@@ -253,6 +253,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIAppFonts = "Resources/Fonts/Pretendard-Black.otf Resources/Fonts/Pretendard-ExtraBold.otf Resources/Fonts/Pretendard-Bold.otf Resources/Fonts/Pretendard-SemiBold.otf Resources/Fonts/Pretendard-Medium.otf Resources/Fonts/Pretendard-Regular.otf Resources/Fonts/Pretendard-Light.otf Resources/Fonts/Pretendard-ExtraLight.otf Resources/Fonts/Pretendard-Thin.otf Resources/Fonts/SUIT-Heavy.ttf Resources/Fonts/SUIT-ExtraBold.ttf Resources/Fonts/SUIT-Bold.ttf Resources/Fonts/SUIT-SemiBold.ttf Resources/Fonts/SUIT-Medium.ttf Resources/Fonts/SUIT-Regular.ttf Resources/Fonts/SUIT-Light.ttf Resources/Fonts/SUIT-ExtraLight.ttf Resources/Fonts/SUIT-Thin.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -284,6 +285,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIAppFonts = "Resources/Fonts/Pretendard-Black.otf Resources/Fonts/Pretendard-ExtraBold.otf Resources/Fonts/Pretendard-Bold.otf Resources/Fonts/Pretendard-SemiBold.otf Resources/Fonts/Pretendard-Medium.otf Resources/Fonts/Pretendard-Regular.otf Resources/Fonts/Pretendard-Light.otf Resources/Fonts/Pretendard-ExtraLight.otf Resources/Fonts/Pretendard-Thin.otf Resources/Fonts/SUIT-Heavy.ttf Resources/Fonts/SUIT-ExtraBold.ttf Resources/Fonts/SUIT-Bold.ttf Resources/Fonts/SUIT-SemiBold.ttf Resources/Fonts/SUIT-Medium.ttf Resources/Fonts/SUIT-Regular.ttf Resources/Fonts/SUIT-Light.ttf Resources/Fonts/SUIT-ExtraLight.ttf Resources/Fonts/SUIT-Thin.ttf";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
