@@ -1,0 +1,39 @@
+name: 디스코드 PR 알림
+
+on:
+  pull_request:
+    types: [opened, closed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Discord notification
+        env:
+          # GitHub 값들을 전부 env로 전달 (스크립트에 직접 박지 않음)
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_ACTION: ${{ github.event.action }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_iOS }}
+        run: |
+          if [ "$PR_ACTION" = "opened" ]; then
+            STATUS="🟢 PR Opened"
+          elif [ "$PR_MERGED" = "true" ]; then
+            STATUS="🟣 PR Merged"
+          else
+            STATUS="🔴 PR Closed"
+          fi
+
+          # jq로 안전하게 JSON 생성 (--arg 로 넘긴 값은 자동 이스케이프됨)
+          payload=$(jq -n \
+            --arg title "$STATUS — #$PR_NUMBER $PR_TITLE" \
+            --arg url "$PR_URL" \
+            --arg desc "by $PR_AUTHOR" \
+            '{embeds: [{title: $title, url: $url, description: $desc}]}')
+
+          curl -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$DISCORD_WEBHOOK"
