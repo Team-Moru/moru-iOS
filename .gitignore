@@ -53,6 +53,9 @@ playground.xcworkspace
 Secrets.xcconfig
 *.secret.xcconfig
 
+### Codex ###
+.codex/
+
 ### fastlane (사용 시) ###
 fastlane/report.xml
 fastlane/Preview.html
