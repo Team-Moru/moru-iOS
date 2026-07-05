@@ -16,19 +16,15 @@
 
 ## 👥 멤버
 | **초이** | **찬혁** | **레티** | **개미** |
-|:------:|:------:|:------:|:------:|
-| 사진1 | 사진2 | 사진3 | 사진4 |
-| PL | FE | FE | FE |
-| [GitHub](깃허브 링크) | [GitHub](깃허브 링크) | [GitHub](깃허브 링크) | [GitHub](깃허브 링크) |
 
 모루 iOS 팀은 화면 단위 분배보다 **"공통 기준 정의 및 책임 책임제"**를 통해 AI 툴 활용 시 발생할 수 있는 코드 파편화를 방지합니다.
 
 | 이름 | 역할 및 담당 영역 |
 | :--- | :--- |
-| **초이** | 전체 흐름, AppShell, Navigation 시스템, 화면 간 연결 기준 수립 |
-| **찬헉** | 디자인 시스템(Color, Font, Icon 공통 등록), 공통 UI 컴포넌트 개발 및 관리 |
-| **레티** | 프로젝트 코드 구조 정의, 데이터 모델 설계, Mock Data 표준 수립 및 컨벤션 빌드 |
-| **개미** | 하드웨어/플랫폼 검증 (AlarmKit, App Intents, STT/TTS, 백그라운드 오디오 오퍼레이션) |
+| **초이** | Foundation/SwiftData + 온보딩(첫 루틴 생성 및 알람 설정 후 SwiftData에 저장) 구현 |
+| **걔미** | 루틴 실행 및 완료 UI + Local TTS 음성 안내 + Speech Input 구현 |
+| **찬혁** | Home/Routine 탭에 해당하는 UI 구현  |
+| **레티** | 이력 + 프로필 + 설정 UI 구현 |
 
 <br>
 
@@ -67,13 +63,11 @@ Swift 6.2
 <img src="https://img.shields.io/badge/git-%23F05033.svg?style=for-the-badge&logo=git&logoColor=white" />
 <img src="https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white" />
 <img src="https://img.shields.io/badge/SPM-FA7343?style=for-the-badge&logo=swift&logoColor=white" />
-<img src="https://img.shields.io/badge/Fastlane-n?style=for-the-badge&logo=fastlane&logoColor=black" />
 </div>
 
 ### Development
 <div align="left">
 <img src="https://img.shields.io/badge/Xcode-007ACC?style=for-the-badge&logo=Xcode&logoColor=white" />
-<img src="https://img.shields.io/badge/Firebase-DD2C00?style=for-the-badge&logo=Firebase&logoColor=white" />
 <img src="https://img.shields.io/badge/SwiftUI-42A5F5?style=for-the-badge&logo=swift&logoColor=white" />
 <img src="https://img.shields.io/badge/Alamofire-FF5722?style=for-the-badge&logo=swift&logoColor=white" />
 <img src="https://img.shields.io/badge/Moya-8A4182?style=for-the-badge&logo=swift&logoColor=white" />
@@ -83,7 +77,6 @@ Swift 6.2
 
 ### Communication
 <div align="left">
-<img src="https://img.shields.io/badge/Miro-FFFC00.svg?style=for-the-badge&logo=Miro&logoColor=050038" />
 <img src="https://img.shields.io/badge/Notion-white.svg?style=for-the-badge&logo=Notion&logoColor=000000" />
 <img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=Discord&logoColor=white" />
 <img src="https://img.shields.io/badge/Figma-F24E1E?style=for-the-badge&logo=figma&logoColor=white" />
@@ -243,50 +236,24 @@ var messages: Array<String>?  // ❌ 나쁜 예
 <!-- 팀원들끼리 협의하여 기록해주세요! -->
 
 ### ✅ PR 예시 모음
-> 🎉 [Chore] 프로젝트 초기 세팅 <br>
-> ✨ [Feat] 프로필 화면 UI 구현 <br>
-> 🐛 [Fix] iOS 26에서 버튼 클릭 오류 수정 <br>
-> 💄 [Design] 로그인 화면 레이아웃 조정 <br>
-> 📝 [Docs] README에 프로젝트 소개 추가 <br>
+>  [Chore] 프로젝트 초기 세팅 <br>
+>  [Feat] 프로필 화면 UI 구현 <br>
+>  [Fix] iOS 26에서 버튼 클릭 오류 수정 <br>
+>  [Design] 로그인 화면 레이아웃 조정 <br>
+>  [Docs] README에 프로젝트 소개 추가 <br>
 
 <br>
 
 ## 📑 커밋 컨벤션
-
-### 💬 깃모지 가이드
-
-| 아이콘 | 코드 | 설명 | 원문 |
-| :---: | :---: | :---: | :---: |
-| 🐛 | bug | 버그 수정 | Fix a bug |
-| ✨ | sparkles | 새 기능 | Introduce new features |
-| 💄 | lipstick | UI/스타일 파일 추가/수정 | Add or update the UI and style files |
-| ♻️ | recycle | 코드 리팩토링 | Refactor code |
-| ➕ | heavy_plus_sign | 의존성 추가 | Add a dependency |
-| 🔀 | twisted_rightwards_arrows | 브랜치 합병 | Merge branches |
-| 💡 | bulb | 주석 추가/수정 | Add or update comments in source code |
-| 🔥 | fire | 코드/파일 삭제 | Remove code or files |
-| 🚑 | ambulance | 긴급 수정 | Critical hotfix |
-| 🎉 | tada | 프로젝트 시작 | Begin a project |
-| 🔒 | lock | 보안 이슈 수정 | Fix security issues |
-| 🔖 | bookmark | 릴리즈/버전 태그 | Release / Version tags |
-| 📝 | memo | 문서 추가/수정 | Add or update documentation |
-| 🔧| wrench | 구성 파일 추가/삭제 | Add or update configuration files.|
-| ⚡️ | zap | 성능 개선 | Improve performance |
-| 🎨 | art | 코드 구조 개선 | Improve structure / format of the code |
-| 📦 | package | 컴파일된 파일 추가/수정 | Add or update compiled files |
-| 👽 | alien | 외부 API 변경 반영 | Update code due to external API changes |
-| 🚚 | truck | 리소스 이동, 이름 변경 | Move or rename resources |
-| 🙈 | see_no_evil | .gitignore 추가/수정 | Add or update a .gitignore file |
-
 ### 🏷️ 커밋 태그 가이드
 <!-- 팀원들끼리 협의하여 기록해주세요! -->
 
 ### ✅ 커밋 예시 모음
-> 🎉 [Chore] 프로젝트 초기 세팅 <br>
-> ✨ [Feat] 프로필 화면 UI 구현 <br>
-> 🐛 [Fix] iOS 26에서 버튼 클릭 오류 수정 <br>
-> 💄 [Design] 로그인 화면 레이아웃 조정 <br>
-> 📝 [Docs] README에 프로젝트 소개 추가 <br>
+>  [Chore] 프로젝트 초기 세팅 <br>
+>  [Feat] 프로필 화면 UI 구현 <br>
+>  [Fix] iOS 26에서 버튼 클릭 오류 수정 <br>
+>  [Design] 로그인 화면 레이아웃 조정 <br>
+>  [Docs] README에 프로젝트 소개 추가 <br>
 
 <br>
 
@@ -294,14 +261,37 @@ var messages: Array<String>?  // ❌ 나쁜 예
 프로젝트 구조는 MVVM 아키텍처와 도메인(기능) 중심으로 분리하여 관리합니다.
 
 ```text
-MORU/
-├── App/                  # App Entry, AppShell, AppState 등 앱 초기 설정
-├── Core/                 # Network, Storage(SwiftData), Manager (Auth, TTS 등)
-├── DesignSystem/         # AppColor, AppFont, AppIcon 및 공통 UI 컴포넌트
-├── Features/             # 실제 기능별 화면 (내부에 View, ViewModel 위치)
-│   ├── Onboarding/
-│   ├── Home/
-│   ├── Routine/
-│   └── Alarm/
-├── Models/               # 앱 전반에서 사용되는 Entity 및 Data Model
-└── Shared/               # Extensions, Utilities 등 공통 사용 로직
+Moru
+├─ App
+│  ├─ MoruApp.swift
+│  ├─ AppRouter.swift            // 기본 flow: local session (auth 아님)
+│  ├─ DependencyContainer.swift  // .local(modelContext:) 기본, .mock()은 #if DEBUG
+│  └─ SessionStore.swift         // LocalProfile + onboarding 상태
+├─ DesignSystem
+│  ├─ MoruDesignTokens.swift     // 색/간격/radius — Figma variables와 매핑
+│  ├─ Fonts.swift                // Pretendard 스타일 (D10)
+│  └─ Components/                // Figma '컴포넌트' 섹션(1445:1113) 기준
+├─ Domain
+│  ├─ Models/                    // Routine, RoutineStep, AlarmSchedule, RoutineRun, RoutineStepResult, LocalProfile, SyncMetadata
+│  ├─ UseCases/
+│  ├─ Repositories/              // RoutineRepository, RoutineRunRepository, LocalProfileRepository
+│  └─ Services/                  // RoutineSuggestionService (D5)
+├─ Data
+│  ├─ Persistence/               // MoruSchemaV1, SchemaMigrationPlan (D3)
+│  ├─ Local/                     // SwiftData repositories + Mappers
+│  └─ Mock/                      // Preview/Snapshot/QA/Test 전용
+├─ Platform
+│  ├─ Alarm/                     // AlarmKit + LocalNotification fallback
+│  ├─ TTS/                       // LocalTTSService
+│  └─ Speech/
+├─ Debug/                        // DeviceQA 패널/레코더 (ContentView에서 분리, #if DEBUG)
+└─ Features
+   ├─ Onboarding
+   ├─ Home            // 홈 대시보드
+   ├─ RoutineList     // 루틴 목록/수정/삭제
+   ├─ RoutineCreate   // 직접 만들기 + 제안 받기
+   ├─ AlarmSetting
+   ├─ RoutinePlayer   // 스텝 실행 (확인/타이머/입력)
+   ├─ History         // 이력/주간 리포트/일별 기록
+   └─ Profile         // 설정
+```
