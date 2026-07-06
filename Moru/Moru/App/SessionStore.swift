@@ -44,11 +44,17 @@ final class SessionStore: ObservableObject {
 
   @discardableResult
   func createDefaultProfile() throws -> LocalProfile {
-    let profile = try localProfileRepository.loadOrCreateDefaultProfile()
-    let activeRoutines = try routineRepository.fetchActiveRoutines()
-    self.profile = profile
-    phase = Self.phase(profile: profile, activeRoutines: activeRoutines)
-    return profile
+    do {
+      let profile = try localProfileRepository.loadOrCreateDefaultProfile()
+      let activeRoutines = try routineRepository.fetchActiveRoutines()
+      self.profile = profile
+      phase = Self.phase(profile: profile, activeRoutines: activeRoutines)
+      return profile
+    } catch {
+      profile = nil
+      phase = .failed(error.localizedDescription)
+      throw error
+    }
   }
 
   static func isOnboardingComplete(
