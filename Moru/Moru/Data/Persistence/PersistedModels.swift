@@ -19,7 +19,6 @@ final class PersistedRoutine {
   var isActive: Bool
   var createdAt: Date
   var updatedAt: Date
-  var deletedAt: Date?
   var remoteID: String?
   var syncStatusRawValue: String
   var lastSyncedAt: Date?
@@ -35,7 +34,6 @@ final class PersistedRoutine {
     isActive: Bool,
     createdAt: Date,
     updatedAt: Date,
-    deletedAt: Date?,
     remoteID: String?,
     syncStatusRawValue: String,
     lastSyncedAt: Date?,
@@ -50,7 +48,6 @@ final class PersistedRoutine {
     self.isActive = isActive
     self.createdAt = createdAt
     self.updatedAt = updatedAt
-    self.deletedAt = deletedAt
     self.remoteID = remoteID
     self.syncStatusRawValue = syncStatusRawValue
     self.lastSyncedAt = lastSyncedAt
@@ -127,6 +124,7 @@ final class PersistedRoutineRun {
   var startedAt: Date
   var completedAt: Date?
   @Relationship(deleteRule: .cascade) var results: [PersistedRoutineStepResult]
+  @Relationship(deleteRule: .cascade) var plannedSteps: [PersistedRoutineStepSnapshot]
   var endedEarly: Bool
   var remoteID: String?
   var syncStatusRawValue: String
@@ -140,6 +138,7 @@ final class PersistedRoutineRun {
     startedAt: Date,
     completedAt: Date?,
     results: [PersistedRoutineStepResult],
+    plannedSteps: [PersistedRoutineStepSnapshot],
     endedEarly: Bool,
     remoteID: String?,
     syncStatusRawValue: String,
@@ -152,11 +151,41 @@ final class PersistedRoutineRun {
     self.startedAt = startedAt
     self.completedAt = completedAt
     self.results = results
+    self.plannedSteps = plannedSteps
     self.endedEarly = endedEarly
     self.remoteID = remoteID
     self.syncStatusRawValue = syncStatusRawValue
     self.lastSyncedAt = lastSyncedAt
     self.remoteRevision = remoteRevision
+  }
+}
+
+@Model
+final class PersistedRoutineStepSnapshot {
+  @Attribute(.unique) var id: UUID
+  var stepID: UUID
+  var stepTitle: String
+  var stepTypeRawValue: String
+  var stepOrder: Int
+  var estimatedSeconds: Int?
+  var isRequired: Bool
+
+  init(
+    id: UUID,
+    stepID: UUID,
+    stepTitle: String,
+    stepTypeRawValue: String,
+    stepOrder: Int,
+    estimatedSeconds: Int?,
+    isRequired: Bool
+  ) {
+    self.id = id
+    self.stepID = stepID
+    self.stepTitle = stepTitle
+    self.stepTypeRawValue = stepTypeRawValue
+    self.stepOrder = stepOrder
+    self.estimatedSeconds = estimatedSeconds
+    self.isRequired = isRequired
   }
 }
 

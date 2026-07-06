@@ -8,10 +8,37 @@
 import SwiftUI
 
 struct AppRouter: View {
-  let dependencies: DependencyContainer
-  let sessionStore: SessionStore
+  private enum State {
+    case ready(dependencies: DependencyContainer, sessionStore: SessionStore)
+    case bootstrapFailed(String)
+  }
+
+  private let state: State
+
+  init(dependencies: DependencyContainer, sessionStore: SessionStore) {
+    state = .ready(dependencies: dependencies, sessionStore: sessionStore)
+  }
+
+  init(bootstrapFailureMessage: String) {
+    state = .bootstrapFailed(bootstrapFailureMessage)
+  }
 
   var body: some View {
+    Group {
+      switch state {
+      case .ready(_, let sessionStore):
+        sessionContent(sessionStore: sessionStore)
+      case .bootstrapFailed(let message):
+        ContentView(
+          title: "저장소를 열 수 없어요",
+          message: message
+        )
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func sessionContent(sessionStore: SessionStore) -> some View {
     Group {
       switch sessionStore.phase {
       case .loading:

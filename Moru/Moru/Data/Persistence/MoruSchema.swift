@@ -16,6 +16,7 @@ enum MoruSchemaV1: VersionedSchema {
       PersistedRoutineStep.self,
       PersistedAlarmSchedule.self,
       PersistedRoutineRun.self,
+      PersistedRoutineStepSnapshot.self,
       PersistedRoutineStepResult.self,
       PersistedLocalProfile.self
     ]

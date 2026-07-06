@@ -9,7 +9,8 @@ import Foundation
 
 @MainActor
 protocol RoutineRepository {
-  func fetchRoutines(includeDeleted: Bool) throws -> [Routine]
+  func fetchRoutines() throws -> [Routine]
+  func fetchActiveRoutines() throws -> [Routine]
   func routine(id: UUID) throws -> Routine?
   func saveRoutine(_ routine: Routine) throws
   func updateRoutineActivation(id: UUID, isActive: Bool) throws
@@ -19,7 +20,15 @@ protocol RoutineRepository {
 @MainActor
 protocol RoutineRunRepository {
   func fetchRuns() throws -> [RoutineRun]
+  func fetchRecentRuns(limit: Int) throws -> [RoutineRun]
   func fetchRuns(for routineID: UUID) throws -> [RoutineRun]
+  func fetchRuns(from startDate: Date, to endDate: Date) throws -> [RoutineRun]
+  func fetchRuns(
+    for routineID: UUID,
+    from startDate: Date,
+    to endDate: Date
+  ) throws -> [RoutineRun]
+  func latestRun(for routineID: UUID) throws -> RoutineRun?
   func run(id: UUID) throws -> RoutineRun?
   func saveRun(_ run: RoutineRun) throws
   func deleteAllRuns() throws

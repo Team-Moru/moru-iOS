@@ -9,14 +9,6 @@ import Foundation
 
 enum SyncStatus: String, Codable, CaseIterable, Hashable {
   case localOnly
-  case synced
-  case pendingUpload
-  case pendingDelete
-  case conflict
-
-  static func fallback(rawValue: String) -> SyncStatus {
-    SyncStatus(rawValue: rawValue) ?? .localOnly
-  }
 }
 
 struct SyncMetadata: Codable, Hashable {
@@ -76,10 +68,6 @@ enum RoutineStepType: String, Codable, CaseIterable, Hashable {
   case confirm
   case timer
   case input
-
-  static func fallback(rawValue: String) -> RoutineStepType {
-    RoutineStepType(rawValue: rawValue) ?? .confirm
-  }
 }
 
 struct RoutineStep: Identifiable, Codable, Hashable {
@@ -151,7 +139,6 @@ struct Routine: Identifiable, Codable, Hashable {
   var isActive: Bool
   var createdAt: Date
   var updatedAt: Date
-  var deletedAt: Date?
   var sync: SyncMetadata?
 
   init(
@@ -164,7 +151,6 @@ struct Routine: Identifiable, Codable, Hashable {
     isActive: Bool = true,
     createdAt: Date = Date(),
     updatedAt: Date = Date(),
-    deletedAt: Date? = nil,
     sync: SyncMetadata? = .localOnly
   ) {
     self.id = id
@@ -176,8 +162,46 @@ struct Routine: Identifiable, Codable, Hashable {
     self.isActive = isActive
     self.createdAt = createdAt
     self.updatedAt = updatedAt
-    self.deletedAt = deletedAt
     self.sync = sync
+  }
+}
+
+struct RoutineStepSnapshot: Identifiable, Codable, Hashable {
+  var id: UUID
+  var stepID: UUID
+  var stepTitle: String
+  var stepType: RoutineStepType
+  var stepOrder: Int
+  var estimatedSeconds: Int?
+  var isRequired: Bool
+
+  init(
+    id: UUID = UUID(),
+    stepID: UUID,
+    stepTitle: String,
+    stepType: RoutineStepType,
+    stepOrder: Int,
+    estimatedSeconds: Int? = nil,
+    isRequired: Bool = true
+  ) {
+    self.id = id
+    self.stepID = stepID
+    self.stepTitle = stepTitle
+    self.stepType = stepType
+    self.stepOrder = stepOrder
+    self.estimatedSeconds = estimatedSeconds
+    self.isRequired = isRequired
+  }
+
+  init(step: RoutineStep) {
+    self.init(
+      stepID: step.id,
+      stepTitle: step.title,
+      stepType: step.type,
+      stepOrder: step.order,
+      estimatedSeconds: step.estimatedSeconds,
+      isRequired: step.isRequired
+    )
   }
 }
 
@@ -226,6 +250,7 @@ struct RoutineRun: Identifiable, Codable, Hashable {
   var startedAt: Date
   var completedAt: Date?
   var results: [RoutineStepResult]
+  var plannedSteps: [RoutineStepSnapshot]
   var endedEarly: Bool
   var sync: SyncMetadata?
 
@@ -236,6 +261,7 @@ struct RoutineRun: Identifiable, Codable, Hashable {
     startedAt: Date = Date(),
     completedAt: Date? = nil,
     results: [RoutineStepResult] = [],
+    plannedSteps: [RoutineStepSnapshot] = [],
     endedEarly: Bool = false,
     sync: SyncMetadata? = .localOnly
   ) {
@@ -245,17 +271,32 @@ struct RoutineRun: Identifiable, Codable, Hashable {
     self.startedAt = startedAt
     self.completedAt = completedAt
     self.results = results
+    self.plannedSteps = plannedSteps
     self.endedEarly = endedEarly
     self.sync = sync
   }
 
+  var plannedStepCount: Int {
+    plannedSteps.count
+  }
+
   var completionRate: Double {
-    guard !results.isEmpty else {
+    let denominator = max(plannedStepCount, results.count)
+
+    guard denominator > 0 else {
       return 0
     }
 
-    let completedCount = results.filter(\.isCompleted).count
-    return Double(completedCount) / Double(results.count)
+    let completedStepIDs = Set(results.filter(\.isCompleted).map(\.stepID))
+    let completedCount: Int
+
+    if plannedSteps.isEmpty {
+      completedCount = results.filter(\.isCompleted).count
+    } else {
+      completedCount = plannedSteps.filter { completedStepIDs.contains($0.stepID) }.count
+    }
+
+    return Double(completedCount) / Double(denominator)
   }
 }
 

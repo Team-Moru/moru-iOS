@@ -7,7 +7,7 @@
 > 모루(MORU)는 모닝 루틴의 줄임말로, 사용자가 아침에 눈을 떠서 기분 좋은 루틴을 완수할 수 있도록 돕는 음성 코칭 기반 알람 어플리케이션입니다.
 
 [![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)]()
-[![Xcode](https://img.shields.io/badge/Xcode-26.5-blue.svg)]()
+[![Xcode](https://img.shields.io/badge/Xcode-26.3+-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 ---
@@ -44,8 +44,8 @@
 ## 🤔 요구사항
 For building and running the application you need:
 
-iOS 26.5 <br>
-Xcode 26.5 <br>
+iOS 26.0 <br>
+Xcode 26.3+ <br>
 Swift 6.2
 
 <br>
@@ -346,3 +346,13 @@ Moru
    ├─ History         // 이력/주간 리포트/일별 기록
    └─ Profile         // 설정
 ```
+
+### Foundation / SwiftData v1 기준
+- v1 저장 정책은 **localOnly + hard delete**입니다.
+- `RoutineRepository.deleteRoutine(id:)`는 Routine을 실제 삭제합니다.
+- Routine 삭제 시 step/alarm은 SwiftData cascade로 삭제하고, `RoutineRun` 기록은 유지합니다.
+- soft delete를 뜻하는 `deletedAt`, `includeDeleted`, `pendingDelete` 계약은 v1에서 사용하지 않습니다.
+- Feature View/ViewModel은 `SwiftData`, `@Query`, `ModelContext`를 직접 사용하지 않습니다.
+- 화면 계층은 `DependencyContainer`가 제공하는 Repository/Service 계약만 사용합니다.
+- SwiftData 접근은 `Data/Persistence`, `Data/Local`, App bootstrap, 테스트로 제한합니다.
+- 앱 루트는 `.modelContainer(...)`를 전역 주입하지 않습니다.

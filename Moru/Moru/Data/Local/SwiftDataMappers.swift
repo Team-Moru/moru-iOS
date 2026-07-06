@@ -8,9 +8,31 @@
 import Foundation
 import SwiftData
 
+enum SwiftDataMappingError: Error, Equatable, LocalizedError {
+  case malformedStringArray(field: String, rawValue: String)
+  case malformedIntArray(field: String, rawValue: String)
+  case unknownStepType(field: String, rawValue: String)
+  case unknownSyncStatus(rawValue: String)
+
+  var errorDescription: String? {
+    switch self {
+    case .malformedStringArray(let field, _):
+      return "Malformed string array in \(field)."
+    case .malformedIntArray(let field, _):
+      return "Malformed integer array in \(field)."
+    case .unknownStepType(let field, let rawValue):
+      return "Unknown routine step type '\(rawValue)' in \(field)."
+    case .unknownSyncStatus(let rawValue):
+      return "Unknown sync status '\(rawValue)'."
+    }
+  }
+}
+
 enum SwiftDataMapper {
   static func makePersistedRoutine(from routine: Routine) -> PersistedRoutine {
-    PersistedRoutine(
+    let sync = v1Sync(for: routine.sync)
+
+    return PersistedRoutine(
       id: routine.id,
       name: routine.name,
       summary: routine.summary,
@@ -22,11 +44,10 @@ enum SwiftDataMapper {
       isActive: routine.isActive,
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
-      deletedAt: routine.deletedAt,
-      remoteID: v1Sync(for: routine.sync).remoteID,
-      syncStatusRawValue: v1Sync(for: routine.sync).status.rawValue,
-      lastSyncedAt: v1Sync(for: routine.sync).lastSyncedAt,
-      remoteRevision: v1Sync(for: routine.sync).remoteRevision
+      remoteID: sync.remoteID,
+      syncStatusRawValue: sync.status.rawValue,
+      lastSyncedAt: sync.lastSyncedAt,
+      remoteRevision: sync.remoteRevision
     )
   }
 
@@ -52,28 +73,29 @@ enum SwiftDataMapper {
     persisted.isActive = routine.isActive
     persisted.createdAt = routine.createdAt
     persisted.updatedAt = routine.updatedAt
-    persisted.deletedAt = routine.deletedAt
     persisted.remoteID = sync.remoteID
     persisted.syncStatusRawValue = sync.status.rawValue
     persisted.lastSyncedAt = sync.lastSyncedAt
     persisted.remoteRevision = sync.remoteRevision
   }
 
-  static func makeDomainRoutine(from persisted: PersistedRoutine) -> Routine {
-    Routine(
+  static func makeDomainRoutine(from persisted: PersistedRoutine) throws -> Routine {
+    return Routine(
       id: persisted.id,
       name: persisted.name,
       summary: persisted.summary,
-      goalTags: decodeStringArray(persisted.goalTagsRawValue),
-      steps: persisted.steps
+      goalTags: try decodeStringArray(
+        persisted.goalTagsRawValue,
+        field: "PersistedRoutine.goalTagsRawValue"
+      ),
+      steps: try persisted.steps
         .map(makeDomainRoutineStep)
         .sorted { $0.order < $1.order },
-      alarmSchedule: persisted.alarmSchedule.map(makeDomainAlarmSchedule),
+      alarmSchedule: try persisted.alarmSchedule.map(makeDomainAlarmSchedule),
       isActive: persisted.isActive,
       createdAt: persisted.createdAt,
       updatedAt: persisted.updatedAt,
-      deletedAt: persisted.deletedAt,
-      sync: makeSyncMetadata(
+      sync: try makeSyncMetadata(
         remoteID: persisted.remoteID,
         syncStatusRawValue: persisted.syncStatusRawValue,
         lastSyncedAt: persisted.lastSyncedAt,
@@ -91,6 +113,9 @@ enum SwiftDataMapper {
       startedAt: run.startedAt,
       completedAt: run.completedAt,
       results: run.results.map(makePersistedStepResult),
+      plannedSteps: run.plannedSteps
+        .sorted { $0.stepOrder < $1.stepOrder }
+        .map(makePersistedStepSnapshot),
       endedEarly: run.endedEarly,
       remoteID: sync.remoteID,
       syncStatusRawValue: sync.status.rawValue,
@@ -105,6 +130,7 @@ enum SwiftDataMapper {
     in modelContext: ModelContext
   ) {
     persisted.results.forEach { modelContext.delete($0) }
+    persisted.plannedSteps.forEach { modelContext.delete($0) }
 
     let sync = v1Sync(for: run.sync)
     persisted.routineID = run.routineID
@@ -112,6 +138,9 @@ enum SwiftDataMapper {
     persisted.startedAt = run.startedAt
     persisted.completedAt = run.completedAt
     persisted.results = run.results.map(makePersistedStepResult)
+    persisted.plannedSteps = run.plannedSteps
+      .sorted { $0.stepOrder < $1.stepOrder }
+      .map(makePersistedStepSnapshot)
     persisted.endedEarly = run.endedEarly
     persisted.remoteID = sync.remoteID
     persisted.syncStatusRawValue = sync.status.rawValue
@@ -119,16 +148,19 @@ enum SwiftDataMapper {
     persisted.remoteRevision = sync.remoteRevision
   }
 
-  static func makeDomainRun(from persisted: PersistedRoutineRun) -> RoutineRun {
+  static func makeDomainRun(from persisted: PersistedRoutineRun) throws -> RoutineRun {
     RoutineRun(
       id: persisted.id,
       routineID: persisted.routineID,
       routineName: persisted.routineName,
       startedAt: persisted.startedAt,
       completedAt: persisted.completedAt,
-      results: persisted.results.map(makeDomainStepResult),
+      results: try persisted.results.map(makeDomainStepResult),
+      plannedSteps: try persisted.plannedSteps
+        .map(makeDomainStepSnapshot)
+        .sorted { $0.stepOrder < $1.stepOrder },
       endedEarly: persisted.endedEarly,
-      sync: makeSyncMetadata(
+      sync: try makeSyncMetadata(
         remoteID: persisted.remoteID,
         syncStatusRawValue: persisted.syncStatusRawValue,
         lastSyncedAt: persisted.lastSyncedAt,
@@ -178,10 +210,17 @@ enum SwiftDataMapper {
     )
   }
 
-  private static func makeDomainRoutineStep(from persisted: PersistedRoutineStep) -> RoutineStep {
-    RoutineStep(
+  private static func makeDomainRoutineStep(
+    from persisted: PersistedRoutineStep
+  ) throws -> RoutineStep {
+    let stepType = try makeStepType(
+      rawValue: persisted.typeRawValue,
+      field: "PersistedRoutineStep.typeRawValue"
+    )
+
+    return RoutineStep(
       id: persisted.id,
-      type: RoutineStepType.fallback(rawValue: persisted.typeRawValue),
+      type: stepType,
       title: persisted.title,
       instruction: persisted.instruction,
       order: persisted.order,
@@ -207,16 +246,52 @@ enum SwiftDataMapper {
 
   private static func makeDomainAlarmSchedule(
     from persisted: PersistedAlarmSchedule
-  ) -> AlarmSchedule {
-    AlarmSchedule(
+  ) throws -> AlarmSchedule {
+    return AlarmSchedule(
       id: persisted.id,
       hour: persisted.hour,
       minute: persisted.minute,
-      weekdays: decodeIntArray(persisted.weekdaysRawValue).compactMap(Weekday.init(rawValue:)),
+      weekdays: try decodeIntArray(
+        persisted.weekdaysRawValue,
+        field: "PersistedAlarmSchedule.weekdaysRawValue"
+      ).compactMap(Weekday.init(rawValue:)),
       soundName: persisted.soundName,
       isEnabled: persisted.isEnabled,
       includeWeather: persisted.includeWeather,
       includeFortune: persisted.includeFortune
+    )
+  }
+
+  private static func makePersistedStepSnapshot(
+    from snapshot: RoutineStepSnapshot
+  ) -> PersistedRoutineStepSnapshot {
+    PersistedRoutineStepSnapshot(
+      id: snapshot.id,
+      stepID: snapshot.stepID,
+      stepTitle: snapshot.stepTitle,
+      stepTypeRawValue: snapshot.stepType.rawValue,
+      stepOrder: snapshot.stepOrder,
+      estimatedSeconds: snapshot.estimatedSeconds,
+      isRequired: snapshot.isRequired
+    )
+  }
+
+  private static func makeDomainStepSnapshot(
+    from persisted: PersistedRoutineStepSnapshot
+  ) throws -> RoutineStepSnapshot {
+    let stepType = try makeStepType(
+      rawValue: persisted.stepTypeRawValue,
+      field: "PersistedRoutineStepSnapshot.stepTypeRawValue"
+    )
+
+    return RoutineStepSnapshot(
+      id: persisted.id,
+      stepID: persisted.stepID,
+      stepTitle: persisted.stepTitle,
+      stepType: stepType,
+      stepOrder: persisted.stepOrder,
+      estimatedSeconds: persisted.estimatedSeconds,
+      isRequired: persisted.isRequired
     )
   }
 
@@ -238,12 +313,17 @@ enum SwiftDataMapper {
 
   private static func makeDomainStepResult(
     from persisted: PersistedRoutineStepResult
-  ) -> RoutineStepResult {
-    RoutineStepResult(
+  ) throws -> RoutineStepResult {
+    let stepType = try makeStepType(
+      rawValue: persisted.stepTypeRawValue,
+      field: "PersistedRoutineStepResult.stepTypeRawValue"
+    )
+
+    return RoutineStepResult(
       id: persisted.id,
       stepID: persisted.stepID,
       stepTitle: persisted.stepTitle,
-      stepType: RoutineStepType.fallback(rawValue: persisted.stepTypeRawValue),
+      stepType: stepType,
       completedAt: persisted.completedAt,
       skipped: persisted.skipped,
       inputText: persisted.inputText,
@@ -257,22 +337,37 @@ enum SwiftDataMapper {
     syncStatusRawValue: String,
     lastSyncedAt: Date?,
     remoteRevision: String?
-  ) -> SyncMetadata {
-    SyncMetadata(
+  ) throws -> SyncMetadata {
+    guard let syncStatus = SyncStatus(rawValue: syncStatusRawValue) else {
+      throw SwiftDataMappingError.unknownSyncStatus(rawValue: syncStatusRawValue)
+    }
+
+    return SyncMetadata(
       remoteID: remoteID,
-      status: SyncStatus.fallback(rawValue: syncStatusRawValue),
+      status: syncStatus,
       lastSyncedAt: lastSyncedAt,
       remoteRevision: remoteRevision
     )
   }
 
   private static func v1Sync(for sync: SyncMetadata?) -> SyncMetadata {
-    SyncMetadata(
+    return SyncMetadata(
       remoteID: nil,
       status: .localOnly,
       lastSyncedAt: nil,
       remoteRevision: nil
     )
+  }
+
+  private static func makeStepType(
+    rawValue: String,
+    field: String
+  ) throws -> RoutineStepType {
+    guard let stepType = RoutineStepType(rawValue: rawValue) else {
+      throw SwiftDataMappingError.unknownStepType(field: field, rawValue: rawValue)
+    }
+
+    return stepType
   }
 
   private static func encodeStringArray(_ values: [String]) -> String {
@@ -284,10 +379,13 @@ enum SwiftDataMapper {
     return rawValue
   }
 
-  private static func decodeStringArray(_ rawValue: String) -> [String] {
+  private static func decodeStringArray(
+    _ rawValue: String,
+    field: String
+  ) throws -> [String] {
     guard let data = rawValue.data(using: .utf8),
           let values = try? JSONDecoder().decode([String].self, from: data) else {
-      return []
+      throw SwiftDataMappingError.malformedStringArray(field: field, rawValue: rawValue)
     }
 
     return values
@@ -302,10 +400,13 @@ enum SwiftDataMapper {
     return rawValue
   }
 
-  private static func decodeIntArray(_ rawValue: String) -> [Int] {
+  private static func decodeIntArray(
+    _ rawValue: String,
+    field: String
+  ) throws -> [Int] {
     guard let data = rawValue.data(using: .utf8),
           let values = try? JSONDecoder().decode([Int].self, from: data) else {
-      return []
+      throw SwiftDataMappingError.malformedIntArray(field: field, rawValue: rawValue)
     }
 
     return values

@@ -16,12 +16,13 @@ nonisolated final class MockRoutineRepository: RoutineRepository {
   }
 
   @MainActor
-  func fetchRoutines(includeDeleted: Bool = false) throws -> [Routine] {
-    guard !includeDeleted else {
-      return routines
-    }
+  func fetchRoutines() throws -> [Routine] {
+    routines.sorted { $0.createdAt < $1.createdAt }
+  }
 
-    return routines.filter { $0.deletedAt == nil }
+  @MainActor
+  func fetchActiveRoutines() throws -> [Routine] {
+    try fetchRoutines().filter(\.isActive)
   }
 
   @MainActor
@@ -68,8 +69,37 @@ nonisolated final class MockRoutineRunRepository: RoutineRunRepository {
   }
 
   @MainActor
+  func fetchRecentRuns(limit: Int) throws -> [RoutineRun] {
+    guard limit > 0 else {
+      return []
+    }
+
+    return Array(try fetchRuns().prefix(limit))
+  }
+
+  @MainActor
   func fetchRuns(for routineID: UUID) throws -> [RoutineRun] {
     try fetchRuns().filter { $0.routineID == routineID }
+  }
+
+  @MainActor
+  func fetchRuns(from startDate: Date, to endDate: Date) throws -> [RoutineRun] {
+    try fetchRuns().filter { $0.startedAt >= startDate && $0.startedAt < endDate }
+  }
+
+  @MainActor
+  func fetchRuns(
+    for routineID: UUID,
+    from startDate: Date,
+    to endDate: Date
+  ) throws -> [RoutineRun] {
+    try fetchRuns(for: routineID)
+      .filter { $0.startedAt >= startDate && $0.startedAt < endDate }
+  }
+
+  @MainActor
+  func latestRun(for routineID: UUID) throws -> RoutineRun? {
+    try fetchRuns(for: routineID).first
   }
 
   @MainActor

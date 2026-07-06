@@ -16,17 +16,22 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
   }
 
   @MainActor
-  func fetchRoutines(includeDeleted: Bool = false) throws -> [Routine] {
+  func fetchRoutines() throws -> [Routine] {
     let descriptor = FetchDescriptor<PersistedRoutine>(
       sortBy: [SortDescriptor(\.createdAt, order: .forward)]
     )
-    let routines = try modelContext.fetch(descriptor).map(SwiftDataMapper.makeDomainRoutine)
 
-    guard !includeDeleted else {
-      return routines
-    }
+    return try modelContext.fetch(descriptor).map(SwiftDataMapper.makeDomainRoutine)
+  }
 
-    return routines.filter { $0.deletedAt == nil }
+  @MainActor
+  func fetchActiveRoutines() throws -> [Routine] {
+    let descriptor = FetchDescriptor<PersistedRoutine>(
+      predicate: #Predicate { $0.isActive },
+      sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+    )
+
+    return try modelContext.fetch(descriptor).map(SwiftDataMapper.makeDomainRoutine)
   }
 
   @MainActor
@@ -68,7 +73,11 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
 
   @MainActor
   private func persistedRoutine(id: UUID) throws -> PersistedRoutine? {
-    let descriptor = FetchDescriptor<PersistedRoutine>()
-    return try modelContext.fetch(descriptor).first { $0.id == id }
+    var descriptor = FetchDescriptor<PersistedRoutine>(
+      predicate: #Predicate { $0.id == id }
+    )
+    descriptor.fetchLimit = 1
+
+    return try modelContext.fetch(descriptor).first
   }
 }
