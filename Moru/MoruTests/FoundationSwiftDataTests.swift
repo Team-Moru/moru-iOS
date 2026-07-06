@@ -5,6 +5,7 @@
 //  Created by Codex on 7/6/26.
 //
 
+import Foundation
 import SwiftData
 import XCTest
 @testable import Moru
@@ -38,11 +39,13 @@ final class FoundationSwiftDataTests: XCTestCase {
     XCTAssertNil(run.sync?.remoteID)
     XCTAssertNil(run.sync?.lastSyncedAt)
     XCTAssertNil(run.sync?.remoteRevision)
+    XCTAssertEqual(run.plannedStepCount, 0)
+    XCTAssertEqual(run.completionRate, 0)
   }
 
   @MainActor
   func testRoutineRunCompletionRateUsesPlannedSnapshotForPartialRuns() throws {
-    let routine = try LocalTemplateSuggestionService().makeRoutine(
+    let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
       from: RoutineSuggestionInput(routineName: "아침 시작")
     )
     let completedResult = RoutineStepResult(
@@ -58,16 +61,108 @@ final class FoundationSwiftDataTests: XCTestCase {
       completedAt: Date(),
       skipped: true
     )
+    let strayResult = RoutineStepResult(
+      stepID: UUID(),
+      stepTitle: "현재 루틴에 없는 스텝",
+      stepType: .confirm,
+      completedAt: Date()
+    )
     let run = RoutineRun(
-      routineID: routine.id,
-      routineName: routine.name,
-      results: [completedResult, skippedResult],
-      plannedSteps: routine.steps.map(RoutineStepSnapshot.init),
+      routine: routine,
+      results: [completedResult, skippedResult, strayResult],
       endedEarly: true
     )
 
     XCTAssertEqual(run.plannedStepCount, 3)
     XCTAssertEqual(run.completionRate, 1.0 / 3.0, accuracy: 0.0001)
+  }
+
+  @MainActor
+  func testRoutineRunInitializerCapturesRoutineSnapshot() throws {
+    let firstStep = RoutineStep(
+      type: .confirm,
+      title: "첫 스텝",
+      order: 0
+    )
+    let secondStep = RoutineStep(
+      type: .timer,
+      title: "두 번째 스텝",
+      order: 1,
+      estimatedSeconds: 60
+    )
+    let routine = Routine(
+      name: "스냅샷 루틴",
+      steps: [secondStep, firstStep],
+      alarmSchedule: makeAlarm(isEnabled: true)
+    )
+
+    let run = RoutineRun(routine: routine)
+
+    XCTAssertEqual(run.routineID, routine.id)
+    XCTAssertEqual(run.routineName, routine.name)
+    XCTAssertEqual(run.plannedSteps.map(\.stepID), [firstStep.id, secondStep.id])
+    XCTAssertEqual(run.plannedSteps.map(\.stepTitle), ["첫 스텝", "두 번째 스텝"])
+  }
+
+  @MainActor
+  func testSessionStoreRequiresProfileActiveRoutineAndEnabledAlarmBeforeReady() throws {
+    let profile = LocalProfile()
+    let noAlarmRoutine = makeRoutine(
+      name: "알람 없음",
+      createdAt: Date(timeIntervalSince1970: 1)
+    )
+    let disabledAlarmRoutine = makeRoutine(
+      name: "꺼진 알람",
+      createdAt: Date(timeIntervalSince1970: 2),
+      alarmSchedule: makeAlarm(isEnabled: false)
+    )
+    let readyRoutine = makeRoutine(
+      name: "완료 루틴",
+      createdAt: Date(timeIntervalSince1970: 3),
+      alarmSchedule: makeAlarm(isEnabled: true)
+    )
+
+    XCTAssertFalse(
+      SessionStore.isOnboardingComplete(
+        profile: nil,
+        activeRoutines: [readyRoutine]
+      )
+    )
+    XCTAssertFalse(
+      SessionStore.isOnboardingComplete(
+        profile: profile,
+        activeRoutines: []
+      )
+    )
+    XCTAssertFalse(
+      SessionStore.isOnboardingComplete(
+        profile: profile,
+        activeRoutines: [noAlarmRoutine]
+      )
+    )
+    XCTAssertFalse(
+      SessionStore.isOnboardingComplete(
+        profile: profile,
+        activeRoutines: [disabledAlarmRoutine]
+      )
+    )
+    XCTAssertTrue(
+      SessionStore.isOnboardingComplete(
+        profile: profile,
+        activeRoutines: [readyRoutine]
+      )
+    )
+
+  }
+
+  @MainActor
+  func testDefaultProfileAloneDoesNotCompleteOnboarding() throws {
+    XCTAssertFalse(
+      SessionStore.isOnboardingComplete(
+        profile: LocalProfile(),
+        activeRoutines: []
+      )
+    )
   }
 
   @MainActor
@@ -129,7 +224,7 @@ final class FoundationSwiftDataTests: XCTestCase {
   func testSwiftDataRoutineRepositorySavesFetchesAndTogglesRoutine() throws {
     let container = try makeContainer()
     let repository = SwiftDataRoutineRepository(modelContext: container.mainContext)
-    let routine = try LocalTemplateSuggestionService().makeRoutine(
+    let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
       from: RoutineSuggestionInput(routineName: "아침 시작")
     )
 
@@ -150,12 +245,11 @@ final class FoundationSwiftDataTests: XCTestCase {
     let context = container.mainContext
     let routineRepository = SwiftDataRoutineRepository(modelContext: context)
     let runRepository = SwiftDataRoutineRunRepository(modelContext: context)
-    let routine = try LocalTemplateSuggestionService().makeRoutine(
+    let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
       from: RoutineSuggestionInput(routineName: "보존할 이름")
     )
     let run = RoutineRun(
-      routineID: routine.id,
-      routineName: routine.name,
+      routine: routine,
       completedAt: Date(),
       results: [
         RoutineStepResult(
@@ -164,8 +258,7 @@ final class FoundationSwiftDataTests: XCTestCase {
           stepType: routine.steps[0].type,
           completedAt: Date()
         )
-      ],
-      plannedSteps: routine.steps.map(RoutineStepSnapshot.init)
+      ]
     )
 
     try routineRepository.saveRoutine(routine)
@@ -182,6 +275,29 @@ final class FoundationSwiftDataTests: XCTestCase {
     XCTAssertEqual(savedRun.plannedStepCount, routine.steps.count)
     XCTAssertEqual(savedRun.plannedSteps.map(\.stepTitle), routine.steps.map(\.title))
     XCTAssertEqual(savedRun.completionRate, 1.0 / 3.0, accuracy: 0.0001)
+  }
+
+  @MainActor
+  func testRoutineRunRepositoryRejectsRunsWithoutPlannedSnapshot() throws {
+    let container = try makeContainer()
+    let runRepository = SwiftDataRoutineRunRepository(modelContext: container.mainContext)
+    let runWithoutSnapshot = RoutineRun(
+      routineID: UUID(),
+      routineName: "스냅샷 없는 실행",
+      results: [
+        RoutineStepResult(
+          stepID: UUID(),
+          stepTitle: "저장되면 안 되는 결과",
+          stepType: .confirm,
+          completedAt: Date()
+        )
+      ]
+    )
+
+    XCTAssertThrowsError(try runRepository.saveRun(runWithoutSnapshot)) {
+      XCTAssertEqual($0 as? RepositoryContractError, .routineRunSnapshotRequired)
+    }
+    XCTAssertEqual(try runRepository.fetchRuns().count, 0)
   }
 
   @MainActor
@@ -285,6 +401,14 @@ final class FoundationSwiftDataTests: XCTestCase {
       )
     }
 
+    let remoteSyncRoutine = makePersistedRoutine(remoteID: "server-id")
+    XCTAssertThrowsError(try SwiftDataMapper.makeDomainRoutine(from: remoteSyncRoutine)) {
+      XCTAssertEqual(
+        $0 as? SwiftDataMappingError,
+        .nonLocalSyncMetadata(field: "remoteID")
+      )
+    }
+
     let malformedAlarmRoutine = makePersistedRoutine(
       alarmSchedule: PersistedAlarmSchedule(
         id: UUID(),
@@ -306,11 +430,33 @@ final class FoundationSwiftDataTests: XCTestCase {
         )
       )
     }
+
+    let invalidWeekdayRoutine = makePersistedRoutine(
+      alarmSchedule: PersistedAlarmSchedule(
+        id: UUID(),
+        hour: 7,
+        minute: 0,
+        weekdaysRawValue: "[1,9]",
+        soundName: "moru-default",
+        isEnabled: true,
+        includeWeather: false,
+        includeFortune: false
+      )
+    )
+    XCTAssertThrowsError(try SwiftDataMapper.makeDomainRoutine(from: invalidWeekdayRoutine)) {
+      XCTAssertEqual(
+        $0 as? SwiftDataMappingError,
+        .invalidWeekdayRawValue(
+          field: "PersistedAlarmSchedule.weekdaysRawValue",
+          rawValue: 9
+        )
+      )
+    }
   }
 
   @MainActor
   func testLocalTemplateSuggestionCreatesThreeStepTypes() throws {
-    let service = LocalTemplateSuggestionService()
+    let service = LocalTemplateSuggestionService.shared
     let routine = try service.makeRoutine(
       from: RoutineSuggestionInput(
         routineName: "",
@@ -330,6 +476,33 @@ final class FoundationSwiftDataTests: XCTestCase {
   }
 
   @MainActor
+  func testDependencyContainerExposesRepositoryContractsInsteadOfSwiftDataContext() throws {
+    XCTAssertEqual(
+      DependencyContainer.featureVisibleDependencyKeys,
+      [
+        "routineRepository",
+        "routineRunRepository",
+        "localProfileRepository",
+        "routineSuggestionService",
+      ]
+    )
+    XCTAssertFalse(DependencyContainer.featureVisibleDependencyKeys.contains("modelContext"))
+
+    assertRoutineRepository(MockRoutineRepository.self)
+    assertRoutineRunRepository(MockRoutineRunRepository.self)
+    assertLocalProfileRepository(MockLocalProfileRepository.self)
+    assertRoutineSuggestionService(LocalTemplateSuggestionService.self)
+  }
+
+  private func assertRoutineRepository<T: RoutineRepository>(_: T.Type) {}
+
+  private func assertRoutineRunRepository<T: RoutineRunRepository>(_: T.Type) {}
+
+  private func assertLocalProfileRepository<T: LocalProfileRepository>(_: T.Type) {}
+
+  private func assertRoutineSuggestionService<T: RoutineSuggestionService>(_: T.Type) {}
+
+  @MainActor
   private func makeContainer() throws -> ModelContainer {
     try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
   }
@@ -338,7 +511,8 @@ final class FoundationSwiftDataTests: XCTestCase {
   private func makeRoutine(
     name: String,
     createdAt: Date,
-    isActive: Bool = true
+    isActive: Bool = true,
+    alarmSchedule: AlarmSchedule? = nil
   ) -> Routine {
     Routine(
       name: name,
@@ -349,6 +523,7 @@ final class FoundationSwiftDataTests: XCTestCase {
           order: 0
         )
       ],
+      alarmSchedule: alarmSchedule,
       isActive: isActive,
       createdAt: createdAt,
       updatedAt: createdAt
@@ -358,8 +533,7 @@ final class FoundationSwiftDataTests: XCTestCase {
   @MainActor
   private func makeRun(routine: Routine, startedAt: Date) -> RoutineRun {
     RoutineRun(
-      routineID: routine.id,
-      routineName: routine.name,
+      routine: routine,
       startedAt: startedAt,
       completedAt: startedAt.addingTimeInterval(60),
       results: [
@@ -369,8 +543,17 @@ final class FoundationSwiftDataTests: XCTestCase {
           stepType: routine.steps[0].type,
           completedAt: startedAt.addingTimeInterval(60)
         )
-      ],
-      plannedSteps: routine.steps.map(RoutineStepSnapshot.init)
+      ]
+    )
+  }
+
+  @MainActor
+  private func makeAlarm(isEnabled: Bool) -> AlarmSchedule {
+    AlarmSchedule(
+      hour: 7,
+      minute: 0,
+      weekdays: [.monday],
+      isEnabled: isEnabled
     )
   }
 
@@ -378,7 +561,10 @@ final class FoundationSwiftDataTests: XCTestCase {
     goalTagsRawValue: String = "[]",
     steps: [PersistedRoutineStep] = [],
     alarmSchedule: PersistedAlarmSchedule? = nil,
-    syncStatusRawValue: String = SyncStatus.localOnly.rawValue
+    syncStatusRawValue: String = SyncStatus.localOnly.rawValue,
+    remoteID: String? = nil,
+    lastSyncedAt: Date? = nil,
+    remoteRevision: String? = nil
   ) -> PersistedRoutine {
     PersistedRoutine(
       id: UUID(),
@@ -390,12 +576,13 @@ final class FoundationSwiftDataTests: XCTestCase {
       isActive: true,
       createdAt: Date(timeIntervalSince1970: 1),
       updatedAt: Date(timeIntervalSince1970: 1),
-      remoteID: nil,
+      remoteID: remoteID,
       syncStatusRawValue: syncStatusRawValue,
-      lastSyncedAt: nil,
-      remoteRevision: nil
+      lastSyncedAt: lastSyncedAt,
+      remoteRevision: remoteRevision
     )
   }
+
 }
 
 private enum TestBootstrapError: LocalizedError {

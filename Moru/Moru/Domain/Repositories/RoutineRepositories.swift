@@ -7,8 +7,19 @@
 
 import Foundation
 
+enum RepositoryContractError: Error, Equatable, LocalizedError {
+  case routineRunSnapshotRequired
+
+  var errorDescription: String? {
+    switch self {
+    case .routineRunSnapshotRequired:
+      return "RoutineRun must include planned step snapshots before it is saved."
+    }
+  }
+}
+
 @MainActor
-protocol RoutineRepository {
+protocol RoutineRepository: AnyObject {
   func fetchRoutines() throws -> [Routine]
   func fetchActiveRoutines() throws -> [Routine]
   func routine(id: UUID) throws -> Routine?
@@ -18,7 +29,7 @@ protocol RoutineRepository {
 }
 
 @MainActor
-protocol RoutineRunRepository {
+protocol RoutineRunRepository: AnyObject {
   func fetchRuns() throws -> [RoutineRun]
   func fetchRecentRuns(limit: Int) throws -> [RoutineRun]
   func fetchRuns(for routineID: UUID) throws -> [RoutineRun]
@@ -35,7 +46,7 @@ protocol RoutineRunRepository {
 }
 
 @MainActor
-protocol LocalProfileRepository {
+protocol LocalProfileRepository: AnyObject {
   func fetchProfile() throws -> LocalProfile?
   func loadOrCreateDefaultProfile() throws -> LocalProfile
   func saveProfile(_ profile: LocalProfile) throws

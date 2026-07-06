@@ -13,6 +13,8 @@ enum SwiftDataMappingError: Error, Equatable, LocalizedError {
   case malformedIntArray(field: String, rawValue: String)
   case unknownStepType(field: String, rawValue: String)
   case unknownSyncStatus(rawValue: String)
+  case nonLocalSyncMetadata(field: String)
+  case invalidWeekdayRawValue(field: String, rawValue: Int)
 
   var errorDescription: String? {
     switch self {
@@ -24,6 +26,10 @@ enum SwiftDataMappingError: Error, Equatable, LocalizedError {
       return "Unknown routine step type '\(rawValue)' in \(field)."
     case .unknownSyncStatus(let rawValue):
       return "Unknown sync status '\(rawValue)'."
+    case .nonLocalSyncMetadata(let field):
+      return "Non-local sync metadata is not allowed in v1: \(field)."
+    case .invalidWeekdayRawValue(let field, let rawValue):
+      return "Invalid weekday raw value '\(rawValue)' in \(field)."
     }
   }
 }
@@ -247,14 +253,20 @@ enum SwiftDataMapper {
   private static func makeDomainAlarmSchedule(
     from persisted: PersistedAlarmSchedule
   ) throws -> AlarmSchedule {
+    let weekdaysRawValueField = "PersistedAlarmSchedule.weekdaysRawValue"
+    let weekdayRawValues = try decodeIntArray(
+      persisted.weekdaysRawValue,
+      field: weekdaysRawValueField
+    )
+
     return AlarmSchedule(
       id: persisted.id,
       hour: persisted.hour,
       minute: persisted.minute,
-      weekdays: try decodeIntArray(
-        persisted.weekdaysRawValue,
-        field: "PersistedAlarmSchedule.weekdaysRawValue"
-      ).compactMap(Weekday.init(rawValue:)),
+      weekdays: try makeWeekdays(
+        rawValues: weekdayRawValues,
+        field: weekdaysRawValueField
+      ),
       soundName: persisted.soundName,
       isEnabled: persisted.isEnabled,
       includeWeather: persisted.includeWeather,
@@ -342,12 +354,23 @@ enum SwiftDataMapper {
       throw SwiftDataMappingError.unknownSyncStatus(rawValue: syncStatusRawValue)
     }
 
-    return SyncMetadata(
-      remoteID: remoteID,
-      status: syncStatus,
-      lastSyncedAt: lastSyncedAt,
-      remoteRevision: remoteRevision
-    )
+    guard syncStatus == .localOnly else {
+      throw SwiftDataMappingError.unknownSyncStatus(rawValue: syncStatusRawValue)
+    }
+
+    if remoteID != nil {
+      throw SwiftDataMappingError.nonLocalSyncMetadata(field: "remoteID")
+    }
+
+    if lastSyncedAt != nil {
+      throw SwiftDataMappingError.nonLocalSyncMetadata(field: "lastSyncedAt")
+    }
+
+    if remoteRevision != nil {
+      throw SwiftDataMappingError.nonLocalSyncMetadata(field: "remoteRevision")
+    }
+
+    return .localOnly
   }
 
   private static func v1Sync(for sync: SyncMetadata?) -> SyncMetadata {
@@ -368,6 +391,22 @@ enum SwiftDataMapper {
     }
 
     return stepType
+  }
+
+  private static func makeWeekdays(
+    rawValues: [Int],
+    field: String
+  ) throws -> [Weekday] {
+    try rawValues.map { rawValue in
+      guard let weekday = Weekday(rawValue: rawValue) else {
+        throw SwiftDataMappingError.invalidWeekdayRawValue(
+          field: field,
+          rawValue: rawValue
+        )
+      }
+
+      return weekday
+    }
   }
 
   private static func encodeStringArray(_ values: [String]) -> String {

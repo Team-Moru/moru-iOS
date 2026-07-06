@@ -8,6 +8,13 @@
 import SwiftData
 
 struct DependencyContainer {
+  static let featureVisibleDependencyKeys: Set<String> = [
+    "routineRepository",
+    "routineRunRepository",
+    "localProfileRepository",
+    "routineSuggestionService",
+  ]
+
   let routineRepository: any RoutineRepository
   let routineRunRepository: any RoutineRunRepository
   let localProfileRepository: any LocalProfileRepository
@@ -18,7 +25,7 @@ struct DependencyContainer {
       routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
       routineRunRepository: SwiftDataRoutineRunRepository(modelContext: modelContext),
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
-      routineSuggestionService: LocalTemplateSuggestionService()
+      routineSuggestionService: LocalTemplateSuggestionService.shared
     )
   }
 
@@ -28,7 +35,7 @@ struct DependencyContainer {
       routineRepository: MockRoutineRepository(),
       routineRunRepository: MockRoutineRunRepository(),
       localProfileRepository: MockLocalProfileRepository(),
-      routineSuggestionService: LocalTemplateSuggestionService()
+      routineSuggestionService: LocalTemplateSuggestionService.shared
     )
   }
   #endif

@@ -276,25 +276,43 @@ struct RoutineRun: Identifiable, Codable, Hashable {
     self.sync = sync
   }
 
+  init(
+    id: UUID = UUID(),
+    routine: Routine,
+    startedAt: Date = Date(),
+    completedAt: Date? = nil,
+    results: [RoutineStepResult] = [],
+    endedEarly: Bool = false,
+    sync: SyncMetadata? = .localOnly
+  ) {
+    self.init(
+      id: id,
+      routineID: routine.id,
+      routineName: routine.name,
+      startedAt: startedAt,
+      completedAt: completedAt,
+      results: results,
+      plannedSteps: routine.steps
+        .sorted { $0.order < $1.order }
+        .map(RoutineStepSnapshot.init),
+      endedEarly: endedEarly,
+      sync: sync
+    )
+  }
+
   var plannedStepCount: Int {
     plannedSteps.count
   }
 
   var completionRate: Double {
-    let denominator = max(plannedStepCount, results.count)
+    let denominator = plannedStepCount
 
     guard denominator > 0 else {
       return 0
     }
 
     let completedStepIDs = Set(results.filter(\.isCompleted).map(\.stepID))
-    let completedCount: Int
-
-    if plannedSteps.isEmpty {
-      completedCount = results.filter(\.isCompleted).count
-    } else {
-      completedCount = plannedSteps.filter { completedStepIDs.contains($0.stepID) }.count
-    }
+    let completedCount = plannedSteps.filter { completedStepIDs.contains($0.stepID) }.count
 
     return Double(completedCount) / Double(denominator)
   }

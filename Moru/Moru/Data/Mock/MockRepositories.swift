@@ -8,7 +8,7 @@
 #if DEBUG
 import Foundation
 
-nonisolated final class MockRoutineRepository: RoutineRepository {
+final class MockRoutineRepository: RoutineRepository {
   private var routines: [Routine]
 
   init(routines: [Routine] = []) {
@@ -56,7 +56,7 @@ nonisolated final class MockRoutineRepository: RoutineRepository {
   }
 }
 
-nonisolated final class MockRoutineRunRepository: RoutineRunRepository {
+final class MockRoutineRunRepository: RoutineRunRepository {
   private var runs: [RoutineRun]
 
   init(runs: [RoutineRun] = []) {
@@ -109,6 +109,10 @@ nonisolated final class MockRoutineRunRepository: RoutineRunRepository {
 
   @MainActor
   func saveRun(_ run: RoutineRun) throws {
+    guard !run.plannedSteps.isEmpty else {
+      throw RepositoryContractError.routineRunSnapshotRequired
+    }
+
     if let index = runs.firstIndex(where: { $0.id == run.id }) {
       runs[index] = run
     } else {
@@ -122,7 +126,7 @@ nonisolated final class MockRoutineRunRepository: RoutineRunRepository {
   }
 }
 
-nonisolated final class MockLocalProfileRepository: LocalProfileRepository {
+final class MockLocalProfileRepository: LocalProfileRepository {
   private var profile: LocalProfile?
 
   init(profile: LocalProfile? = nil) {

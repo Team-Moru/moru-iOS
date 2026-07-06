@@ -30,11 +30,15 @@ struct RoutineSuggestionInput: Hashable {
 }
 
 @MainActor
-protocol RoutineSuggestionService {
+protocol RoutineSuggestionService: AnyObject {
   func makeRoutine(from input: RoutineSuggestionInput) throws -> Routine
 }
 
-struct LocalTemplateSuggestionService: RoutineSuggestionService {
+final class LocalTemplateSuggestionService: RoutineSuggestionService {
+  static let shared = LocalTemplateSuggestionService()
+
+  private init() {}
+
   func makeRoutine(from input: RoutineSuggestionInput) throws -> Routine {
     let now = Date()
     let trimmedName = input.routineName.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -34,7 +34,8 @@ enum AppBootstrapper {
       let modelContainer = try modelContainerFactory()
       let dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
       let sessionStore = SessionStore(
-        localProfileRepository: dependencies.localProfileRepository
+        localProfileRepository: dependencies.localProfileRepository,
+        routineRepository: dependencies.routineRepository
       )
       return .ready(
         AppRuntime(

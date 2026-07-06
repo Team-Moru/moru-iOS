@@ -94,6 +94,8 @@ nonisolated final class SwiftDataRoutineRunRepository: RoutineRunRepository {
 
   @MainActor
   func saveRun(_ run: RoutineRun) throws {
+    try validateRunForPersistence(run)
+
     if let persisted = try persistedRun(id: run.id) {
       SwiftDataMapper.update(persisted, with: run, in: modelContext)
     } else {
@@ -118,5 +120,11 @@ nonisolated final class SwiftDataRoutineRunRepository: RoutineRunRepository {
     descriptor.fetchLimit = 1
 
     return try modelContext.fetch(descriptor).first
+  }
+
+  private func validateRunForPersistence(_ run: RoutineRun) throws {
+    guard !run.plannedSteps.isEmpty else {
+      throw RepositoryContractError.routineRunSnapshotRequired
+    }
   }
 }

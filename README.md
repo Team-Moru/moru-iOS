@@ -351,8 +351,12 @@ Moru
 - v1 저장 정책은 **localOnly + hard delete**입니다.
 - `RoutineRepository.deleteRoutine(id:)`는 Routine을 실제 삭제합니다.
 - Routine 삭제 시 step/alarm은 SwiftData cascade로 삭제하고, `RoutineRun` 기록은 유지합니다.
+- `RoutineRun`은 실행 당시 step snapshot을 포함해야 하며, snapshot 없는 run 저장은 repository에서 거부합니다.
 - soft delete를 뜻하는 `deletedAt`, `includeDeleted`, `pendingDelete` 계약은 v1에서 사용하지 않습니다.
+- v1 sync 컬럼은 `localOnly`/`nil`만 유효합니다. persisted read-path에서도 remote metadata가 보이면 mapper error로 다룹니다.
+- Session ready 조건은 `LocalProfile + 활성 Routine + enabled alarm`입니다. 프로필만 생성된 상태는 온보딩 완료가 아닙니다.
 - Feature View/ViewModel은 `SwiftData`, `@Query`, `ModelContext`를 직접 사용하지 않습니다.
 - 화면 계층은 `DependencyContainer`가 제공하는 Repository/Service 계약만 사용합니다.
 - SwiftData 접근은 `Data/Persistence`, `Data/Local`, App bootstrap, 테스트로 제한합니다.
+- Foundation 테스트는 `DependencyContainer`가 repository/service 계약만 노출하는지 확인하고, 실제 소스 토큰 검사는 `bash Scripts/check-swiftdata-boundary.sh`로 수행합니다.
 - 앱 루트는 `.modelContainer(...)`를 전역 주입하지 않습니다.
