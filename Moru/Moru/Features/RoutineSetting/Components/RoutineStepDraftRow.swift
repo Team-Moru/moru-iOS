@@ -84,7 +84,7 @@ struct RoutineStepDraftRow: View {
       RoundedRectangle(cornerRadius: AppRadius.sm)
         .stroke(AppColor.moruBorder, lineWidth: 1)
     )
-    .shadow(color: AppColor.babyBlue150.opacity(1.25), radius: 10, x: 0, y: 0)
+    .shadow(color: AppColor.babyBlue150, radius: 10, x: 0, y: 0)
     .contentShape(Rectangle())
     .onTapGesture {
       if isEditing {

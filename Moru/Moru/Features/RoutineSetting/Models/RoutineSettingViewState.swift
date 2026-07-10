@@ -63,11 +63,7 @@ struct RoutineDraftState: Equatable, Identifiable {
     hour: Int = 7,
     minute: Int = 0,
     selectedWeekdays: Set<Weekday> = [.monday, .tuesday, .wednesday, .thursday, .friday],
-    steps: [RoutineStepDraftState] = [
-      RoutineStepDraftState(type: .confirm, title: "잠자리 정리하기", estimatedMinutes: 1),
-      RoutineStepDraftState(type: .timer, title: "심호흡하며 명상하기", estimatedMinutes: 3),
-      RoutineStepDraftState(type: .input, title: "오늘의 다짐 확인하기", estimatedMinutes: 1),
-    ],
+    steps: [RoutineStepDraftState] = [],
     isActive: Bool = true
   ) {
     self.id = id
@@ -84,6 +80,7 @@ struct RoutineDraftState: Equatable, Identifiable {
   var canSave: Bool {
     !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       && !selectedWeekdays.isEmpty
+      && !steps.isEmpty
       && steps.allSatisfy { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
   }
 }

@@ -52,7 +52,9 @@ struct HomeView: View {
     .task {
       viewModel.load()
     }
-    .sheet(isPresented: $isRoutineSettingPresented) {
+    .sheet(isPresented: $isRoutineSettingPresented, onDismiss: {
+      viewModel.load()
+    }) {
       RoutineSettingView(dependencies: dependencies)
     }
   }

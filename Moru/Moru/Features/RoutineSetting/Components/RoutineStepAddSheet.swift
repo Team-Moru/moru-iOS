@@ -89,10 +89,12 @@ struct RoutineStepAddSheet: View {
           Spacer()
 
           Button {
-            estimatedMinutes += 1
+            estimatedMinutes = min(estimatedMinutes + 1, 60)
           } label: {
             MoruRoutineStepControlIcon(style: .plus)
+              .opacity(estimatedMinutes == 60 ? 0.35 : 1)
           }
+          .disabled(estimatedMinutes == 60)
           .buttonStyle(.plain)
         }
         .padding(.horizontal, AppSpacing.md)

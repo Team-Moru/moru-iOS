@@ -34,7 +34,10 @@ struct CurrentRoutineCard: View {
         .buttonStyle(.plain)
 
         if let routine {
-          routineSummary(routine)
+          Button(action: onStart) {
+            routineSummary(routine)
+          }
+          .buttonStyle(.plain)
 
           VStack(spacing: AppSpacing.none) {
             ForEach(routine.steps) { step in

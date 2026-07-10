@@ -16,8 +16,6 @@ struct RoutineScheduleSettingView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.none) {
-      progressBar
-
       Text("루틴을 실행할\n시간을 설정해 주세요")
         .font(AppFont.heading1SemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
@@ -72,21 +70,6 @@ struct RoutineScheduleSettingView: View {
     .padding(.top, AppSpacing.fiftySix)
     .padding(.bottom, AppSpacing.lg)
     .background(AppColor.babyBlue50.ignoresSafeArea())
-  }
-
-  private var progressBar: some View {
-    GeometryReader { proxy in
-      ZStack(alignment: .leading) {
-        Capsule()
-          .fill(AppColor.grayWhite)
-
-        Capsule()
-          .fill(AppColor.orange350)
-          .frame(width: proxy.size.width * 0.78)
-      }
-    }
-    .frame(height: 4)
-    .padding(.horizontal, AppSpacing.ten)
   }
 
   private var timeDragPicker: some View {

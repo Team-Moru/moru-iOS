@@ -276,7 +276,7 @@ struct RoutineEditorView: View {
         RoundedRectangle(cornerRadius: AppRadius.sm)
           .stroke(AppColor.moruBorder, lineWidth: 1)
       )
-      .shadow(color: AppColor.babyBlue150.opacity(1.25), radius: 10, x: 0, y: 0)
+      .shadow(color: AppColor.babyBlue150, radius: 10, x: 0, y: 0)
     }
     .buttonStyle(.plain)
   }
@@ -402,7 +402,14 @@ struct RoutineEditorView: View {
 #if DEBUG
 #Preview {
   RoutineEditorView(
-    draft: RoutineDraftState(title: "활력 루틴"),
+    draft: RoutineDraftState(
+      title: "활력 루틴",
+      steps: [
+        RoutineStepDraftState(type: .confirm, title: "잠자리 정리하기", estimatedMinutes: 1),
+        RoutineStepDraftState(type: .timer, title: "심호흡하며 명상하기", estimatedMinutes: 3),
+        RoutineStepDraftState(type: .input, title: "오늘의 다짐 확인하기", estimatedMinutes: 1),
+      ]
+    ),
     onSave: { _ in },
     onResolveWeekdayConflict: { _ in }
   )

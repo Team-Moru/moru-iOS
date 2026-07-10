@@ -176,14 +176,28 @@ final class HomeViewModel {
 
     return HomeStreakState(
       currentDays: currentStreak,
-      bestDays: max(currentStreak, completedDates.count),
+      bestDays: calculateBestStreak(from: completedDates),
       completedWeekdays: completedWeekdays
     )
   }
 
   private func consecutiveCompletedDays(from completedDates: Set<Date>) -> Int {
+    let today = calendar.startOfDay(for: Date())
+    guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else {
+      return 0
+    }
+
+    let startPoint: Date
+    if completedDates.contains(today) {
+      startPoint = today
+    } else if completedDates.contains(yesterday) {
+      startPoint = yesterday
+    } else {
+      return 0
+    }
+
     var count = 0
-    var cursor = calendar.startOfDay(for: Date())
+    var cursor = startPoint
 
     while completedDates.contains(cursor) {
       count += 1
@@ -196,6 +210,30 @@ final class HomeViewModel {
     }
 
     return count
+  }
+
+  private func calculateBestStreak(from completedDates: Set<Date>) -> Int {
+    guard !completedDates.isEmpty else { return 0 }
+    let sortedDates = completedDates.sorted()
+    var maxStreak = 0
+    var currentStreak = 0
+    var previousDate: Date? = nil
+
+    for date in sortedDates {
+      if let prev = previousDate {
+        if let nextDay = calendar.date(byAdding: .day, value: 1, to: prev),
+           calendar.isDate(date, inSameDayAs: nextDay) {
+          currentStreak += 1
+        } else {
+          maxStreak = max(maxStreak, currentStreak)
+          currentStreak = 1
+        }
+      } else {
+        currentStreak = 1
+      }
+      previousDate = date
+    }
+    return max(maxStreak, currentStreak)
   }
 
   private func estimatedMinutes(for routine: Routine) -> Int {

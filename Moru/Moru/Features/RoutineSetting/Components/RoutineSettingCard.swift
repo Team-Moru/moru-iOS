@@ -46,7 +46,7 @@ struct RoutineSettingCard: View {
       RoundedRectangle(cornerRadius: AppRadius.lg)
         .fill(isActive ? AppColor.orange150 : AppColor.grayWhite.opacity(0.2))
         .shadow(
-          color: AppColor.babyBlue150.opacity(1.25),
+          color: AppColor.babyBlue150,
           radius: 10,
           x: 0,
           y: 0
