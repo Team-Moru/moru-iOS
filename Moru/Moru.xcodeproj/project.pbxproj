@@ -127,16 +127,16 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
-					TargetAttributes = {
-						E0D6C3B62FF1232200DA2A54 = {
-							CreatedOnToolsVersion = 26.5;
-						};
-						E0D6C3D32FF12A0000DA2A54 = {
-							CreatedOnToolsVersion = 26.5;
-							TestTargetID = E0D6C3B62FF1232200DA2A54;
-						};
+				TargetAttributes = {
+					E0D6C3B62FF1232200DA2A54 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					E0D6C3D32FF12A0000DA2A54 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = E0D6C3B62FF1232200DA2A54;
 					};
 				};
+			};
 			buildConfigurationList = E0D6C3B22FF1232200DA2A54 /* Build configuration list for PBXProject "Moru" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -326,6 +326,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2RA6Y95Z22;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MoruInfo.plist;
@@ -359,6 +360,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 2RA6Y95Z22;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MoruInfo.plist;

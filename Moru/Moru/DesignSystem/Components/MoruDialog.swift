@@ -30,7 +30,8 @@ struct MoruDialog: View {
           .multilineTextAlignment(.center)
           .frame(width: 320)
       }
-      .frame(width: 320, height: 95)
+      .frame(width: 320)
+      .padding(.top, AppSpacing.thirtySix)
 
       HStack(spacing: 0) {
         dialogActionButton(
@@ -49,7 +50,7 @@ struct MoruDialog: View {
       }
       .frame(width: 320, height: 54)
     }
-    .frame(width: 320, height: 201)
+    .frame(width: 320)
     .background(AppColor.grayWhite)
     .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
   }

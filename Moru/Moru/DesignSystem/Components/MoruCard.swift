@@ -8,6 +8,11 @@
 import SwiftUI
 
 struct MoruCard<Content: View>: View {
+  var backgroundColor: Color = AppColor.grayWhite
+  var shadowColor: Color = AppShadow.cardColor
+  var shadowRadius: CGFloat = AppShadow.cardRadius
+  var shadowX: CGFloat = 0
+  var shadowY: CGFloat = AppShadow.cardY
   @ViewBuilder var content: Content
 
   var body: some View {
@@ -16,8 +21,8 @@ struct MoruCard<Content: View>: View {
     }
     .padding(AppSpacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(AppColor.grayWhite)
+    .background(backgroundColor)
     .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
-    .shadow(color: AppShadow.cardColor, radius: AppShadow.cardRadius, y: AppShadow.cardY)
+    .shadow(color: shadowColor, radius: shadowRadius, x: shadowX, y: shadowY)
   }
 }
