@@ -48,17 +48,14 @@ protocol CompleteOnboardingUseCaseProtocol: AnyObject {
 }
 
 nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProtocol {
-  private let localProfileRepository: any LocalProfileRepository
-  private let routineRepository: any RoutineRepository
+  private let onboardingRepository: any OnboardingRepository
   private let routineSuggestionService: any RoutineSuggestionService
 
   init(
-    localProfileRepository: any LocalProfileRepository,
-    routineRepository: any RoutineRepository,
+    onboardingRepository: any OnboardingRepository,
     routineSuggestionService: any RoutineSuggestionService
   ) {
-    self.localProfileRepository = localProfileRepository
-    self.routineRepository = routineRepository
+    self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
   }
 
@@ -66,10 +63,9 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
   func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult {
     try validate(request)
 
-    var profile = try localProfileRepository.loadOrCreateDefaultProfile()
+    var profile = try onboardingRepository.fetchProfile() ?? LocalProfile()
     profile.selectedVoice = request.selectedVoice
     profile.updatedAt = Date()
-    try localProfileRepository.saveProfile(profile)
 
     var routine = try routineSuggestionService.makeRoutine(from: request.suggestionInput)
     routine.isActive = true
@@ -79,7 +75,7 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
     )
     routine.sync = .localOnly
     routine.updatedAt = Date()
-    try routineRepository.saveRoutine(routine)
+    try onboardingRepository.saveCompletion(profile: profile, routine: routine)
 
     return CompleteOnboardingResult(profile: profile, routine: routine)
   }

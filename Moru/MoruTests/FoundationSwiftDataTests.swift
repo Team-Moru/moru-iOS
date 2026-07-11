@@ -483,6 +483,7 @@ final class FoundationSwiftDataTests: XCTestCase {
         "routineRepository",
         "routineRunRepository",
         "localProfileRepository",
+        "onboardingRepository",
         "routineSuggestionService",
       ]
     )
@@ -491,6 +492,7 @@ final class FoundationSwiftDataTests: XCTestCase {
     assertRoutineRepository(MockRoutineRepository.self)
     assertRoutineRunRepository(MockRoutineRunRepository.self)
     assertLocalProfileRepository(MockLocalProfileRepository.self)
+    assertOnboardingRepository(MockOnboardingRepository.self)
     assertRoutineSuggestionService(LocalTemplateSuggestionService.self)
   }
 
@@ -499,6 +501,8 @@ final class FoundationSwiftDataTests: XCTestCase {
   private func assertRoutineRunRepository<T: RoutineRunRepository>(_: T.Type) {}
 
   private func assertLocalProfileRepository<T: LocalProfileRepository>(_: T.Type) {}
+
+  private func assertOnboardingRepository<T: OnboardingRepository>(_: T.Type) {}
 
   private func assertRoutineSuggestionService<T: RoutineSuggestionService>(_: T.Type) {}
 

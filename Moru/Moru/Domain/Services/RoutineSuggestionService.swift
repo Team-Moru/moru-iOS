@@ -68,12 +68,22 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
       minute: input.wakeUpMinute,
       weekdays: input.weekdays
     )
+    let steps = template.steps.map {
+      RoutineStep(
+        type: $0.type,
+        title: $0.title,
+        instruction: $0.instruction,
+        order: $0.order,
+        estimatedSeconds: $0.estimatedSeconds,
+        isRequired: $0.isRequired
+      )
+    }
 
     return Routine(
       name: routineName,
       summary: template.summary,
       goalTags: input.goalTags,
-      steps: template.steps,
+      steps: steps,
       alarmSchedule: alarmSchedule,
       createdAt: now,
       updatedAt: now

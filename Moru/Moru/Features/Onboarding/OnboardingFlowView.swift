@@ -16,8 +16,7 @@ struct OnboardingFlowView: View {
     onCompleted: @escaping () -> Void
   ) {
     let useCase = CompleteOnboardingUseCase(
-      localProfileRepository: dependencies.localProfileRepository,
-      routineRepository: dependencies.routineRepository,
+      onboardingRepository: dependencies.onboardingRepository,
       routineSuggestionService: dependencies.routineSuggestionService
     )
     _viewModel = StateObject(
@@ -455,7 +454,7 @@ private struct OnboardingAlarmSettingView: View {
 
   var body: some View {
     OnboardingStepLayout(
-      title: "정리된\n루틴이에요",
+      title: "루틴 알림을\n설정해주세요",
       subtitle: "",
       titleSpacing: AppSpacing.forty
     ) {

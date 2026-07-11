@@ -159,4 +159,28 @@ final class MockLocalProfileRepository: LocalProfileRepository {
     profile = nil
   }
 }
+
+final class MockOnboardingRepository: OnboardingRepository {
+  private let localProfileRepository: MockLocalProfileRepository
+  private let routineRepository: MockRoutineRepository
+
+  init(
+    localProfileRepository: MockLocalProfileRepository,
+    routineRepository: MockRoutineRepository
+  ) {
+    self.localProfileRepository = localProfileRepository
+    self.routineRepository = routineRepository
+  }
+
+  @MainActor
+  func fetchProfile() throws -> LocalProfile? {
+    try localProfileRepository.fetchProfile()
+  }
+
+  @MainActor
+  func saveCompletion(profile: LocalProfile, routine: Routine) throws {
+    try localProfileRepository.saveProfile(profile)
+    try routineRepository.saveRoutine(routine)
+  }
+}
 #endif

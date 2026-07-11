@@ -16,8 +16,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let dependencies = DependencyContainer.local(modelContext: container.mainContext)
     let useCase = CompleteOnboardingUseCase(
-      localProfileRepository: dependencies.localProfileRepository,
-      routineRepository: dependencies.routineRepository,
+      onboardingRepository: dependencies.onboardingRepository,
       routineSuggestionService: dependencies.routineSuggestionService
     )
 
@@ -67,8 +66,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let dependencies = DependencyContainer.local(modelContext: container.mainContext)
     let useCase = CompleteOnboardingUseCase(
-      localProfileRepository: dependencies.localProfileRepository,
-      routineRepository: dependencies.routineRepository,
+      onboardingRepository: dependencies.onboardingRepository,
       routineSuggestionService: dependencies.routineSuggestionService
     )
 
@@ -148,6 +146,9 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(first.steps.map(\.type), second.steps.map(\.type))
     XCTAssertEqual(first.steps.map(\.title), second.steps.map(\.title))
     XCTAssertEqual(first.steps.map(\.estimatedSeconds), second.steps.map(\.estimatedSeconds))
+    XCTAssertTrue(
+      Set(first.steps.map(\.id)).isDisjoint(with: Set(second.steps.map(\.id)))
+    )
     XCTAssertEqual(Set(first.steps.map(\.type)), Set(RoutineStepType.allCases))
     XCTAssertEqual(first.sync?.status, .localOnly)
     XCTAssertNil(first.sync?.remoteID)
@@ -230,8 +231,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       let container = try ModelContainer.moruContainer(storeURL: storeURL)
       let dependencies = DependencyContainer.local(modelContext: container.mainContext)
       let useCase = CompleteOnboardingUseCase(
-        localProfileRepository: dependencies.localProfileRepository,
-        routineRepository: dependencies.routineRepository,
+        onboardingRepository: dependencies.onboardingRepository,
         routineSuggestionService: dependencies.routineSuggestionService
       )
 

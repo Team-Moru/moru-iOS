@@ -68,3 +68,10 @@ protocol LocalProfileRepository: AnyObject {
   @MainActor
   func deleteProfile() throws
 }
+
+protocol OnboardingRepository: AnyObject {
+  @MainActor
+  func fetchProfile() throws -> LocalProfile?
+  @MainActor
+  func saveCompletion(profile: LocalProfile, routine: Routine) throws
+}
