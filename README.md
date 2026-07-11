@@ -7,7 +7,7 @@
 > 모루(MORU)는 모닝 루틴의 줄임말로, 사용자가 아침에 눈을 떠서 기분 좋은 루틴을 완수할 수 있도록 돕는 음성 코칭 기반 알람 어플리케이션입니다.
 
 [![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)]()
-[![Xcode](https://img.shields.io/badge/Xcode-26.5-blue.svg)]()
+[![Xcode](https://img.shields.io/badge/Xcode-26.3+-blue.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
 
 ---
@@ -22,7 +22,7 @@
 | 이름 | 역할 및 담당 영역 |
 | :--- | :--- |
 | **초이** | Foundation/SwiftData + 온보딩(첫 루틴 생성 및 알람 설정 후 SwiftData에 저장) 구현 |
-| **걔미** | 루틴 실행 및 완료 UI + Local TTS 음성 안내 + Speech Input 구현 |
+| **개미** | 루틴 실행 및 완료 UI + Local TTS 음성 안내 + Speech Input 구현 |
 | **찬혁** | Home/Routine 탭에 해당하는 UI 구현  |
 | **레티** | 이력 + 프로필 + 설정 UI 구현 |
 
@@ -44,8 +44,8 @@
 ## 🤔 요구사항
 For building and running the application you need:
 
-iOS 26.5 <br>
-Xcode 26.5 <br>
+iOS 26.0 <br>
+Xcode 26.3+ <br>
 Swift 6.2
 
 <br>
@@ -99,6 +99,24 @@ Swift 6.2
 
 ## 🔖 브랜치 컨벤션
 속도감 있는 개발과 유연한 통합을 위해 **`main` 브랜치 중심 개발** 전략을 채택합니다. 데모 직전에만 안정화 브랜치를 분기합니다.
+
+### Git-Flow 학습 및 팀 적용 방식
+
+MORU iOS 팀은 Git-Flow의 핵심 개념인 **역할별 브랜치 분리와 PR 기반 병합**을 참고하되, 현재 프로젝트 규모와 일정에 맞게 단순화해서 적용합니다.
+
+- `main`은 항상 빌드 및 실행 가능한 최신 상태를 유지합니다.
+- 기능 개발, 버그 수정, 문서 작업은 각각 목적에 맞는 브랜치에서 진행합니다.
+- 작업 완료 후 Pull Request를 생성하고, 팀원 리뷰를 거친 뒤 `main`에 병합합니다.
+- 실험성 작업은 `spike/*` 브랜치에서 검증하고, 실제 반영이 필요하면 `feat/*` 브랜치에서 정리해 구현합니다.
+
+### 작업 흐름
+
+1. 작업할 내용을 GitHub Issue로 기록합니다.
+2. 작업 성격에 맞는 브랜치를 생성합니다.
+3. 기능 구현 또는 문서 작업을 진행합니다.
+4. 로컬에서 빌드 또는 Preview를 확인합니다.
+5. 원격 브랜치에 push 후 Pull Request를 생성합니다.
+6. 리뷰를 반영한 뒤 `main`에 merge합니다.
 
 ### 📌 브랜치 명명 규칙 (Branch Naming)
 - **`main`** : 항상 빌드 및 실행 가능한 최신 상태 유지 (PR 리뷰 후 병합)
@@ -233,7 +251,16 @@ var messages: Array<String>?  // ❌ 나쁜 예
     6. `PR 태그 종류`, PR 제목의 태그는 아래 형식을 따른다.
 
 #### 🌟 태그 종류 (커밋 컨벤션과 동일)
-<!-- 팀원들끼리 협의하여 기록해주세요! -->
+
+| 태그 | 설명 |
+| --- | --- |
+| `[Feat]` | 새로운 기능 또는 화면 구현 |
+| `[Fix]` | 버그 수정 |
+| `[Design]` | UI 디자인, 스타일, 레이아웃 변경 |
+| `[Refactor]` | 동작 변경 없는 코드 구조 개선 |
+| `[Docs]` | README, 문서 수정 |
+| `[Chore]` | 설정, 빌드, 파일 정리 등 기타 작업 |
+| `[Test]` | 테스트 코드 추가 및 수정 |
 
 ### ✅ PR 예시 모음
 >  [Chore] 프로젝트 초기 세팅 <br>
@@ -246,7 +273,31 @@ var messages: Array<String>?  // ❌ 나쁜 예
 
 ## 📑 커밋 컨벤션
 ### 🏷️ 커밋 태그 가이드
-<!-- 팀원들끼리 협의하여 기록해주세요! -->
+
+커밋 메시지는 아래 형식을 사용합니다.
+
+```text
+[태그] 작업 내용
+```
+
+예시:
+
+```text
+[Feat] 홈 화면 UI 구현
+[Fix] 디자인 토큰 중복 선언 제거
+[Refactor] 공용 컴포넌트 파일 구조 정리
+[Docs] README 컨벤션 추가
+```
+
+| 태그 | 설명 |
+| --- | --- |
+| `[Feat]` | 새로운 기능 또는 화면 구현 |
+| `[Fix]` | 버그 수정 |
+| `[Design]` | UI 디자인, 스타일, 레이아웃 변경 |
+| `[Refactor]` | 동작 변경 없는 코드 구조 개선 |
+| `[Docs]` | 문서 추가 및 수정 |
+| `[Chore]` | 설정, 빌드, 파일 정리 등 기타 작업 |
+| `[Test]` | 테스트 코드 추가 및 수정 |
 
 ### ✅ 커밋 예시 모음
 >  [Chore] 프로젝트 초기 세팅 <br>
@@ -295,3 +346,17 @@ Moru
    ├─ History         // 이력/주간 리포트/일별 기록
    └─ Profile         // 설정
 ```
+
+### Foundation / SwiftData v1 기준
+- v1 저장 정책은 **localOnly + hard delete**입니다.
+- `RoutineRepository.deleteRoutine(id:)`는 Routine을 실제 삭제합니다.
+- Routine 삭제 시 step/alarm은 SwiftData cascade로 삭제하고, `RoutineRun` 기록은 유지합니다.
+- `RoutineRun`은 실행 당시 step snapshot을 포함해야 하며, snapshot 없는 run 저장은 repository에서 거부합니다.
+- soft delete를 뜻하는 `deletedAt`, `includeDeleted`, `pendingDelete` 계약은 v1에서 사용하지 않습니다.
+- v1 sync 컬럼은 `localOnly`/`nil`만 유효합니다. persisted read-path에서도 remote metadata가 보이면 mapper error로 다룹니다.
+- Session ready 조건은 `LocalProfile + 활성 Routine + enabled alarm`입니다. 프로필만 생성된 상태는 온보딩 완료가 아닙니다.
+- Feature View/ViewModel은 `SwiftData`, `@Query`, `ModelContext`를 직접 사용하지 않습니다.
+- 화면 계층은 `DependencyContainer`가 제공하는 Repository/Service 계약만 사용합니다.
+- SwiftData 접근은 `Data/Persistence`, `Data/Local`, App bootstrap, 테스트로 제한합니다.
+- Foundation 테스트는 `DependencyContainer`가 repository/service 계약만 노출하는지 확인하고, 실제 소스 토큰 검사는 `bash Scripts/check-swiftdata-boundary.sh`로 수행합니다.
+- 앱 루트는 `.modelContainer(...)`를 전역 주입하지 않습니다.

@@ -9,9 +9,24 @@ import SwiftUI
 
 @main
 struct MoruApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
+  private let bootstrapState: AppBootstrapState
+
+  @MainActor
+  init() {
+    bootstrapState = AppBootstrapper.make()
+  }
+
+  var body: some Scene {
+    WindowGroup {
+      switch bootstrapState {
+      case .ready(let runtime):
+        AppRouter(
+          dependencies: runtime.dependencies,
+          sessionStore: runtime.sessionStore
+        )
+      case .failed(let failure):
+        AppRouter(bootstrapFailureMessage: failure.message)
+      }
     }
+  }
 }
