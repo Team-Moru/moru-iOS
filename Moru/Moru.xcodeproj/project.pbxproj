@@ -371,9 +371,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = MoruInfo.plist;
-				INFOPLIST_KEY_UIAppFonts = "Pretendard-Black.otf Pretendard-ExtraBold.otf Pretendard-Bold.otf Pretendard-SemiBold.otf Pretendard-Medium.otf Pretendard-Regular.otf Pretendard-Light.otf Pretendard-ExtraLight.otf Pretendard-Thin.otf";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -393,7 +390,6 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 6.2;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -408,9 +404,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = MoruInfo.plist;
-				INFOPLIST_KEY_UIAppFonts = "Pretendard-Black.otf Pretendard-ExtraBold.otf Pretendard-Bold.otf Pretendard-SemiBold.otf Pretendard-Medium.otf Pretendard-Regular.otf Pretendard-Light.otf Pretendard-ExtraLight.otf Pretendard-Thin.otf";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -430,7 +423,6 @@
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 6.2;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
