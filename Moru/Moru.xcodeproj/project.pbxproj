@@ -83,6 +83,10 @@
 					E0D6C3B62FF1232200DA2A54 = {
 						CreatedOnToolsVersion = 26.5;
 					};
+					E0D6C3D32FF12A0000DA2A54 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = E0D6C3B62FF1232200DA2A54;
+					};
 				};
 			};
 			buildConfigurationList = E0D6C3B22FF1232200DA2A54 /* Build configuration list for PBXProject "Moru" */;
