@@ -5,11 +5,10 @@
 //  Created by Codex on 7/6/26.
 //
 
-import Foundation
 import Combine
+import Foundation
 
-@MainActor
-final class SessionStore: ObservableObject {
+nonisolated final class SessionStore: ObservableObject {
   enum Phase: Equatable {
     case loading
     case onboardingRequired
@@ -17,12 +16,24 @@ final class SessionStore: ObservableObject {
     case failed(String)
   }
 
+  let objectWillChange = ObservableObjectPublisher()
+
   private let localProfileRepository: any LocalProfileRepository
   private let routineRepository: any RoutineRepository
 
-  @Published private(set) var profile: LocalProfile?
-  @Published private(set) var phase: Phase = .loading
+  private(set) var profile: LocalProfile? {
+    willSet {
+      objectWillChange.send()
+    }
+  }
 
+  private(set) var phase: Phase = .loading {
+    willSet {
+      objectWillChange.send()
+    }
+  }
+
+  @MainActor
   init(
     localProfileRepository: any LocalProfileRepository,
     routineRepository: any RoutineRepository
@@ -31,6 +42,7 @@ final class SessionStore: ObservableObject {
     self.routineRepository = routineRepository
   }
 
+  @MainActor
   func load() {
     do {
       profile = try localProfileRepository.fetchProfile()
@@ -42,6 +54,7 @@ final class SessionStore: ObservableObject {
     }
   }
 
+  @MainActor
   @discardableResult
   func createDefaultProfile() throws -> LocalProfile {
     do {
