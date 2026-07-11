@@ -26,8 +26,11 @@ struct AppRouter: View {
   var body: some View {
     Group {
       switch state {
-      case .ready(_, let sessionStore):
-        SessionContentView(sessionStore: sessionStore)
+      case .ready(let dependencies, let sessionStore):
+        SessionContentView(
+          dependencies: dependencies,
+          sessionStore: sessionStore
+        )
       case .bootstrapFailed(let message):
         ContentView(
           title: "저장소를 열 수 없어요",
@@ -38,6 +41,7 @@ struct AppRouter: View {
   }
 
   private struct SessionContentView: View {
+    let dependencies: DependencyContainer
     @ObservedObject var sessionStore: SessionStore
 
     var body: some View {
@@ -46,10 +50,9 @@ struct AppRouter: View {
         case .loading:
           ProgressView()
         case .onboardingRequired:
-          ContentView(
-            title: "MORU",
-            message: "첫 루틴 생성 흐름을 연결할 준비가 되었습니다."
-          )
+          OnboardingFlowView(dependencies: dependencies) {
+            sessionStore.load()
+          }
         case .ready:
           ContentView(
             title: "안녕하세요, \(sessionStore.profile?.displayName ?? "모루 사용자")님",
