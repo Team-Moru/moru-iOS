@@ -12,7 +12,7 @@ struct RoutineFinishedView: View {
     let completionRate: Int
     let completedStepCount: Int
     let skippedStepCount: Int
-    let onTapTodayRecord: () -> Void
+    let onTapTodayRecord: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 28) {
@@ -36,20 +36,22 @@ struct RoutineFinishedView: View {
                     .foregroundStyle(AppColor.grayWhite.opacity(0.8))
             }
 
-            Button {
-                onTapTodayRecord()
-            } label: {
-                Text("오늘의 기록 확인")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.babyBlue250)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(AppColor.grayWhite)
-                    .clipShape(Capsule())
+            if let onTapTodayRecord {
+                Button {
+                    onTapTodayRecord()
+                } label: {
+                    Text("오늘의 기록 확인")
+                        .font(AppFont.body1NormalSemiBold)
+                        .foregroundStyle(AppColor.babyBlue250)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(AppColor.grayWhite)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 24)
-            .padding(.top, 20)
 
             Spacer()
         }

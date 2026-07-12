@@ -53,8 +53,8 @@ struct SnoozeSheetView: View {
                                 .font(AppFont.body1NormalMedium)
                                 .foregroundStyle(
                                     selectedMinutes == minutes
-                                    ? AppColor.gray550
-                                    : AppColor.gray400
+                                        ? AppColor.gray550
+                                        : AppColor.gray400
                                 )
 
                             Spacer()
@@ -63,6 +63,12 @@ struct SnoozeSheetView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("\(minutes)분 후 다시 알림")
+                    .accessibilityValue(
+                        selectedMinutes == minutes
+                            ? "선택됨"
+                            : "선택 안 됨"
+                    )
                 }
             }
 

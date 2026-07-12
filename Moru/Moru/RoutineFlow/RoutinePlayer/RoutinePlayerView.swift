@@ -96,10 +96,7 @@ struct RoutinePlayerView: View {
                     .count,
                 skippedStepCount: savedRun.results
                     .filter(\.skipped)
-                    .count,
-                onTapTodayRecord: {
-                    // TODO: History / Today Detail 화면으로 이동 연결
-                }
+                    .count
             )
         }
     }
@@ -138,6 +135,7 @@ struct RoutinePlayerView: View {
             .padding(.bottom, 36)
         }
         .padding(.top, 24)
+        .disabled(viewModel.isStepInteractionDisabled)
     }
 
     private var topBar: some View {
@@ -198,12 +196,15 @@ struct RoutinePlayerView: View {
                     viewModel.completeCurrentStep()
                 }
             )
+            .id(step.id)
 
         case .input:
             InputStepContentView(
                 step: step,
                 onComplete: { inputText in
-                    viewModel.completeCurrentStep(inputText: inputText)
+                    viewModel.completeCurrentStep(
+                        inputText: inputText
+                    )
                 }
             )
         }

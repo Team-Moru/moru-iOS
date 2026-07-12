@@ -33,28 +33,27 @@ struct AlarmRingView: View {
     var body: some View {
         ZStack {
             alarmBackground
-            
+                .ignoresSafeArea()
+
             VStack(spacing: 0) {
-                Spacer()
-                    .frame(height: 146)
-                
+                Spacer(minLength: 20)
+
                 timeSection
-                
-                Spacer()
-                
+
+                Spacer(minLength: 28)
+
                 routineSection
-                
-                Spacer()
-                    .frame(height: 226)
-                
+
+                Spacer(minLength: 32)
+
                 SlideToStartControl {
                     onStartRoutine()
                 }
-                .padding(.bottom, 56)
             }
             .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 24)
         }
-        .ignoresSafeArea()
         .sheet(isPresented: $isShowingSnoozeSheet) {
             SnoozeSheetView(
                 selectedMinutes: 5,
@@ -66,7 +65,7 @@ struct AlarmRingView: View {
                     isShowingSnoozeSheet = false
                 }
             )
-            .presentationDetents([.height(489)])
+            .presentationDetents([.height(540)])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(32)
         }

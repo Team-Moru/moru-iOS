@@ -10,13 +10,18 @@
 //  Moru
 //
 
+//
+//  InputStepContentView.swift
+//  Moru
+//
+//  Created by 김승겸 on 7/8/26.
+//
+
 import SwiftUI
 
 struct InputStepContentView: View {
     let step: RoutineStep
-    let onComplete: (String) -> Void
-
-    @State private var inputText = ""
+    let onComplete: (String?) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,8 +51,9 @@ struct InputStepContentView: View {
                 .frame(height: 32)
 
             VoiceMicButton {
-                let fallbackText = inputText.isEmpty ? "음성 입력 완료" : inputText
-                onComplete(fallbackText)
+                // TODO: Speech Framework 연결 후
+                // 인식된 transcript를 전달합니다.
+                onComplete(nil)
             }
         }
         .padding(.horizontal, 24)
@@ -69,6 +75,7 @@ struct InputStepContentView: View {
     private var estimatedMinuteText: String {
         let seconds = step.estimatedSeconds ?? 60
         let minutes = max(seconds / 60, 1)
+
         return "\(minutes)분"
     }
 
@@ -77,6 +84,9 @@ struct InputStepContentView: View {
             return step.instruction
         }
 
-        return "오늘의 다짐을 크게 말해봐요!\n어떤 하루를 만들고 싶나요?"
+        return """
+        오늘의 다짐을 크게 말해봐요!
+        어떤 하루를 만들고 싶나요?
+        """
     }
 }

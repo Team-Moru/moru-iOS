@@ -107,9 +107,20 @@ struct TimerStepContentView: View {
     }
 
     private var estimatedMinuteText: String {
-        let seconds = step.estimatedSeconds ?? 60
-        let minutes = max(seconds / 60, 1)
-        return "\(minutes)분"
+        let totalSeconds = step.estimatedSeconds ?? 60
+
+        if totalSeconds < 60 {
+            return "1분"
+        }
+
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+
+        if seconds == 0 {
+            return "\(minutes)분"
+        }
+
+        return "\(minutes)분 \(seconds)초"
     }
 
     private var timeText: String {

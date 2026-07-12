@@ -21,6 +21,7 @@ struct VoiceSendingBarView: View {
                     .frame(width: 64, height: 64)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("일시정지")
 
             RoundedRectangle(cornerRadius: 3)
                 .fill(AppColor.grayWhite.opacity(0.8))
@@ -40,6 +41,7 @@ struct VoiceSendingBarView: View {
                     .frame(width: 64, height: 64)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("정지")
         }
         .padding(.horizontal, 14)
         .frame(height: 76)

@@ -34,6 +34,9 @@ final class RoutinePlayerViewModel {
     var isSavingRun = false
 
     var errorMessage: String?
+    var isStepInteractionDisabled: Bool {
+        pendingSaveRequest != nil || isSavingRun
+    }
 
     init(
         routine: Routine,
@@ -64,10 +67,12 @@ final class RoutinePlayerViewModel {
     }
 
     func requestSkipStep() {
+        guard !isStepInteractionDisabled else { return }
         isShowingSkipDialog = true
     }
 
     func requestEndRoutine() {
+        guard !isStepInteractionDisabled else { return }
         isShowingEndDialog = true
     }
 
@@ -83,6 +88,7 @@ final class RoutinePlayerViewModel {
         inputText: String? = nil,
         transcript: String? = nil
     ) {
+        guard !isStepInteractionDisabled else { return }
         guard case .running = screenState else { return }
         guard let step = currentStep else { return }
 
@@ -100,7 +106,7 @@ final class RoutinePlayerViewModel {
             inputText: inputText,
             transcript: transcript,
             durationSeconds: step.type == .timer
-                ? step.estimatedSeconds
+                ? (step.estimatedSeconds ?? 60)
                 : nil
         )
 
@@ -109,9 +115,9 @@ final class RoutinePlayerViewModel {
     }
 
     func skipCurrentStep() {
-        // currentStep이 없어도 다이얼로그는 먼저 닫아야 합니다.
         isShowingSkipDialog = false
 
+        guard !isStepInteractionDisabled else { return }
         guard case .running = screenState else { return }
         guard let step = currentStep else { return }
 
@@ -133,15 +139,18 @@ final class RoutinePlayerViewModel {
     }
 
     func finishStepCompletedScreen() {
+        guard !isStepInteractionDisabled else { return }
         guard case .stepCompleted = screenState else { return }
+
         moveToNextStep()
     }
 
     func endRoutine() {
         isShowingEndDialog = false
+        guard !isStepInteractionDisabled else { return }
         saveRun(endedEarly: true)
     }
-
+    
     func retrySavingRun() {
         guard let pendingSaveRequest else { return }
         persistRun(using: pendingSaveRequest)

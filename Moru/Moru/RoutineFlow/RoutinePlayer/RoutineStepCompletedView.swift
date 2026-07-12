@@ -38,9 +38,18 @@ struct RoutineStepCompletedView: View {
             Spacer()
         }
         .padding(.horizontal, 24)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        .task {
+            do {
+                try await Task.sleep(
+                    nanoseconds: 1_000_000_000
+                )
+
+                guard !Task.isCancelled else { return }
+
                 onFinish()
+            } catch {
+                // 화면이 사라져 Task가 취소된 경우에는
+                // 다음 단계로 이동하지 않습니다.
             }
         }
     }

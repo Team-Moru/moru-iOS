@@ -29,7 +29,7 @@ extension Routine {
             RoutineStep(
                 type: .input,
                 title: "오늘의 다짐 말하기",
-                instruction: "오늘 이루고 싶은 일을 적어주세요.",
+                instruction: "오늘 이루고 싶은 일을 말해주세요.",
                 order: 2
             )
         ]
