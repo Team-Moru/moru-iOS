@@ -32,10 +32,17 @@ final class MockRoutineRepository: RoutineRepository {
 
   @MainActor
   func saveRoutine(_ routine: Routine) throws {
-    if let index = routines.firstIndex(where: { $0.id == routine.id }) {
-      routines[index] = routine
-    } else {
-      routines.append(routine)
+    try saveRoutines([routine])
+  }
+
+  @MainActor
+  func saveRoutines(_ routines: [Routine]) throws {
+    for routine in routines {
+      if let index = self.routines.firstIndex(where: { $0.id == routine.id }) {
+        self.routines[index] = routine
+      } else {
+        self.routines.append(routine)
+      }
     }
   }
 

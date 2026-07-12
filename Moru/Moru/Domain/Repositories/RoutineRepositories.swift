@@ -24,6 +24,7 @@ protocol RoutineRepository: AnyObject {
   func fetchActiveRoutines() throws -> [Routine]
   func routine(id: UUID) throws -> Routine?
   func saveRoutine(_ routine: Routine) throws
+  func saveRoutines(_ routines: [Routine]) throws
   func updateRoutineActivation(id: UUID, isActive: Bool) throws
   func deleteRoutine(id: UUID) throws
 }

@@ -12,6 +12,7 @@ import Observation
 @Observable
 final class RoutineSettingViewModel {
   private let routineRepository: any RoutineRepository
+  private let routineSettingUseCase: RoutineSettingUseCase
   private let calendar: Calendar
 
   var state: RoutineSettingViewState = .empty
@@ -21,6 +22,9 @@ final class RoutineSettingViewModel {
     calendar: Calendar = .current
   ) {
     self.routineRepository = dependencies.routineRepository
+    self.routineSettingUseCase = RoutineSettingUseCase(
+      routineRepository: dependencies.routineRepository
+    )
     self.calendar = calendar
   }
 
@@ -72,25 +76,30 @@ final class RoutineSettingViewModel {
     )
   }
 
-  func saveDraft(_ draft: RoutineDraftState) {
+  @discardableResult
+  func saveDraft(_ draft: RoutineDraftState) -> Bool {
     do {
-      let routine = makeRoutine(from: draft)
-      try routineRepository.saveRoutine(routine)
+      try routineSettingUseCase.saveRoutine(from: makeMutation(from: draft))
       load()
+      return true
     } catch {
       state.errorMessage = "루틴을 저장하지 못했어요."
+      return false
     }
   }
 
-  func saveDraftResolvingWeekdayConflict(_ draft: RoutineDraftState) {
+  @discardableResult
+  func saveDraftResolvingWeekdayConflict(_ draft: RoutineDraftState) -> Bool {
     do {
-      try removeConflictingWeekdays(for: draft)
-
-      let routine = makeRoutine(from: draft)
-      try routineRepository.saveRoutine(routine)
+      try routineSettingUseCase.saveRoutine(
+        from: makeMutation(from: draft),
+        resolvingWeekdayConflict: true
+      )
       load()
+      return true
     } catch {
       state.errorMessage = "루틴을 저장하지 못했어요."
+      return false
     }
   }
 
@@ -99,20 +108,10 @@ final class RoutineSettingViewModel {
       return nil
     }
 
-    guard let routines = try? routineRepository.fetchRoutines() else {
+    guard let conflictingWeekdays = try? routineSettingUseCase.weekdayConflict(
+      for: makeMutation(from: draft)
+    ) else {
       return nil
-    }
-
-    let selectedWeekdays = draft.selectedWeekdays
-    let conflictingWeekdays = routines.reduce(into: Set<Weekday>()) { result, routine in
-      guard routine.id != draft.routineID,
-            routine.isActive,
-            let schedule = routine.alarmSchedule,
-            schedule.isEnabled else {
-        return
-      }
-
-      result.formUnion(selectedWeekdays.intersection(Set(schedule.weekdays)))
     }
 
     guard !conflictingWeekdays.isEmpty else {
@@ -122,12 +121,15 @@ final class RoutineSettingViewModel {
     return RoutineWeekdayConflictState(conflictingWeekdays: conflictingWeekdays)
   }
 
-  func routineActivationDidChange(id: UUID, isActive: Bool) {
+  @discardableResult
+  func routineActivationDidChange(id: UUID, isActive: Bool) -> Bool {
     do {
-      try updateRoutineActivation(id: id, isActive: isActive)
+      try routineSettingUseCase.updateActivation(routineID: id, isActive: isActive)
       load()
+      return true
     } catch {
       state.errorMessage = "루틴 상태를 변경하지 못했어요."
+      return false
     }
   }
 
@@ -140,19 +142,19 @@ final class RoutineSettingViewModel {
     return weekdayConflict(for: draft)
   }
 
-  func activateRoutineResolvingWeekdayConflict(id: UUID) {
-    guard var draft = makeDraft(for: id) else {
-      return
-    }
-
-    draft.isActive = true
-
+  @discardableResult
+  func activateRoutineResolvingWeekdayConflict(id: UUID) -> Bool {
     do {
-      try removeConflictingWeekdays(for: draft)
-      try updateRoutineActivation(id: id, isActive: true)
+      try routineSettingUseCase.updateActivation(
+        routineID: id,
+        isActive: true,
+        resolvingWeekdayConflict: true
+      )
       load()
+      return true
     } catch {
       state.errorMessage = "루틴 상태를 변경하지 못했어요."
+      return false
     }
   }
 
@@ -176,84 +178,23 @@ final class RoutineSettingViewModel {
     )
   }
 
-  private func removeConflictingWeekdays(for draft: RoutineDraftState) throws {
-    guard draft.isActive else {
-      return
-    }
-
-    let selectedWeekdays = draft.selectedWeekdays
-    let routines = try routineRepository.fetchRoutines()
-
-    for var routine in routines {
-      guard routine.id != draft.routineID,
-            routine.isActive,
-            var schedule = routine.alarmSchedule,
-            schedule.isEnabled else {
-        continue
-      }
-
-      let originalWeekdays = schedule.weekdays
-      let remainingWeekdays = originalWeekdays.filter { !selectedWeekdays.contains($0) }
-
-      guard remainingWeekdays.count != originalWeekdays.count else {
-        continue
-      }
-
-      if remainingWeekdays.isEmpty {
-        schedule.isEnabled = false
-        routine.isActive = false
-      } else {
-        schedule.weekdays = remainingWeekdays
-      }
-
-      routine.alarmSchedule = schedule
-      routine.updatedAt = Date()
-      try routineRepository.saveRoutine(routine)
-    }
-  }
-
-  private func updateRoutineActivation(id: UUID, isActive: Bool) throws {
-    guard var routine = try routineRepository.routine(id: id) else {
-      return
-    }
-
-    routine.isActive = isActive
-
-    if var schedule = routine.alarmSchedule {
-      schedule.isEnabled = isActive
-      routine.alarmSchedule = schedule
-    }
-
-    routine.updatedAt = Date()
-    try routineRepository.saveRoutine(routine)
-  }
-
-  private func makeRoutine(from draft: RoutineDraftState) -> Routine {
-    let now = Date()
-    let steps = draft.steps.enumerated().map { index, step in
-      RoutineStep(
-        id: step.id,
-        type: step.type,
-        title: step.title.trimmingCharacters(in: .whitespacesAndNewlines),
-        order: index,
-        estimatedSeconds: max(step.estimatedMinutes, 1) * 60
-      )
-    }
-
-    return Routine(
-      id: draft.routineID ?? UUID(),
-      name: draft.title.trimmingCharacters(in: .whitespacesAndNewlines),
-      summary: draft.summary.trimmingCharacters(in: .whitespacesAndNewlines),
-      steps: steps,
-      alarmSchedule: AlarmSchedule(
-        hour: draft.hour,
-        minute: draft.minute,
-        weekdays: draft.selectedWeekdays.sortedByDisplayOrder(),
-        isEnabled: draft.isActive
-      ),
-      isActive: draft.isActive,
-      createdAt: now,
-      updatedAt: now
+  private func makeMutation(from draft: RoutineDraftState) -> RoutineSettingMutation {
+    RoutineSettingMutation(
+      routineID: draft.routineID,
+      name: draft.title,
+      summary: draft.summary,
+      hour: draft.hour,
+      minute: draft.minute,
+      selectedWeekdays: draft.selectedWeekdays,
+      steps: draft.steps.map { step in
+        RoutineStepMutation(
+          id: step.id,
+          type: step.type,
+          title: step.title,
+          estimatedMinutes: step.estimatedMinutes
+        )
+      },
+      isActive: draft.isActive
     )
   }
 

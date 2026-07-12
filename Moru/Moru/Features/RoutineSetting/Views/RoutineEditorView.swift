@@ -18,16 +18,17 @@ struct RoutineEditorView: View {
   @State private var isEditingSteps = false
   @State private var selectedEditStepIndex: Int? = nil
   @State private var isStepEditSheetPresented = false
+  @State private var saveErrorMessage: String?
 
-  let onSave: (RoutineDraftState) -> Void
-  let onResolveWeekdayConflict: (RoutineDraftState) -> Void
+  let onSave: (RoutineDraftState) -> Bool
+  let onResolveWeekdayConflict: (RoutineDraftState) -> Bool
   let onDelete: ((UUID) -> Void)?
   let weekdayConflictState: (RoutineDraftState) -> RoutineWeekdayConflictState?
 
   init(
     draft: RoutineDraftState,
-    onSave: @escaping (RoutineDraftState) -> Void,
-    onResolveWeekdayConflict: @escaping (RoutineDraftState) -> Void,
+    onSave: @escaping (RoutineDraftState) -> Bool,
+    onResolveWeekdayConflict: @escaping (RoutineDraftState) -> Bool,
     onDelete: ((UUID) -> Void)? = nil,
     weekdayConflictState: @escaping (RoutineDraftState) -> RoutineWeekdayConflictState? = { _ in nil }
   ) {
@@ -46,6 +47,12 @@ struct RoutineEditorView: View {
           titleSection
           alarmSection
           stepSection
+
+          if let saveErrorMessage {
+            Text(saveErrorMessage)
+              .font(AppFont.caption1Medium)
+              .foregroundStyle(AppColor.orange500)
+          }
         }
         .padding(.horizontal, AppSpacing.screenHorizontal)
         .padding(.top, AppSpacing.forty)
@@ -65,8 +72,7 @@ struct RoutineEditorView: View {
               return
             }
 
-            onSave(draft)
-            dismiss()
+            saveAndDismissIfNeeded()
           } label: {
             Text("저장")
               .font(AppFont.body1NormalSemiBold)
@@ -322,11 +328,31 @@ struct RoutineEditorView: View {
           weekdayConflict = nil
         },
         secondaryAction: {
-          onResolveWeekdayConflict(draft)
-          weekdayConflict = nil
-          dismiss()
+          resolveWeekdayConflictAndDismissIfNeeded()
         }
       )
+    }
+  }
+
+  private func saveAndDismissIfNeeded() {
+    saveErrorMessage = nil
+
+    if onSave(draft) {
+      dismiss()
+    } else {
+      saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
+    }
+  }
+
+  private func resolveWeekdayConflictAndDismissIfNeeded() {
+    saveErrorMessage = nil
+
+    if onResolveWeekdayConflict(draft) {
+      weekdayConflict = nil
+      dismiss()
+    } else {
+      weekdayConflict = nil
+      saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
     }
   }
 
@@ -410,8 +436,8 @@ struct RoutineEditorView: View {
         RoutineStepDraftState(type: .input, title: "오늘의 다짐 확인하기", estimatedMinutes: 1),
       ]
     ),
-    onSave: { _ in },
-    onResolveWeekdayConflict: { _ in }
+    onSave: { _ in true },
+    onResolveWeekdayConflict: { _ in true }
   )
 }
 #endif
