@@ -29,7 +29,7 @@ struct ConfirmStepContentView: View {
                 .frame(height: 44)
 
             VStack(spacing: 8) {
-                Text("AI 음성 안내 중")
+                Text("음성 안내 중")
                     .font(AppFont.caption1SemiBold)
                     .foregroundStyle(AppColor.gray350)
 

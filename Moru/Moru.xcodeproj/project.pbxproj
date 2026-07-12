@@ -6,11 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		A10000000000000000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000005 /* Alamofire */; };
-		A10000000000000000000002 /* Moya in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000006 /* Moya */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		E0D6C3D72FF12A0000DA2A54 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -20,6 +15,10 @@
 			remoteInfo = Moru;
 		};
 /* End PBXContainerItemProxy section */
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000005 /* Alamofire */; };
+		A10000000000000000000002 /* Moya in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000006 /* Moya */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		E0D6C3B72FF1232200DA2A54 /* Moru.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moru.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -136,16 +135,16 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
-				TargetAttributes = {
-					E0D6C3B62FF1232200DA2A54 = {
-						CreatedOnToolsVersion = 26.5;
-					};
-					E0D6C3D32FF12A0000DA2A54 = {
-						CreatedOnToolsVersion = 26.5;
-						TestTargetID = E0D6C3B62FF1232200DA2A54;
+					TargetAttributes = {
+						E0D6C3B62FF1232200DA2A54 = {
+							CreatedOnToolsVersion = 26.5;
+						};
+						E0D6C3D32FF12A0000DA2A54 = {
+							CreatedOnToolsVersion = 26.5;
+							TestTargetID = E0D6C3B62FF1232200DA2A54;
+						};
 					};
 				};
-			};
 			buildConfigurationList = E0D6C3B22FF1232200DA2A54 /* Build configuration list for PBXProject "Moru" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -211,6 +210,37 @@
 			targetProxy = E0D6C3D72FF12A0000DA2A54 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+/* Begin XCRemoteSwiftPackageReference section */
+		A10000000000000000000003 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Alamofire/Alamofire.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.10.0;
+			};
+		};
+		A10000000000000000000004 /* XCRemoteSwiftPackageReference "Moya" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Moya/Moya.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 15.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000000000000000000005 /* Alamofire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000003 /* XCRemoteSwiftPackageReference "Alamofire" */;
+			productName = Alamofire;
+		};
+		A10000000000000000000006 /* Moya */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000004 /* XCRemoteSwiftPackageReference "Moya" */;
+			productName = Moya;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		E0D6C3C02FF1232300DA2A54 /* Debug */ = {
@@ -477,38 +507,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		A10000000000000000000003 /* XCRemoteSwiftPackageReference "Alamofire" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Alamofire/Alamofire.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 5.10.0;
-			};
-		};
-		A10000000000000000000004 /* XCRemoteSwiftPackageReference "Moya" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Moya/Moya.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 15.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		A10000000000000000000005 /* Alamofire */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A10000000000000000000003 /* XCRemoteSwiftPackageReference "Alamofire" */;
-			productName = Alamofire;
-		};
-		A10000000000000000000006 /* Moya */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A10000000000000000000004 /* XCRemoteSwiftPackageReference "Moya" */;
-			productName = Moya;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E0D6C3AF2FF1232200DA2A54 /* Project object */;
 }

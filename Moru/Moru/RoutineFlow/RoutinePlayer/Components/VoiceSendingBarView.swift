@@ -28,7 +28,7 @@ struct VoiceSendingBarView: View {
                 .overlay {
                     Text("음성 전송 중")
                         .font(AppFont.caption1SemiBold)
-                        .foregroundStyle(AppColor.grayWhite.opacity(0.001))
+                        .foregroundStyle(AppColor.gray500)
                 }
 
             Button {

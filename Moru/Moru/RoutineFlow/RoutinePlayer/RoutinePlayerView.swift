@@ -12,12 +12,28 @@ struct RoutinePlayerView: View {
 
     init(
         routine: Routine,
-        runRepository: RoutineRunRepository? = nil
+        dependencies: DependencyContainer
+    ) {
+        let useCase = SaveRoutineRunUseCase(
+            routineRunRepository: dependencies.routineRunRepository
+        )
+
+        _viewModel = State(
+            initialValue: RoutinePlayerViewModel(
+                routine: routine,
+                saveRoutineRunUseCase: useCase
+            )
+        )
+    }
+
+    init(
+        routine: Routine,
+        saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
     ) {
         _viewModel = State(
             initialValue: RoutinePlayerViewModel(
                 routine: routine,
-                runRepository: runRepository
+                saveRoutineRunUseCase: saveRoutineRunUseCase
             )
         )
     }
@@ -50,6 +66,11 @@ struct RoutinePlayerView: View {
                 )
             }
         }
+        .overlay(alignment: .bottom) {
+            if let errorMessage = viewModel.errorMessage {
+                saveErrorBanner(message: errorMessage)
+            }
+        }
         .navigationBarBackButtonHidden(true)
     }
 
@@ -64,12 +85,18 @@ struct RoutinePlayerView: View {
                 viewModel.finishStepCompletedScreen()
             }
 
-        case .finished:
+        case .finished(let savedRun):
             RoutineFinishedView(
-                routineName: viewModel.routineName,
-                completionRate: viewModel.completionRate,
-                completedStepCount: viewModel.completedStepCount,
-                skippedStepCount: viewModel.skippedStepCount,
+                routineName: savedRun.routineName,
+                completionRate: Int(
+                    (savedRun.completionRate * 100).rounded()
+                ),
+                completedStepCount: savedRun.results
+                    .filter(\.isCompleted)
+                    .count,
+                skippedStepCount: savedRun.results
+                    .filter(\.skipped)
+                    .count,
                 onTapTodayRecord: {
                     // TODO: History / Today Detail 화면으로 이동 연결
                 }
@@ -181,6 +208,35 @@ struct RoutinePlayerView: View {
             )
         }
     }
+    
+    private func saveErrorBanner(message: String) -> some View {
+        VStack(spacing: 12) {
+            Text(message)
+                .font(AppFont.body1NormalMedium)
+                .foregroundStyle(AppColor.gray500)
+                .multilineTextAlignment(.center)
+
+            Button {
+                viewModel.retrySavingRun()
+            } label: {
+                Text("다시 시도")
+                    .font(AppFont.body1NormalSemiBold)
+                    .foregroundStyle(AppColor.grayWhite)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(AppColor.orange350)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isSavingRun)
+        }
+        .padding(20)
+        .background(AppColor.grayWhite)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(radius: 12, y: 4)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 24)
+    }
 
     private var backgroundView: some View {
         LinearGradient(
@@ -197,6 +253,9 @@ struct RoutinePlayerView: View {
 
 #if DEBUG
 #Preview {
-    RoutinePlayerView(routine: .mockMorningRoutine)
+    RoutinePlayerView(
+        routine: .mockMorningRoutine,
+        dependencies: .mock()
+    )
 }
 #endif

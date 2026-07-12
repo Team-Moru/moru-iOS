@@ -14,14 +14,15 @@ final class RoutinePlayerViewModel {
     enum ScreenState {
         case running
         case stepCompleted(RoutineStep)
-        case finished
+        case finished(RoutineRun)
     }
 
     private let routine: Routine
-    private let runRepository: RoutineRunRepository?
+    private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
 
     private let startedAt: Date
     private let steps: [RoutineStep]
+    private var pendingSaveRequest: SaveRoutineRunRequest?
 
     var currentStepIndex: Int = 0
     var stepResults: [RoutineStepResult] = []
@@ -30,21 +31,18 @@ final class RoutinePlayerViewModel {
 
     var isShowingSkipDialog = false
     var isShowingEndDialog = false
+    var isSavingRun = false
 
     var errorMessage: String?
 
     init(
         routine: Routine,
-        runRepository: RoutineRunRepository? = nil
+        saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
     ) {
         self.routine = routine
-        self.runRepository = runRepository
+        self.saveRoutineRunUseCase = saveRoutineRunUseCase
         self.startedAt = Date()
         self.steps = routine.steps.sorted { $0.order < $1.order }
-    }
-
-    var routineName: String {
-        routine.name
     }
 
     var currentStep: RoutineStep? {
@@ -65,21 +63,6 @@ final class RoutinePlayerViewModel {
         return Double(currentStepIndex + 1) / Double(steps.count)
     }
 
-    var completionRate: Int {
-        guard !steps.isEmpty else { return 0 }
-
-        let completedCount = stepResults.filter { !$0.skipped }.count
-        return Int((Double(completedCount) / Double(steps.count)) * 100)
-    }
-
-    var completedStepCount: Int {
-        stepResults.filter { !$0.skipped }.count
-    }
-
-    var skippedStepCount: Int {
-        stepResults.filter { $0.skipped }.count
-    }
-
     func requestSkipStep() {
         isShowingSkipDialog = true
     }
@@ -96,8 +79,17 @@ final class RoutinePlayerViewModel {
         isShowingEndDialog = false
     }
 
-    func completeCurrentStep(inputText: String? = nil, transcript: String? = nil) {
+    func completeCurrentStep(
+        inputText: String? = nil,
+        transcript: String? = nil
+    ) {
+        guard case .running = screenState else { return }
         guard let step = currentStep else { return }
+
+        // 같은 단계가 중복으로 완료되는 것을 방지합니다.
+        guard !stepResults.contains(where: { $0.stepID == step.id }) else {
+            return
+        }
 
         let result = RoutineStepResult(
             stepID: step.id,
@@ -107,7 +99,9 @@ final class RoutinePlayerViewModel {
             skipped: false,
             inputText: inputText,
             transcript: transcript,
-            durationSeconds: step.type == .timer ? step.estimatedSeconds : nil
+            durationSeconds: step.type == .timer
+                ? step.estimatedSeconds
+                : nil
         )
 
         stepResults.append(result)
@@ -115,7 +109,16 @@ final class RoutinePlayerViewModel {
     }
 
     func skipCurrentStep() {
+        // currentStep이 없어도 다이얼로그는 먼저 닫아야 합니다.
+        isShowingSkipDialog = false
+
+        guard case .running = screenState else { return }
         guard let step = currentStep else { return }
+
+        // 같은 단계가 중복으로 기록되는 것을 방지합니다.
+        guard !stepResults.contains(where: { $0.stepID == step.id }) else {
+            return
+        }
 
         let result = RoutineStepResult(
             stepID: step.id,
@@ -126,17 +129,22 @@ final class RoutinePlayerViewModel {
         )
 
         stepResults.append(result)
-        isShowingSkipDialog = false
         moveToNextStep()
     }
 
     func finishStepCompletedScreen() {
+        guard case .stepCompleted = screenState else { return }
         moveToNextStep()
     }
 
     func endRoutine() {
         isShowingEndDialog = false
         saveRun(endedEarly: true)
+    }
+
+    func retrySavingRun() {
+        guard let pendingSaveRequest else { return }
+        persistRun(using: pendingSaveRequest)
     }
 
     private func moveToNextStep() {
@@ -149,7 +157,7 @@ final class RoutinePlayerViewModel {
     }
 
     private func saveRun(endedEarly: Bool) {
-        let run = RoutineRun(
+        let request = SaveRoutineRunRequest(
             routine: routine,
             startedAt: startedAt,
             completedAt: Date(),
@@ -157,12 +165,31 @@ final class RoutinePlayerViewModel {
             endedEarly: endedEarly
         )
 
+        pendingSaveRequest = request
+        persistRun(using: request)
+    }
+
+    private func persistRun(using request: SaveRoutineRunRequest) {
+        guard !isSavingRun else { return }
+
+        isSavingRun = true
+        errorMessage = nil
+
         do {
-            try runRepository?.saveRun(run)
+            let savedRun = try saveRoutineRunUseCase.execute(request)
+
+            // 저장에 성공한 경우에만 완료 화면으로 이동합니다.
+            pendingSaveRequest = nil
+            screenState = .finished(savedRun)
         } catch {
-            errorMessage = "루틴 실행 기록을 저장하지 못했습니다."
+            // screenState는 변경하지 않습니다.
+            // 따라서 기존 루틴 실행 화면이 그대로 유지됩니다.
+            errorMessage = """
+            루틴 실행 기록을 저장하지 못했습니다. \
+            다시 시도해 주세요.
+            """
         }
 
-        screenState = .finished
+        isSavingRun = false
     }
 }

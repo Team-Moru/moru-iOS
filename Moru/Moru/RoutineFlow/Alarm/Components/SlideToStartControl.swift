@@ -19,7 +19,13 @@ struct SlideToStartControl: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let maxOffset = max(proxy.size.width - knobSize - horizontalPadding * 2, 0)
+            let maxOffset = max(
+                proxy.size.width
+                    - knobSize
+                    - horizontalPadding * 2,
+                0
+            )
+
             let completionThreshold = maxOffset * 0.82
 
             ZStack(alignment: .leading) {
@@ -28,59 +34,95 @@ struct SlideToStartControl: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay {
                         Capsule()
-                            .stroke(AppColor.grayWhite.opacity(0.55), lineWidth: 1)
+                            .stroke(
+                                AppColor.grayWhite.opacity(0.55),
+                                lineWidth: 1
+                            )
                     }
 
                 HStack(spacing: 8) {
                     Spacer()
-                        
-                        Text("밀어서 시작하기")
-                            .font(AppFont.body1NormalSemiBold)
-                            .foregroundStyle(AppColor.grayWhite)
-                        
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AppColor.grayWhite)
-                    
+
+                    Text("밀어서 시작하기")
+                        .font(AppFont.body1NormalSemiBold)
+                        .foregroundStyle(AppColor.grayWhite)
+
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AppColor.grayWhite)
+
                     Spacer()
                 }
 
                 Circle()
                     .fill(AppColor.grayWhite)
-                    .frame(width: knobSize, height: knobSize)
+                    .frame(
+                        width: knobSize,
+                        height: knobSize
+                    )
                     .padding(.leading, horizontalPadding)
                     .offset(x: dragOffset)
                     .gesture(
                         DragGesture()
                             .onChanged { value in
                                 guard !didComplete else { return }
-                                dragOffset = min(max(value.translation.width, 0), maxOffset)
+
+                                dragOffset = min(
+                                    max(value.translation.width, 0),
+                                    maxOffset
+                                )
                             }
                             .onEnded { _ in
                                 guard !didComplete else { return }
 
                                 if dragOffset >= completionThreshold {
-                                    didComplete = true
-
-                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                                        dragOffset = maxOffset
-                                    }
-
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                        onCompleted()
-                                    }
+                                    completeSlide(
+                                        maxOffset: maxOffset
+                                    )
                                 } else {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    withAnimation(
+                                        .spring(
+                                            response: 0.3,
+                                            dampingFraction: 0.8
+                                        )
+                                    ) {
                                         dragOffset = 0
                                     }
                                 }
                             }
                     )
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("루틴 시작하기")
+            .accessibilityHint(
+                "두 번 탭하면 오늘의 루틴을 시작합니다."
+            )
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction(.default) {
+                completeSlide(maxOffset: maxOffset)
+            }
         }
         .frame(height: height)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("밀어서 루틴 시작하기")
-        .accessibilityHint("오른쪽으로 밀면 오늘의 루틴을 시작합니다.")
+    }
+
+    private func completeSlide(maxOffset: CGFloat) {
+        guard !didComplete else { return }
+
+        didComplete = true
+
+        withAnimation(
+            .spring(
+                response: 0.28,
+                dampingFraction: 0.85
+            )
+        ) {
+            dragOffset = maxOffset
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.15
+        ) {
+            onCompleted()
+        }
     }
 }
