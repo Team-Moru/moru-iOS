@@ -9,24 +9,47 @@ import SwiftUI
 
 @main
 struct MoruApp: App {
-  private let bootstrapState: AppBootstrapState
-
-  @MainActor
-  init() {
-    bootstrapState = AppBootstrapper.make()
-  }
+  @StateObject private var bootstrapper = AppBootstrapper()
 
   var body: some Scene {
     WindowGroup {
-      switch bootstrapState {
-      case .ready(let runtime):
-        AppRouter(
-          dependencies: runtime.dependencies,
-          sessionStore: runtime.sessionStore
-        )
-      case .failed(let failure):
-        AppRouter(bootstrapFailureMessage: failure.message)
+      Group {
+        switch bootstrapper.state {
+        case .idle, .loading:
+          ProgressView()
+        case .ready(let app):
+          AppRouter(
+            dependencies: app.dependencies,
+            sessionStore: app.sessionStore,
+            coordinator: app.navigationCoordinator,
+            onboardingBuilder: app.onboardingBuilder,
+            routinePlayerBuilder: app.routinePlayerBuilder
+          )
+        case .failed(let failure):
+          BootstrapFailureView(
+            message: failure.message,
+            onRetry: bootstrapper.retry
+          )
+        }
       }
+      .task {
+        bootstrapper.start()
+      }
+    }
+  }
+}
+
+private struct BootstrapFailureView: View {
+  let message: String
+  let onRetry: @MainActor () -> Void
+
+  var body: some View {
+    VStack(spacing: 16) {
+      ContentView(
+        title: "저장소를 초기화할 수 없어요",
+        message: message
+      )
+      Button("다시 시도", action: onRetry)
     }
   }
 }

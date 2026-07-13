@@ -11,23 +11,6 @@ import SwiftUI
 struct OnboardingFlowView: View {
   @StateObject private var viewModel: OnboardingViewModel
 
-  init(
-    dependencies: DependencyContainer,
-    onCompleted: @escaping () -> Void
-  ) {
-    let useCase = CompleteOnboardingUseCase(
-      onboardingRepository: dependencies.onboardingRepository,
-      routineSuggestionService: dependencies.routineSuggestionService
-    )
-    _viewModel = StateObject(
-      wrappedValue: OnboardingViewModel(
-        routineSuggestionService: dependencies.routineSuggestionService,
-        completeOnboardingUseCase: useCase,
-        onCompleted: onCompleted
-      )
-    )
-  }
-
   init(viewModel: OnboardingViewModel) {
     _viewModel = StateObject(wrappedValue: viewModel)
   }
@@ -55,7 +38,7 @@ struct OnboardingFlowView: View {
     }
     .background(OnboardingBackgroundView(step: viewModel.step))
     .onAppear {
-      viewModel.refreshPreview()
+      _ = viewModel.refreshPreview()
     }
   }
 
@@ -73,7 +56,7 @@ struct OnboardingFlowView: View {
     case .freeform:
       RoutineFreeformInputView(viewModel: viewModel)
     case .organizing:
-      RoutineOrganizingView()
+      RoutineOrganizingView(viewModel: viewModel)
     case .review:
       RoutineReviewView(viewModel: viewModel)
     case .alarm:
@@ -132,7 +115,7 @@ private struct OnboardingFooterView: View {
       }
 
       Button {
-        viewModel.advance()
+        viewModel.primaryButtonDidTap()
       } label: {
         HStack(spacing: AppSpacing.xs) {
           if viewModel.isSaving {
@@ -252,7 +235,7 @@ private struct RoutineExperienceQuestionView: View {
             isSelected: false
           ) {
             viewModel.selectExperience(experience)
-            viewModel.advance()
+            viewModel.primaryButtonDidTap()
           }
         }
       }
@@ -318,14 +301,18 @@ private struct SuggestedRoutinePreviewView: View {
       title: "모루가 추천하는\n나만의 루틴이에요",
       subtitle: ""
     ) {
-      VStack(spacing: AppSpacing.lg) {
-        RoutineMetaPill(
-          goal: viewModel.draft.primaryGoalTitle,
-          stepCount: viewModel.draft.previewRoutine?.steps.count ?? 0,
-          durationMinutes: viewModel.draft.estimatedDurationMinutes
-        )
+      if let routine = viewModel.validatedPreviewRoutine {
+        VStack(spacing: AppSpacing.lg) {
+          RoutineMetaPill(
+            goalTitle: viewModel.draft.primaryGoalTitle,
+            stepCount: routine.steps.count,
+            durationMinutes: OnboardingDuration.totalMinutes(for: routine)
+          )
 
-        RoutineStepListCard(routine: viewModel.draft.previewRoutine)
+          RoutineStepListCard(routine: routine)
+        }
+      } else {
+        PreviewUnavailableState(errorMessage: viewModel.errorMessage)
       }
     }
   }
@@ -335,14 +322,24 @@ private struct RoutineDurationPreviewView: View {
   @ObservedObject var viewModel: OnboardingViewModel
 
   var body: some View {
-    OnboardingStepLayout(
-      title: "다인님의\n예상 루틴 시간은\n\(viewModel.draft.estimatedDurationMinutes)분이에요",
-      subtitle: "",
-      titleSpacing: AppSpacing.fortyEight
-    ) {
-      OnboardingClockView(durationMinutes: viewModel.draft.estimatedDurationMinutes)
-        .frame(maxWidth: .infinity)
-        .padding(.top, AppSpacing.xl)
+    if let routine = viewModel.validatedPreviewRoutine {
+      OnboardingStepLayout(
+        title: "예상 루틴 시간은\n\(OnboardingDuration.totalMinutes(for: routine))분이에요",
+        subtitle: "",
+        titleSpacing: AppSpacing.fortyEight
+      ) {
+        OnboardingClockView(durationMinutes: OnboardingDuration.totalMinutes(for: routine))
+          .frame(maxWidth: .infinity)
+          .padding(.top, AppSpacing.xl)
+      }
+    } else {
+      OnboardingStepLayout(
+        title: "루틴 미리보기를\n불러올 수 없어요",
+        subtitle: "",
+        titleSpacing: AppSpacing.fortyEight
+      ) {
+        PreviewUnavailableState(errorMessage: viewModel.errorMessage)
+      }
     }
   }
 }
@@ -402,7 +399,10 @@ private struct RoutineFreeformInputView: View {
   }
 }
 
+@MainActor
 private struct RoutineOrganizingView: View {
+  @ObservedObject var viewModel: OnboardingViewModel
+
   var body: some View {
     OnboardingStepLayout(
       title: "루틴을 정리하고 있어요",
@@ -423,6 +423,21 @@ private struct RoutineOrganizingView: View {
       }
       .frame(maxWidth: .infinity)
     }
+    .task {
+      do {
+        try await Task.sleep(for: .seconds(1))
+      } catch {
+        return
+      }
+
+      guard !Task.isCancelled else {
+        return
+      }
+
+      await MainActor.run {
+        viewModel.organizingDidFinish()
+      }
+    }
   }
 }
 
@@ -435,10 +450,14 @@ private struct RoutineReviewView: View {
       subtitle: "",
       titleSpacing: AppSpacing.forty
     ) {
-      RoutineReviewForm(
-        routine: viewModel.draft.previewRoutine,
-        alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
-      )
+      if let routine = viewModel.validatedPreviewRoutine {
+        RoutineReviewForm(
+          routine: routine,
+          alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
+        )
+      } else {
+        PreviewUnavailableState(errorMessage: viewModel.errorMessage)
+      }
     }
   }
 
@@ -458,32 +477,36 @@ private struct OnboardingAlarmSettingView: View {
       subtitle: "",
       titleSpacing: AppSpacing.forty
     ) {
-      VStack(alignment: .leading, spacing: AppSpacing.twentyEight) {
-        RoutineNameFields(routineName: viewModel.draft.previewRoutine?.name ?? "활력 루틴")
+      if let routine = viewModel.validatedPreviewRoutine {
+        VStack(alignment: .leading, spacing: AppSpacing.twentyEight) {
+          RoutineNameFields(routine: routine)
 
-        VStack(alignment: .leading, spacing: AppSpacing.md) {
-          Text("루틴 알림")
-            .font(AppFont.heading3SemiBold)
-            .foregroundStyle(AppColor.moruTextSecondary)
-
-          HStack {
-            Text("\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)")
-              .font(AppFont.body1NormalSemiBold)
+          VStack(alignment: .leading, spacing: AppSpacing.md) {
+            Text("루틴 알림")
+              .font(AppFont.heading3SemiBold)
               .foregroundStyle(AppColor.moruTextSecondary)
 
-            Spacer()
+            HStack {
+              Text("\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)")
+                .font(AppFont.body1NormalSemiBold)
+                .foregroundStyle(AppColor.moruTextSecondary)
 
-            Image(systemName: "chevron.up")
-              .font(.system(size: 18, weight: .semibold))
-              .foregroundStyle(AppColor.moruTextSecondary)
+              Spacer()
+
+              Image(systemName: "chevron.up")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AppColor.moruTextSecondary)
+            }
+
+            TimeWheelControl(viewModel: viewModel)
+            WeekdayCircleSelector(viewModel: viewModel)
+            LocalAlarmSoundCard()
           }
 
-          TimeWheelControl(viewModel: viewModel)
-          WeekdayCircleSelector(viewModel: viewModel)
-          LocalAlarmSoundCard()
+          RoutineCountSummary(routine: routine)
         }
-
-        RoutineCountSummary(routine: viewModel.draft.previewRoutine)
+      } else {
+        PreviewUnavailableState(errorMessage: viewModel.errorMessage)
       }
     }
   }
@@ -602,14 +625,47 @@ private struct CompletionCheckmarkBadge: View {
   }
 }
 
+enum OnboardingDuration {
+  static func roundedMinutes(for estimatedSeconds: Int?) -> Int {
+    let seconds = max(0, estimatedSeconds ?? 60)
+    return max(1, (seconds + 59) / 60)
+  }
+
+  static func totalMinutes(for routine: Routine) -> Int {
+    routine.steps.reduce(0) { total, step in
+      total + roundedMinutes(for: step.estimatedSeconds)
+    }
+  }
+}
+
+private struct PreviewUnavailableState: View {
+  let errorMessage: String?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+      Text("루틴 미리보기를 사용할 수 없어요")
+        .font(AppFont.heading3SemiBold)
+        .foregroundStyle(AppColor.moruTextStrong)
+
+      Text(errorMessage ?? "이전 단계에서 다시 시도해 주세요.")
+        .font(AppFont.label1NormalMedium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(AppSpacing.md)
+    .background(OnboardingSurface.card)
+    .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+  }
+}
+
 private struct RoutineMetaPill: View {
-  let goal: String
+  let goalTitle: String?
   let stepCount: Int
   let durationMinutes: Int
 
   var body: some View {
     HStack {
-      Text("\(goal) 목표")
+      Text(goalTitle.map { "\($0) 목표" } ?? "맞춤 루틴")
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.orange350)
 
@@ -627,7 +683,7 @@ private struct RoutineMetaPill: View {
 }
 
 private struct RoutineStepListCard: View {
-  let routine: Routine?
+  let routine: Routine
 
   var body: some View {
     VStack(spacing: AppSpacing.xs) {
@@ -638,7 +694,7 @@ private struct RoutineStepListCard: View {
   }
 
   private var orderedSteps: [RoutineStep] {
-    (routine?.steps ?? []).sorted { $0.order < $1.order }
+    routine.steps.sorted { $0.order < $1.order }
   }
 }
 
@@ -684,12 +740,12 @@ private struct RoutineStepPreviewRow: View {
 }
 
 private struct RoutineReviewForm: View {
-  let routine: Routine?
+  let routine: Routine
   let alarmSummary: String
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.twentyEight) {
-      RoutineNameFields(routineName: routine?.name ?? "활력 루틴")
+      RoutineNameFields(routine: routine)
 
       VStack(alignment: .leading, spacing: AppSpacing.sm) {
         Text("루틴 알림")
@@ -706,7 +762,7 @@ private struct RoutineReviewForm: View {
 }
 
 private struct RoutineNameFields: View {
-  let routineName: String
+  let routine: Routine
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -714,8 +770,11 @@ private struct RoutineNameFields: View {
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.moruTextSecondary)
 
-      RoundedInfoField(text: routineName)
-      RoundedInfoField(text: "루틴 설명", isPlaceholder: true)
+      RoundedInfoField(text: routine.name)
+      RoundedInfoField(
+        text: routine.summary.isEmpty ? "설명이 없어요" : routine.summary,
+        isPlaceholder: routine.summary.isEmpty
+      )
     }
   }
 }
@@ -740,7 +799,7 @@ private struct RoundedInfoField: View {
 }
 
 private struct RoutineCountSummary: View {
-  let routine: Routine?
+  let routine: Routine
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -748,15 +807,10 @@ private struct RoutineCountSummary: View {
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.moruTextSecondary)
 
-      Text("\(routine?.steps.count ?? 0)개 - 총 \(durationMinutes)분")
+      Text("\(routine.steps.count)개 - 총 \(OnboardingDuration.totalMinutes(for: routine))분")
         .font(AppFont.body1NormalSemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
     }
-  }
-
-  private var durationMinutes: Int {
-    let seconds = (routine?.steps ?? []).reduce(0) { $0 + ($1.estimatedSeconds ?? 60) }
-    return max(1, (seconds + 59) / 60)
   }
 }
 
@@ -1036,15 +1090,20 @@ private struct FlowLayout<Content: View>: View {
 
 private extension OnboardingStep {
   var showsFooter: Bool {
-    self != .experience
+    switch self {
+    case .experience, .organizing:
+      return false
+    case .goals, .suggestedRoutine, .duration, .freeform, .review, .alarm, .voice, .completion:
+      return true
+    }
   }
 }
 
 private extension OnboardingDraft {
-  var primaryGoalTitle: String {
+  var primaryGoalTitle: String? {
     guard let firstGoalTag = orderedGoalTags.first,
           let option = Self.goalOptions.first(where: { $0.tag == firstGoalTag }) else {
-      return "활력"
+      return nil
     }
 
     return option.title
@@ -1111,11 +1170,7 @@ private extension RoutineStepType {
 
 private extension RoutineStep {
   var durationTitle: String {
-    guard let estimatedSeconds else {
-      return "1분"
-    }
-
-    return "\(max(1, estimatedSeconds / 60))분"
+    "\(OnboardingDuration.roundedMinutes(for: estimatedSeconds))분"
   }
 }
 
@@ -1125,7 +1180,7 @@ private extension RoutineStep {
     viewModel: OnboardingViewModel(
       routineSuggestionService: LocalTemplateSuggestionService.shared,
       completeOnboardingUseCase: PreviewCompleteOnboardingUseCase(),
-      onCompleted: {}
+      onCompleted: { _ in }
     )
   )
 }

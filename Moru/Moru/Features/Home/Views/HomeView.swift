@@ -9,12 +9,17 @@ import SwiftUI
 
 struct HomeView: View {
   private let dependencies: DependencyContainer
+  private let onStartRoutine: @MainActor (UUID) -> Void
 
   @State private var viewModel: HomeViewModel
   @State private var isRoutineSettingPresented = false
 
-  init(dependencies: DependencyContainer) {
+  init(
+    dependencies: DependencyContainer,
+    onStartRoutine: @escaping @MainActor (UUID) -> Void = { _ in }
+  ) {
     self.dependencies = dependencies
+    self.onStartRoutine = onStartRoutine
     _viewModel = State(initialValue: HomeViewModel(dependencies: dependencies))
   }
 
@@ -35,7 +40,13 @@ struct HomeView: View {
             isRoutineSettingPresented = true
             viewModel.currentRoutineCardDidTap()
           },
-          onStart: viewModel.startRoutineButtonDidTap
+          onStart: {
+            guard let routineID = viewModel.state.todayRoutine?.id else {
+              return
+            }
+
+            onStartRoutine(routineID)
+          }
         )
         .padding(.horizontal, AppSpacing.screenHorizontal)
 
