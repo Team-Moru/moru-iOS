@@ -13,16 +13,18 @@ import XCTest
 final class FoundationSwiftDataTests: XCTestCase {
   @MainActor
   func testBootstrapFailureDoesNotCrash() {
-    let state = AppBootstrapper.make {
+    let bootstrapper = AppBootstrapper {
       throw TestBootstrapError.storageUnavailable
     }
 
-    switch state {
-    case .ready:
-      XCTFail("Bootstrap should surface storage failures instead of creating runtime.")
+    bootstrapper.start()
+
+    switch bootstrapper.state {
     case .failed(let failure):
-      XCTAssertTrue(failure.message.contains("저장소 초기화에 실패했습니다."))
-      XCTAssertTrue(failure.message.contains("storage unavailable"))
+      XCTAssertEqual(failure.message, "저장소를 초기화할 수 없어요. 다시 시도해 주세요.")
+      XCTAssertFalse(failure.message.contains("storage unavailable"))
+    case .idle, .loading, .ready:
+      XCTFail("Bootstrap should surface storage failures instead of creating runtime.")
     }
   }
 
@@ -482,34 +484,25 @@ final class FoundationSwiftDataTests: XCTestCase {
 
   @MainActor
   func testDependencyContainerExposesRepositoryContractsInsteadOfSwiftDataContext() throws {
-    XCTAssertEqual(
-      DependencyContainer.featureVisibleDependencyKeys,
-      [
-        "routineRepository",
-        "routineRunRepository",
-        "localProfileRepository",
-        "onboardingRepository",
-        "routineSuggestionService",
-      ]
-    )
-    XCTAssertFalse(DependencyContainer.featureVisibleDependencyKeys.contains("modelContext"))
+    let modelContainer = try makeContainer()
+    let dependencyContainer = DependencyContainer.local(modelContext: modelContainer.mainContext)
 
-    assertRoutineRepository(MockRoutineRepository.self)
-    assertRoutineRunRepository(MockRoutineRunRepository.self)
-    assertLocalProfileRepository(MockLocalProfileRepository.self)
-    assertOnboardingRepository(MockOnboardingRepository.self)
-    assertRoutineSuggestionService(LocalTemplateSuggestionService.self)
+    assertRoutineRepository(dependencyContainer.routineRepository)
+    assertRoutineRunRepository(dependencyContainer.routineRunRepository)
+    assertLocalProfileRepository(dependencyContainer.localProfileRepository)
+    assertOnboardingRepository(dependencyContainer.onboardingRepository)
+    assertRoutineSuggestionService(dependencyContainer.routineSuggestionService)
   }
 
-  private func assertRoutineRepository<T: RoutineRepository>(_: T.Type) {}
+  private func assertRoutineRepository(_ dependency: any RoutineRepository) {}
 
-  private func assertRoutineRunRepository<T: RoutineRunRepository>(_: T.Type) {}
+  private func assertRoutineRunRepository(_ dependency: any RoutineRunRepository) {}
 
-  private func assertLocalProfileRepository<T: LocalProfileRepository>(_: T.Type) {}
+  private func assertLocalProfileRepository(_ dependency: any LocalProfileRepository) {}
 
-  private func assertOnboardingRepository<T: OnboardingRepository>(_: T.Type) {}
+  private func assertOnboardingRepository(_ dependency: any OnboardingRepository) {}
 
-  private func assertRoutineSuggestionService<T: RoutineSuggestionService>(_: T.Type) {}
+  private func assertRoutineSuggestionService(_ dependency: any RoutineSuggestionService) {}
 
   @MainActor
   private func makeContainer() throws -> ModelContainer {
