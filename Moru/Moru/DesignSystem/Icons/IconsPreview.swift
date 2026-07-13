@@ -126,6 +126,30 @@ private struct MoruIconsPreviewHost: View {
         previewItem("note off") {
           MoruRoutineNoteIcon(isActive: false)
         }
+
+        previewItem("routine edit") {
+          MoruRoutineEditIcon()
+        }
+
+        previewItem("step minus") {
+          MoruRoutineStepControlIcon(style: .minus)
+        }
+
+        previewItem("step plus") {
+          MoruRoutineStepControlIcon(style: .plus)
+        }
+
+        previewItem("step timer") {
+          MoruRoutineStepTypeIcon(type: .timer)
+        }
+
+        previewItem("step confirm") {
+          MoruRoutineStepTypeIcon(type: .confirm)
+        }
+
+        previewItem("step input") {
+          MoruRoutineStepTypeIcon(type: .input)
+        }
       }
       .padding(AppSpacing.screenHorizontal)
     }

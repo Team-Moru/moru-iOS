@@ -41,13 +41,25 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
 
   @MainActor
   func saveRoutine(_ routine: Routine) throws {
-    if let persisted = try persistedRoutine(id: routine.id) {
-      SwiftDataMapper.update(persisted, with: routine, in: modelContext)
-    } else {
-      modelContext.insert(SwiftDataMapper.makePersistedRoutine(from: routine))
-    }
+    try saveRoutines([routine])
+  }
 
-    try modelContext.save()
+  @MainActor
+  func saveRoutines(_ routines: [Routine]) throws {
+    do {
+      for routine in routines {
+        if let persisted = try persistedRoutine(id: routine.id) {
+          SwiftDataMapper.update(persisted, with: routine, in: modelContext)
+        } else {
+          modelContext.insert(SwiftDataMapper.makePersistedRoutine(from: routine))
+        }
+      }
+
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
   }
 
   @MainActor
