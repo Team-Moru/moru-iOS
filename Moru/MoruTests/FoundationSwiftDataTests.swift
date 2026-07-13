@@ -73,8 +73,8 @@ final class FoundationSwiftDataTests: XCTestCase {
       endedEarly: true
     )
 
-    XCTAssertEqual(run.plannedStepCount, 3)
-    XCTAssertEqual(run.completionRate, 1.0 / 3.0, accuracy: 0.0001)
+    XCTAssertEqual(run.plannedStepCount, routine.steps.count)
+    XCTAssertEqual(run.completionRate, 1.0 / Double(routine.steps.count), accuracy: 0.0001)
   }
 
   @MainActor
@@ -231,7 +231,7 @@ final class FoundationSwiftDataTests: XCTestCase {
     try repository.saveRoutine(routine)
     let fetched = try XCTUnwrap(repository.routine(id: routine.id))
     XCTAssertEqual(fetched.name, "아침 시작")
-    XCTAssertEqual(fetched.steps.count, 3)
+    XCTAssertEqual(fetched.steps.count, routine.steps.count)
     XCTAssertTrue(fetched.isActive)
 
     try repository.updateRoutineActivation(id: routine.id, isActive: false)
@@ -274,7 +274,7 @@ final class FoundationSwiftDataTests: XCTestCase {
     XCTAssertEqual(savedRun.routineName, "보존할 이름")
     XCTAssertEqual(savedRun.plannedStepCount, routine.steps.count)
     XCTAssertEqual(savedRun.plannedSteps.map(\.stepTitle), routine.steps.map(\.title))
-    XCTAssertEqual(savedRun.completionRate, 1.0 / 3.0, accuracy: 0.0001)
+    XCTAssertEqual(savedRun.completionRate, 1.0 / Double(routine.steps.count), accuracy: 0.0001)
   }
 
   @MainActor
@@ -467,7 +467,7 @@ final class FoundationSwiftDataTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(routine.name, "상쾌한 아침 루틴")
+    XCTAssertEqual(routine.name, "마음 안정 루틴")
     XCTAssertEqual(routine.goalTags, ["mind"])
     XCTAssertEqual(routine.alarmSchedule?.hour, 6)
     XCTAssertEqual(routine.alarmSchedule?.minute, 45)
@@ -483,6 +483,7 @@ final class FoundationSwiftDataTests: XCTestCase {
         "routineRepository",
         "routineRunRepository",
         "localProfileRepository",
+        "onboardingRepository",
         "routineSuggestionService",
       ]
     )
@@ -491,6 +492,7 @@ final class FoundationSwiftDataTests: XCTestCase {
     assertRoutineRepository(MockRoutineRepository.self)
     assertRoutineRunRepository(MockRoutineRunRepository.self)
     assertLocalProfileRepository(MockLocalProfileRepository.self)
+    assertOnboardingRepository(MockOnboardingRepository.self)
     assertRoutineSuggestionService(LocalTemplateSuggestionService.self)
   }
 
@@ -499,6 +501,8 @@ final class FoundationSwiftDataTests: XCTestCase {
   private func assertRoutineRunRepository<T: RoutineRunRepository>(_: T.Type) {}
 
   private func assertLocalProfileRepository<T: LocalProfileRepository>(_: T.Type) {}
+
+  private func assertOnboardingRepository<T: OnboardingRepository>(_: T.Type) {}
 
   private func assertRoutineSuggestionService<T: RoutineSuggestionService>(_: T.Type) {}
 
