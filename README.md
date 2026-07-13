@@ -331,6 +331,9 @@ Moru
 │  ├─ Persistence/               // MoruSchemaV1, SchemaMigrationPlan (D3)
 │  ├─ Local/                     // SwiftData repositories + Mappers
 │  └─ Mock/                      // Preview/Snapshot/QA/Test 전용
+├─ Resources
+│  ├─ Fonts/                     // 앱 번들 폰트
+│  └─ RoutinePresets/            // 추천 항목 CSV + 로컬 음성 리소스
 ├─ Platform
 │  ├─ Alarm/                     // AlarmKit + LocalNotification fallback
 │  ├─ TTS/                       // LocalTTSService
