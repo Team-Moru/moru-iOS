@@ -91,6 +91,35 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
+  func testMainTabStateMakesHistoryReachableAndReloadsItForEachSelection() {
+    var state = MainTabState()
+
+    XCTAssertEqual(MainTabState.availableTabs, [.home, .routine, .record])
+    XCTAssertEqual(state.selection, .home)
+    XCTAssertEqual(state.historyReloadToken, 0)
+    state.select(.my)
+
+    XCTAssertEqual(state.selection, .home)
+    XCTAssertEqual(state.historyReloadToken, 0)
+
+    state.select(.routine)
+
+    XCTAssertEqual(state.selection, .routine)
+    XCTAssertEqual(state.historyReloadToken, 0)
+
+    state.select(.record)
+
+    XCTAssertEqual(state.selection, .record)
+    XCTAssertEqual(state.historyReloadToken, 1)
+
+    state.select(.record)
+
+    XCTAssertEqual(state.selection, .record)
+    XCTAssertEqual(state.historyReloadToken, 2)
+  }
+
+
+  @MainActor
   func testRegularLaunchBoundaryMapsStartedAndAlreadyRunning() {
     let coordinator = AppNavigationCoordinator()
     let routineID = UUID()
@@ -135,10 +164,14 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
-  func testRegularDismissalMakesOneHomeRefreshEligible() {
+  func testRegularDismissalAcknowledgmentReturnsToIdleAndAdmitsNewRegularRoutine() {
     let coordinator = AppNavigationCoordinator()
+    let firstRoutineID = UUID()
+    let nextRoutineID = UUID()
 
-    guard case .presented(let token) = coordinator.presentRegularRoutine(routineID: UUID()) else {
+    guard case .presented(let token) = coordinator.presentRegularRoutine(
+      routineID: firstRoutineID
+    ) else {
       XCTFail("A regular launch should be accepted.")
       return
     }
@@ -155,7 +188,20 @@ final class RouterRuntimeContractTests: XCTestCase {
     XCTAssertEqual(coordinator.pendingDismissalToken, token)
     XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
     XCTAssertNil(coordinator.pendingDismissalToken)
-    XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
+    XCTAssertEqual(coordinator.navigationState, .idle)
+
+    guard case .presented(let nextToken) = coordinator.presentRegularRoutine(
+      routineID: nextRoutineID
+    ) else {
+      XCTFail("A regular launch should be admitted after dismissal acknowledgment.")
+      return
+    }
+
+    XCTAssertNotEqual(nextToken, token)
+    XCTAssertEqual(
+      coordinator.presentation,
+      .regularRoutine(routineID: nextRoutineID, token: nextToken)
+    )
   }
 
   @MainActor

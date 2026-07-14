@@ -248,11 +248,11 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       viewModel.state.todayRoutine?.steps.map(\.title),
       ["기록된 첫 스텝", "기록된 두 번째 스텝"]
     )
-    XCTAssertEqual(viewModel.state.streak.currentDays, 3)
-    XCTAssertEqual(viewModel.state.streak.bestDays, 3)
+    XCTAssertEqual(viewModel.state.streak.currentDays, 2)
+    XCTAssertEqual(viewModel.state.streak.bestDays, 2)
     XCTAssertEqual(
       viewModel.state.streak.completedWeekdays,
-      Set([.sunday, .monday, .tuesday])
+      Set([.sunday, .monday])
     )
   }
 

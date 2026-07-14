@@ -51,6 +51,38 @@ final class HistoryRunReportingTests: XCTestCase {
     XCTAssertEqual(overview.recentDays[0].completionRate, 5.0 / 6.0)
     XCTAssertEqual(overview.week.completionRate, 5.0 / 6.0)
   }
+  @MainActor
+  func testHistoryDisplayLabelsReflectRunAndStepResults() {
+    XCTAssertEqual(HistoryRunStatus.completed.displayText, "완료")
+    XCTAssertEqual(HistoryRunStatus.partial.displayText, "일부 완료")
+    XCTAssertEqual(HistoryRunStatus.endedEarly.displayText, "중단됨")
+
+    let completed = HistoryStepResult(
+      stepID: UUID(),
+      stepTitle: "완료 스텝",
+      isCompleted: true,
+      isSkipped: false,
+      transcript: nil
+    )
+    let skipped = HistoryStepResult(
+      stepID: UUID(),
+      stepTitle: "건너뛴 스텝",
+      isCompleted: false,
+      isSkipped: true,
+      transcript: nil
+    )
+    let incomplete = HistoryStepResult(
+      stepID: UUID(),
+      stepTitle: "미완료 스텝",
+      isCompleted: false,
+      isSkipped: false,
+      transcript: nil
+    )
+
+    XCTAssertEqual(completed.displayText, "완료")
+    XCTAssertEqual(skipped.displayText, "건너뜀")
+    XCTAssertEqual(incomplete.displayText, "미완료")
+  }
 
   @MainActor
   func testHistoryUsesRunSnapshotsAfterRoutineDeletion() throws {
@@ -163,6 +195,35 @@ final class HistoryRunReportingTests: XCTestCase {
     ])
     XCTAssertEqual(week.dailyCompletionRates[0].completionRate, 1)
     XCTAssertTrue(week.dailyCompletionRates.dropFirst().allSatisfy { $0.completionRate == 0 })
+  }
+  @MainActor
+  func testWeekExcludesNextMondayAtMidnightAcrossDST() throws {
+    let timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+    let calendar = makeCalendar(timeZone: timeZone)
+    let sundayStep = makeSnapshot()
+    let nextMondayStep = makeSnapshot()
+    let sundayRun = makeRun(
+      startedAt: makeDate(2026, 3, 8, 23, 59, calendar: calendar),
+      plannedSteps: [sundayStep],
+      results: [makeCompletedResult(for: sundayStep)]
+    )
+    let nextMondayRun = makeRun(
+      startedAt: makeDate(2026, 3, 9, 0, 0, calendar: calendar),
+      plannedSteps: [nextMondayStep],
+      results: [makeCompletedResult(for: nextMondayStep)]
+    )
+    let overview = try makeUseCase(
+      runs: [sundayRun, nextMondayRun],
+      calendar: calendar,
+      now: makeDate(2026, 3, 4, 12, 0, calendar: calendar)
+    ).load()
+
+    XCTAssertEqual(overview.calendar, calendar)
+    XCTAssertEqual(overview.week.weekStartDate, makeDate(2026, 3, 2, 0, 0, calendar: calendar))
+    XCTAssertEqual(overview.week.weekEndDate, makeDate(2026, 3, 9, 0, 0, calendar: calendar))
+    XCTAssertEqual(overview.week.totalRunCount, 1)
+    XCTAssertEqual(overview.week.completedRunCount, 1)
+    XCTAssertEqual(overview.week.dailyCompletionRates[6].completionRate, 1)
   }
 
   @MainActor
