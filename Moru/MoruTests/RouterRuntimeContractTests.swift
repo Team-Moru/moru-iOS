@@ -83,6 +83,82 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
+  func testRoutineLaunchRequestPreservesTheExactRoutineID() {
+    let routineID = UUID()
+    let request = RoutineLaunchRequest(routineID: routineID)
+
+    XCTAssertEqual(request.routineID, routineID)
+  }
+
+  @MainActor
+  func testRegularLaunchBoundaryMapsStartedAndAlreadyRunning() {
+    let coordinator = AppNavigationCoordinator()
+    let routineID = UUID()
+
+    let firstResult = AppRouter.regularRoutineLaunchResult(
+      from: coordinator.presentRegularRoutine(routineID: routineID)
+    )
+
+    XCTAssertEqual(firstResult, .started)
+
+    guard case .regularRoutine(let activeRoutineID, let token) = coordinator.presentation else {
+      XCTFail("A regular launch should present the requested routine.")
+      return
+    }
+
+    XCTAssertEqual(activeRoutineID, routineID)
+    XCTAssertEqual(
+      AppRouter.regularRoutineLaunchResult(
+        from: coordinator.presentRegularRoutine(routineID: routineID)
+      ),
+      .alreadyRunning
+    )
+    XCTAssertEqual(coordinator.presentation?.id, token)
+  }
+
+  @MainActor
+  func testRegularLaunchBoundaryMapsDifferentRoutineToBusy() {
+    let coordinator = AppNavigationCoordinator()
+
+    XCTAssertEqual(
+      AppRouter.regularRoutineLaunchResult(
+        from: coordinator.presentRegularRoutine(routineID: UUID())
+      ),
+      .started
+    )
+    XCTAssertEqual(
+      AppRouter.regularRoutineLaunchResult(
+        from: coordinator.presentRegularRoutine(routineID: UUID())
+      ),
+      .busy
+    )
+  }
+
+  @MainActor
+  func testRegularDismissalMakesOneHomeRefreshEligible() {
+    let coordinator = AppNavigationCoordinator()
+
+    guard case .presented(let token) = coordinator.presentRegularRoutine(routineID: UUID()) else {
+      XCTFail("A regular launch should be accepted.")
+      return
+    }
+
+    XCTAssertEqual(
+      coordinator.handle(
+        event: .exitRequested(.userDismissed),
+        presentationToken: token
+      ),
+      .dismiss(token: token)
+    )
+    coordinator.presentationBindingDidChange(to: nil)
+
+    XCTAssertEqual(coordinator.pendingDismissalToken, token)
+    XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
+    XCTAssertNil(coordinator.pendingDismissalToken)
+    XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
+  }
+
+  @MainActor
   func testCoordinatorKeepsArmedDismissalBusyUntilMatchingDismissalCompletes() {
     let coordinator = AppNavigationCoordinator()
     let routineID = UUID()
