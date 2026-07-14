@@ -628,6 +628,12 @@ private final class ResolvingRoutineRepository: RoutineRepository {
     self.routine = routine
   }
 
+  func saveRoutines(_ routines: [Routine]) throws {
+    for routine in routines {
+      try saveRoutine(routine)
+    }
+  }
+
   func updateRoutineActivation(id: UUID, isActive: Bool) throws {
     guard var routine = try routine(id: id) else {
       return
