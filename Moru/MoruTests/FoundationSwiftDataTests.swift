@@ -232,6 +232,10 @@ final class FoundationSwiftDataTests: XCTestCase {
     let fetched = try XCTUnwrap(repository.routine(id: routine.id))
     XCTAssertEqual(fetched.name, "아침 시작")
     XCTAssertEqual(fetched.steps.count, routine.steps.count)
+    XCTAssertEqual(
+      fetched.steps.map(\.presetItemID),
+      routine.steps.map(\.presetItemID)
+    )
     XCTAssertTrue(fetched.isActive)
 
     try repository.updateRoutineActivation(id: routine.id, isActive: false)
@@ -377,6 +381,7 @@ final class FoundationSwiftDataTests: XCTestCase {
       steps: [
         PersistedRoutineStep(
           id: UUID(),
+          presetItemID: nil,
           typeRawValue: "voice",
           title: "잘못된 스텝",
           instruction: "",
