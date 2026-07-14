@@ -15,7 +15,6 @@ protocol OnboardingFlowBuilding: AnyObject {
     onCompleted: @escaping OnboardingCompletionHandler
   ) -> AnyView
 }
-
 @MainActor
 final class DefaultOnboardingFlowBuilder: OnboardingFlowBuilding {
   private let routineSuggestionService: any RoutineSuggestionService
@@ -43,4 +42,3 @@ final class DefaultOnboardingFlowBuilder: OnboardingFlowBuilding {
     )
   }
 }
-

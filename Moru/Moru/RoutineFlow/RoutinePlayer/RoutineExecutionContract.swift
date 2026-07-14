@@ -8,7 +8,6 @@ import Foundation
 struct TrialRoutineExecutionRequest: Equatable {
   let routineID: UUID
 }
-
 struct RegularRoutineExecutionRequest: Equatable {
   enum Source: Equatable {
     case manual
@@ -150,4 +149,3 @@ func makeRoutineCompletionSummary(
     completionRate: completionRate
   ))
 }
-

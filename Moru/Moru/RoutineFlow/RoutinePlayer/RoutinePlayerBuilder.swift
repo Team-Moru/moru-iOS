@@ -20,7 +20,6 @@ protocol RoutinePlayerBuilding: AnyObject {
     onEvent: @escaping RoutinePlayerEventHandler
   ) -> AnyView
 }
-
 @MainActor
 final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   private let resolver: any ResolveRoutineExecutionUseCaseProtocol
@@ -116,4 +115,3 @@ private final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
     ).get()
   }
 }
-

@@ -15,7 +15,6 @@ struct ResolveRoutineExecutionRequest: Equatable {
   let routineID: UUID
   let launch: Launch
 }
-
 enum RoutineIneligibilityReason: Equatable {
   case inactive
   case alarmDisabled
@@ -82,4 +81,3 @@ final class ResolveRoutineExecutionUseCase: ResolveRoutineExecutionUseCaseProtoc
     return .available(routine)
   }
 }
-
