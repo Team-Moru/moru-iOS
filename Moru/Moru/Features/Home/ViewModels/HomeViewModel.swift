@@ -61,10 +61,6 @@ final class HomeViewModel {
     }
   }
 
-  func startRoutineButtonDidTap() {
-    // TODO: RoutinePlayer 라우팅이 정해지면 routineID를 넘겨 연결합니다.
-  }
-
   func currentRoutineCardDidTap() {
     // TODO: RoutineSetting 상세 화면 라우팅이 정해지면 연결합니다.
   }

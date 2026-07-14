@@ -8,6 +8,7 @@
 import Foundation
 
 struct SaveRoutineRunRequest: Hashable {
+  let runID: UUID
   let routine: Routine
   let startedAt: Date
   let completedAt: Date
@@ -32,6 +33,7 @@ nonisolated final class SaveRoutineRunUseCase: SaveRoutineRunUseCaseProtocol {
   @discardableResult
   func execute(_ request: SaveRoutineRunRequest) throws -> RoutineRun {
     let run = RoutineRun(
+      id: request.runID,
       routine: request.routine,
       startedAt: request.startedAt,
       completedAt: request.completedAt,

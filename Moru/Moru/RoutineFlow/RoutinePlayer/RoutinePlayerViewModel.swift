@@ -2,8 +2,6 @@
 //  RoutinePlayerViewModel.swift
 //  Moru
 //
-//  Created by 김승겸 on 7/8/26.
-//
 
 import Foundation
 import Observation
@@ -11,194 +9,494 @@ import Observation
 @MainActor
 @Observable
 final class RoutinePlayerViewModel {
-    enum ScreenState {
-        case running
-        case stepCompleted(RoutineStep)
-        case finished(RoutineRun)
+  enum ScreenState {
+    case resolving
+    case resolutionRetry(RoutineResolutionRetryReason)
+    case terminalFailure(RoutineTerminalReason)
+    case running(RoutineStep)
+    case stepCompleted(RoutineStep)
+    case summary(RoutineCompletionSummary)
+  }
+
+  enum DialogState: Equatable {
+    enum Exit: Equatable {
+      case endedEarly
+      case userDismissed
     }
 
-    private let routine: Routine
-    private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
+    case skipStep
+    case exit(Exit)
+  }
 
-    private let startedAt: Date
-    private let steps: [RoutineStep]
-    private var pendingSaveRequest: SaveRoutineRunRequest?
+  private enum FinalizationMode {
+    case trial(any TrialRoutineFinalizing)
+    case regular(any RegularRoutineFinalizing)
+  }
 
-    var currentStepIndex: Int = 0
-    var stepResults: [RoutineStepResult] = []
+  private enum PendingTerminalIntent {
+    case natural
+    case exit(RoutinePlayerExit)
+  }
 
-    var screenState: ScreenState = .running
+  private struct PendingSave {
+    let request: SaveRoutineRunRequest
+    let terminalIntent: PendingTerminalIntent
+    let finalizer: any RegularRoutineFinalizing
+  }
 
-    var isShowingSkipDialog = false
-    var isShowingEndDialog = false
-    var isSavingRun = false
+  private let resolver: any ResolveRoutineExecutionUseCaseProtocol
+  private let finalizationMode: FinalizationMode
+  private let resolutionRequest: ResolveRoutineExecutionRequest
+  private let presentationToken: UUID
+  private let onEvent: RoutinePlayerEventHandler
+  private let startedAt: Date
 
-    var errorMessage: String?
-    var isStepInteractionDisabled: Bool {
-        pendingSaveRequest != nil || isSavingRun
+  private var routine: Routine?
+  private var steps: [RoutineStep] = []
+  private var pendingSave: PendingSave?
+  private var didEmitRunnableContent = false
+  private var didRequestExit = false
+
+  private(set) var currentStepIndex = 0
+  private(set) var stepResults: [RoutineStepResult] = []
+  private(set) var screenState: ScreenState = .resolving
+  private(set) var dialogState: DialogState?
+  private(set) var isSavingRun = false
+  private(set) var errorMessage: String?
+
+  var isStepInteractionDisabled: Bool {
+    dialogState != nil || pendingSave != nil || isSavingRun || didRequestExit
+  }
+
+  init(
+    request: TrialRoutineExecutionRequest,
+    resolver: any ResolveRoutineExecutionUseCaseProtocol,
+    finalizer: any TrialRoutineFinalizing,
+    presentationToken: UUID,
+    onEvent: @escaping RoutinePlayerEventHandler
+  ) {
+    self.resolver = resolver
+    self.finalizationMode = .trial(finalizer)
+    self.resolutionRequest = ResolveRoutineExecutionRequest(
+      routineID: request.routineID,
+      launch: .trial
+    )
+    self.presentationToken = presentationToken
+    self.onEvent = onEvent
+    self.startedAt = Date()
+  }
+
+  init(
+    request: RegularRoutineExecutionRequest,
+    resolver: any ResolveRoutineExecutionUseCaseProtocol,
+    finalizer: any RegularRoutineFinalizing,
+    presentationToken: UUID,
+    onEvent: @escaping RoutinePlayerEventHandler
+  ) {
+    let launch: ResolveRoutineExecutionRequest.Launch
+
+    switch request.source {
+    case .manual:
+      launch = .manual
+
+    case .scheduled:
+      launch = .scheduled
     }
 
-    init(
-        routine: Routine,
-        saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
-    ) {
-        self.routine = routine
-        self.saveRoutineRunUseCase = saveRoutineRunUseCase
-        self.startedAt = Date()
-        self.steps = routine.steps.sorted { $0.order < $1.order }
+    self.resolver = resolver
+    self.finalizationMode = .regular(finalizer)
+    self.resolutionRequest = ResolveRoutineExecutionRequest(
+      routineID: request.routineID,
+      launch: launch
+    )
+    self.presentationToken = presentationToken
+    self.onEvent = onEvent
+    self.startedAt = Date()
+  }
+
+  var currentStepNumberText: String {
+    guard case .running(_) = screenState else {
+      return "0/0"
     }
 
-    var currentStep: RoutineStep? {
-        guard steps.indices.contains(currentStepIndex) else {
-            return nil
-        }
+    return "\(currentStepIndex + 1)/\(steps.count)"
+  }
 
-        return steps[currentStepIndex]
+  var progressValue: Double {
+    guard case .running(_) = screenState else {
+      return 0
     }
 
-    var currentStepNumberText: String {
-        guard !steps.isEmpty else { return "0/0" }
-        return "\(currentStepIndex + 1)/\(steps.count)"
+    return Double(currentStepIndex + 1) / Double(steps.count)
+  }
+
+  func resolveRoutine() {
+    guard !didRequestExit else {
+      return
     }
 
-    var progressValue: Double {
-        guard !steps.isEmpty else { return 0 }
-        return Double(currentStepIndex + 1) / Double(steps.count)
+    guard case .resolving = screenState else {
+      return
     }
 
-    func requestSkipStep() {
-        guard !isStepInteractionDisabled else { return }
-        isShowingSkipDialog = true
+    switch resolver.execute(resolutionRequest) {
+    case .available(let routine):
+      self.routine = routine
+      steps = routine.steps.sorted { $0.order < $1.order }
+      currentStepIndex = 0
+      stepResults = []
+      didEmitRunnableContent = false
+
+      guard let firstStep = steps.first else {
+        displayTerminalFailure(.ineligible(.noExecutableSteps))
+        return
+      }
+
+      screenState = .running(firstStep)
+
+    case .notFound:
+      displayTerminalFailure(.notFound)
+
+    case .ineligible(let reason):
+      displayTerminalFailure(.ineligible(reason))
+
+    case .temporarilyUnavailable(let reason):
+      screenState = .resolutionRetry(reason)
+      emit(.resolutionRetryDisplayed(reason))
+    }
+  }
+
+  func retryResolution() {
+    guard case .resolutionRetry = screenState else {
+      return
     }
 
-    func requestEndRoutine() {
-        guard !isStepInteractionDisabled else { return }
-        isShowingEndDialog = true
+    screenState = .resolving
+    resolveRoutine()
+  }
+
+  func continueAfterTerminalFailure() {
+    guard case .terminalFailure = screenState else {
+      return
     }
 
-    func cancelSkipStep() {
-        isShowingSkipDialog = false
+    emitExit(.terminalUnavailable)
+  }
+
+  func runnableContentDidAppear() {
+    guard case .running(_) = screenState else {
+      return
     }
 
-    func cancelEndRoutine() {
-        isShowingEndDialog = false
+    guard !didEmitRunnableContent else {
+      return
     }
 
-    func completeCurrentStep(
-        inputText: String? = nil,
-        transcript: String? = nil
-    ) {
-        guard !isStepInteractionDisabled else { return }
-        guard case .running = screenState else { return }
-        guard let step = currentStep else { return }
+    didEmitRunnableContent = true
+    emit(.runnableContentDidAppear(Date()))
+  }
 
-        // 같은 단계가 중복으로 완료되는 것을 방지합니다.
-        guard !stepResults.contains(where: { $0.stepID == step.id }) else {
-            return
-        }
-
-        let result = RoutineStepResult(
-            stepID: step.id,
-            stepTitle: step.title,
-            stepType: step.type,
-            completedAt: Date(),
-            skipped: false,
-            inputText: inputText,
-            transcript: transcript,
-            durationSeconds: step.type == .timer
-                ? (step.estimatedSeconds ?? 60)
-                : nil
-        )
-
-        stepResults.append(result)
-        screenState = .stepCompleted(step)
+  func requestSkipStep() {
+    guard !isStepInteractionDisabled else {
+      return
     }
 
-    func skipCurrentStep() {
-        isShowingSkipDialog = false
-
-        guard !isStepInteractionDisabled else { return }
-        guard case .running = screenState else { return }
-        guard let step = currentStep else { return }
-
-        // 같은 단계가 중복으로 기록되는 것을 방지합니다.
-        guard !stepResults.contains(where: { $0.stepID == step.id }) else {
-            return
-        }
-
-        let result = RoutineStepResult(
-            stepID: step.id,
-            stepTitle: step.title,
-            stepType: step.type,
-            completedAt: nil,
-            skipped: true
-        )
-
-        stepResults.append(result)
-        moveToNextStep()
+    guard case .running(_) = screenState else {
+      return
     }
 
-    func finishStepCompletedScreen() {
-        guard !isStepInteractionDisabled else { return }
-        guard case .stepCompleted = screenState else { return }
+    dialogState = .skipStep
+  }
 
-        moveToNextStep()
+  func requestEndRoutine() {
+    requestExitDialog(.endedEarly)
+  }
+
+  func requestCloseRoutine() {
+    requestExitDialog(.userDismissed)
+  }
+
+  func cancelActiveDialog() {
+    dialogState = nil
+  }
+
+  func confirmActiveDialog() {
+    guard let dialogState else {
+      return
     }
 
-    func endRoutine() {
-        isShowingEndDialog = false
-        guard !isStepInteractionDisabled else { return }
-        saveRun(endedEarly: true)
-    }
-    
-    func retrySavingRun() {
-        guard let pendingSaveRequest else { return }
-        persistRun(using: pendingSaveRequest)
-    }
+    self.dialogState = nil
 
-    private func moveToNextStep() {
-        if currentStepIndex + 1 < steps.count {
-            currentStepIndex += 1
-            screenState = .running
-        } else {
-            saveRun(endedEarly: false)
-        }
+    switch dialogState {
+    case .skipStep:
+      skipCurrentStep()
+
+    case .exit(let exit):
+      confirmExit(exit)
     }
+  }
 
-    private func saveRun(endedEarly: Bool) {
-        let request = SaveRoutineRunRequest(
-            routine: routine,
-            startedAt: startedAt,
-            completedAt: Date(),
-            results: stepResults,
-            endedEarly: endedEarly
-        )
-
-        pendingSaveRequest = request
-        persistRun(using: request)
+  func completeCurrentStep(
+    inputText: String? = nil,
+    transcript: String? = nil
+  ) {
+    guard !isStepInteractionDisabled else {
+      return
     }
 
-    private func persistRun(using request: SaveRoutineRunRequest) {
-        guard !isSavingRun else { return }
-
-        isSavingRun = true
-        errorMessage = nil
-
-        do {
-            let savedRun = try saveRoutineRunUseCase.execute(request)
-
-            // 저장에 성공한 경우에만 완료 화면으로 이동합니다.
-            pendingSaveRequest = nil
-            screenState = .finished(savedRun)
-        } catch {
-            // screenState는 변경하지 않습니다.
-            // 따라서 기존 루틴 실행 화면이 그대로 유지됩니다.
-            errorMessage = """
-            루틴 실행 기록을 저장하지 못했습니다. \
-            다시 시도해 주세요.
-            """
-        }
-
-        isSavingRun = false
+    guard case .running(let step) = screenState else {
+      return
     }
+
+    guard !stepResults.contains(where: { $0.stepID == step.id }) else {
+      return
+    }
+
+    let result = RoutineStepResult(
+      stepID: step.id,
+      stepTitle: step.title,
+      stepType: step.type,
+      completedAt: Date(),
+      skipped: false,
+      inputText: inputText,
+      transcript: transcript,
+      durationSeconds: step.type == .timer
+        ? (step.estimatedSeconds ?? 60)
+        : nil
+    )
+
+    stepResults.append(result)
+    screenState = .stepCompleted(step)
+  }
+
+  func skipCurrentStep() {
+    guard !isStepInteractionDisabled else {
+      return
+    }
+
+    guard case .running(let step) = screenState else {
+      return
+    }
+
+    guard !stepResults.contains(where: { $0.stepID == step.id }) else {
+      return
+    }
+
+    let result = RoutineStepResult(
+      stepID: step.id,
+      stepTitle: step.title,
+      stepType: step.type,
+      completedAt: nil,
+      skipped: true
+    )
+
+    stepResults.append(result)
+    moveToNextStep()
+  }
+
+  func finishStepCompletedScreen() {
+    guard !isStepInteractionDisabled else {
+      return
+    }
+
+    guard case .stepCompleted = screenState else {
+      return
+    }
+
+    moveToNextStep()
+  }
+
+  func retrySavingRun() {
+    guard pendingSave != nil else {
+      return
+    }
+
+    persistPendingSave()
+  }
+
+  func requestSummaryExit() {
+    guard case .summary = screenState else {
+      return
+    }
+
+    emitExit(.summaryCTA)
+  }
+
+  private func requestExitDialog(_ exit: DialogState.Exit) {
+    guard !isStepInteractionDisabled else {
+      return
+    }
+
+    guard case .running(_) = screenState else {
+      return
+    }
+
+    dialogState = .exit(exit)
+  }
+
+  private func confirmExit(_ exit: DialogState.Exit) {
+    guard !isStepInteractionDisabled else {
+      return
+    }
+
+    guard case .running(_) = screenState else {
+      return
+    }
+
+    guard let routine else {
+      displayTerminalFailure(.notFound)
+      return
+    }
+
+    switch exit {
+    case .endedEarly:
+      finalizeEarlyExit(.endedEarly, routine: routine)
+
+    case .userDismissed:
+      finalizeEarlyExit(.userDismissed, routine: routine)
+    }
+  }
+
+  private func moveToNextStep() {
+    let nextStepIndex = currentStepIndex + 1
+
+    guard steps.indices.contains(nextStepIndex) else {
+      finalizeNaturalCompletion()
+      return
+    }
+
+    currentStepIndex = nextStepIndex
+    screenState = .running(steps[nextStepIndex])
+  }
+
+  private func finalizeNaturalCompletion() {
+    guard let routine else {
+      displayTerminalFailure(.notFound)
+      return
+    }
+
+    switch finalizationMode {
+    case .trial(let finalizer):
+      switch finalizer.finalize(
+        routine: routine,
+        startedAt: startedAt,
+        completedAt: Date(),
+        results: stepResults
+      ) {
+      case .success(let summary):
+        screenState = .summary(summary)
+        emit(.completionDisplayed(summary))
+
+      case .failure(let error):
+        displayTerminalFailure(.invalidCompletionSummary(error))
+      }
+
+    case .regular(let finalizer):
+      beginRegularFinalization(
+        routine: routine,
+        finalizer: finalizer,
+        endedEarly: false,
+        terminalIntent: .natural
+      )
+    }
+  }
+
+  private func finalizeEarlyExit(
+    _ exit: RoutinePlayerExit,
+    routine: Routine
+  ) {
+    switch finalizationMode {
+    case .trial:
+      emitExit(exit)
+
+    case .regular(let finalizer):
+      beginRegularFinalization(
+        routine: routine,
+        finalizer: finalizer,
+        endedEarly: true,
+        terminalIntent: .exit(exit)
+      )
+    }
+  }
+
+  private func beginRegularFinalization(
+    routine: Routine,
+    finalizer: any RegularRoutineFinalizing,
+    endedEarly: Bool,
+    terminalIntent: PendingTerminalIntent
+  ) {
+    guard pendingSave == nil else {
+      return
+    }
+
+    let request = SaveRoutineRunRequest(
+      runID: UUID(),
+      routine: routine,
+      startedAt: startedAt,
+      completedAt: Date(),
+      results: stepResults,
+      endedEarly: endedEarly
+    )
+
+    pendingSave = PendingSave(
+      request: request,
+      terminalIntent: terminalIntent,
+      finalizer: finalizer
+    )
+    persistPendingSave()
+  }
+
+  private func persistPendingSave() {
+    guard !isSavingRun else {
+      return
+    }
+
+    guard let pendingSave else {
+      return
+    }
+
+    isSavingRun = true
+    errorMessage = nil
+
+    do {
+      let summary = try pendingSave.finalizer.finalize(pendingSave.request)
+
+      self.pendingSave = nil
+      isSavingRun = false
+
+      switch pendingSave.terminalIntent {
+      case .natural:
+        screenState = .summary(summary)
+        emit(.completionDisplayed(summary))
+
+      case .exit(let exit):
+        emitExit(exit)
+      }
+    } catch let error as RoutineCompletionSummaryValidationError {
+      self.pendingSave = nil
+      isSavingRun = false
+      displayTerminalFailure(.invalidCompletionSummary(error))
+    } catch {
+      errorMessage = "루틴 실행 기록을 저장하지 못했습니다. 다시 시도해 주세요."
+      isSavingRun = false
+    }
+  }
+
+  private func displayTerminalFailure(_ reason: RoutineTerminalReason) {
+    screenState = .terminalFailure(reason)
+    emit(.terminalFailureDisplayed(reason))
+  }
+
+  private func emitExit(_ exit: RoutinePlayerExit) {
+    guard !didRequestExit else {
+      return
+    }
+
+    didRequestExit = true
+    emit(.exitRequested(exit))
+  }
+
+  private func emit(_ event: RoutinePlayerEvent) {
+    onEvent(presentationToken, event)
+  }
 }
