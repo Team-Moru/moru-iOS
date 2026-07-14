@@ -734,6 +734,7 @@ private final class RoutineRunSaverSpy: SaveRoutineRunUseCaseProtocol {
     }
 
     let run = RoutineRun(
+      id: request.runID,
       routine: request.routine,
       startedAt: request.startedAt,
       completedAt: request.completedAt,

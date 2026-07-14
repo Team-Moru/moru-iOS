@@ -430,6 +430,7 @@ final class RoutinePlayerViewModel {
     }
 
     let request = SaveRoutineRunRequest(
+      runID: UUID(),
       routine: routine,
       startedAt: startedAt,
       completedAt: Date(),

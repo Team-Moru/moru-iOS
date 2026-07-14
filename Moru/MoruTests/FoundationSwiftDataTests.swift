@@ -246,6 +246,32 @@ final class FoundationSwiftDataTests: XCTestCase {
   }
 
   @MainActor
+  func testSaveRoutineRunUseCaseKeepsOneRunForRepeatedRequest() throws {
+    let container = try makeContainer()
+    let repository = SwiftDataRoutineRunRepository(modelContext: container.mainContext)
+    let useCase = SaveRoutineRunUseCase(routineRunRepository: repository)
+    let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
+      from: RoutineSuggestionInput(routineName: "재시도 루틴")
+    )
+    let request = SaveRoutineRunRequest(
+      runID: UUID(),
+      routine: routine,
+      startedAt: Date(timeIntervalSince1970: 100),
+      completedAt: Date(timeIntervalSince1970: 200),
+      results: [],
+      endedEarly: false
+    )
+
+    let first = try useCase.execute(request)
+    let second = try useCase.execute(request)
+    let savedRuns = try repository.fetchRuns()
+
+    XCTAssertEqual(first.id, request.runID)
+    XCTAssertEqual(second.id, request.runID)
+    XCTAssertEqual(savedRuns.map(\.id), [request.runID])
+  }
+
+  @MainActor
   func testDeletingRoutineHardDeletesStepsAndAlarmButKeepsRunSnapshot() throws {
     let container = try makeContainer()
     let context = container.mainContext
