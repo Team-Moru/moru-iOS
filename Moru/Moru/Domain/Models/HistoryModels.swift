@@ -10,8 +10,22 @@ enum HistoryRunStatus: Sendable, Equatable {
   case completed
   case partial
 }
+extension HistoryRunStatus {
+  var displayText: String {
+    switch self {
+    case .completed:
+      return "완료"
+    case .partial:
+      return "일부 완료"
+    case .endedEarly:
+      return "중단됨"
+    }
+  }
+}
+
 
 struct HistoryOverview: Sendable, Equatable {
+  let calendar: Calendar
   let recentDays: [HistoryDaySummary]
   let week: HistoryWeekReport
 }
@@ -40,6 +54,15 @@ struct HistoryStepResult: Sendable, Equatable {
   let isCompleted: Bool
   let isSkipped: Bool
   let transcript: String?
+}
+extension HistoryStepResult {
+  var displayText: String {
+    if isCompleted {
+      return "완료"
+    }
+
+    return isSkipped ? "건너뜀" : "미완료"
+  }
 }
 
 struct HistoryWeekReport: Sendable, Equatable {

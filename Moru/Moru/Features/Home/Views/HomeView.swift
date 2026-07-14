@@ -8,31 +8,24 @@
 import SwiftUI
 
 struct HomeView: View {
-  private let dependencies: DependencyContainer
   private let onStartRoutine: RoutineLaunchHandler
   private let refreshToken: Int
+  private let routineSettingContent: AnyView
 
   @State private var viewModel: HomeViewModel
   @State private var isRoutineSettingPresented = false
   @State private var routineLaunchMessage: String?
 
   init(
-    dependencies: DependencyContainer,
-    onStartRoutine: @escaping RoutineLaunchHandler = { _ in .started },
-    refreshToken: Int = 0
+    viewModel: HomeViewModel,
+    onStartRoutine: @escaping RoutineLaunchHandler,
+    refreshToken: Int,
+    routineSettingContent: AnyView
   ) {
-    self.dependencies = dependencies
     self.onStartRoutine = onStartRoutine
     self.refreshToken = refreshToken
-    _viewModel = State(
-      initialValue: HomeViewModel(
-        loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
-          routineRepository: dependencies.routineRepository,
-          routineRunRepository: dependencies.routineRunRepository,
-          localProfileRepository: dependencies.localProfileRepository
-        )
-      )
-    )
+    self.routineSettingContent = routineSettingContent
+    _viewModel = State(initialValue: viewModel)
   }
 
   var body: some View {
@@ -89,7 +82,7 @@ struct HomeView: View {
     .sheet(isPresented: $isRoutineSettingPresented, onDismiss: {
       viewModel.load()
     }) {
-      RoutineSettingView(dependencies: dependencies)
+      routineSettingContent
     }
   }
 
@@ -107,6 +100,54 @@ struct HomeView: View {
 
 #if DEBUG
 #Preview {
-  HomeView(dependencies: .homePreview)
+  DefaultHomeFlowBuilder(
+    loadHomeRoutinesUseCase: HomePreviewLoadHomeRoutinesUseCase(),
+    routineSettingContentFactory: {
+      AnyView(RoutineSettingView(dependencies: .homePreview))
+    }
+  ).make(
+    onStartRoutine: { _ in .started },
+    refreshToken: 0
+  )
+}
+
+@MainActor
+private final class HomePreviewLoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
+  func execute() throws -> HomeRoutineLoadResult {
+    let routine = Routine(
+      name: "기본 루틴",
+      summary: "가볍게 시작하는 아침 루틴",
+      steps: [
+        RoutineStep(
+          type: .confirm,
+          title: "물 한 잔 마시기",
+          order: 0,
+          estimatedSeconds: 60
+        ),
+        RoutineStep(
+          type: .timer,
+          title: "스트레칭 10분",
+          order: 1,
+          estimatedSeconds: 600
+        ),
+      ],
+      alarmSchedule: AlarmSchedule(
+        hour: 6,
+        minute: 15,
+        weekdays: Weekday.allCases
+      )
+    )
+    return HomeRoutineLoadResult(
+      profile: LocalProfile(displayName: "다인"),
+      todayRoutine: routine,
+      manualRoutines: [routine],
+      todayRun: nil,
+      streak: HomeRoutineStreak(
+        currentDays: 3,
+        bestDays: 7,
+        completedWeekdays: [.monday, .tuesday, .wednesday]
+      )
+    )
+  }
 }
 #endif

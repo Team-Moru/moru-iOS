@@ -44,10 +44,19 @@ enum MoruTabItem: String, CaseIterable, Identifiable {
 
 struct MoruTabBar: View {
   @Binding var selection: MoruTabItem
+  let items: [MoruTabItem]
+
+  init(
+    selection: Binding<MoruTabItem>,
+    items: [MoruTabItem] = MoruTabItem.allCases
+  ) {
+    _selection = selection
+    self.items = items
+  }
 
   var body: some View {
     HStack(spacing: 0) {
-      ForEach(MoruTabItem.allCases) { item in
+      ForEach(items) { item in
         Button {
           selection = item
         } label: {
@@ -71,14 +80,14 @@ struct MoruTabBar: View {
                 selection == item ? AppColor.orange350 : AppColor.moruTextBody
               )
           }
-          .frame(width: 60, height: 45)
+          .frame(maxWidth: .infinity, minHeight: 45)
         }
         .buttonStyle(.plain)
       }
     }
-    .frame(width: 346, height: 45)
-    .padding(.horizontal, 23.5)
-    .frame(width: 393, height: 95)
+    .frame(maxWidth: .infinity, minHeight: 45)
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .frame(maxWidth: .infinity, minHeight: 95)
     .background(AppColor.grayWhite)
   }
 }

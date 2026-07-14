@@ -15,7 +15,6 @@ enum RoutineLaunchResult: Equatable {
   case started
   case alreadyRunning
   case busy
-
 }
 
 typealias RoutineLaunchHandler = @MainActor (RoutineLaunchRequest) -> RoutineLaunchResult

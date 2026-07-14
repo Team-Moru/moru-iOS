@@ -41,7 +41,7 @@ struct HistoryView: View {
       .navigationBarTitleDisplayMode(.large)
       .navigationDestination(isPresented: $isWeeklyReportPresented) {
         if case .content(let overview) = viewModel.state {
-          HistoryWeeklyReportView(report: overview.week)
+          HistoryWeeklyReportView(report: overview.week, calendar: overview.calendar)
         }
       }
     }
@@ -54,9 +54,10 @@ struct HistoryView: View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: AppSpacing.xl) {
         HistoryWeeklySummaryCard(
-          title: weekRangeText(
+          title: historyWeekRangeText(
             from: overview.week.weekStartDate,
-            toExclusive: overview.week.weekEndDate
+            toExclusive: overview.week.weekEndDate,
+            calendar: overview.calendar
           ),
           completedRuns: overview.week.completedRunCount,
           totalRuns: overview.week.totalRunCount,
@@ -71,9 +72,9 @@ struct HistoryView: View {
         LazyVStack(spacing: AppSpacing.sm) {
           ForEach(overview.recentDays, id: \.date) { day in
             NavigationLink {
-              HistoryDailyDetailView(day: day)
+              HistoryDailyDetailView(day: day, calendar: overview.calendar)
             } label: {
-              HistoryDaySummaryRow(day: day)
+              HistoryDaySummaryRow(day: day, calendar: overview.calendar)
             }
             .buttonStyle(.plain)
           }
@@ -84,21 +85,44 @@ struct HistoryView: View {
       .padding(.bottom, AppSpacing.xxl)
     }
   }
+}
 
-  private func weekRangeText(from startDate: Date, toExclusive endDate: Date) -> String {
-    let finalDate = Calendar.current.date(byAdding: .day, value: -1, to: endDate) ?? endDate
-    return "\(startDate.formatted(.dateTime.month(.wide).day())) ~ "
-      + finalDate.formatted(.dateTime.month(.wide).day())
-  }
+private func historyWeekRangeText(
+  from startDate: Date,
+  toExclusive endDate: Date,
+  calendar: Calendar
+) -> String {
+  let finalDate = calendar.date(byAdding: .day, value: -1, to: endDate) ?? endDate
+  let format = Date.FormatStyle.dateTime.month(.wide).day()
+  let startText = historyFormattedDate(startDate, calendar: calendar, format: format)
+  let endText = historyFormattedDate(finalDate, calendar: calendar, format: format)
+
+  return "\(startText) ~ \(endText)"
+}
+
+private func historyFormattedDate(
+  _ date: Date,
+  calendar: Calendar,
+  format: Date.FormatStyle
+) -> String {
+  var configuredFormat = format
+  configuredFormat.calendar = calendar
+  configuredFormat.timeZone = calendar.timeZone
+  configuredFormat.locale = calendar.locale ?? .autoupdatingCurrent
+  return date.formatted(configuredFormat)
 }
 
 private struct HistoryDaySummaryRow: View {
   let day: HistoryDaySummary
-
+  let calendar: Calendar
   var body: some View {
     HStack(spacing: AppSpacing.sm) {
       VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-        Text(day.date.formatted(.dateTime.month(.wide).day().weekday(.abbreviated)))
+        Text(historyFormattedDate(
+          day.date,
+          calendar: calendar,
+          format: .dateTime.month(.wide).day().weekday(.abbreviated)
+        ))
           .font(AppFont.label1NormalSemiBold)
           .foregroundStyle(AppColor.moruTextPrimary)
 
@@ -136,7 +160,7 @@ private struct HistoryDaySummaryRow: View {
 
 private struct HistoryDailyDetailView: View {
   let day: HistoryDaySummary
-
+  let calendar: Calendar
   var body: some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: AppSpacing.xl) {
@@ -171,8 +195,12 @@ private struct HistoryDailyDetailView: View {
             VStack(alignment: .leading, spacing: AppSpacing.sm) {
               HistoryRunRow(
                 routineName: run.routineName,
-                timeText: run.startedAt.formatted(date: .omitted, time: .shortened),
-                completionText: statusText(for: run.status),
+                timeText: historyFormattedDate(
+                  run.startedAt,
+                  calendar: calendar,
+                  format: Date.FormatStyle(date: .omitted, time: .shortened)
+                ),
+                completionText: run.status.displayText,
                 isCompleted: run.status == .completed
               )
 
@@ -180,7 +208,7 @@ private struct HistoryDailyDetailView: View {
                 HistoryStepResultRow(
                   index: index + 1,
                   title: result.stepTitle,
-                  resultText: stepResultText(for: result),
+                  resultText: result.displayText,
                   isCompleted: result.isCompleted,
                   transcript: result.transcript
                 )
@@ -194,33 +222,19 @@ private struct HistoryDailyDetailView: View {
       .padding(.bottom, AppSpacing.xxl)
     }
     .background(AppColor.babyBlue50.ignoresSafeArea())
-    .navigationTitle(day.date.formatted(.dateTime.month(.wide).day()))
+    .navigationTitle(historyFormattedDate(
+      day.date,
+      calendar: calendar,
+      format: .dateTime.month(.wide).day()
+    ))
     .navigationBarTitleDisplayMode(.inline)
-  }
-
-  private func statusText(for status: HistoryRunStatus) -> String {
-    switch status {
-    case .completed:
-      return "완료"
-    case .partial:
-      return "일부 완료"
-    case .endedEarly:
-      return "중단됨"
-    }
-  }
-
-  private func stepResultText(for result: HistoryStepResult) -> String {
-    if result.isCompleted {
-      return "완료"
-    }
-
-    return result.isSkipped ? "건너뜀" : "미완료"
   }
 }
 
+
 private struct HistoryWeeklyReportView: View {
   let report: HistoryWeekReport
-
+  let calendar: Calendar
   var body: some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: AppSpacing.xl) {
@@ -252,7 +266,7 @@ private struct HistoryWeeklyReportView: View {
 
         LazyVStack(spacing: AppSpacing.sm) {
           ForEach(report.dailyCompletionRates, id: \.date) { completion in
-            HistoryWeeklyDailyRateRow(completion: completion)
+            HistoryWeeklyDailyRateRow(completion: completion, calendar: calendar)
           }
         }
       }
@@ -266,23 +280,24 @@ private struct HistoryWeeklyReportView: View {
   }
 
   private var weekRangeText: String {
-    let finalDate = Calendar.current.date(
-      byAdding: .day,
-      value: -1,
-      to: report.weekEndDate
-    ) ?? report.weekEndDate
-
-    return "\(report.weekStartDate.formatted(.dateTime.month(.wide).day())) ~ "
-      + finalDate.formatted(.dateTime.month(.wide).day())
+    historyWeekRangeText(
+      from: report.weekStartDate,
+      toExclusive: report.weekEndDate,
+      calendar: calendar
+    )
   }
 }
 
 private struct HistoryWeeklyDailyRateRow: View {
   let completion: HistoryDailyCompletion
-
+  let calendar: Calendar
   var body: some View {
     HStack(spacing: AppSpacing.md) {
-      Text(completion.date.formatted(.dateTime.weekday(.abbreviated)))
+      Text(historyFormattedDate(
+        completion.date,
+        calendar: calendar,
+        format: .dateTime.weekday(.abbreviated)
+      ))
         .font(AppFont.label1NormalSemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
         .frame(width: 28, alignment: .leading)

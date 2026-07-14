@@ -30,6 +30,7 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
     let runs = try routineRunRepository.fetchRuns()
 
     return HistoryOverview(
+      calendar: calendar,
       recentDays: makeDaySummaries(from: runs),
       week: makeWeekReport(from: runs, containing: now())
     )

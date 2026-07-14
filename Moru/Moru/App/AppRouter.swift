@@ -42,11 +42,7 @@ struct AppRouter: View {
         onboardingBuilder.make(onCompleted: handleOnboardingCompleted)
       case .ready:
         if sessionStore.profile != nil {
-          HomeView(
-            dependencies: dependencies,
-            onStartRoutine: handleRegularRoutineLaunch,
-            refreshToken: homeRefreshToken
-          )
+          mainTabView
         } else {
           SessionFailureView(
             title: "프로필 정보를 확인할 수 없어요",
@@ -140,6 +136,34 @@ struct AppRouter: View {
     case .deferredBusy:
       .busy
     }
+  }
+  @MainActor
+  private var mainTabView: MainTabView {
+    let homeBuilder = DefaultHomeFlowBuilder(
+      loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
+        routineRepository: dependencies.routineRepository,
+        routineRunRepository: dependencies.routineRunRepository,
+        localProfileRepository: dependencies.localProfileRepository
+      ),
+      routineSettingContentFactory: {
+        AnyView(RoutineSettingView(dependencies: dependencies))
+      }
+    )
+
+    let historyBuilder = DefaultHistoryFlowBuilder(
+      loadHistoryUseCase: LoadHistoryUseCase(
+        routineRunRepository: dependencies.routineRunRepository
+      )
+    )
+
+    return MainTabView(
+      home: homeBuilder.make(
+        onStartRoutine: handleRegularRoutineLaunch,
+        refreshToken: homeRefreshToken
+      ),
+      routineSetting: RoutineSettingView(dependencies: dependencies),
+      history: historyBuilder.make()
+    )
   }
 
   @MainActor
