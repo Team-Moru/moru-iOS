@@ -44,7 +44,7 @@ struct AppRouter: View {
         if sessionStore.profile != nil {
           HomeView(
             dependencies: dependencies,
-            onStartRoutine: handleRegularRoutineStart,
+            onStartRoutine: handleRegularRoutineLaunch,
             refreshToken: homeRefreshToken
           )
         } else {
@@ -121,8 +121,25 @@ struct AppRouter: View {
   }
 
   @MainActor
-  private func handleRegularRoutineStart(routineID: UUID) {
-    _ = coordinator.presentRegularRoutine(routineID: routineID)
+  private func handleRegularRoutineLaunch(
+    _ request: RoutineLaunchRequest
+  ) -> RoutineLaunchResult {
+    Self.regularRoutineLaunchResult(
+      from: coordinator.presentRegularRoutine(routineID: request.routineID)
+    )
+  }
+
+  static func regularRoutineLaunchResult(
+    from admission: PresentationAttempt
+  ) -> RoutineLaunchResult {
+    switch admission {
+    case .presented:
+      .started
+    case .alreadyPresented:
+      .alreadyRunning
+    case .deferredBusy:
+      .busy
+    }
   }
 
   @MainActor
@@ -147,6 +164,10 @@ struct AppRouter: View {
 
   @MainActor
   private func completePendingDismissal() {
+    guard coordinator.pendingDismissalToken != nil else {
+      return
+    }
+
     let effect = coordinator.presentationDidDismiss()
     homeRefreshToken += 1
     retryDeferredOnboardingTrial()

@@ -9,21 +9,30 @@ import SwiftUI
 
 struct HomeView: View {
   private let dependencies: DependencyContainer
-  private let onStartRoutine: @MainActor (UUID) -> Void
+  private let onStartRoutine: RoutineLaunchHandler
   private let refreshToken: Int
 
   @State private var viewModel: HomeViewModel
   @State private var isRoutineSettingPresented = false
+  @State private var routineLaunchMessage: String?
 
   init(
     dependencies: DependencyContainer,
-    onStartRoutine: @escaping @MainActor (UUID) -> Void = { _ in },
+    onStartRoutine: @escaping RoutineLaunchHandler = { _ in .started },
     refreshToken: Int = 0
   ) {
     self.dependencies = dependencies
     self.onStartRoutine = onStartRoutine
     self.refreshToken = refreshToken
-    _viewModel = State(initialValue: HomeViewModel(dependencies: dependencies))
+    _viewModel = State(
+      initialValue: HomeViewModel(
+        loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
+          routineRepository: dependencies.routineRepository,
+          routineRunRepository: dependencies.routineRunRepository,
+          localProfileRepository: dependencies.localProfileRepository
+        )
+      )
+    )
   }
 
   var body: some View {
@@ -41,14 +50,18 @@ struct HomeView: View {
           routine: viewModel.state.todayRoutine,
           onTap: {
             isRoutineSettingPresented = true
-            viewModel.currentRoutineCardDidTap()
           },
           onStart: {
             guard let routineID = viewModel.state.todayRoutine?.id else {
               return
             }
 
-            onStartRoutine(routineID)
+            switch onStartRoutine(RoutineLaunchRequest(routineID: routineID)) {
+            case .started, .alreadyRunning:
+              break
+            case .busy:
+              routineLaunchMessage = "다른 루틴이 실행 중이에요."
+            }
           }
         )
         .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -59,11 +72,18 @@ struct HomeView: View {
             .foregroundStyle(AppColor.orange500)
             .padding(.horizontal, AppSpacing.screenHorizontal)
         }
+        if let routineLaunchMessage {
+          Text(routineLaunchMessage)
+            .font(AppFont.caption1Medium)
+            .foregroundStyle(AppColor.orange500)
+            .padding(.horizontal, AppSpacing.screenHorizontal)
+        }
       }
       .padding(.bottom, AppSpacing.xxl)
     }
     .background(homeBackground.ignoresSafeArea())
     .task(id: refreshToken) {
+      routineLaunchMessage = nil
       viewModel.load()
     }
     .sheet(isPresented: $isRoutineSettingPresented, onDismiss: {

@@ -7,22 +7,76 @@
 
 import Foundation
 
-struct HomeViewState: Equatable {
+enum HomeLoadState: Equatable {
+  case loading
+  case content
+  case empty
+  case failed
+}
+
+enum HomeViewState: Equatable {
+  case loading
+  case content(HomeContentState)
+  case empty(HomeContentState)
+  case failed
+
+  var loadState: HomeLoadState {
+    switch self {
+    case .loading:
+      return .loading
+    case .content:
+      return .content
+    case .empty:
+      return .empty
+    case .failed:
+      return .failed
+    }
+  }
+
+  var userName: String {
+    contentState?.userName ?? ""
+  }
+
+  var todayRoutine: HomeRoutineState? {
+    contentState?.todayRoutine
+  }
+
+  var manualRoutines: [HomeRoutineState] {
+    contentState?.manualRoutines ?? []
+  }
+
+  var todayProgress: HomeProgressState {
+    contentState?.todayProgress ?? .empty
+  }
+
+  var streak: HomeStreakState {
+    contentState?.streak ?? .empty
+  }
+
+  var isLoading: Bool {
+    loadState == .loading
+  }
+
+  var errorMessage: String? {
+    loadState == .failed ? "홈 정보를 불러오지 못했어요." : nil
+  }
+
+  private var contentState: HomeContentState? {
+    switch self {
+    case .content(let content), .empty(let content):
+      return content
+    case .loading, .failed:
+      return nil
+    }
+  }
+}
+
+struct HomeContentState: Equatable {
   var userName: String
   var todayRoutine: HomeRoutineState?
+  var manualRoutines: [HomeRoutineState]
   var todayProgress: HomeProgressState
   var streak: HomeStreakState
-  var isLoading: Bool
-  var errorMessage: String?
-
-  static let placeholder = HomeViewState(
-    userName: "다인",
-    todayRoutine: .placeholder,
-    todayProgress: .placeholder,
-    streak: .placeholder,
-    isLoading: false,
-    errorMessage: nil
-  )
 }
 
 struct HomeProgressState: Equatable {
