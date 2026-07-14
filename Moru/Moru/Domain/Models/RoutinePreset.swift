@@ -15,6 +15,7 @@ struct RoutinePresetItem: Identifiable, Hashable {
 
   func makeStep(order: Int) -> RoutineStep {
     RoutineStep(
+      presetItemID: id,
       type: type,
       title: title,
       order: order,

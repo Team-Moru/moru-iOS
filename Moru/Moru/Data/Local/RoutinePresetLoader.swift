@@ -32,8 +32,18 @@ struct RoutinePresetLoader: RoutinePresetProviding {
     }
 
     let content = try String(contentsOf: fileURL, encoding: .utf8)
-    let rows = try CSVDocument.parse(content)
+    let rows: [[String]]
+
+    do {
+      rows = try CSVDocument.parse(content)
+    } catch let CSVDocumentError.unterminatedQuote(row) {
+      throw RoutinePresetLoaderError.malformedCSV(row: row)
+    }
+
     guard let header = rows.first else {
+      throw RoutinePresetLoaderError.malformedCSV(row: 1)
+    }
+    guard Set(header).count == header.count else {
       throw RoutinePresetLoaderError.malformedCSV(row: 1)
     }
 
@@ -96,6 +106,10 @@ struct RoutinePresetLoader: RoutinePresetProviding {
   }
 }
 
+enum CSVDocumentError: Error, Equatable {
+  case unterminatedQuote(row: Int)
+}
+
 enum CSVDocument {
   static func parse(_ content: String) throws -> [[String]] {
     let normalizedContent = content
@@ -136,7 +150,7 @@ enum CSVDocument {
     }
 
     guard !isQuoted else {
-      throw RoutinePresetLoaderError.malformedCSV(row: rows.count + 1)
+      throw CSVDocumentError.unterminatedQuote(row: rows.count + 1)
     }
 
     if !field.isEmpty || !row.isEmpty {

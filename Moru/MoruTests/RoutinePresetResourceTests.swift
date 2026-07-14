@@ -44,6 +44,26 @@ final class RoutinePresetResourceTests: XCTestCase {
     XCTAssertNotNil(loader.resourceURL(for: cue))
   }
 
+  func testPresetStepsKeepSourceItemIDsForAudioCueLookup() throws {
+    let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
+      from: RoutineSuggestionInput(goalTags: ["habit"])
+    )
+    let audioLoader = RoutineAudioResourceLoader()
+
+    XCTAssertFalse(routine.steps.isEmpty)
+
+    for step in routine.steps {
+      let itemID = try XCTUnwrap(step.presetItemID)
+      XCTAssertNotNil(
+        try audioLoader.cue(
+          itemID: itemID,
+          voiceCode: "Aoede",
+          kind: .intro
+        )
+      )
+    }
+  }
+
   func testPresetLoaderRejectsUnknownStepType() throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -63,5 +83,58 @@ final class RoutinePresetResourceTests: XCTestCase {
         .invalidStepType("UNKNOWN", row: 2)
       )
     }
+  }
+
+  func testLoadersRejectDuplicateHeaders() throws {
+    let directory = try makeTemporaryResourceDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    try "항목ID,항목ID\n".write(
+      to: directory.appendingPathComponent("recommended-items.csv"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try "항목ID,항목ID\n".write(
+      to: directory.appendingPathComponent("routine-audio-mapping.csv"),
+      atomically: true,
+      encoding: .utf8
+    )
+
+    XCTAssertThrowsError(try RoutinePresetLoader(resourceDirectory: directory).loadItems()) {
+      XCTAssertEqual($0 as? RoutinePresetLoaderError, .malformedCSV(row: 1))
+    }
+    XCTAssertThrowsError(try RoutineAudioResourceLoader(resourceDirectory: directory).loadCues()) {
+      XCTAssertEqual($0 as? RoutineAudioResourceError, .malformedCSV(row: 1))
+    }
+  }
+
+  func testLoadersTranslateUnterminatedQuotesToOwnErrors() throws {
+    let directory = try makeTemporaryResourceDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    try "항목ID\n\"닫히지 않은 값".write(
+      to: directory.appendingPathComponent("recommended-items.csv"),
+      atomically: true,
+      encoding: .utf8
+    )
+    try "항목ID\n\"닫히지 않은 값".write(
+      to: directory.appendingPathComponent("routine-audio-mapping.csv"),
+      atomically: true,
+      encoding: .utf8
+    )
+
+    XCTAssertThrowsError(try RoutinePresetLoader(resourceDirectory: directory).loadItems()) {
+      XCTAssertEqual($0 as? RoutinePresetLoaderError, .malformedCSV(row: 2))
+    }
+    XCTAssertThrowsError(try RoutineAudioResourceLoader(resourceDirectory: directory).loadCues()) {
+      XCTAssertEqual($0 as? RoutineAudioResourceError, .malformedCSV(row: 2))
+    }
+  }
+
+  private func makeTemporaryResourceDirectory() throws -> URL {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    return directory
   }
 }

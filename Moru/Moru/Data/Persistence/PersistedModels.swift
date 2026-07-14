@@ -58,6 +58,7 @@ final class PersistedRoutine {
 @Model
 final class PersistedRoutineStep {
   @Attribute(.unique) var id: UUID
+  var presetItemID: String?
   var typeRawValue: String
   var title: String
   var instruction: String
@@ -67,6 +68,7 @@ final class PersistedRoutineStep {
 
   init(
     id: UUID,
+    presetItemID: String?,
     typeRawValue: String,
     title: String,
     instruction: String,
@@ -75,6 +77,7 @@ final class PersistedRoutineStep {
     isRequired: Bool
   ) {
     self.id = id
+    self.presetItemID = presetItemID
     self.typeRawValue = typeRawValue
     self.title = title
     self.instruction = instruction

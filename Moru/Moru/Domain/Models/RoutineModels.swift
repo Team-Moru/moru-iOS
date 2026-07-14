@@ -72,6 +72,7 @@ enum RoutineStepType: String, Codable, CaseIterable, Hashable {
 
 struct RoutineStep: Identifiable, Codable, Hashable {
   var id: UUID
+  var presetItemID: String?
   var type: RoutineStepType
   var title: String
   var instruction: String
@@ -81,6 +82,7 @@ struct RoutineStep: Identifiable, Codable, Hashable {
 
   init(
     id: UUID = UUID(),
+    presetItemID: String? = nil,
     type: RoutineStepType,
     title: String,
     instruction: String = "",
@@ -89,6 +91,7 @@ struct RoutineStep: Identifiable, Codable, Hashable {
     isRequired: Bool = true
   ) {
     self.id = id
+    self.presetItemID = presetItemID
     self.type = type
     self.title = title
     self.instruction = instruction

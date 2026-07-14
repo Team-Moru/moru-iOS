@@ -54,8 +54,18 @@ final class RoutineAudioResourceLoader {
     }
 
     let content = try String(contentsOf: mappingURL, encoding: .utf8)
-    let rows = try CSVDocument.parse(content)
+    let rows: [[String]]
+
+    do {
+      rows = try CSVDocument.parse(content)
+    } catch let CSVDocumentError.unterminatedQuote(row) {
+      throw RoutineAudioResourceError.malformedCSV(row: row)
+    }
+
     guard let header = rows.first else {
+      throw RoutineAudioResourceError.malformedCSV(row: 1)
+    }
+    guard Set(header).count == header.count else {
       throw RoutineAudioResourceError.malformedCSV(row: 1)
     }
 

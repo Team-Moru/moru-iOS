@@ -76,6 +76,7 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
     )
     let steps = template.steps.map {
       RoutineStep(
+        presetItemID: $0.presetItemID,
         type: $0.type,
         title: $0.title,
         instruction: $0.instruction,
