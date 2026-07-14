@@ -10,16 +10,19 @@ import SwiftUI
 struct HomeView: View {
   private let dependencies: DependencyContainer
   private let onStartRoutine: @MainActor (UUID) -> Void
+  private let refreshToken: Int
 
   @State private var viewModel: HomeViewModel
   @State private var isRoutineSettingPresented = false
 
   init(
     dependencies: DependencyContainer,
-    onStartRoutine: @escaping @MainActor (UUID) -> Void = { _ in }
+    onStartRoutine: @escaping @MainActor (UUID) -> Void = { _ in },
+    refreshToken: Int = 0
   ) {
     self.dependencies = dependencies
     self.onStartRoutine = onStartRoutine
+    self.refreshToken = refreshToken
     _viewModel = State(initialValue: HomeViewModel(dependencies: dependencies))
   }
 
@@ -60,7 +63,7 @@ struct HomeView: View {
       .padding(.bottom, AppSpacing.xxl)
     }
     .background(homeBackground.ignoresSafeArea())
-    .task {
+    .task(id: refreshToken) {
       viewModel.load()
     }
     .sheet(isPresented: $isRoutineSettingPresented, onDismiss: {

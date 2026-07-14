@@ -12,6 +12,7 @@ struct AppRouter: View {
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
+  @State private var homeRefreshToken = 0
 
   private let dependencies: DependencyContainer
   private let onboardingBuilder: any OnboardingFlowBuilding
@@ -43,7 +44,8 @@ struct AppRouter: View {
         if sessionStore.profile != nil {
           HomeView(
             dependencies: dependencies,
-            onStartRoutine: handleRegularRoutineStart
+            onStartRoutine: handleRegularRoutineStart,
+            refreshToken: homeRefreshToken
           )
         } else {
           SessionFailureView(
@@ -146,6 +148,7 @@ struct AppRouter: View {
   @MainActor
   private func completePendingDismissal() {
     let effect = coordinator.presentationDidDismiss()
+    homeRefreshToken += 1
     retryDeferredOnboardingTrial()
     execute(effect)
   }
