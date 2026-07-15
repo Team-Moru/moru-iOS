@@ -1,10 +1,3 @@
-//
-//  AlarmKitDebugView.swift
-//  Moru
-//
-//  Created by 김승겸 on 7/12/26.
-//
-
 #if DEBUG
 
 import SwiftUI
@@ -18,8 +11,7 @@ struct AlarmKitDebugView: View {
 
     let dependencies: DependencyContainer
 
-    @StateObject private var alarmService =
-        MoruAlarmService()
+    @StateObject private var alarmService = MoruAlarmService()
 
     @Environment(\.scenePhase)
     private var scenePhase
@@ -29,28 +21,45 @@ struct AlarmKitDebugView: View {
     private let routine = Routine.mockMorningRoutine
 
     var body: some View {
-        Group {
-            switch phase {
-            case .alarmControl:
-                alarmControlView
-
-            case .alarmRing:
-                alarmRingView
-
-            case .routinePlayer:
-                RoutinePlayerView(
-                    routine: routine,
-                    dependencies: dependencies
-                )
+        content
+            .onAppear {
+                consumePendingAlarmRoute()
             }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase == .active else { return }
+                consumePendingAlarmRoute()
+            }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch phase {
+        case .alarmControl:
+            alarmControlView
+
+        case .alarmRing:
+            alarmRingView
+
+        case .routinePlayer:
+            routinePlayerPlaceholder
         }
-        .onAppear {
-            consumePendingAlarmRoute()
+    }
+
+    private var routinePlayerPlaceholder: some View {
+        VStack(spacing: 20) {
+            Text("루틴 실행 화면")
+                .font(.title2.bold())
+
+            Text("RoutinePlayer의 최신 생성 방식으로 연결해야 합니다.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button("알람 테스트 화면으로 돌아가기") {
+                phase = .alarmControl
+            }
+            .buttonStyle(.borderedProminent)
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
-            consumePendingAlarmRoute()
-        }
+        .padding(24)
     }
 
     private var alarmControlView: some View {
@@ -60,10 +69,8 @@ struct AlarmKitDebugView: View {
                     Text("AlarmKit 테스트")
                         .font(.title2.bold())
 
-                    Text(
-                        "권한 상태: \(alarmService.authorizationText)"
-                    )
-                    .font(.body)
+                    Text("권한 상태: \(alarmService.authorizationText)")
+                        .font(.body)
 
                     Text(alarmService.statusMessage)
                         .font(.footnote)
@@ -73,8 +80,7 @@ struct AlarmKitDebugView: View {
 
                 Button {
                     Task {
-                        await alarmService
-                            .requestAuthorization()
+                        await alarmService.requestAuthorization()
                     }
                 } label: {
                     Text("알람 권한 요청")
@@ -85,12 +91,11 @@ struct AlarmKitDebugView: View {
 
                 Button {
                     Task {
-                        await alarmService
-                            .scheduleOneTimeAlarm(
-                                after: 60,
-                                routineID: routine.id,
-                                routineName: routine.name
-                            )
+                        await alarmService.scheduleOneTimeAlarm(
+                            after: 60,
+                            routineID: routine.id,
+                            routineName: routine.name
+                        )
                     }
                 } label: {
                     Text("60초 뒤 테스트 알람 예약")
@@ -100,8 +105,7 @@ struct AlarmKitDebugView: View {
                 .buttonStyle(.borderedProminent)
 
                 Button {
-                    alarmService
-                        .cancelLastScheduledAlarm()
+                    alarmService.cancelLastScheduledAlarm()
                 } label: {
                     Text("마지막 테스트 알람 취소")
                         .frame(maxWidth: .infinity)
@@ -128,19 +132,17 @@ struct AlarmKitDebugView: View {
         AlarmRingView(
             routineName: routine.name,
             routineMinutes: routineMinutes,
-            alarmDate: alarmService.lastScheduledDate
-                ?? Date(),
+            alarmDate: alarmService.lastScheduledDate ?? Date(),
             onStartRoutine: {
                 phase = .routinePlayer
             },
             onSnoozeSelected: { minutes in
                 Task {
-                    await alarmService
-                        .scheduleOneTimeAlarm(
-                            after: TimeInterval(minutes * 60),
-                            routineID: routine.id,
-                            routineName: routine.name
-                        )
+                    await alarmService.scheduleOneTimeAlarm(
+                        after: TimeInterval(minutes * 60),
+                        routineID: routine.id,
+                        routineName: routine.name
+                    )
 
                     phase = .alarmControl
                 }
@@ -149,28 +151,26 @@ struct AlarmKitDebugView: View {
     }
 
     private var routineMinutes: Int {
-        let totalSeconds = routine.steps.reduce(0) {
-            result,
-            step in
-
+        let totalSeconds = routine.steps.reduce(0) { result, step in
             result + (step.estimatedSeconds ?? 60)
         }
 
-        return max(
-            1,
-            (totalSeconds + 59) / 60
-        )
+        return max(1, (totalSeconds + 59) / 60)
     }
 
     private func consumePendingAlarmRoute() {
-        guard MoruAlarmRouteStore
-            .consumePendingRoute() != nil
-        else {
+        guard MoruAlarmRouteStore.consumePendingRoute() != nil else {
             return
         }
 
         phase = .alarmRing
     }
+}
+
+#Preview("AlarmKit Debug") {
+    AlarmKitDebugView(
+        dependencies: .mock()
+    )
 }
 
 #endif
