@@ -8,13 +8,6 @@
 import SwiftData
 
 struct DependencyContainer {
-  static let featureVisibleDependencyKeys: Set<String> = [
-    "routineRepository",
-    "routineRunRepository",
-    "localProfileRepository",
-    "onboardingRepository",
-    "routineSuggestionService",
-  ]
 
   let routineRepository: any RoutineRepository
   let routineRunRepository: any RoutineRunRepository
@@ -29,6 +22,42 @@ struct DependencyContainer {
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
       routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+  }
+
+  @MainActor
+  func makeSessionStore() -> SessionStore {
+    SessionStore(
+      localProfileRepository: localProfileRepository,
+      routineRepository: routineRepository
+    )
+  }
+
+  @MainActor
+  func makeOnboardingBuilder() -> any OnboardingFlowBuilding {
+    let completeOnboardingUseCase = CompleteOnboardingUseCase(
+      onboardingRepository: onboardingRepository,
+      routineSuggestionService: routineSuggestionService
+    )
+
+    return DefaultOnboardingFlowBuilder(
+      routineSuggestionService: routineSuggestionService,
+      completeOnboardingUseCase: completeOnboardingUseCase
+    )
+  }
+
+  @MainActor
+  func makeRoutinePlayerBuilder() -> any RoutinePlayerBuilding {
+    let resolver = ResolveRoutineExecutionUseCase(
+      routineRepository: routineRepository
+    )
+    let saveRoutineRunUseCase = SaveRoutineRunUseCase(
+      routineRunRepository: routineRunRepository
+    )
+
+    return DefaultRoutinePlayerBuilder(
+      resolver: resolver,
+      saveRoutineRunUseCase: saveRoutineRunUseCase
     )
   }
 

@@ -28,6 +28,8 @@ protocol RoutineRepository: AnyObject {
   @MainActor
   func saveRoutine(_ routine: Routine) throws
   @MainActor
+  func saveRoutines(_ routines: [Routine]) throws
+  @MainActor
   func updateRoutineActivation(id: UUID, isActive: Bool) throws
   @MainActor
   func deleteRoutine(id: UUID) throws

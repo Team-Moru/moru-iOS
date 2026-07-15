@@ -46,6 +46,42 @@ enum Weekday: Int, Codable, CaseIterable, Hashable, Identifiable {
   }
 }
 
+extension Weekday {
+  static let weekdays: [Weekday] = [.monday, .tuesday, .wednesday, .thursday, .friday]
+  static let displayOrder: [Weekday] = [
+    .monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday,
+  ]
+
+  var shortTitle: String {
+    switch self {
+    case .sunday:
+      return "일"
+    case .monday:
+      return "월"
+    case .tuesday:
+      return "화"
+    case .wednesday:
+      return "수"
+    case .thursday:
+      return "목"
+    case .friday:
+      return "금"
+    case .saturday:
+      return "토"
+    }
+  }
+
+  var displayOrderIndex: Int {
+    Self.displayOrder.firstIndex(of: self) ?? rawValue
+  }
+}
+
+extension Sequence where Element == Weekday {
+  func sortedByDisplayOrder() -> [Weekday] {
+    sorted { $0.displayOrderIndex < $1.displayOrderIndex }
+  }
+}
+
 struct VoiceProfile: Codable, Hashable, Identifiable {
   var id: String
   var displayName: String
@@ -72,6 +108,7 @@ enum RoutineStepType: String, Codable, CaseIterable, Hashable {
 
 struct RoutineStep: Identifiable, Codable, Hashable {
   var id: UUID
+  var presetItemID: String?
   var type: RoutineStepType
   var title: String
   var instruction: String
@@ -81,6 +118,7 @@ struct RoutineStep: Identifiable, Codable, Hashable {
 
   init(
     id: UUID = UUID(),
+    presetItemID: String? = nil,
     type: RoutineStepType,
     title: String,
     instruction: String = "",
@@ -89,6 +127,7 @@ struct RoutineStep: Identifiable, Codable, Hashable {
     isRequired: Bool = true
   ) {
     self.id = id
+    self.presetItemID = presetItemID
     self.type = type
     self.title = title
     self.instruction = instruction
