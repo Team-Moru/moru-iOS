@@ -54,7 +54,9 @@ struct AppRouter: View {
             sessionStore.load()
           }
         case .ready:
-          HomeView(dependencies: dependencies)
+          MainTabView(dependencies: dependencies) {
+            sessionStore.load()
+          }
         case .failed(let message):
           ContentView(
             title: "저장소를 열 수 없어요",

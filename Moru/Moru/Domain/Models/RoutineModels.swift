@@ -89,11 +89,23 @@ struct VoiceProfile: Codable, Hashable, Identifiable {
 
   static let moru = VoiceProfile(
     id: "moru-local",
-    displayName: "모루 기본 목소리",
+    displayName: "모루 말투",
     localeIdentifier: "ko-KR"
   )
 
-  static let localVoices = [VoiceProfile.moru]
+  static let calm = VoiceProfile(
+    id: "moru-calm",
+    displayName: "차분한 말투",
+    localeIdentifier: "ko-KR"
+  )
+
+  static let bright = VoiceProfile(
+    id: "moru-bright",
+    displayName: "활기찬 말투",
+    localeIdentifier: "ko-KR"
+  )
+
+  static let localVoices = [VoiceProfile.moru, .calm, .bright]
 
   static func fallback(id: String) -> VoiceProfile {
     localVoices.first { $0.id == id } ?? .moru
