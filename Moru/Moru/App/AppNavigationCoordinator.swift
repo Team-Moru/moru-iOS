@@ -274,6 +274,9 @@ final class AppNavigationCoordinator: ObservableObject {
 
     return apply(.presentationDidDismiss(token: token)).effect
   }
+  func clearForLocalReset() {
+    updateNavigationState(.idle)
+  }
 
   private func attemptPresentation(
     _ request: AppPresentationRequest

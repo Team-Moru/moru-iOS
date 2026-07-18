@@ -44,6 +44,42 @@ nonisolated struct ContinuousAppLaunchClock: AppLaunchClock {
     try await Task.sleep(for: duration)
   }
 }
+@MainActor
+protocol AppLaunchPreparing: AnyObject {
+  func prepare(_ container: SendableModelContainer) async throws
+}
+
+@MainActor
+final class DefaultAppLaunchPreparation: AppLaunchPreparing {
+  private let resetJournalStore: any LocalResetJournalStoring
+
+  init(resetJournalStore: any LocalResetJournalStoring = LocalResetJournalStore()) {
+    self.resetJournalStore = resetJournalStore
+  }
+
+  func prepare(_ container: SendableModelContainer) async throws {
+    let dependencies = DependencyContainer.local(
+      modelContext: container.rawModelContainer.mainContext
+    )
+
+    if let journal = try resetJournalStore.load(), !journal.phase.isTerminal {
+      throw AppLaunchPreparationError.resetJournalIsNonterminal(journal.operationID)
+    }
+
+    let routines = try dependencies.routineRepository.fetchRoutines()
+    do {
+      try await dependencies.alarmScheduleMutator.reconcile(routines: routines)
+    } catch NotificationAlarmMutationError.permissionDenied {
+      return
+    } catch NotificationAlarmMutationError.platformFailure {
+      return
+    }
+  }
+}
+
+nonisolated enum AppLaunchPreparationError: Error, Equatable, Sendable {
+  case resetJournalIsNonterminal(UUID)
+}
 
 nonisolated struct SessionProfileSnapshot: Sendable, Equatable {
   let id: UUID
@@ -251,7 +287,7 @@ actor SessionSnapshotLoading: SessionSnapshotLoader {
       activeRoutines: activeRoutines,
       platformStates: platformStates,
       settings: settings,
-      resetGeneration: nil
+      resetGeneration: try LocalResetJournalStore().currentGeneration()
     )
   }
 
@@ -447,6 +483,10 @@ nonisolated enum SessionReloadSource: Sendable, Hashable {
   case routineMutation(UUID)
   case trialDismissal(UUID)
 }
+nonisolated enum SessionReloadAcknowledgementError: Error, Equatable, Sendable {
+  case failed(SessionReloadSource, AppLaunchFailure)
+}
+
 
 nonisolated struct AppLaunchFailure: Equatable, Sendable {
   nonisolated enum Kind: Equatable, Sendable {
@@ -556,6 +596,7 @@ final class AppLaunchCoordinator: ObservableObject {
   private let modelContainerFactory: any ModelContainerFactory
   private let loaderFactory: any SessionSnapshotLoaderFactory
   private let clock: any AppLaunchClock
+  private let launchPreparation: any AppLaunchPreparing
 
   private var nextLaunchGeneration: UInt64 = 0
   private var nextAttemptNumber: UInt64 = 0
@@ -567,15 +608,19 @@ final class AppLaunchCoordinator: ObservableObject {
   private var completedReloadSources = Set<SessionReloadSource>()
   private var inFlightReloadSource: SessionReloadSource?
   private var failedReloadSource: SessionReloadSource?
+  private var bootstrapFailureCount = 0
+  private var reloadWaiters: [SessionReloadSource: [UUID: CheckedContinuation<Void, Error>]] = [:]
 
   init(
     modelContainerFactory: any ModelContainerFactory = DefaultModelContainerFactory(),
     loaderFactory: any SessionSnapshotLoaderFactory = DefaultSessionSnapshotLoaderFactory(),
-    clock: any AppLaunchClock = ContinuousAppLaunchClock()
+    clock: any AppLaunchClock = ContinuousAppLaunchClock(),
+    launchPreparation: any AppLaunchPreparing = DefaultAppLaunchPreparation()
   ) {
     self.modelContainerFactory = modelContainerFactory
     self.loaderFactory = loaderFactory
     self.clock = clock
+    self.launchPreparation = launchPreparation
   }
 
   deinit {
@@ -583,6 +628,11 @@ final class AppLaunchCoordinator: ObservableObject {
     sessionTask?.cancel()
     statusTask?.cancel()
     timeoutTask?.cancel()
+    for waiters in reloadWaiters.values {
+      for continuation in waiters.values {
+        continuation.resume(throwing: CancellationError())
+      }
+    }
   }
 
   func start() {
@@ -616,6 +666,76 @@ final class AppLaunchCoordinator: ObservableObject {
     beginQueuedReloadIfPossible()
   }
 
+  private func registerReloadWaiter(
+    _ continuation: CheckedContinuation<Void, Error>,
+    for source: SessionReloadSource,
+    waiterID: UUID
+  ) {
+    guard !Task.isCancelled else {
+      continuation.resume(throwing: CancellationError())
+      return
+    }
+
+    guard !completedReloadSources.contains(source) else {
+      continuation.resume()
+      return
+    }
+
+    reloadWaiters[source, default: [:]][waiterID] = continuation
+
+    if failedReloadSource == source {
+      retrySessionReload(source: source)
+    } else {
+      requestSessionReload(source: source)
+    }
+  }
+
+  private func cancelReloadWaiter(for source: SessionReloadSource, waiterID: UUID) {
+    guard let continuation = reloadWaiters[source]?.removeValue(forKey: waiterID) else {
+      return
+    }
+
+    if reloadWaiters[source]?.isEmpty == true {
+      reloadWaiters[source] = nil
+    }
+    continuation.resume(throwing: CancellationError())
+  }
+
+  private func finishReloadWaiters(
+    for source: SessionReloadSource,
+    failure: AppLaunchFailure? = nil
+  ) {
+    let waiters = reloadWaiters.removeValue(forKey: source).map { Array($0.values) } ?? []
+
+    for continuation in waiters {
+      if let failure {
+        continuation.resume(
+          throwing: SessionReloadAcknowledgementError.failed(source, failure)
+        )
+      } else {
+        continuation.resume()
+      }
+    }
+  }
+
+  func awaitSessionReload(source: SessionReloadSource) async throws {
+    let waiterID = UUID()
+
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        registerReloadWaiter(
+          continuation,
+          for: source,
+          waiterID: waiterID
+        )
+      }
+    } onCancel: {
+      Task { @MainActor [weak self] in
+        self?.cancelReloadWaiter(for: source, waiterID: waiterID)
+      }
+    }
+  }
+
   func retrySessionReload() {
     guard let source = failedReloadSource else {
       return
@@ -644,9 +764,11 @@ final class AppLaunchCoordinator: ObservableObject {
     armTimers(for: token)
 
     let factory = modelContainerFactory
-    constructionTask = Task { @MainActor [weak self, factory] in
+    let launchPreparation = launchPreparation
+    constructionTask = Task { @MainActor [weak self, factory, launchPreparation] in
       do {
         let container = try await factory.makeContainer()
+        try await launchPreparation.prepare(container)
         guard !Task.isCancelled else {
           return
         }
@@ -688,9 +810,19 @@ final class AppLaunchCoordinator: ObservableObject {
       return
     }
 
-    lastFailure = failure
     finishAttempt(token)
-    phase = .bootstrapFailed(failure)
+    finishBootstrapFailure(failure)
+  }
+
+  private func finishBootstrapFailure(_ failure: AppLaunchFailure) {
+    lastFailure = failure
+    bootstrapFailureCount += 1
+
+    if bootstrapFailureCount > 3 {
+      phase = .recoveryRequired(failure)
+    } else {
+      phase = .bootstrapFailed(failure)
+    }
   }
 
   private func beginSessionLoading(_ pending: PendingLaunchResources) {
@@ -836,9 +968,9 @@ final class AppLaunchCoordinator: ObservableObject {
     launchedApp.sessionStore.apply(snapshot: snapshot)
     inFlightReloadSource = nil
     completedReloadSources.insert(source)
+    finishReloadWaiters(for: source)
     beginQueuedReloadIfPossible()
   }
-
   private func receivedReloadFailure(
     source: SessionReloadSource,
     for launchedApp: LaunchedApp,
@@ -854,8 +986,8 @@ final class AppLaunchCoordinator: ObservableObject {
     inFlightReloadSource = nil
     failedReloadSource = source
     launchedApp.sessionStore.apply(failure: failure)
+    finishReloadWaiters(for: source, failure: failure)
   }
-
   private func armTimers(for token: AppLaunchAttemptToken) {
     activeAttemptToken = token
     showsLaunchStatus = false
@@ -907,8 +1039,7 @@ final class AppLaunchCoordinator: ObservableObject {
     case .constructing:
       constructionTask?.cancel()
       finishAttempt(token)
-      lastFailure = .timedOut
-      phase = .bootstrapFailed(.timedOut)
+      finishBootstrapFailure(.timedOut)
     case .loadingSession(let pending):
       sessionTask?.cancel()
       finishAttempt(token)

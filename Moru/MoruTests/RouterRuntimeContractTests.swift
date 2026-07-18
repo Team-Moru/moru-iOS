@@ -297,12 +297,128 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
+  func testNonterminalAndCorruptResetJournalBlockRegularLaunch() throws {
+    let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "RouterResetLaunchGuard-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer {
+      try? FileManager.default.removeItem(at: directoryURL)
+    }
+
+    let journalURL = directoryURL.appendingPathComponent("journal.json", isDirectory: false)
+    let journalStore = LocalResetJournalStore(fileURL: journalURL)
+    _ = try journalStore.begin(operationID: UUID(), at: Date())
+    let homeBuilder = CapturingHomeFlowBuilder()
+    let (router, coordinator, _) = makeRouter(
+      homeBuilder: homeBuilder,
+      routinePlayerBuilder: CapturingRoutinePlayerBuilder(),
+      state: AppRouterState(),
+      localResetJournalStore: journalStore
+    )
+
+    _ = router.mainTabView
+    let launchRoutine = try XCTUnwrap(homeBuilder.onStartRoutine)
+    let request = RoutineLaunchRequest(routineID: UUID())
+
+    XCTAssertEqual(launchRoutine(request), .busy)
+    XCTAssertNil(coordinator.presentation)
+
+    try Data("corrupt".utf8).write(to: journalURL, options: .atomic)
+
+    XCTAssertEqual(launchRoutine(request), .busy)
+    XCTAssertNil(coordinator.presentation)
+  }
+  @MainActor
+  func testResetRemainsBusyUntilTheMatchingReloadAcknowledges() async throws {
+    let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "RouterRuntimeContractTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer {
+      try? FileManager.default.removeItem(at: directoryURL)
+    }
+
+    let journalStore = LocalResetJournalStore(
+      fileURL: directoryURL.appendingPathComponent("journal.json", isDirectory: false)
+    )
+    let reloadRecorder = RouterAsyncReloadRecorder()
+    let state = AppRouterState()
+    let (router, _, _) = makeRouter(
+      homeBuilder: CapturingHomeFlowBuilder(),
+      routinePlayerBuilder: CapturingRoutinePlayerBuilder(),
+      state: state,
+      awaitSessionReload: reloadRecorder.awaitReload,
+      localResetRepository: RouterResetDataRepository(),
+      localResetJournalStore: journalStore
+    )
+    state.selectMainTab(.record)
+    let performer = router.makeProfileLocalResetPerformer()
+    let reset = Task { @MainActor () -> Result<Void, Error> in
+      do {
+        try await performer.reset()
+        return .success(())
+      } catch {
+        return .failure(error)
+      }
+    }
+
+    await waitUntil("Reset should request an exact-source reload after navigation clears.") {
+      !reloadRecorder.sources.isEmpty
+    }
+    guard case .reset(let operationID) = try XCTUnwrap(reloadRecorder.sources.first) else {
+      return XCTFail("Reset should await a reset reload source.")
+    }
+    XCTAssertTrue(state.isLocalResetInProgress)
+    XCTAssertEqual(state.mainTabState, MainTabState())
+
+    XCTAssertTrue(reloadRecorder.succeedNext())
+    _ = try await reset.value.get()
+    XCTAssertEqual(try journalStore.load()?.operationID, operationID)
+    await waitUntil("Reset should finish after its matching reload acknowledgement.") {
+      !state.isLocalResetInProgress
+    }
+  }
+
+  @MainActor
+  func testRepeatedAlarmRepairRetriesUseOneAdmissionUntilReloadCompletes() async {
+    let reloadRecorder = RouterAsyncReloadRecorder()
+    let state = AppRouterState()
+    let (router, _, _) = makeRouter(
+      homeBuilder: CapturingHomeFlowBuilder(),
+      routinePlayerBuilder: CapturingRoutinePlayerBuilder(),
+      state: state,
+      awaitSessionReload: reloadRecorder.awaitReload
+    )
+
+    router.retryAlarmRepair()
+    router.retryAlarmRepair()
+
+    await waitUntil("Only the first repair retry should reach its reload acknowledgement.") {
+      reloadRecorder.sources.count == 1
+    }
+    XCTAssertTrue(state.isAlarmRepairRetryInProgress)
+    guard case .some(.routineMutation) = reloadRecorder.sources.first else {
+      return XCTFail("Repair retry should await its exact routine-mutation reload.")
+    }
+
+    XCTAssertTrue(reloadRecorder.succeedNext())
+    await waitUntil("Repair admission should finish after the reload outcome.") {
+      !state.isAlarmRepairRetryInProgress
+    }
+    XCTAssertEqual(reloadRecorder.sources.count, 1)
+  }
+
+  @MainActor
   private func makeRouter(
     homeBuilder: CapturingHomeFlowBuilder,
     routinePlayerBuilder: CapturingRoutinePlayerBuilder,
     state: AppRouterState,
     requestSessionReload: @escaping @MainActor (SessionReloadSource) -> Void = { _ in },
-    retrySessionReload: @escaping @MainActor () -> Void = {}
+    awaitSessionReload: @escaping @MainActor (SessionReloadSource) async throws -> Void = { _ in },
+    retrySessionReload: @escaping @MainActor () -> Void = {},
+    localResetRepository: (any LocalResetDataRepository)? = nil,
+    localResetJournalStore: (any LocalResetJournalStoring)? = nil
   ) -> (AppRouter, AppNavigationCoordinator, SessionStore) {
     let routineRepository = ResolvingRoutineRepository()
     let routineRunRepository = RouterRuntimeRoutineRunRepository()
@@ -316,7 +432,10 @@ final class RouterRuntimeContractTests: XCTestCase {
       routineSuggestionService: LocalTemplateSuggestionService.shared,
       homeWeatherRepository: nil,
       historyEvidenceRepository: MockHistoryEvidenceRepository(),
-      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
+      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe(),
+      alarmScheduleMutator: DebugLocalCommitAlarmScheduleMutator(),
+      localResetRepository: localResetRepository,
+      localResetJournalStore: localResetJournalStore
     )
     let coordinator = AppNavigationCoordinator()
     let sessionStore = SessionStore()
@@ -329,6 +448,7 @@ final class RouterRuntimeContractTests: XCTestCase {
         onboardingBuilder: EmptyOnboardingFlowBuilder(),
         routinePlayerBuilder: routinePlayerBuilder,
         requestSessionReload: requestSessionReload,
+        awaitSessionReload: awaitSessionReload,
         retrySessionReload: retrySessionReload,
         homeBuilder: homeBuilder,
         state: state
@@ -336,6 +456,24 @@ final class RouterRuntimeContractTests: XCTestCase {
       coordinator,
       sessionStore
     )
+  }
+
+  @MainActor
+  private func waitUntil(
+    _ message: String,
+    _ predicate: @escaping @MainActor () async -> Bool
+  ) async {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: .seconds(1))
+
+    while clock.now < deadline {
+      if await predicate() {
+        return
+      }
+      await Task.yield()
+    }
+
+    XCTFail(message)
   }
 
 
@@ -991,7 +1129,7 @@ final class RouterRuntimeContractTests: XCTestCase {
 
 
   @MainActor
-  func testOnboardingEmitsExactSavedRoutineIDOnceAndFailureEmitsNone() {
+  func testOnboardingEmitsExactSavedRoutineIDOnceAndFailureEmitsNone() async {
     let savedRoutine = makeExecutableRoutine()
     let successfulUseCase = OnboardingCompletionUseCaseSpy(
       outcome: .success(
@@ -1012,6 +1150,9 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     successfulViewModel.primaryButtonDidTap()
     successfulViewModel.primaryButtonDidTap()
+    while successfulViewModel.isSaving {
+      await Task.yield()
+    }
 
     XCTAssertEqual(successfulUseCase.executeCallCount, 1)
     XCTAssertEqual(emittedRoutineIDs, [savedRoutine.id])
@@ -1027,6 +1168,9 @@ final class RouterRuntimeContractTests: XCTestCase {
     }
 
     failingViewModel.primaryButtonDidTap()
+    while failingViewModel.isSaving {
+      await Task.yield()
+    }
 
     XCTAssertEqual(failingUseCase.executeCallCount, 1)
     XCTAssertTrue(failedEmissionRoutineIDs.isEmpty)
@@ -1634,6 +1778,36 @@ private final class RoutinePlayerEventRecorder {
     events.append(event)
     onRecord(event)
   }
+}
+@MainActor
+private final class RouterAsyncReloadRecorder {
+  private var continuations: [CheckedContinuation<Void, Error>] = []
+  private(set) var sources: [SessionReloadSource] = []
+
+  func awaitReload(_ source: SessionReloadSource) async throws {
+    sources.append(source)
+    try await withCheckedThrowingContinuation { continuation in
+      continuations.append(continuation)
+    }
+  }
+
+  func succeedNext() -> Bool {
+    guard !continuations.isEmpty else {
+      return false
+    }
+
+    continuations.removeFirst().resume()
+    return true
+  }
+}
+
+@MainActor
+private final class RouterResetDataRepository: LocalResetDataRepository {
+  func inventoryScheduleIDs() throws -> [UUID] {
+    []
+  }
+
+  func deleteAll() throws {}
 }
 @MainActor
 private final class RouterReloadRecorder {

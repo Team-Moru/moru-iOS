@@ -12,6 +12,8 @@ struct RoutineSettingView: View {
   @State private var editorDraft: RoutineDraftState?
   @State private var activationConflictRoutineID: UUID?
   @State private var activationConflict: RoutineWeekdayConflictState?
+  @State private var activationOverrides: [UUID: Bool] = [:]
+  @State private var isActivationMutationInProgress = false
 
   init(dependencies: DependencyContainer) {
     _viewModel = State(initialValue: RoutineSettingViewModel(dependencies: dependencies))
@@ -49,11 +51,11 @@ struct RoutineSettingView: View {
     }
     .sheet(item: $editorDraft) { draft in
       RoutineEditorView(draft: draft) { savedDraft in
-        viewModel.saveDraft(savedDraft)
+        await viewModel.saveDraft(savedDraft)
       } onResolveWeekdayConflict: { savedDraft in
-        viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
+        await viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
       } onDelete: { routineID in
-        viewModel.deleteRoutine(id: routineID)
+        await viewModel.deleteRoutine(id: routineID)
       } weekdayConflictState: { draft in
         viewModel.weekdayConflict(for: draft)
       }
@@ -107,6 +109,7 @@ struct RoutineSettingView: View {
               editorDraft = viewModel.makeDraft(for: routine.id)
             }
           )
+          .disabled(isMutationInProgress)
         }
       }
     }
@@ -119,6 +122,7 @@ struct RoutineSettingView: View {
       MoruRoutineCard(title: "새 루틴 추가하기", isAddCard: true)
     }
     .buttonStyle(.plain)
+    .disabled(isMutationInProgress)
   }
 
   private func emptySectionCard(title: String) -> some View {
@@ -134,10 +138,16 @@ struct RoutineSettingView: View {
     .shadow(color: AppColor.babyBlue150, radius: 7.5, x: 0, y: 0)
   }
 
+  private var isMutationInProgress: Bool {
+    viewModel.isMutationInProgress || isActivationMutationInProgress
+  }
+
   private func activationBinding(for routine: RoutineSettingItemState) -> Binding<Bool> {
     Binding(
       get: {
-        viewModel.state.routines.first { $0.id == routine.id }?.isActive ?? routine.isActive
+        activationOverrides[routine.id]
+          ?? viewModel.state.routines.first { $0.id == routine.id }?.isActive
+          ?? routine.isActive
       },
       set: { isActive in
         routineActivationDidChange(routineID: routine.id, isActive: isActive)
@@ -146,20 +156,42 @@ struct RoutineSettingView: View {
   }
 
   private func routineActivationDidChange(routineID: UUID, isActive: Bool) {
+    guard !isMutationInProgress else {
+      return
+    }
+
+    activationOverrides[routineID] = isActive
+
     guard isActive else {
-      viewModel.routineActivationDidChange(id: routineID, isActive: false)
+      performActivationMutation(routineID: routineID, isActive: false)
       return
     }
 
     if let conflict = viewModel.activationConflict(for: routineID) {
+      activationOverrides.removeValue(forKey: routineID)
       activationConflictRoutineID = routineID
       activationConflict = conflict
     } else {
-      viewModel.routineActivationDidChange(id: routineID, isActive: true)
+      performActivationMutation(routineID: routineID, isActive: true)
     }
   }
 
-  private func activationConflictDialogOverlay(_ conflict: RoutineWeekdayConflictState) -> some View {
+  private func performActivationMutation(routineID: UUID, isActive: Bool) {
+    guard !isMutationInProgress else {
+      return
+    }
+
+    isActivationMutationInProgress = true
+    Task { @MainActor in
+      _ = await viewModel.routineActivationDidChange(id: routineID, isActive: isActive)
+      activationOverrides.removeValue(forKey: routineID)
+      isActivationMutationInProgress = false
+    }
+  }
+
+  private func activationConflictDialogOverlay(
+    _ conflict: RoutineWeekdayConflictState
+  ) -> some View {
     ZStack {
       AppColor.grayBlack
         .opacity(0.22)
@@ -171,18 +203,30 @@ struct RoutineSettingView: View {
         primaryTitle: "괜찮아요",
         secondaryTitle: "변경하기",
         primaryAction: {
-          activationConflict = nil
-          activationConflictRoutineID = nil
-        },
-        secondaryAction: {
-          if let activationConflictRoutineID {
-            viewModel.activateRoutineResolvingWeekdayConflict(id: activationConflictRoutineID)
+          guard !isMutationInProgress else {
+            return
           }
 
           activationConflict = nil
           activationConflictRoutineID = nil
+        },
+        secondaryAction: {
+          guard let routineID = activationConflictRoutineID,
+                !isMutationInProgress else {
+            return
+          }
+
+          isActivationMutationInProgress = true
+          Task { @MainActor in
+            _ = await viewModel.activateRoutineResolvingWeekdayConflict(id: routineID)
+            activationConflict = nil
+            activationConflictRoutineID = nil
+            activationOverrides.removeValue(forKey: routineID)
+            isActivationMutationInProgress = false
+          }
         }
       )
+      .disabled(isMutationInProgress)
     }
   }
 

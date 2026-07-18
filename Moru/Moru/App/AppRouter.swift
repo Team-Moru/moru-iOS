@@ -12,6 +12,8 @@ import UIKit
 final class AppRouterState: ObservableObject {
   @Published private(set) var homeRefreshToken = 0
   @Published private(set) var mainTabState = MainTabState()
+  @Published private(set) var isLocalResetInProgress = false
+  @Published private(set) var isAlarmRepairRetryInProgress = false
 
   func refreshHome() {
     homeRefreshToken += 1
@@ -40,6 +42,34 @@ final class AppRouterState: ObservableObject {
     nextState.setHistoryDestination(destination)
     mainTabState = nextState
   }
+  func beginLocalReset() -> Bool {
+    guard !isLocalResetInProgress else {
+      return false
+    }
+    isLocalResetInProgress = true
+    return true
+  }
+
+  func finishLocalReset() {
+    isLocalResetInProgress = false
+  }
+
+  func beginAlarmRepairRetry() -> Bool {
+    guard !isAlarmRepairRetryInProgress else {
+      return false
+    }
+
+    isAlarmRepairRetryInProgress = true
+    return true
+  }
+
+  func finishAlarmRepairRetry() {
+    isAlarmRepairRetryInProgress = false
+  }
+  func clearNavigationForLocalReset() {
+    mainTabState = MainTabState()
+    homeRefreshToken += 1
+  }
 }
 
 struct AppRouter: View {
@@ -55,6 +85,7 @@ struct AppRouter: View {
   private let homeBuilder: any HomeFlowBuilding
   private let requestSessionReload: @MainActor (SessionReloadSource) -> Void
   private let retrySessionReloadAction: @MainActor () -> Void
+  private let awaitSessionReload: @MainActor (SessionReloadSource) async throws -> Void
 
   @MainActor
   init(
@@ -64,6 +95,7 @@ struct AppRouter: View {
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
     requestSessionReload: @escaping @MainActor (SessionReloadSource) -> Void,
+    awaitSessionReload: @escaping @MainActor (SessionReloadSource) async throws -> Void,
     retrySessionReload: @escaping @MainActor () -> Void,
     homeBuilder: any HomeFlowBuilding,
     state: AppRouterState
@@ -74,6 +106,7 @@ struct AppRouter: View {
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
     self.requestSessionReload = requestSessionReload
+    self.awaitSessionReload = awaitSessionReload
     retrySessionReloadAction = retrySessionReload
     _state = ObservedObject(wrappedValue: state)
     self.homeBuilder = homeBuilder
@@ -86,6 +119,22 @@ struct AppRouter: View {
         ProgressView()
       case .onboardingRequired:
         onboardingBuilder.make(onCompleted: handleOnboardingCompleted)
+      case .alarmPermissionRequired:
+        AlarmSessionRepairView(
+          title: "알람 권한이 꺼져 있어요",
+          message: "현재는 기기 알림으로 알려드려요. 설정에서 알림 권한을 켜 주세요.",
+          settingsAction: openSystemSettings,
+          retryAction: retryAlarmRepair,
+          isRetryDisabled: state.isAlarmRepairRetryInProgress
+        )
+      case .alarmRepairRequired:
+        AlarmSessionRepairView(
+          title: "알람을 다시 예약해야 해요",
+          message: "저장된 루틴의 기기 알림을 다시 예약해 주세요.",
+          settingsAction: nil,
+          retryAction: retryAlarmRepair,
+          isRetryDisabled: state.isAlarmRepairRetryInProgress
+        )
       case .ready:
         if sessionStore.profile != nil {
           mainTabView
@@ -157,9 +206,26 @@ struct AppRouter: View {
   private func handleRegularRoutineLaunch(
     _ request: RoutineLaunchRequest
   ) -> RoutineLaunchResult {
-    Self.regularRoutineLaunchResult(
+    guard !state.isLocalResetInProgress, resetJournalAllowsRoutineLaunch() else {
+      return .busy
+    }
+    return Self.regularRoutineLaunchResult(
       from: coordinator.presentRegularRoutine(routineID: request.routineID)
     )
+  }
+  private func resetJournalAllowsRoutineLaunch() -> Bool {
+    guard let journalStore = dependencies.localResetJournalStore else {
+      return true
+    }
+
+    do {
+      guard let entry = try journalStore.load() else {
+        return true
+      }
+      return entry.phase.isTerminal
+    } catch {
+      return false
+    }
   }
 
   static func regularRoutineLaunchResult(
@@ -188,19 +254,18 @@ struct AppRouter: View {
       localSettingsRepository: dependencies.localSettingsRepository,
       voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
     )
+    let resetPerformer = makeProfileLocalResetPerformer()
     let profileBuilder = DefaultProfileFlowBuilder(
       profileSettingsUseCase: profileSettingsUseCase,
       voicePreviewPlayer: AVSpeechVoicePreviewPlayer(
         availabilityProbe: dependencies.voiceAvailabilityProbe
       ),
       alarmStatusProvider: { profileAlarmStatus },
-      resetPerformer: AlarmResetPendingProfileLocalResetPerformer(coordinator: coordinator),
+      resetPerformer: resetPerformer,
       onOpenSettings: {
         openSystemSettings()
       },
-      onRetryAlarmRepair: {
-        retrySessionReload()
-      }
+      onRetryAlarmRepair: retryAlarmRepair
     )
     let mainTabState = state.mainTabState
 
@@ -234,6 +299,58 @@ struct AppRouter: View {
       }
     )
   }
+  @MainActor
+  func makeProfileLocalResetPerformer() -> any ProfileLocalResetPerforming {
+    guard let resetRepository = dependencies.localResetRepository,
+          let journalStore = dependencies.localResetJournalStore else {
+      return UnavailableProfileLocalResetPerformer(coordinator: coordinator)
+    }
+
+    let resetCoordinator = LocalResetCoordinator(
+      alarmMutator: dependencies.alarmScheduleMutator,
+      resetRepository: resetRepository,
+      journalStore: journalStore,
+      clearCoordinator: { operationID in
+        coordinator.clearForLocalReset()
+        state.clearNavigationForLocalReset()
+        try await awaitSessionReload(.reset(operationID))
+      }
+    )
+    return NotificationProfileLocalResetPerformer(
+      coordinator: coordinator,
+      routerState: state,
+      sessionStore: sessionStore,
+      journalStore: journalStore,
+      resetCoordinator: resetCoordinator
+    )
+  }
+
+  @MainActor
+  func retryAlarmRepair() {
+    guard state.beginAlarmRepairRetry() else {
+      return
+    }
+
+    let source = SessionReloadSource.routineMutation(UUID())
+    Task { @MainActor in
+      defer {
+        state.finishAlarmRepairRetry()
+      }
+
+      do {
+        let routines = try dependencies.routineRepository.fetchRoutines()
+        try await dependencies.alarmScheduleMutator.reconcile(routines: routines)
+      } catch {
+        return
+      }
+
+      do {
+        try await awaitSessionReload(source)
+      } catch {
+        // The matching reload publishes its failure before this acknowledgement returns.
+      }
+    }
+  }
 
   private var profileAlarmStatus: ProfileAlarmStatus {
     guard let platformStates = sessionStore.snapshot?.platformStates,
@@ -241,7 +358,15 @@ struct AppRouter: View {
       return .unavailable
     }
 
-    if platformStates.contains(where: { $0.state == .repairRequired }) {
+    if platformStates.contains(where: {
+      $0.lastErrorCode == "notificationPermissionDenied"
+    }) {
+      return .permissionOff
+    }
+
+    if platformStates.contains(where: {
+      $0.state == .repairRequired || $0.state == .cancellationPending
+    }) {
       return .repairRequired
     }
 
@@ -317,11 +442,13 @@ struct AppRouter: View {
 }
 
 private enum ProfileLocalResetUnavailableError: Error {
-  case alarmResetRequired
+  case activeRoutine
+  case resetInProgress
+  case unavailable
 }
 
 @MainActor
-private final class AlarmResetPendingProfileLocalResetPerformer: ProfileLocalResetPerforming {
+private final class UnavailableProfileLocalResetPerformer: ProfileLocalResetPerforming {
   private let coordinator: AppNavigationCoordinator
 
   init(coordinator: AppNavigationCoordinator) {
@@ -332,15 +459,94 @@ private final class AlarmResetPendingProfileLocalResetPerformer: ProfileLocalRes
     if coordinator.presentation != nil || coordinator.pendingDismissalToken != nil {
       return .blockedByActiveRoutine
     }
-
     return .blockedByAlarmReset
   }
 
   func reset() async throws {
-    throw ProfileLocalResetUnavailableError.alarmResetRequired
+    throw ProfileLocalResetUnavailableError.unavailable
   }
 }
 
+@MainActor
+private final class NotificationProfileLocalResetPerformer: ProfileLocalResetPerforming {
+  private let coordinator: AppNavigationCoordinator
+  private let routerState: AppRouterState
+  private let sessionStore: SessionStore
+  private let journalStore: any LocalResetJournalStoring
+  private let resetCoordinator: LocalResetCoordinator
+
+  init(
+    coordinator: AppNavigationCoordinator,
+    routerState: AppRouterState,
+    sessionStore: SessionStore,
+    journalStore: any LocalResetJournalStoring,
+    resetCoordinator: LocalResetCoordinator
+  ) {
+    self.coordinator = coordinator
+    self.routerState = routerState
+    self.sessionStore = sessionStore
+    self.journalStore = journalStore
+    self.resetCoordinator = resetCoordinator
+  }
+
+  func availability() -> LocalResetAvailability {
+    if routerState.isLocalResetInProgress {
+      return .blockedByAlarmReset
+    }
+    if coordinator.presentation != nil || coordinator.pendingDismissalToken != nil {
+      return .blockedByActiveRoutine
+    }
+
+    do {
+      if let entry = try journalStore.load(), !entry.phase.isTerminal {
+        return .available
+      }
+    } catch {
+      return .blockedByAlarmRepair
+    }
+
+    if sessionStore.snapshot?.platformStates.contains(where: {
+      $0.state == .repairRequired || $0.state == .cancellationPending
+    }) == true {
+      return .blockedByAlarmRepair
+    }
+    return .available
+  }
+
+  func reset() async throws {
+    guard routerState.beginLocalReset() else {
+      throw ProfileLocalResetUnavailableError.resetInProgress
+    }
+    defer {
+      routerState.finishLocalReset()
+    }
+
+    guard coordinator.presentation == nil,
+          coordinator.pendingDismissalToken == nil else {
+      throw ProfileLocalResetUnavailableError.activeRoutine
+    }
+
+    _ = try await resetCoordinator.reset()
+  }
+}
+private struct AlarmSessionRepairView: View {
+  let title: String
+  let message: String
+  let settingsAction: (@MainActor () -> Void)?
+  let retryAction: @MainActor () -> Void
+  let isRetryDisabled: Bool
+
+  var body: some View {
+    VStack(spacing: 16) {
+      ContentView(title: title, message: message)
+      if let settingsAction {
+        Button("설정 열기", action: settingsAction)
+      }
+      Button("다시 시도", action: retryAction)
+        .disabled(isRetryDisabled)
+    }
+  }
+}
 private struct SessionFailureView: View {
   let title: String
   let message: String

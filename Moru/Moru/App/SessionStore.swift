@@ -13,6 +13,8 @@ final class SessionStore: ObservableObject {
   enum Phase: Equatable {
     case loading
     case onboardingRequired
+    case alarmPermissionRequired
+    case alarmRepairRequired
     case ready
     case failed(String)
   }
@@ -80,6 +82,23 @@ final class SessionStore: ObservableObject {
   }
 
   private static func phase(for snapshot: SessionSnapshot) -> Phase {
-    isOnboardingComplete(snapshot: snapshot) ? .ready : .onboardingRequired
+    if isOnboardingComplete(snapshot: snapshot) {
+      return .ready
+    }
+    guard snapshot.profile != nil, hasEnabledRoutine(snapshot.activeRoutines) else {
+      return .onboardingRequired
+    }
+    if snapshot.platformStates.contains(where: {
+      $0.lastErrorCode == "notificationPermissionDenied"
+    }) {
+      return .alarmPermissionRequired
+    }
+    return .alarmRepairRequired
+  }
+
+  private static func hasEnabledRoutine(_ routines: [SessionRoutineSnapshot]) -> Bool {
+    routines.contains { routine in
+      routine.isActive && routine.alarmSchedule?.isEnabled == true
+    }
   }
 }

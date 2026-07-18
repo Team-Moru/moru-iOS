@@ -16,14 +16,28 @@ final class RoutineSettingViewModel {
   private let calendar: Calendar
 
   var state: RoutineSettingViewState = .empty
+  private(set) var isMutationInProgress = false
 
-  init(
+  convenience init(
     dependencies: DependencyContainer,
     calendar: Calendar = .current
   ) {
-    self.routineRepository = dependencies.routineRepository
+    self.init(
+      routineRepository: dependencies.routineRepository,
+      alarmScheduleMutator: dependencies.alarmScheduleMutator,
+      calendar: calendar
+    )
+  }
+
+  init(
+    routineRepository: any RoutineRepository,
+    alarmScheduleMutator: any AlarmScheduleMutating,
+    calendar: Calendar = .current
+  ) {
+    self.routineRepository = routineRepository
     self.routineSettingUseCase = RoutineSettingUseCase(
-      routineRepository: dependencies.routineRepository
+      routineRepository: routineRepository,
+      alarmScheduleMutator: alarmScheduleMutator
     )
     self.calendar = calendar
   }
@@ -50,36 +64,48 @@ final class RoutineSettingViewModel {
   }
 
   func makeDraft(for routineID: UUID) -> RoutineDraftState? {
-    guard let routine = try? routineRepository.routine(id: routineID) else {
+    do {
+      guard let routine = try routineRepository.routine(id: routineID) else {
+        return nil
+      }
+
+      let schedule = routine.alarmSchedule
+      return RoutineDraftState(
+        routineID: routine.id,
+        title: routine.name,
+        summary: routine.summary,
+        hour: schedule?.hour ?? 7,
+        minute: schedule?.minute ?? 0,
+        selectedWeekdays: Set(schedule?.weekdays ?? Weekday.weekdays),
+        steps: routine.steps
+          .sorted { $0.order < $1.order }
+          .map { step in
+            RoutineStepDraftState(
+              id: step.id,
+              type: step.type,
+              title: step.title,
+              estimatedMinutes: max((step.estimatedSeconds ?? 180) / 60, 1)
+            )
+          },
+        isActive: routine.isActive
+      )
+    } catch {
+      state.errorMessage = "루틴 정보를 불러오지 못했어요."
       return nil
     }
-
-    let schedule = routine.alarmSchedule
-    return RoutineDraftState(
-      routineID: routine.id,
-      title: routine.name,
-      summary: routine.summary,
-      hour: schedule?.hour ?? 7,
-      minute: schedule?.minute ?? 0,
-      selectedWeekdays: Set(schedule?.weekdays ?? Weekday.weekdays),
-      steps: routine.steps
-        .sorted { $0.order < $1.order }
-        .map { step in
-          RoutineStepDraftState(
-            id: step.id,
-            type: step.type,
-            title: step.title,
-            estimatedMinutes: max((step.estimatedSeconds ?? 180) / 60, 1)
-          )
-        },
-      isActive: routine.isActive
-    )
   }
 
   @discardableResult
-  func saveDraft(_ draft: RoutineDraftState) -> Bool {
+  func saveDraft(_ draft: RoutineDraftState) async -> Bool {
+    guard beginMutation() else {
+      return false
+    }
+    defer {
+      isMutationInProgress = false
+    }
+
     do {
-      try routineSettingUseCase.saveRoutine(from: makeMutation(from: draft))
+      try await routineSettingUseCase.saveRoutine(from: makeMutation(from: draft))
       load()
       return true
     } catch {
@@ -89,9 +115,16 @@ final class RoutineSettingViewModel {
   }
 
   @discardableResult
-  func saveDraftResolvingWeekdayConflict(_ draft: RoutineDraftState) -> Bool {
+  func saveDraftResolvingWeekdayConflict(_ draft: RoutineDraftState) async -> Bool {
+    guard beginMutation() else {
+      return false
+    }
+    defer {
+      isMutationInProgress = false
+    }
+
     do {
-      try routineSettingUseCase.saveRoutine(
+      try await routineSettingUseCase.saveRoutine(
         from: makeMutation(from: draft),
         resolvingWeekdayConflict: true
       )
@@ -108,23 +141,33 @@ final class RoutineSettingViewModel {
       return nil
     }
 
-    guard let conflictingWeekdays = try? routineSettingUseCase.weekdayConflict(
-      for: makeMutation(from: draft)
-    ) else {
+    do {
+      let conflictingWeekdays = try routineSettingUseCase.weekdayConflict(
+        for: makeMutation(from: draft)
+      )
+
+      guard !conflictingWeekdays.isEmpty else {
+        return nil
+      }
+
+      return RoutineWeekdayConflictState(conflictingWeekdays: conflictingWeekdays)
+    } catch {
+      state.errorMessage = "루틴 정보를 불러오지 못했어요."
       return nil
     }
-
-    guard !conflictingWeekdays.isEmpty else {
-      return nil
-    }
-
-    return RoutineWeekdayConflictState(conflictingWeekdays: conflictingWeekdays)
   }
 
   @discardableResult
-  func routineActivationDidChange(id: UUID, isActive: Bool) -> Bool {
+  func routineActivationDidChange(id: UUID, isActive: Bool) async -> Bool {
+    guard beginMutation() else {
+      return false
+    }
+    defer {
+      isMutationInProgress = false
+    }
+
     do {
-      try routineSettingUseCase.updateActivation(routineID: id, isActive: isActive)
+      try await routineSettingUseCase.updateActivation(routineID: id, isActive: isActive)
       load()
       return true
     } catch {
@@ -143,9 +186,16 @@ final class RoutineSettingViewModel {
   }
 
   @discardableResult
-  func activateRoutineResolvingWeekdayConflict(id: UUID) -> Bool {
+  func activateRoutineResolvingWeekdayConflict(id: UUID) async -> Bool {
+    guard beginMutation() else {
+      return false
+    }
+    defer {
+      isMutationInProgress = false
+    }
+
     do {
-      try routineSettingUseCase.updateActivation(
+      try await routineSettingUseCase.updateActivation(
         routineID: id,
         isActive: true,
         resolvingWeekdayConflict: true
@@ -158,13 +208,32 @@ final class RoutineSettingViewModel {
     }
   }
 
-  func deleteRoutine(id: UUID) {
+  @discardableResult
+  func deleteRoutine(id: UUID) async -> Bool {
+    guard beginMutation() else {
+      return false
+    }
+    defer {
+      isMutationInProgress = false
+    }
+
     do {
-      try routineRepository.deleteRoutine(id: id)
+      try await routineSettingUseCase.deleteRoutine(id: id)
       load()
+      return true
     } catch {
       state.errorMessage = "루틴을 삭제하지 못했어요."
+      return false
     }
+  }
+
+  private func beginMutation() -> Bool {
+    guard !isMutationInProgress else {
+      return false
+    }
+
+    isMutationInProgress = true
+    return true
   }
 
   private func makeItemState(from routine: Routine) -> RoutineSettingItemState {

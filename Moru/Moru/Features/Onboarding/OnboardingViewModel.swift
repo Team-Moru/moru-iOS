@@ -218,19 +218,25 @@ final class OnboardingViewModel: ObservableObject {
     isSaving = true
     errorMessage = nil
 
-    do {
-      let result = try completeOnboardingUseCase.execute(
-        CompleteOnboardingRequest(
-          suggestionInput: draft.suggestionInput,
-          selectedVoice: draft.selectedVoice
-        )
-      )
-      didComplete = true
-      isSaving = false
-      onCompleted(result.routine.id)
-    } catch {
-      isSaving = false
-      errorMessage = error.localizedDescription
+    let request = CompleteOnboardingRequest(
+      suggestionInput: draft.suggestionInput,
+      selectedVoice: draft.selectedVoice
+    )
+
+    Task { [weak self] in
+      guard let self else {
+        return
+      }
+
+      do {
+        let result = try await self.completeOnboardingUseCase.execute(request)
+        self.didComplete = true
+        self.isSaving = false
+        self.onCompleted(result.routine.id)
+      } catch {
+        self.isSaving = false
+        self.errorMessage = error.localizedDescription
+      }
     }
   }
 }

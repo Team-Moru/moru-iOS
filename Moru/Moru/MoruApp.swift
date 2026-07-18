@@ -29,6 +29,7 @@ struct MoruApp: App {
             onboardingBuilder: app.onboardingBuilder,
             routinePlayerBuilder: app.routinePlayerBuilder,
             requestSessionReload: launchCoordinator.requestSessionReload,
+            awaitSessionReload: launchCoordinator.awaitSessionReload,
             retrySessionReload: launchCoordinator.retrySessionReload,
             homeBuilder: app.homeBuilder,
             state: app.routerState

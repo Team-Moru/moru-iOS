@@ -5,6 +5,7 @@
 //  Created by Codex on 7/6/26.
 //
 
+import Foundation
 import SwiftData
 
 struct DependencyContainer {
@@ -18,6 +19,9 @@ struct DependencyContainer {
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let historyEvidenceRepository: any HistoryEvidenceRepository
   let voiceAvailabilityProbe: any VoiceAvailabilityProbing
+  let alarmScheduleMutator: any AlarmScheduleMutating
+  let localResetRepository: (any LocalResetDataRepository)?
+  let localResetJournalStore: (any LocalResetJournalStoring)?
 
   init(
     routineRepository: any RoutineRepository,
@@ -28,7 +32,10 @@ struct DependencyContainer {
     routineSuggestionService: any RoutineSuggestionService,
     homeWeatherRepository: (any HomeWeatherRepository)?,
     historyEvidenceRepository: any HistoryEvidenceRepository,
-    voiceAvailabilityProbe: any VoiceAvailabilityProbing
+    voiceAvailabilityProbe: any VoiceAvailabilityProbing,
+    alarmScheduleMutator: any AlarmScheduleMutating,
+    localResetRepository: (any LocalResetDataRepository)? = nil,
+    localResetJournalStore: (any LocalResetJournalStoring)? = nil
   ) {
     self.routineRepository = routineRepository
     self.routineRunRepository = routineRunRepository
@@ -39,14 +46,38 @@ struct DependencyContainer {
     self.homeWeatherRepository = homeWeatherRepository
     self.historyEvidenceRepository = historyEvidenceRepository
     self.voiceAvailabilityProbe = voiceAvailabilityProbe
+    self.alarmScheduleMutator = alarmScheduleMutator
+    self.localResetRepository = localResetRepository
+    self.localResetJournalStore = localResetJournalStore
   }
 
+  @MainActor
   static func local(modelContext: ModelContext) -> DependencyContainer {
     let voiceAvailabilityProbe = AVSpeechVoiceAvailabilityProbe()
     let localProfileRepository = SwiftDataLocalProfileRepository(
       modelContext: modelContext,
       availabilityProbe: voiceAvailabilityProbe
     )
+    let resetJournalStore = LocalResetJournalStore()
+    let alarmScheduleMutator = NotificationAlarmMutationCoordinator(
+      scheduler: UserNotificationAlarmScheduler(),
+      platformRepository: SwiftDataAlarmPlatformStateRepository(modelContext: modelContext),
+      resetGeneration: {
+        try resetJournalStore.currentGeneration()
+      },
+      mutationAllowed: {
+        do {
+          guard let journal = try resetJournalStore.load() else {
+            return true
+          }
+
+          return journal.phase.isTerminal
+        } catch {
+          return false
+        }
+      }
+    )
+    let localResetRepository = SwiftDataLocalResetRepository(modelContext: modelContext)
 
     return DependencyContainer(
       routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
@@ -57,7 +88,10 @@ struct DependencyContainer {
       routineSuggestionService: LocalTemplateSuggestionService.shared,
       homeWeatherRepository: SwiftDataHomeWeatherRepository(modelContext: modelContext),
       historyEvidenceRepository: SwiftDataHistoryEvidenceRepository(modelContext: modelContext),
-      voiceAvailabilityProbe: voiceAvailabilityProbe
+      voiceAvailabilityProbe: voiceAvailabilityProbe,
+      alarmScheduleMutator: alarmScheduleMutator,
+      localResetRepository: localResetRepository,
+      localResetJournalStore: resetJournalStore
     )
   }
 
@@ -70,7 +104,8 @@ struct DependencyContainer {
   func makeOnboardingBuilder() -> any OnboardingFlowBuilding {
     let completeOnboardingUseCase = CompleteOnboardingUseCase(
       onboardingRepository: onboardingRepository,
-      routineSuggestionService: routineSuggestionService
+      routineSuggestionService: routineSuggestionService,
+      alarmScheduleMutator: alarmScheduleMutator
     )
 
     return DefaultOnboardingFlowBuilder(
@@ -111,8 +146,74 @@ struct DependencyContainer {
       routineSuggestionService: LocalTemplateSuggestionService.shared,
       homeWeatherRepository: nil,
       historyEvidenceRepository: MockHistoryEvidenceRepository(),
-      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
+      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe(),
+      alarmScheduleMutator: DebugLocalCommitAlarmScheduleMutator()
     )
   }
   #endif
 }
+
+#if DEBUG
+@MainActor
+final class DebugLocalCommitAlarmScheduleMutator: AlarmScheduleMutating {
+  private var freezeToken: AlarmMutationFreezeToken?
+
+  func commit(
+    routines: [Routine],
+    localCommit: @escaping @MainActor () throws -> Void
+  ) async throws {
+    try ensureMutationAllowed()
+    try localCommit()
+  }
+
+  func delete(
+    routineID: UUID,
+    scheduleID: UUID?,
+    localCommit: @escaping @MainActor () throws -> Void
+  ) async throws {
+    try ensureMutationAllowed()
+    try localCommit()
+  }
+
+  func reconcile(routines: [Routine]) async throws {
+    try ensureMutationAllowed()
+  }
+
+  private func ensureMutationAllowed() throws {
+    guard freezeToken == nil else {
+      throw NotificationAlarmMutationError.mutationFrozen
+    }
+  }
+
+  func freezeAndDrain() async throws -> AlarmMutationFreezeToken {
+    guard freezeToken == nil else {
+      throw NotificationAlarmMutationError.mutationFrozen
+    }
+
+    let token = AlarmMutationFreezeToken()
+    freezeToken = token
+    return token
+  }
+
+  func cancelAll(
+    scheduleIDs: [UUID],
+    using token: AlarmMutationFreezeToken
+  ) async throws {
+    guard freezeToken == token else {
+      throw NotificationAlarmMutationError.mutationFrozen
+    }
+  }
+
+  func thaw(_ token: AlarmMutationFreezeToken) {
+    guard freezeToken == token else {
+      return
+    }
+
+    freezeToken = nil
+  }
+
+  func permissionState() async -> AlarmNotificationPermissionState {
+    .authorized
+  }
+}
+#endif

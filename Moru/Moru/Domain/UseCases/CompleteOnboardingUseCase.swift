@@ -44,23 +44,26 @@ enum CompleteOnboardingError: Error, Equatable, LocalizedError {
 
 protocol CompleteOnboardingUseCaseProtocol: AnyObject {
   @MainActor
-  func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult
+  func execute(_ request: CompleteOnboardingRequest) async throws -> CompleteOnboardingResult
 }
 
 nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProtocol {
   private let onboardingRepository: any OnboardingRepository
   private let routineSuggestionService: any RoutineSuggestionService
+  private let alarmScheduleMutator: any AlarmScheduleMutating
 
   init(
     onboardingRepository: any OnboardingRepository,
-    routineSuggestionService: any RoutineSuggestionService
+    routineSuggestionService: any RoutineSuggestionService,
+    alarmScheduleMutator: any AlarmScheduleMutating
   ) {
     self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
+    self.alarmScheduleMutator = alarmScheduleMutator
   }
 
   @MainActor
-  func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult {
+  func execute(_ request: CompleteOnboardingRequest) async throws -> CompleteOnboardingResult {
     try validate(request)
 
     var profile = try onboardingRepository.fetchProfile() ?? LocalProfile()
@@ -75,7 +78,10 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
     )
     routine.sync = .localOnly
     routine.updatedAt = Date()
-    try onboardingRepository.saveCompletion(profile: profile, routine: routine)
+
+    try await alarmScheduleMutator.commit(routines: [routine]) {
+      try self.onboardingRepository.saveCompletion(profile: profile, routine: routine)
+    }
 
     return CompleteOnboardingResult(profile: profile, routine: routine)
   }

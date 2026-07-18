@@ -75,12 +75,17 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
 
   @MainActor
   func deleteRoutine(id: UUID) throws {
-    guard let persisted = try persistedRoutine(id: id) else {
-      return
-    }
+    do {
+      guard let persisted = try persistedRoutine(id: id) else {
+        return
+      }
 
-    modelContext.delete(persisted)
-    try modelContext.save()
+      modelContext.delete(persisted)
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
   }
 
   @MainActor

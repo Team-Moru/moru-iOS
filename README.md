@@ -60,26 +60,50 @@ Swift 6.2
 ## 🔎 기술 스택
 ### Envrionment
 <div align="left">
-<img src="https://img.shields.io/badge/git-%23F05033.svg?style=for-the-badge&logo=git&logoColor=white" />
-<img src="https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white" />
-<img src="https://img.shields.io/badge/SPM-FA7343?style=for-the-badge&logo=swift&logoColor=white" />
+<img
+  src="https://img.shields.io/badge/git-%23F05033.svg?style=for-the-badge&logo=git&logoColor=white"
+/>
+<img
+  src="https://img.shields.io/badge/GitHub-121011?style=for-the-badge&logo=github"
+/>
+<img
+  src="https://img.shields.io/badge/SPM-FA7343?style=for-the-badge&logo=swift&logoColor=white"
+/>
 </div>
 
 ### Development
 <div align="left">
-<img src="https://img.shields.io/badge/Xcode-007ACC?style=for-the-badge&logo=Xcode&logoColor=white" />
-<img src="https://img.shields.io/badge/SwiftUI-42A5F5?style=for-the-badge&logo=swift&logoColor=white" />
-<img src="https://img.shields.io/badge/Alamofire-FF5722?style=for-the-badge&logo=swift&logoColor=white" />
-<img src="https://img.shields.io/badge/Moya-8A4182?style=for-the-badge&logo=swift&logoColor=white" />
-<img src="https://img.shields.io/badge/Kingfisher-0F92F3?style=for-the-badge&logo=swift&logoColor=white" />
-<img src="https://img.shields.io/badge/Combine-FF2D55?style=for-the-badge&logo=apple&logoColor=white" />
+<img
+  src="https://img.shields.io/badge/Xcode-007ACC?style=for-the-badge&logo=Xcode&logoColor=white"
+/>
+<img
+  src="https://img.shields.io/badge/SwiftUI-42A5F5?style=for-the-badge&logo=swift&logoColor=white"
+/>
+<img
+  src="https://img.shields.io/badge/Alamofire-FF5722?style=for-the-badge&logo=swift"
+/>
+<img
+  src="https://img.shields.io/badge/Moya-8A4182?style=for-the-badge&logo=swift&logoColor=white"
+/>
+<img
+  src="https://img.shields.io/badge/Kingfisher-0F92F3?style=for-the-badge&logo=swift"
+/>
+<img
+  src="https://img.shields.io/badge/Combine-FF2D55?style=for-the-badge&logo=apple&logoColor=white"
+/>
 </div>
 
 ### Communication
 <div align="left">
-<img src="https://img.shields.io/badge/Notion-white.svg?style=for-the-badge&logo=Notion&logoColor=000000" />
-<img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=Discord&logoColor=white" />
-<img src="https://img.shields.io/badge/Figma-F24E1E?style=for-the-badge&logo=figma&logoColor=white" />
+<img
+  src="https://img.shields.io/badge/Notion-white?style=for-the-badge&logo=notion"
+/>
+<img
+  src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord"
+/>
+<img
+  src="https://img.shields.io/badge/Figma-F24E1E?style=for-the-badge&logo=figma&logoColor=white"
+/>
 </div>
 
 <br>
@@ -323,19 +347,20 @@ Moru
 │  ├─ Fonts.swift                // Pretendard 스타일 (D10)
 │  └─ Components/                // Figma '컴포넌트' 섹션(1445:1113) 기준
 ├─ Domain
-│  ├─ Models/                    // Routine, RoutineStep, AlarmSchedule, RoutineRun, RoutineStepResult, LocalProfile, SyncMetadata
+│  ├─ Models/                    // Routine, RoutineStep, AlarmSchedule, RoutineRun,
+│  │                               RoutineStepResult, LocalProfile, SyncMetadata
 │  ├─ UseCases/
 │  ├─ Repositories/              // RoutineRepository, RoutineRunRepository, LocalProfileRepository
 │  └─ Services/                  // RoutineSuggestionService (D5)
 ├─ Data
 │  ├─ Persistence/               // MoruSchemaV1, SchemaMigrationPlan (D3)
 │  ├─ Local/                     // SwiftData repositories + Mappers
+│  ├─ Platform/                  // 로컬 알림 전용; 외부 AlarmKit 동작은 증거 전 미출시
 │  └─ Mock/                      // Preview/Snapshot/QA/Test 전용
 ├─ Resources
 │  ├─ Fonts/                     // 앱 번들 폰트
 │  └─ RoutinePresets/            // 추천 항목 CSV + 로컬 음성 리소스
 ├─ Platform
-│  ├─ Alarm/                     // AlarmKit + LocalNotification fallback
 │  ├─ TTS/                       // LocalTTSService
 │  └─ Speech/
 ├─ Debug/                        // DeviceQA 패널/레코더 (ContentView에서 분리, #if DEBUG)
@@ -356,10 +381,12 @@ Moru
 - Routine 삭제 시 step/alarm은 SwiftData cascade로 삭제하고, `RoutineRun` 기록은 유지합니다.
 - `RoutineRun`은 실행 당시 step snapshot을 포함해야 하며, snapshot 없는 run 저장은 repository에서 거부합니다.
 - soft delete를 뜻하는 `deletedAt`, `includeDeleted`, `pendingDelete` 계약은 v1에서 사용하지 않습니다.
-- v1 sync 컬럼은 `localOnly`/`nil`만 유효합니다. persisted read-path에서도 remote metadata가 보이면 mapper error로 다룹니다.
+- v1 sync 컬럼은 `localOnly`/`nil`만 유효합니다. persisted read-path에서도 remote metadata가
+  보이면 mapper error로 다룹니다.
 - Session ready 조건은 `LocalProfile + 활성 Routine + enabled alarm`입니다. 프로필만 생성된 상태는 온보딩 완료가 아닙니다.
 - Feature View/ViewModel은 `SwiftData`, `@Query`, `ModelContext`를 직접 사용하지 않습니다.
 - 화면 계층은 `DependencyContainer`가 제공하는 Repository/Service 계약만 사용합니다.
 - SwiftData 접근은 `Data/Persistence`, `Data/Local`, App bootstrap, 테스트로 제한합니다.
-- Foundation 테스트는 `DependencyContainer`가 repository/service 계약만 노출하는지 확인하고, 실제 소스 토큰 검사는 `bash Scripts/check-swiftdata-boundary.sh`로 수행합니다.
+- Foundation 테스트는 `DependencyContainer`가 repository/service 계약만 노출하는지 확인하고,
+  실제 소스 토큰 검사는 `bash Scripts/check-swiftdata-boundary.sh`로 수행합니다.
 - 앱 루트는 `.modelContainer(...)`를 전역 주입하지 않습니다.

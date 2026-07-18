@@ -19,18 +19,21 @@ struct RoutineEditorView: View {
   @State private var selectedEditStepIndex: Int? = nil
   @State private var isStepEditSheetPresented = false
   @State private var saveErrorMessage: String?
+  @State private var isMutationInProgress = false
 
-  let onSave: (RoutineDraftState) -> Bool
-  let onResolveWeekdayConflict: (RoutineDraftState) -> Bool
-  let onDelete: ((UUID) -> Void)?
+  let onSave: @MainActor (RoutineDraftState) async -> Bool
+  let onResolveWeekdayConflict: @MainActor (RoutineDraftState) async -> Bool
+  let onDelete: (@MainActor (UUID) async -> Bool)?
   let weekdayConflictState: (RoutineDraftState) -> RoutineWeekdayConflictState?
 
   init(
     draft: RoutineDraftState,
-    onSave: @escaping (RoutineDraftState) -> Bool,
-    onResolveWeekdayConflict: @escaping (RoutineDraftState) -> Bool,
-    onDelete: ((UUID) -> Void)? = nil,
-    weekdayConflictState: @escaping (RoutineDraftState) -> RoutineWeekdayConflictState? = { _ in nil }
+    onSave: @escaping @MainActor (RoutineDraftState) async -> Bool,
+    onResolveWeekdayConflict: @escaping @MainActor (RoutineDraftState) async -> Bool,
+    onDelete: (@MainActor (UUID) async -> Bool)? = nil,
+    weekdayConflictState: @escaping (RoutineDraftState) -> RoutineWeekdayConflictState? = {
+      _ in nil
+    }
   ) {
     self._draft = State(initialValue: draft)
     self.onSave = onSave
@@ -63,7 +66,7 @@ struct RoutineEditorView: View {
       .safeAreaInset(edge: .bottom) {
         VStack(spacing: AppSpacing.none) {
           Button {
-            guard draft.canSave else {
+            guard draft.canSave, !isMutationInProgress else {
               return
             }
 
@@ -79,10 +82,12 @@ struct RoutineEditorView: View {
               .foregroundStyle(AppColor.grayWhite)
               .frame(maxWidth: .infinity)
               .frame(height: 66)
-              .background(draft.canSave ? AppColor.orange350 : AppColor.moruDisabled)
+              .background(
+                draft.canSave && !isMutationInProgress ? AppColor.orange350 : AppColor.moruDisabled
+              )
               .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
           }
-          .disabled(!draft.canSave)
+          .disabled(!draft.canSave || isMutationInProgress)
           .buttonStyle(.plain)
         }
         .padding(.horizontal, 26)
@@ -127,6 +132,8 @@ struct RoutineEditorView: View {
         }
       }
     }
+    .disabled(isMutationInProgress)
+    .interactiveDismissDisabled(isMutationInProgress)
   }
 
   private var editorHeader: some View {
@@ -156,7 +163,7 @@ struct RoutineEditorView: View {
             .foregroundStyle(AppColor.moruTextSecondary)
         }
         .opacity(draft.routineID == nil ? 0 : 1)
-        .disabled(draft.routineID == nil)
+        .disabled(draft.routineID == nil || isMutationInProgress)
         .buttonStyle(.plain)
       }
     }
@@ -302,12 +309,7 @@ struct RoutineEditorView: View {
           isDeleteDialogPresented = false
         },
         secondaryAction: {
-          if let routineID = draft.routineID {
-            onDelete?(routineID)
-          }
-
-          isDeleteDialogPresented = false
-          dismiss()
+          deleteAndDismissIfNeeded()
         }
       )
     }
@@ -335,24 +337,68 @@ struct RoutineEditorView: View {
   }
 
   private func saveAndDismissIfNeeded() {
+    guard !isMutationInProgress else {
+      return
+    }
+
+    let savedDraft = draft
+    isMutationInProgress = true
     saveErrorMessage = nil
 
-    if onSave(draft) {
-      dismiss()
-    } else {
-      saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
+    Task { @MainActor in
+      let didSave = await onSave(savedDraft)
+      isMutationInProgress = false
+
+      if didSave {
+        dismiss()
+      } else {
+        saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
+      }
     }
   }
 
   private func resolveWeekdayConflictAndDismissIfNeeded() {
+    guard !isMutationInProgress else {
+      return
+    }
+
+    let savedDraft = draft
+    isMutationInProgress = true
     saveErrorMessage = nil
 
-    if onResolveWeekdayConflict(draft) {
+    Task { @MainActor in
+      let didSave = await onResolveWeekdayConflict(savedDraft)
+      isMutationInProgress = false
       weekdayConflict = nil
-      dismiss()
-    } else {
-      weekdayConflict = nil
-      saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
+
+      if didSave {
+        dismiss()
+      } else {
+        saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
+      }
+    }
+  }
+
+  private func deleteAndDismissIfNeeded() {
+    guard let routineID = draft.routineID,
+          let onDelete,
+          !isMutationInProgress else {
+      return
+    }
+
+    isMutationInProgress = true
+    saveErrorMessage = nil
+
+    Task { @MainActor in
+      let didDelete = await onDelete(routineID)
+      isMutationInProgress = false
+
+      if didDelete {
+        dismiss()
+      } else {
+        isDeleteDialogPresented = false
+        saveErrorMessage = "루틴을 삭제하지 못했어요."
+      }
     }
   }
 

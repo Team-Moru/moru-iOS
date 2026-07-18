@@ -186,6 +186,9 @@ struct ProfileView: View {
       Text("알람 상태")
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
+      Text("현재는 기기 알림으로 알려드려요.")
+        .font(AppFont.caption1Medium)
+        .foregroundStyle(AppColor.moruTextSecondary)
 
       switch viewModel.alarmStatus {
       case .configured:
@@ -199,7 +202,7 @@ struct ProfileView: View {
 
         Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
           .buttonStyle(.bordered)
-          .accessibilityHint("기기 설정에서 알람 권한을 엽니다.")
+          .accessibilityHint("기기 설정에서 알림 권한을 엽니다.")
       case .repairRequired:
         Text(Self.alarmStatusMessage(for: viewModel.alarmStatus))
           .font(AppFont.body1NormalMedium)
@@ -207,7 +210,7 @@ struct ProfileView: View {
 
         Button("다시 시도", action: viewModel.alarmRepairRetryButtonDidTap)
           .buttonStyle(.bordered)
-          .accessibilityHint("알람 재예약을 다시 시도합니다.")
+          .accessibilityHint("알림 재예약을 다시 시도합니다.")
       case .unavailable:
         Text(Self.alarmStatusMessage(for: viewModel.alarmStatus))
           .font(AppFont.body1NormalMedium)

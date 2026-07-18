@@ -12,17 +12,19 @@ import XCTest
 
 final class OnboardingHappyPathTests: XCTestCase {
   @MainActor
-  func testCompleteOnboardingUseCaseSavesDefaultYunaProfileActiveRoutineAndEnabledAlarm() throws {
+  func testCompleteOnboardingUseCaseSchedulesBeforeSavingProfileAndRoutine() async throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let dependencies = DependencyContainer.local(modelContext: container.mainContext)
+    let alarmScheduleMutator = SpyAlarmScheduleMutator()
     let useCase = CompleteOnboardingUseCase(
       onboardingRepository: dependencies.onboardingRepository,
-      routineSuggestionService: dependencies.routineSuggestionService
+      routineSuggestionService: dependencies.routineSuggestionService,
+      alarmScheduleMutator: alarmScheduleMutator
     )
 
     let defaultVoice = OnboardingDraft().selectedVoice
 
-    let result = try useCase.execute(
+    let result = try await useCase.execute(
       CompleteOnboardingRequest(
         suggestionInput: RoutineSuggestionInput(
           experience: .wantsRecommendation,
@@ -55,66 +57,177 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertNil(savedRoutine.sync?.remoteID)
     XCTAssertNil(savedRoutine.sync?.lastSyncedAt)
     XCTAssertNil(savedRoutine.sync?.remoteRevision)
+    XCTAssertEqual(
+      alarmScheduleMutator.events,
+      [.commitStarted, .platformSucceeded, .localCommitStarted, .localCommitFinished]
+    )
+    XCTAssertEqual(alarmScheduleMutator.committedRoutineIDs, [result.routine.id])
   }
 
   @MainActor
-  func testCompleteOnboardingUseCaseRejectsInvalidAlarmAndUnavailableVoiceBeforeSaving() throws {
+  func testOnboardingRejectsInvalidAlarmAndUnavailableVoiceBeforeScheduling() async throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let dependencies = DependencyContainer.local(modelContext: container.mainContext)
+    let alarmScheduleMutator = SpyAlarmScheduleMutator()
     let useCase = CompleteOnboardingUseCase(
       onboardingRepository: dependencies.onboardingRepository,
-      routineSuggestionService: dependencies.routineSuggestionService
+      routineSuggestionService: dependencies.routineSuggestionService,
+      alarmScheduleMutator: alarmScheduleMutator
     )
 
-    XCTAssertThrowsError(
-      try useCase.execute(
-        CompleteOnboardingRequest(
-          suggestionInput: RoutineSuggestionInput(
-            wakeUpHour: 24,
-            wakeUpMinute: 0,
-            weekdays: [.monday]
-          ),
-          selectedVoice: .yuna
+    await assertCompleteOnboardingError(
+      .invalidAlarmTime(hour: 24, minute: 0),
+      from: useCase,
+      request: CompleteOnboardingRequest(
+        suggestionInput: RoutineSuggestionInput(
+          wakeUpHour: 24,
+          wakeUpMinute: 0,
+          weekdays: [.monday]
+        ),
+        selectedVoice: .moru
+      )
+    )
+    await assertCompleteOnboardingError(
+      .emptyWeekdays,
+      from: useCase,
+      request: CompleteOnboardingRequest(
+        suggestionInput: RoutineSuggestionInput(weekdays: []),
+        selectedVoice: .moru
+      )
+    )
+    await assertCompleteOnboardingError(
+      .unavailableVoice("remote-pro-voice"),
+      from: useCase,
+      request: CompleteOnboardingRequest(
+        suggestionInput: RoutineSuggestionInput(),
+        selectedVoice: VoiceProfile(
+          id: "remote-pro-voice",
+          displayName: "서버 목소리",
+          localeIdentifier: "ko-KR"
         )
       )
-    ) {
-      XCTAssertEqual(
-        $0 as? CompleteOnboardingError,
-        .invalidAlarmTime(hour: 24, minute: 0)
-      )
-    }
+    )
 
-    XCTAssertThrowsError(
-      try useCase.execute(
-        CompleteOnboardingRequest(
-          suggestionInput: RoutineSuggestionInput(weekdays: []),
-          selectedVoice: .yuna
-        )
-      )
-    ) {
-      XCTAssertEqual($0 as? CompleteOnboardingError, .emptyWeekdays)
-    }
-
-    XCTAssertThrowsError(
-      try useCase.execute(
-        CompleteOnboardingRequest(
-          suggestionInput: RoutineSuggestionInput(),
-          selectedVoice: VoiceProfile(
-            id: "remote-pro-voice",
-            displayName: "서버 목소리",
-            localeIdentifier: "ko-KR"
-          )
-        )
-      )
-    ) {
-      XCTAssertEqual(
-        $0 as? CompleteOnboardingError,
-        .unavailableVoice("remote-pro-voice")
-      )
-    }
-
+    XCTAssertTrue(alarmScheduleMutator.events.isEmpty)
     XCTAssertNil(try dependencies.localProfileRepository.fetchProfile())
     XCTAssertEqual(try dependencies.routineRepository.fetchActiveRoutines(), [])
+  }
+
+  @MainActor
+  func testCompleteOnboardingUseCaseDoesNotSaveWhenNotificationSchedulingIsDenied() async throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let dependencies = DependencyContainer.local(modelContext: container.mainContext)
+    let alarmScheduleMutator = SpyAlarmScheduleMutator(outcome: .permissionDenied)
+    let useCase = CompleteOnboardingUseCase(
+      onboardingRepository: dependencies.onboardingRepository,
+      routineSuggestionService: dependencies.routineSuggestionService,
+      alarmScheduleMutator: alarmScheduleMutator
+    )
+
+    do {
+      _ = try await useCase.execute(
+        CompleteOnboardingRequest(
+          suggestionInput: RoutineSuggestionInput(weekdays: [.monday]),
+          selectedVoice: .yuna
+        )
+      )
+      XCTFail("Expected notification permission denial.")
+    } catch {
+      XCTAssertEqual(error as? NotificationAlarmMutationError, .permissionDenied)
+    }
+
+    XCTAssertEqual(alarmScheduleMutator.events, [.commitStarted, .permissionDenied])
+    XCTAssertNil(try dependencies.localProfileRepository.fetchProfile())
+    XCTAssertEqual(try dependencies.routineRepository.fetchActiveRoutines(), [])
+  }
+
+  @MainActor
+  func testCompleteOnboardingUseCaseDoesNotSaveWhenNotificationSchedulingFails() async throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let dependencies = DependencyContainer.local(modelContext: container.mainContext)
+    let alarmScheduleMutator = SpyAlarmScheduleMutator(outcome: .schedulingFailure)
+    let useCase = CompleteOnboardingUseCase(
+      onboardingRepository: dependencies.onboardingRepository,
+      routineSuggestionService: dependencies.routineSuggestionService,
+      alarmScheduleMutator: alarmScheduleMutator
+    )
+
+    do {
+      _ = try await useCase.execute(
+        CompleteOnboardingRequest(
+          suggestionInput: RoutineSuggestionInput(weekdays: [.monday]),
+          selectedVoice: .yuna
+        )
+      )
+      XCTFail("Expected notification scheduling failure.")
+    } catch {
+      XCTAssertEqual(error as? NotificationAlarmMutationError, .platformFailure)
+    }
+
+    XCTAssertEqual(alarmScheduleMutator.events, [.commitStarted, .schedulingFailed])
+    XCTAssertNil(try dependencies.localProfileRepository.fetchProfile())
+    XCTAssertEqual(try dependencies.routineRepository.fetchActiveRoutines(), [])
+  }
+
+  @MainActor
+  func testFrozenMutationDoesNotSaveOnboardingLocally() async throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let dependencies = DependencyContainer.local(modelContext: container.mainContext)
+    let alarmScheduleMutator = SpyAlarmScheduleMutator()
+    let useCase = CompleteOnboardingUseCase(
+      onboardingRepository: dependencies.onboardingRepository,
+      routineSuggestionService: dependencies.routineSuggestionService,
+      alarmScheduleMutator: alarmScheduleMutator
+    )
+    let token = try await alarmScheduleMutator.freezeAndDrain()
+    defer {
+      alarmScheduleMutator.thaw(token)
+    }
+
+    do {
+      _ = try await useCase.execute(
+        CompleteOnboardingRequest(
+          suggestionInput: RoutineSuggestionInput(weekdays: [.monday]),
+          selectedVoice: .yuna
+        )
+      )
+      XCTFail("Expected frozen notification mutation.")
+    } catch {
+      XCTAssertEqual(error as? NotificationAlarmMutationError, .mutationFrozen)
+    }
+
+    XCTAssertTrue(alarmScheduleMutator.events.isEmpty)
+    XCTAssertNil(try dependencies.localProfileRepository.fetchProfile())
+    XCTAssertEqual(try dependencies.routineRepository.fetchActiveRoutines(), [])
+  }
+
+  @MainActor
+  func testCompleteOnboardingUseCaseDoesNotCompleteWhenLocalSaveFails() async throws {
+    let onboardingRepository = FailingOnboardingRepository()
+    let alarmScheduleMutator = SpyAlarmScheduleMutator()
+    let useCase = CompleteOnboardingUseCase(
+      onboardingRepository: onboardingRepository,
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      alarmScheduleMutator: alarmScheduleMutator
+    )
+
+    do {
+      _ = try await useCase.execute(
+        CompleteOnboardingRequest(
+          suggestionInput: RoutineSuggestionInput(weekdays: [.monday]),
+          selectedVoice: .yuna
+        )
+      )
+      XCTFail("Expected local save failure.")
+    } catch {
+      XCTAssertEqual(error as? NotificationAlarmMutationError, .localCommitFailure)
+    }
+
+    XCTAssertEqual(onboardingRepository.saveCompletionCallCount, 1)
+    XCTAssertEqual(
+      alarmScheduleMutator.events,
+      [.commitStarted, .platformSucceeded, .localCommitStarted, .localCommitFailed]
+    )
   }
 
   @MainActor
@@ -160,7 +273,7 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testOnboardingViewModelMovesThroughStepsAndSavesExactlyOnce() throws {
+  func testOnboardingViewModelCompletesExactlyOnceWithTheSavedRoutineID() async throws {
     let useCase = SpyCompleteOnboardingUseCase()
     var completionCount = 0
     var completedRoutineID: UUID?
@@ -215,7 +328,11 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(viewModel.step, .completion)
 
     viewModel.primaryButtonDidTap()
+    XCTAssertTrue(viewModel.isSaving)
+    XCTAssertFalse(viewModel.canAdvance)
     viewModel.primaryButtonDidTap()
+    await Task.yield()
+    await Task.yield()
 
     XCTAssertEqual(useCase.executeCallCount, 1)
     XCTAssertEqual(completionCount, 1)
@@ -223,6 +340,32 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpHour, 6)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpMinute, 40)
     XCTAssertEqual(useCase.requests.first?.selectedVoice, .yuna)
+  }
+
+  @MainActor
+  func testOnboardingViewModelLeavesCompletionAvailableAfterFailure() async {
+    let useCase = SpyCompleteOnboardingUseCase(outcome: .notificationDenied)
+    var completionCount = 0
+    let viewModel = OnboardingViewModel(
+      step: .completion,
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      completeOnboardingUseCase: useCase
+    ) { _ in
+      completionCount += 1
+    }
+
+    viewModel.completeButtonDidTap()
+    await Task.yield()
+    await Task.yield()
+
+    XCTAssertEqual(useCase.executeCallCount, 1)
+    XCTAssertEqual(completionCount, 0)
+    XCTAssertFalse(viewModel.isSaving)
+    XCTAssertTrue(viewModel.canAdvance)
+    XCTAssertEqual(
+      viewModel.errorMessage,
+      OnboardingCompletionTestError.notificationDenied.errorDescription
+    )
   }
 
   @MainActor
@@ -346,10 +489,11 @@ final class OnboardingHappyPathTests: XCTestCase {
       let dependencies = DependencyContainer.local(modelContext: container.mainContext)
       let useCase = CompleteOnboardingUseCase(
         onboardingRepository: dependencies.onboardingRepository,
-        routineSuggestionService: dependencies.routineSuggestionService
+        routineSuggestionService: dependencies.routineSuggestionService,
+        alarmScheduleMutator: SpyAlarmScheduleMutator()
       )
 
-      let result = try useCase.execute(
+      let result = try await useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(
             goalTags: ["habit"],
@@ -376,7 +520,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       let profile = try XCTUnwrap(sessionStore.profile)
       let activeRoutine = try XCTUnwrap(snapshot.activeRoutines.first)
 
-      XCTAssertEqual(sessionStore.phase, .onboardingRequired)
+      XCTAssertEqual(sessionStore.phase, .alarmRepairRequired)
       XCTAssertFalse(SessionStore.isOnboardingComplete(snapshot: snapshot))
       XCTAssertEqual(profile.selectedVoice, .yuna)
       XCTAssertEqual(activeRoutine.id, routineID)
@@ -386,17 +530,45 @@ final class OnboardingHappyPathTests: XCTestCase {
       XCTAssertEqual(snapshot.platformStates, [])
     }
   }
+  @MainActor
+  private func assertCompleteOnboardingError(
+    _ expected: CompleteOnboardingError,
+    from useCase: CompleteOnboardingUseCase,
+    request: CompleteOnboardingRequest
+  ) async {
+    do {
+      _ = try await useCase.execute(request)
+      XCTFail("Expected onboarding validation failure.")
+    } catch {
+      XCTAssertEqual(error as? CompleteOnboardingError, expected)
+    }
+  }
+
 }
 
 @MainActor
 private final class SpyCompleteOnboardingUseCase: CompleteOnboardingUseCaseProtocol {
+  enum Outcome {
+    case success
+    case notificationDenied
+  }
+
+  private let outcome: Outcome
   private(set) var executeCallCount = 0
   private(set) var requests: [CompleteOnboardingRequest] = []
   private(set) var resultRoutineIDs: [UUID] = []
 
-  func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult {
+  init(outcome: Outcome = .success) {
+    self.outcome = outcome
+  }
+
+  func execute(_ request: CompleteOnboardingRequest) async throws -> CompleteOnboardingResult {
     executeCallCount += 1
     requests.append(request)
+
+    if case .notificationDenied = outcome {
+      throw OnboardingCompletionTestError.notificationDenied
+    }
 
     let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
       from: request.suggestionInput
@@ -407,6 +579,140 @@ private final class SpyCompleteOnboardingUseCase: CompleteOnboardingUseCaseProto
       profile: LocalProfile(selectedVoice: request.selectedVoice),
       routine: routine
     )
+  }
+}
+
+private enum OnboardingCompletionTestError: LocalizedError {
+  case notificationDenied
+
+  var errorDescription: String? {
+    "알림 권한을 허용해 주세요."
+  }
+}
+
+
+private enum TestOnboardingRepositoryError: Error, Equatable {
+  case saveFailed
+}
+
+@MainActor
+private final class SpyAlarmScheduleMutator: AlarmScheduleMutating {
+  enum Outcome {
+    case success
+    case permissionDenied
+    case schedulingFailure
+  }
+
+  enum Event: Equatable {
+    case commitStarted
+    case permissionDenied
+    case schedulingFailed
+    case platformSucceeded
+    case localCommitStarted
+    case localCommitFinished
+    case localCommitFailed
+  }
+
+  var outcome: Outcome
+  private(set) var events: [Event] = []
+  private(set) var committedRoutineIDs: [UUID] = []
+  private var freezeToken: AlarmMutationFreezeToken?
+
+  init(outcome: Outcome = .success) {
+    self.outcome = outcome
+  }
+
+  func commit(
+    routines: [Routine],
+    localCommit: @escaping @MainActor () throws -> Void
+  ) async throws {
+    try ensureMutationAllowed()
+    events.append(.commitStarted)
+    committedRoutineIDs.append(contentsOf: routines.map(\.id))
+
+    switch outcome {
+    case .permissionDenied:
+      events.append(.permissionDenied)
+      throw NotificationAlarmMutationError.permissionDenied
+    case .schedulingFailure:
+      events.append(.schedulingFailed)
+      throw NotificationAlarmMutationError.platformFailure
+    case .success:
+      events.append(.platformSucceeded)
+    }
+
+    events.append(.localCommitStarted)
+    do {
+      try localCommit()
+      events.append(.localCommitFinished)
+    } catch {
+      events.append(.localCommitFailed)
+      throw NotificationAlarmMutationError.localCommitFailure
+    }
+  }
+
+  private func ensureMutationAllowed() throws {
+    guard freezeToken == nil else {
+      throw NotificationAlarmMutationError.mutationFrozen
+    }
+  }
+
+  func delete(
+    routineID: UUID,
+    scheduleID: UUID?,
+    localCommit: @escaping @MainActor () throws -> Void
+  ) async throws {
+    try ensureMutationAllowed()
+    try localCommit()
+  }
+
+  func reconcile(routines: [Routine]) async throws {
+    try ensureMutationAllowed()
+  }
+
+  func freezeAndDrain() async throws -> AlarmMutationFreezeToken {
+    guard freezeToken == nil else {
+      throw NotificationAlarmMutationError.mutationFrozen
+    }
+
+    let token = AlarmMutationFreezeToken()
+    freezeToken = token
+    return token
+  }
+
+  func cancelAll(
+    scheduleIDs: [UUID],
+    using token: AlarmMutationFreezeToken
+  ) async throws {
+    guard freezeToken == token else {
+      throw NotificationAlarmMutationError.mutationFrozen
+    }
+  }
+
+  func thaw(_ token: AlarmMutationFreezeToken) {
+    guard freezeToken == token else {
+      return
+    }
+
+    freezeToken = nil
+  }
+
+  func permissionState() async -> AlarmNotificationPermissionState {
+    .authorized
+  }
+}
+
+@MainActor
+private final class FailingOnboardingRepository: OnboardingRepository {
+  private(set) var saveCompletionCallCount = 0
+
+  func fetchProfile() throws -> LocalProfile? {
+    nil
+  }
+
+  func saveCompletion(profile: LocalProfile, routine: Routine) throws {
+    saveCompletionCallCount += 1
+    throw TestOnboardingRepositoryError.saveFailed
   }
 }
 private enum RetriableSuggestionError: LocalizedError {

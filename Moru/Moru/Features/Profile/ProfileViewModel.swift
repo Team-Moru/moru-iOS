@@ -306,7 +306,7 @@ final class ProfileViewModel {
     case .blockedByAlarmRepair:
       "알람 상태를 먼저 복구해 주세요"
     case .blockedByAlarmReset:
-      "알람 초기화 기능이 준비되지 않아 지금은 로컬 데이터를 초기화할 수 없어요"
+      "초기화 작업을 마친 뒤 다시 시도해 주세요"
     }
   }
   private func displayNameErrorMessage(for error: ProfileSettingsUseCaseError) -> String {

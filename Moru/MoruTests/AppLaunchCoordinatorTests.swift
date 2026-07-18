@@ -279,6 +279,39 @@ final class AppLaunchCoordinatorTests: XCTestCase {
   }
 
   @MainActor
+  func testFourthBootstrapFailureRequiresRecoveryAfterThreeExplicitRetries() async {
+    let factory = ControlledContainerFactory()
+    let coordinator = AppLaunchCoordinator(modelContainerFactory: factory)
+
+    coordinator.start()
+    await waitForFactoryRequests(1, factory: factory)
+    let didFail = await factory.failNext()
+    XCTAssertTrue(didFail)
+
+    for requestCount in 2...4 {
+      await waitUntil("Bootstrap failure should permit an explicit retry.") {
+        if case .bootstrapFailed = coordinator.phase {
+          true
+        } else {
+          false
+        }
+      }
+      coordinator.retry()
+      await waitForFactoryRequests(requestCount, factory: factory)
+      let didFail = await factory.failNext()
+      XCTAssertTrue(didFail)
+    }
+
+    await waitUntil("The fourth bootstrap failure should require recovery.") {
+      if case .recoveryRequired = coordinator.phase {
+        true
+      } else {
+        false
+      }
+    }
+  }
+
+  @MainActor
   func testLateConstructionCandidateCannotReplaceTimedOutFailure() async throws {
     let factory = ControlledContainerFactory()
     let clock = ControlledLaunchClock()
@@ -476,7 +509,14 @@ final class AppLaunchCoordinatorTests: XCTestCase {
     }
 
     let source = SessionReloadSource.routineMutation(UUID())
-    coordinator.requestSessionReload(source: source)
+    let acknowledgement = Task { @MainActor () -> Result<Void, Error> in
+      do {
+        try await coordinator.awaitSessionReload(source: source)
+        return .success(())
+      } catch {
+        return .failure(error)
+      }
+    }
     await waitForLoaderRequests(2, loader: loader)
     await waitForClockSleepers(6, clock: clock)
     await clock.advance(by: .seconds(8))
@@ -488,6 +528,13 @@ final class AppLaunchCoordinatorTests: XCTestCase {
       }
     }
     XCTAssertEqual(coordinator.lastFailure?.kind, .timedOut)
+    let acknowledgementResult = await acknowledgement.value
+    guard case .failure(
+      let error as SessionReloadAcknowledgementError
+    ) = acknowledgementResult else {
+      return XCTFail("The timed-out exact-source acknowledgement should fail.")
+    }
+    XCTAssertEqual(error, .failed(source, .timedOut))
 
     let didFinishLate = await loader.succeedNext(readySnapshot())
     XCTAssertTrue(didFinishLate)
@@ -516,7 +563,167 @@ final class AppLaunchCoordinatorTests: XCTestCase {
   }
 
   @MainActor
-  func testSnapshotDoesNotInventConfiguredPlatformStateOrResetGeneration() {
+  func testAsyncReloadAcknowledgementReturnsOnlyAfterItsSnapshotApplies() async throws {
+    let (coordinator, loader, launchedApp) = try await makeReadyCoordinator()
+    let source = SessionReloadSource.onboardingCompletion(UUID())
+    let snapshot = readySnapshot()
+    let acknowledgement = Task { @MainActor () -> Result<Void, Error> in
+      do {
+        try await coordinator.awaitSessionReload(source: source)
+        return .success(())
+      } catch {
+        return .failure(error)
+      }
+    }
+
+    await waitForLoaderRequests(2, loader: loader)
+    XCTAssertNotEqual(launchedApp.sessionStore.snapshot, snapshot)
+
+    let didReload = await loader.succeedNext(snapshot)
+    XCTAssertTrue(didReload)
+    _ = try await acknowledgement.value.get()
+    XCTAssertEqual(launchedApp.sessionStore.snapshot, snapshot)
+  }
+
+  @MainActor
+  func testAsyncReloadAcknowledgementFailsForItsMatchingReloadFailure() async throws {
+    let (coordinator, loader, launchedApp) = try await makeReadyCoordinator()
+    let source = SessionReloadSource.routineMutation(UUID())
+    let acknowledgement = Task { @MainActor () -> Result<Void, Error> in
+      do {
+        try await coordinator.awaitSessionReload(source: source)
+        return .success(())
+      } catch {
+        return .failure(error)
+      }
+    }
+
+    await waitForLoaderRequests(2, loader: loader)
+    let didFail = await loader.failNext()
+    XCTAssertTrue(didFail)
+
+    guard case .failure(
+      let error as SessionReloadAcknowledgementError
+    ) = await acknowledgement.value else {
+      return XCTFail("The matching reload failure should reject its acknowledgement.")
+    }
+    guard case .failed(let failedSource, let failure) = error else {
+      return XCTFail("Expected a reload acknowledgement failure.")
+    }
+    XCTAssertEqual(failedSource, source)
+    XCTAssertEqual(failure.kind, .session)
+    if case .failed = launchedApp.sessionStore.phase {
+    } else {
+      XCTFail("The matching reload failure should be applied before acknowledgement.")
+    }
+  }
+
+  @MainActor
+  func testAsyncReloadAcknowledgementsDeduplicateAnExactSource() async throws {
+    let (coordinator, loader, _) = try await makeReadyCoordinator()
+    let source = SessionReloadSource.trialDismissal(UUID())
+    let acknowledgements = (0..<2).map { _ in
+      Task { @MainActor () -> Result<Void, Error> in
+        do {
+          try await coordinator.awaitSessionReload(source: source)
+          return .success(())
+        } catch {
+          return .failure(error)
+        }
+      }
+    }
+
+    await waitForLoaderRequests(2, loader: loader)
+    let requestCount = await loader.requestCount()
+    XCTAssertEqual(requestCount, 2)
+    let didReload = await loader.succeedNext(readySnapshot())
+    XCTAssertTrue(didReload)
+
+    for acknowledgement in acknowledgements {
+      _ = try await acknowledgement.value.get()
+    }
+
+    try await coordinator.awaitSessionReload(source: source)
+    let completedRequestCount = await loader.requestCount()
+    XCTAssertEqual(completedRequestCount, 2)
+  }
+
+  @MainActor
+  func testNonterminalResetJournalBlocksRegularLaunch() async throws {
+    let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "AppLaunchCoordinatorTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer {
+      try? FileManager.default.removeItem(at: directoryURL)
+    }
+
+    let journalStore = LocalResetJournalStore(
+      fileURL: directoryURL.appendingPathComponent("journal.json", isDirectory: false)
+    )
+    _ = try journalStore.begin(operationID: UUID(), at: Date())
+    let loader = ControlledSnapshotLoader()
+    let coordinator = AppLaunchCoordinator(
+      modelContainerFactory: StableContainerFactory(
+        container: try SendableModelContainer.inMemoryForTesting()
+      ),
+      loaderFactory: FixedLoaderFactory(loader: loader),
+      launchPreparation: DefaultAppLaunchPreparation(resetJournalStore: journalStore)
+    )
+
+    coordinator.start()
+    await waitUntil("A nonterminal reset journal should block launch.") {
+      if case .bootstrapFailed = coordinator.phase {
+        true
+      } else {
+        false
+      }
+    }
+    let loaderRequestCount = await loader.requestCount()
+    XCTAssertEqual(loaderRequestCount, 0)
+  }
+
+  @MainActor
+  func testCorruptResetJournalBlocksRegularLaunch() async throws {
+    let directoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "AppLaunchCoordinatorTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer {
+      try? FileManager.default.removeItem(at: directoryURL)
+    }
+
+    try FileManager.default.createDirectory(
+      at: directoryURL,
+      withIntermediateDirectories: true
+    )
+    let journalURL = directoryURL.appendingPathComponent("journal.json", isDirectory: false)
+    try Data("corrupt".utf8).write(to: journalURL)
+    let loader = ControlledSnapshotLoader()
+    let coordinator = AppLaunchCoordinator(
+      modelContainerFactory: StableContainerFactory(
+        container: try SendableModelContainer.inMemoryForTesting()
+      ),
+      loaderFactory: FixedLoaderFactory(loader: loader),
+      launchPreparation: DefaultAppLaunchPreparation(
+        resetJournalStore: LocalResetJournalStore(fileURL: journalURL)
+      )
+    )
+
+    coordinator.start()
+    await waitUntil("A corrupt reset journal should block launch.") {
+      if case .bootstrapFailed = coordinator.phase {
+        true
+      } else {
+        false
+      }
+    }
+    let loaderRequestCount = await loader.requestCount()
+    XCTAssertEqual(loaderRequestCount, 0)
+  }
+
+  @MainActor
+  func testSnapshotWithoutPlatformStateRequiresRepairAndDoesNotInventGeneration() {
     let profile = sessionProfile()
     let routine = sessionRoutine(
       name: "플랫폼 상태 없는 루틴",
@@ -536,8 +743,40 @@ final class AppLaunchCoordinatorTests: XCTestCase {
     XCTAssertNil(snapshot.settings)
     XCTAssertNil(snapshot.resetGeneration)
     XCTAssertFalse(SessionStore.isOnboardingComplete(snapshot: snapshot))
-    XCTAssertEqual(store.phase, .onboardingRequired)
+    XCTAssertEqual(store.phase, .alarmRepairRequired)
     XCTAssertNil(store.snapshot?.resetGeneration)
+  }
+
+  @MainActor
+  private func makeReadyCoordinator() async throws -> (
+    AppLaunchCoordinator,
+    ControlledSnapshotLoader,
+    LaunchedApp
+  ) {
+    let loader = ControlledSnapshotLoader()
+    let coordinator = AppLaunchCoordinator(
+      modelContainerFactory: StableContainerFactory(
+        container: try SendableModelContainer.inMemoryForTesting()
+      ),
+      loaderFactory: FixedLoaderFactory(loader: loader)
+    )
+
+    coordinator.start()
+    await waitForLoaderRequests(1, loader: loader)
+    let didInstall = await loader.succeedNext(readySnapshot())
+    XCTAssertTrue(didInstall)
+    await waitUntil("Initial snapshot should install the app.") {
+      if case .ready = coordinator.phase {
+        true
+      } else {
+        false
+      }
+    }
+
+    guard case .ready(let launchedApp) = coordinator.phase else {
+      throw ControlledLaunchError.expected
+    }
+    return (coordinator, loader, launchedApp)
   }
 
   @MainActor

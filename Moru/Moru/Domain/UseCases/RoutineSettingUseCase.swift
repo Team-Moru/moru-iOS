@@ -28,23 +28,32 @@ struct RoutineStepMutation {
 @MainActor
 struct RoutineSettingUseCase {
   private let routineRepository: any RoutineRepository
+  private let alarmScheduleMutator: any AlarmScheduleMutating
 
-  init(routineRepository: any RoutineRepository) {
+  init(
+    routineRepository: any RoutineRepository,
+    alarmScheduleMutator: any AlarmScheduleMutating
+  ) {
     self.routineRepository = routineRepository
+    self.alarmScheduleMutator = alarmScheduleMutator
   }
 
   func saveRoutine(
     from mutation: RoutineSettingMutation,
     resolvingWeekdayConflict: Bool = false
-  ) throws {
+  ) async throws {
     if resolvingWeekdayConflict {
       let routines = try routinesByResolvingWeekdayConflict(for: mutation)
-      try routineRepository.saveRoutines(routines)
+      try await alarmScheduleMutator.commit(routines: routines) {
+        try routineRepository.saveRoutines(routines)
+      }
       return
     }
 
     let routine = try makeRoutine(from: mutation)
-    try routineRepository.saveRoutine(routine)
+    try await alarmScheduleMutator.commit(routines: [routine]) {
+      try routineRepository.saveRoutine(routine)
+    }
   }
 
   func weekdayConflict(for mutation: RoutineSettingMutation) throws -> Set<Weekday> {
@@ -71,7 +80,7 @@ struct RoutineSettingUseCase {
     routineID: UUID,
     isActive: Bool,
     resolvingWeekdayConflict: Bool = false
-  ) throws {
+  ) async throws {
     guard var routine = try routineRepository.routine(id: routineID) else {
       return
     }
@@ -79,7 +88,9 @@ struct RoutineSettingUseCase {
     if resolvingWeekdayConflict {
       let mutation = makeMutation(from: routine, isActive: true)
       let routines = try routinesByResolvingWeekdayConflict(for: mutation)
-      try routineRepository.saveRoutines(routines)
+      try await alarmScheduleMutator.commit(routines: routines) {
+        try routineRepository.saveRoutines(routines)
+      }
       return
     }
 
@@ -91,7 +102,23 @@ struct RoutineSettingUseCase {
     }
 
     routine.updatedAt = Date()
-    try routineRepository.saveRoutine(routine)
+    try await alarmScheduleMutator.commit(routines: [routine]) {
+      try routineRepository.saveRoutine(routine)
+    }
+  }
+
+  func deleteRoutine(id: UUID) async throws {
+    guard let routine = try routineRepository.routine(id: id) else {
+      return
+    }
+
+    let scheduleID = routine.alarmSchedule?.id
+    try await alarmScheduleMutator.delete(
+      routineID: routine.id,
+      scheduleID: scheduleID
+    ) {
+      try routineRepository.deleteRoutine(id: routine.id)
+    }
   }
 
   private func routinesByResolvingWeekdayConflict(

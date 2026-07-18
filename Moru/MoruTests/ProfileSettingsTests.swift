@@ -626,11 +626,11 @@ final class ProfileSettingsTests: XCTestCase {
     XCTAssertFalse(viewModel.isResetAvailable)
     XCTAssertEqual(
       viewModel.resetAvailabilityMessage,
-      "알람 초기화 기능이 준비되지 않아 지금은 로컬 데이터를 초기화할 수 없어요"
+      "초기화 작업을 마친 뒤 다시 시도해 주세요"
     )
     XCTAssertEqual(
       viewModel.resetAccessibilityHint,
-      "알람 초기화 기능이 준비되지 않아 지금은 로컬 데이터를 초기화할 수 없어요 "
+      "초기화 작업을 마친 뒤 다시 시도해 주세요 "
         + "초기화 버튼을 사용할 수 없어요."
     )
     XCTAssertEqual(ProfileView.rootAccessibilityIdentifier, "profile.root")
@@ -696,7 +696,7 @@ final class ProfileSettingsTests: XCTestCase {
     let cases: [(LocalResetAvailability, String)] = [
       (.blockedByActiveRoutine, "루틴이 끝난 후 초기화해 주세요"),
       (.blockedByAlarmRepair, "알람 상태를 먼저 복구해 주세요"),
-      (.blockedByAlarmReset, "알람 초기화 기능이 준비되지 않아 지금은 로컬 데이터를 초기화할 수 없어요"),
+      (.blockedByAlarmReset, "초기화 작업을 마친 뒤 다시 시도해 주세요"),
     ]
 
     for (availability, expectedMessage) in cases {

@@ -77,7 +77,8 @@ extension DependencyContainer {
       routineSuggestionService: LocalTemplateSuggestionService.shared,
       homeWeatherRepository: nil,
       historyEvidenceRepository: MockHistoryEvidenceRepository(),
-      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
+      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe(),
+      alarmScheduleMutator: DebugLocalCommitAlarmScheduleMutator()
     )
   }
 }
