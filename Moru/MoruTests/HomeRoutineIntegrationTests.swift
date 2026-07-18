@@ -4,6 +4,8 @@
 //
 
 import Foundation
+import SwiftUI
+import UIKit
 import XCTest
 @testable import Moru
 
@@ -245,6 +247,51 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       HomeStreakCard.weekdayAccessibilityValue(isCompleted: false),
       "미완료"
     )
+  }
+
+  @MainActor
+  func testHomeBusyFeedbackRendersInNativeHomeSurface() throws {
+    let routine = makeRoutine(
+      id: fixtureUUID("00000000-0000-0000-0000-000000000010"),
+      name: "아침 준비 루틴"
+    )
+    let viewModel = makeViewModel(
+      routines: [routine],
+      now: fixtureDate("2026-07-13T08:00:00Z")
+    )
+    viewModel.load()
+
+    let view = HomeView(
+      viewModel: viewModel,
+      onStartRoutine: { _ in .busy },
+      refreshToken: 0,
+      routineSettingContent: AnyView(EmptyView()),
+      initialRoutineLaunchMessage: HomeRoutineLaunchBoundary.busyMessage
+    )
+
+    let bounds = CGRect(x: 0, y: 0, width: 393, height: 1_400)
+    let windowScene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+    )
+    let hostingController = UIHostingController(rootView: view)
+    let window = UIWindow(windowScene: windowScene)
+    window.frame = bounds
+    window.rootViewController = hostingController
+    window.makeKeyAndVisible()
+    hostingController.view.frame = bounds
+    hostingController.view.layoutIfNeeded()
+
+    let renderer = UIGraphicsImageRenderer(bounds: bounds)
+    let image = renderer.image { _ in
+      hostingController.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+    }
+    window.isHidden = true
+
+    let pngData = try XCTUnwrap(image.pngData())
+    let screenshotURL = URL(fileURLWithPath: "/tmp/moru-g006-home-busy.png")
+    try pngData.write(to: screenshotURL, options: .atomic)
+
+    XCTAssertGreaterThan(pngData.count, 1_000)
   }
 
   @MainActor

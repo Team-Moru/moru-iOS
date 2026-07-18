@@ -51,6 +51,7 @@ struct HomeView: View {
   private let routineLaunchBoundary: HomeRoutineLaunchBoundary
   private let refreshToken: Int
   private let routineSettingContent: AnyView
+  private let clearsRoutineLaunchMessageOnRefresh: Bool
 
   @State private var viewModel: HomeViewModel
   @State private var isRoutineSettingPresented = false
@@ -60,12 +61,15 @@ struct HomeView: View {
     viewModel: HomeViewModel,
     onStartRoutine: @escaping RoutineLaunchHandler,
     refreshToken: Int,
-    routineSettingContent: AnyView
+    routineSettingContent: AnyView,
+    initialRoutineLaunchMessage: String? = nil
   ) {
     self.routineLaunchBoundary = HomeRoutineLaunchBoundary(onStartRoutine: onStartRoutine)
     self.refreshToken = refreshToken
     self.routineSettingContent = routineSettingContent
+    self.clearsRoutineLaunchMessageOnRefresh = initialRoutineLaunchMessage == nil
     _viewModel = State(initialValue: viewModel)
+    _routineLaunchMessage = State(initialValue: initialRoutineLaunchMessage)
   }
 
   var body: some View {
@@ -98,7 +102,9 @@ struct HomeView: View {
     }
     .background(homeBackground.ignoresSafeArea())
     .task(id: refreshToken) {
-      routineLaunchMessage = nil
+      if clearsRoutineLaunchMessageOnRefresh {
+        routineLaunchMessage = nil
+      }
       viewModel.load()
     }
     .sheet(isPresented: $isRoutineSettingPresented, onDismiss: {
