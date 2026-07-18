@@ -2,8 +2,6 @@
 //  MainTabView.swift
 //  Moru
 //
-//  Created by Codex on 7/14/26.
-//
 
 import Foundation
 import SwiftUI
@@ -57,6 +55,8 @@ struct MainTabState: Equatable {
 }
 
 struct MainTabView: View {
+  static let tabBarAccessibilityIdentifier = "app.tabBar"
+
   private let home: AnyView
   private let routineSetting: RoutineSettingView
   private let history: AnyView
@@ -89,6 +89,8 @@ struct MainTabView: View {
         selection: $selection,
         items: MainTabState.availableTabs
       )
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier(Self.tabBarAccessibilityIdentifier)
     }
   }
 

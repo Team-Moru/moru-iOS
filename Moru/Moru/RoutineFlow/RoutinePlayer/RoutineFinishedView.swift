@@ -6,6 +6,13 @@
 //
 
 import SwiftUI
+enum RoutineCompletionAccessibility {
+  static let primary = "routineCompletion.primary"
+  static let home = "routineCompletion.home"
+  static let homeTitle = "홈으로"
+  static let recordTitle = "오늘의 기록 확인"
+}
+
 
 enum RoutineCompletionActionConfiguration: Equatable {
   enum Destination: Equatable {
@@ -39,8 +46,8 @@ enum RoutineCompletionActionConfiguration: Equatable {
       return [
         Action(
           destination: .home,
-          title: "홈으로",
-          accessibilityIdentifier: "routineCompletion.primary",
+          title: RoutineCompletionAccessibility.homeTitle,
+          accessibilityIdentifier: RoutineCompletionAccessibility.primary,
           accessibilityHint: "홈 화면으로 돌아갑니다.",
           style: .primary
         )
@@ -50,15 +57,15 @@ enum RoutineCompletionActionConfiguration: Equatable {
       return [
         Action(
           destination: .record,
-          title: "오늘의 기록 확인",
-          accessibilityIdentifier: "routineCompletion.primary",
+          title: RoutineCompletionAccessibility.recordTitle,
+          accessibilityIdentifier: RoutineCompletionAccessibility.primary,
           accessibilityHint: "방금 완료한 루틴의 기록을 확인합니다.",
           style: .primary
         ),
         Action(
           destination: .home,
-          title: "홈으로",
-          accessibilityIdentifier: "routineCompletion.home",
+          title: RoutineCompletionAccessibility.homeTitle,
+          accessibilityIdentifier: RoutineCompletionAccessibility.home,
           accessibilityHint: "홈 화면으로 돌아갑니다.",
           style: .secondary
         )

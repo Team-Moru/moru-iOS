@@ -465,9 +465,11 @@ final class OnboardingHappyPathTests: XCTestCase {
       ]
     )
 
-    XCTAssertEqual(OnboardingDuration.roundedMinutes(for: routine.steps[0].estimatedSeconds), 2)
-    XCTAssertEqual(OnboardingDuration.roundedMinutes(for: routine.steps[1].estimatedSeconds), 1)
-    XCTAssertEqual(OnboardingDuration.totalMinutes(for: routine), 3)
+    XCTAssertEqual(RoutineDuration.roundedMinutes(for: 59), 1)
+    XCTAssertEqual(RoutineDuration.roundedMinutes(for: 60), 1)
+    XCTAssertEqual(RoutineDuration.roundedMinutes(for: 61), 2)
+    XCTAssertEqual(RoutineDuration.roundedMinutes(for: 119), 2)
+    XCTAssertEqual(RoutineDuration.totalMinutes(for: routine), 3)
   }
   @MainActor
   func testDiskReopenSnapshotPreservesOnboardingCompletionFacts() async throws {

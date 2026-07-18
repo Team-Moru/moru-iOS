@@ -2,16 +2,15 @@
 //  CommonComponentsPreview.swift
 //  Moru
 //
-//  Created by Codex on 7/4/26.
-//
 
 import SwiftUI
+#if DEBUG
 
 #Preview("Moru Common Components") {
   MoruCommonComponentsPreviewHost()
 }
 
-private struct MoruCommonComponentsPreviewHost: View {
+struct MoruCommonComponentsPreviewHost: View {
   @State private var toggleOn = true
   @State private var weekdays: Set<String> = ["월", "화", "수", "목", "금"]
   @State private var tab: MoruTabItem = .home
@@ -24,6 +23,11 @@ private struct MoruCommonComponentsPreviewHost: View {
   var body: some View {
     ScrollView {
       VStack(spacing: AppSpacing.xl) {
+        Text("MORU 컴포넌트")
+          .font(AppFont.heading2SemiBold)
+          .foregroundStyle(AppColor.moruTextPrimary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .accessibilityAddTraits(.isHeader)
         MoruButton("다음") {}
         MoruButton("다음", style: .secondary) {}
 
@@ -138,7 +142,7 @@ private struct MoruCommonComponentsPreviewHost: View {
         MoruDialog(
           title: "이 항목을 건너뛸까요?",
           message: "건너뛰면 현재 루틴은 미완료로 기록돼요.\n"
-            + "다음 루틴으로 넘어갈께요.",
+            + "다음 루틴으로 넘어갈게요.",
           primaryTitle: "계속하기",
           secondaryTitle: "건너뛰기",
           primaryAction: {},
@@ -150,5 +154,9 @@ private struct MoruCommonComponentsPreviewHost: View {
       .padding(AppSpacing.screenHorizontal)
     }
     .background(AppColor.gray100)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("components.root")
+    .accessibilityLabel("MORU 컴포넌트")
   }
 }
+#endif

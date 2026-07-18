@@ -2,8 +2,6 @@
 //  RouterRuntimeContractTests.swift
 //  MoruTests
 //
-//  Created by Codex on 7/13/26.
-//
 
 import Foundation
 import SwiftUI
@@ -962,6 +960,38 @@ final class RouterRuntimeContractTests: XCTestCase {
         )
       ]
     )
+    XCTAssertEqual(view.actionConfiguration.actions.map(\.title), ["홈으로"])
+    XCTAssertFalse(
+      view.actionConfiguration.actions.contains {
+        $0.title == RoutineCompletionAccessibility.recordTitle
+      }
+    )
+    XCTAssertFalse(
+      view.actionConfiguration.actions.contains {
+        $0.accessibilityIdentifier == RoutineCompletionAccessibility.home
+      }
+    )
+  }
+  @MainActor
+  func testAccessibilityLedgerIdentifiersAndPlayerCopyRemainStable() {
+    XCTAssertEqual(OnboardingAccessibility.experienceTitle, "onboarding.experience.title")
+    XCTAssertEqual(OnboardingAccessibility.primary, "onboarding.primary")
+    XCTAssertEqual(RoutinePlayerAccessibility.stepTitle, "routinePlayer.step.title")
+    XCTAssertEqual(RoutinePlayerAccessibility.input, "routinePlayer.input")
+    XCTAssertEqual(RoutinePlayerAccessibility.stepTitleLabel, "오늘의 루틴")
+    let customInputStep = RoutineStep(
+      type: .input,
+      title: "물 마신 기록",
+      order: 0
+    )
+    XCTAssertEqual(
+      RoutinePlayerAccessibility.inputLabel(for: customInputStep),
+      customInputStep.title
+    )
+    XCTAssertEqual(RoutineCompletionAccessibility.primary, "routineCompletion.primary")
+    XCTAssertEqual(RoutineCompletionAccessibility.home, "routineCompletion.home")
+    XCTAssertEqual(RoutineCompletionAccessibility.homeTitle, "홈으로")
+    XCTAssertEqual(RoutineCompletionAccessibility.recordTitle, "오늘의 기록 확인")
   }
 
   @MainActor
@@ -995,6 +1025,11 @@ final class RouterRuntimeContractTests: XCTestCase {
           style: .secondary
         )
       ]
+    )
+    XCTAssertEqual(view.actionConfiguration.actions.map(\.title), ["오늘의 기록 확인", "홈으로"])
+    XCTAssertEqual(
+      view.actionConfiguration.actions.map(\.accessibilityIdentifier),
+      ["routineCompletion.primary", "routineCompletion.home"]
     )
   }
 
@@ -1147,11 +1182,12 @@ final class RouterRuntimeContractTests: XCTestCase {
     ) { routineID in
       emittedRoutineIDs.append(routineID)
     }
+    XCTAssertEqual(successfulViewModel.primaryButtonTitle, "루틴 체험하기")
 
     successfulViewModel.primaryButtonDidTap()
     successfulViewModel.primaryButtonDidTap()
-    while successfulViewModel.isSaving {
-      await Task.yield()
+    await waitUntil("Successful onboarding save should finish.") {
+      !successfulViewModel.isSaving
     }
 
     XCTAssertEqual(successfulUseCase.executeCallCount, 1)
@@ -1168,8 +1204,8 @@ final class RouterRuntimeContractTests: XCTestCase {
     }
 
     failingViewModel.primaryButtonDidTap()
-    while failingViewModel.isSaving {
-      await Task.yield()
+    await waitUntil("Failed onboarding save should finish.") {
+      !failingViewModel.isSaving
     }
 
     XCTAssertEqual(failingUseCase.executeCallCount, 1)

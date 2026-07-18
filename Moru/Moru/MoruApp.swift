@@ -13,36 +13,48 @@ struct MoruApp: App {
 
   var body: some Scene {
     WindowGroup {
-      Group {
-        switch launchCoordinator.phase {
-        case .idle, .constructing, .loadingSession:
-          if launchCoordinator.showsLaunchStatus {
-            LaunchStatusView()
-          } else {
-            EmptyView()
-          }
-        case .ready(let app):
-          AppRouter(
-            dependencies: app.dependencies,
-            sessionStore: app.sessionStore,
-            coordinator: app.navigationCoordinator,
-            onboardingBuilder: app.onboardingBuilder,
-            routinePlayerBuilder: app.routinePlayerBuilder,
-            requestSessionReload: launchCoordinator.requestSessionReload,
-            awaitSessionReload: launchCoordinator.awaitSessionReload,
-            retrySessionReload: launchCoordinator.retrySessionReload,
-            homeBuilder: app.homeBuilder,
-            state: app.routerState
-          )
-        case .bootstrapFailed(let failure), .sessionFailed(_, let failure):
-          LaunchFailureView(message: failure.message, onRetry: launchCoordinator.retry)
-        case .recoveryRequired(let failure):
-          LaunchRecoveryView(message: failure.message)
+      #if DEBUG
+      if let configuration = MoruUITestFixture.configuration {
+        MoruUITestFixtureView(configuration: configuration)
+      } else {
+        appContent
+      }
+      #else
+      appContent
+      #endif
+    }
+  }
+
+  private var appContent: some View {
+    Group {
+      switch launchCoordinator.phase {
+      case .idle, .constructing, .loadingSession:
+        if launchCoordinator.showsLaunchStatus {
+          LaunchStatusView()
+        } else {
+          EmptyView()
         }
+      case .ready(let app):
+        AppRouter(
+          dependencies: app.dependencies,
+          sessionStore: app.sessionStore,
+          coordinator: app.navigationCoordinator,
+          onboardingBuilder: app.onboardingBuilder,
+          routinePlayerBuilder: app.routinePlayerBuilder,
+          requestSessionReload: launchCoordinator.requestSessionReload,
+          awaitSessionReload: launchCoordinator.awaitSessionReload,
+          retrySessionReload: launchCoordinator.retrySessionReload,
+          homeBuilder: app.homeBuilder,
+          state: app.routerState
+        )
+      case .bootstrapFailed(let failure), .sessionFailed(_, let failure):
+        LaunchFailureView(message: failure.message, onRetry: launchCoordinator.retry)
+      case .recoveryRequired(let failure):
+        LaunchRecoveryView(message: failure.message)
       }
-      .task {
-        launchCoordinator.start()
-      }
+    }
+    .task {
+      launchCoordinator.start()
     }
   }
 }
@@ -52,6 +64,8 @@ struct LaunchStatusView: View {
 
   var body: some View {
     Text(Self.message)
+      .accessibilityIdentifier("launch.status")
+      .accessibilityLabel(Self.message)
   }
 }
 

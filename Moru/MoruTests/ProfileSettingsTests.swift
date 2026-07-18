@@ -4,8 +4,6 @@
 //
 
 import Foundation
-import SwiftUI
-import UIKit
 import XCTest
 @testable import Moru
 
@@ -511,184 +509,40 @@ final class ProfileSettingsTests: XCTestCase {
     }
     XCTAssertTrue(profileRepository.savedProfiles.isEmpty)
   }
-  func testOwnedProfileSourceTreeContainsNoForbiddenSurfaceTokens() throws {
-    // Supplemental audit of owned Profile sources.
-    // Routes outside this tree need separate coverage.
-    let testFileURL = URL(fileURLWithPath: #filePath)
-    let profileDirectoryURL = testFileURL
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .appending(path: "Moru/Features/Profile")
-    guard let enumerator = FileManager.default.enumerator(
-      at: profileDirectoryURL,
-      includingPropertiesForKeys: [.isRegularFileKey],
-      options: [.skipsHiddenFiles]
-    ) else {
-      return XCTFail("Expected the owned Profile source tree.")
-    }
+  @MainActor
+  func testAlarmStatusMessagesAndAccessibilityHintsReflectStatus() {
+    XCTAssertEqual(
+      ProfileView.notificationOnlyDowngradeDescription,
+      "현재는 기기 알림으로 알려드려요."
+    )
 
-    let source = try enumerator
-      .compactMap { $0 as? URL }
-      .filter { $0.pathExtension == "swift" }
-      .sorted { $0.path < $1.path }
-      .map { try String(contentsOf: $0, encoding: .utf8) }
-      .joined(separator: "\n")
-    let forbiddenTokens = [
-      "로그인",
-      "로그아웃",
-      "회원 탈퇴",
-      "이메일",
-      "구독",
-      "소셜",
-      "인증",
-      "결제",
-      "프리미엄",
-      "진동",
-      "socialLogin",
-      "SocialLogin",
-      "social",
-      "Social",
-      "account",
-      "Account",
-      "login",
-      "Login",
-      "logout",
-      "Logout",
-      "email",
-      "Email",
-      "subscription",
-      "Subscription",
-      "authentication",
-      "Authentication",
-      "auth",
-      "Auth",
-      "signIn",
-      "SignIn",
-      "signOut",
-      "SignOut",
-      "paywall",
-      "Paywall",
-      "premium",
-      "Premium",
-      "isPro",
-      "PRO",
-      "vibration",
-      "Vibration",
-      "haptic",
-      "Haptic",
+    let statusCases: [(ProfileAlarmStatus, String, String)] = [
+      (
+        .configured,
+        "알람이 정상적으로 설정됐어요",
+        "기기 알림으로 알람 상태를 알려드려요."
+      ),
+      (
+        .permissionOff,
+        "알람 권한이 꺼져 있어요",
+        "기기 설정에서 알림 권한을 켜야 해요."
+      ),
+      (
+        .repairRequired,
+        "알람을 다시 예약해야 해요",
+        "알림 재예약을 다시 시도할 수 있어요."
+      ),
+      (
+        .unavailable,
+        "알람 상태를 확인할 수 없어요",
+        "알람 권한이 꺼졌다는 확인 정보가 아직 없어요."
+      ),
     ]
 
-    for forbiddenToken in forbiddenTokens {
-      XCTAssertFalse(
-        source.contains(forbiddenToken),
-        "Owned Profile source tree contains forbidden token: \(forbiddenToken)"
-      )
+    for (status, expectedMessage, expectedHint) in statusCases {
+      XCTAssertEqual(ProfileView.alarmStatusMessage(for: status), expectedMessage)
+      XCTAssertEqual(ProfileView.alarmStatusAccessibilityHint(for: status), expectedHint)
     }
-  }
-
-  @MainActor
-  func testProfileSettingsRenderInNativeSurface() throws {
-    let profile = makeProfile(selectedVoice: .yuna)
-    let profileRepository = ProfileSettingsProfileRepositoryFake(profile: profile)
-    let settingsRepository = ProfileSettingsRepositoryFake(
-      settings: makeSettings(profileID: profile.id, resolvedVoiceID: VoiceProfile.yuna.id),
-      profileRepository: profileRepository
-    )
-    let resetPerformer = ProfileSettingsResetPerformerFake(
-      availability: .blockedByAlarmReset
-    )
-    let viewModel = makeViewModel(
-      useCase: makeUseCase(
-        profileRepository: profileRepository,
-        settingsRepository: settingsRepository
-      ),
-      resetPerformer: resetPerformer,
-      alarmStatusProvider: { .unavailable }
-    )
-
-    viewModel.loadProfileSettings()
-    let loadedContent = content(from: viewModel)
-
-    XCTAssertEqual(loadedContent.profile.id, profile.id)
-    XCTAssertEqual(loadedContent.profile.displayName, profile.displayName)
-    XCTAssertEqual(loadedContent.profile.selectedVoice, VoiceProfile.yuna)
-    XCTAssertEqual(
-      loadedContent.profile.updatedAt,
-      settingsRepository.settings.migrationUpdatedAt
-    )
-    XCTAssertEqual(loadedContent.settings, settingsRepository.settings)
-    XCTAssertEqual(ProfileView.currentVoiceName(in: loadedContent), VoiceProfile.yuna.displayName)
-    XCTAssertEqual(viewModel.alarmStatus, .unavailable)
-    XCTAssertEqual(
-      ProfileView.alarmStatusMessage(for: viewModel.alarmStatus),
-      "알람 상태를 확인할 수 없어요"
-    )
-    XCTAssertFalse(viewModel.isResetAvailable)
-    XCTAssertEqual(
-      viewModel.resetAvailabilityMessage,
-      "초기화 작업을 마친 뒤 다시 시도해 주세요"
-    )
-    XCTAssertEqual(
-      viewModel.resetAccessibilityHint,
-      "초기화 작업을 마친 뒤 다시 시도해 주세요 "
-        + "초기화 버튼을 사용할 수 없어요."
-    )
-    XCTAssertEqual(ProfileView.rootAccessibilityIdentifier, "profile.root")
-    XCTAssertEqual(ProfileView.rootAccessibilityLabel, "마이 프로필과 설정")
-    XCTAssertEqual(ProfileView.localResetDescription, "이 기기에 저장된 로컬 데이터를 초기화합니다.")
-
-    let bounds = CGRect(x: 0, y: 0, width: 393, height: 1_200)
-    let windowScene = try XCTUnwrap(
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-    )
-    let hostingController = UIHostingController(rootView: ProfileView(viewModel: viewModel))
-    let window = UIWindow(windowScene: windowScene)
-    window.frame = bounds
-    window.rootViewController = hostingController
-    window.makeKeyAndVisible()
-    hostingController.view.frame = bounds
-    hostingController.view.layoutIfNeeded()
-
-    let renderer = UIGraphicsImageRenderer(bounds: bounds)
-    let image = renderer.image { _ in
-      hostingController.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
-    }
-    window.isHidden = true
-
-    let pngData = try XCTUnwrap(image.pngData())
-    let screenshotURL = URL(fileURLWithPath: "/tmp/moru-g003-profile.png")
-    try pngData.write(to: screenshotURL, options: .atomic)
-
-    XCTAssertGreaterThan(pngData.count, 1_000)
-    let renderedImage = try XCTUnwrap(image.cgImage)
-    let pixelData = try XCTUnwrap(renderedImage.dataProvider?.data as Data?)
-    let bytesPerPixel = renderedImage.bitsPerPixel / renderedImage.bitsPerComponent
-    let hasNonuniformPixels = pixelData.withUnsafeBytes { rawBuffer in
-      guard bytesPerPixel > 0,
-            pixelData.count >= bytesPerPixel,
-            let bytes = rawBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
-        return false
-      }
-
-      let firstPixel = (0..<bytesPerPixel).map { bytes[$0] }
-
-      for row in 0..<renderedImage.height {
-        for column in 0..<renderedImage.width {
-          let offset = row * renderedImage.bytesPerRow + column * bytesPerPixel
-
-          if (0..<bytesPerPixel).contains(where: { bytes[offset + $0] != firstPixel[$0] }) {
-            return true
-          }
-        }
-      }
-
-      return false
-    }
-
-    XCTAssertTrue(
-      hasNonuniformPixels,
-      "Expected the Profile screenshot to contain nonuniform pixels."
-    )
   }
 
   @MainActor

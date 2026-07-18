@@ -2,10 +2,14 @@
 //  OnboardingFlowView.swift
 //  Moru
 //
-//  Created by Codex on 7/6/26.
 //
 
 import SwiftUI
+enum OnboardingAccessibility {
+  static let experienceTitle = "onboarding.experience.title"
+  static let primary = "onboarding.primary"
+}
+
 
 @MainActor
 struct OnboardingFlowView: View {
@@ -132,6 +136,9 @@ private struct OnboardingFooterView: View {
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
       }
       .buttonStyle(.plain)
+      .accessibilityIdentifier(OnboardingAccessibility.primary)
+      .accessibilityLabel(viewModel.primaryButtonTitle)
+      .accessibilityHint(primaryButtonAccessibilityHint)
       .disabled(!viewModel.canAdvance)
     }
     .frame(maxWidth: .infinity)
@@ -140,6 +147,12 @@ private struct OnboardingFooterView: View {
     .padding(.bottom, viewModel.step == .completion ? AppSpacing.thirtySix : AppSpacing.md)
     .background(Color.clear)
   }
+  private var primaryButtonAccessibilityHint: String {
+    viewModel.step == .completion
+      ? "루틴 체험을 시작합니다."
+      : "다음 단계로 이동합니다."
+  }
+
 }
 
 private struct OnboardingBackgroundView: View {
@@ -197,15 +210,25 @@ private struct OnboardingStepLayout<Content: View>: View {
   let title: String
   let subtitle: String
   var titleSpacing: CGFloat = AppSpacing.fiftySix
+  var titleAccessibilityIdentifier: String? = nil
   @ViewBuilder var content: Content
 
   var body: some View {
     VStack(alignment: .leading, spacing: titleSpacing) {
       VStack(alignment: .leading, spacing: AppSpacing.xs) {
-        Text(title)
-          .font(AppFont.title2Bold)
-          .foregroundStyle(AppColor.moruTextStrong)
-          .fixedSize(horizontal: false, vertical: true)
+        if let titleAccessibilityIdentifier {
+          Text(title)
+            .font(AppFont.title2Bold)
+            .foregroundStyle(AppColor.moruTextStrong)
+            .accessibilityIdentifier(titleAccessibilityIdentifier)
+            .accessibilityLabel(title)
+            .fixedSize(horizontal: false, vertical: true)
+        } else {
+          Text(title)
+            .font(AppFont.title2Bold)
+            .foregroundStyle(AppColor.moruTextStrong)
+            .fixedSize(horizontal: false, vertical: true)
+        }
 
         Text(subtitle)
           .font(AppFont.label1NormalMedium)
@@ -225,7 +248,8 @@ private struct RoutineExperienceQuestionView: View {
   var body: some View {
     OnboardingStepLayout(
       title: "루틴 경험이\n있으신가요?",
-      subtitle: "맞춤 루틴을 설정해드릴게요"
+      subtitle: "맞춤 루틴을 설정해드릴게요",
+      titleAccessibilityIdentifier: OnboardingAccessibility.experienceTitle
     ) {
       VStack(spacing: AppSpacing.md) {
         ForEach(RoutineExperience.allCases) { experience in
@@ -287,6 +311,18 @@ private struct RoutineGoalSelectionView: View {
             .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
           }
           .buttonStyle(.plain)
+          .accessibilityLabel("\(option.title) 목표")
+          .accessibilityValue(
+            viewModel.draft.selectedGoalTags.contains(option.tag) ? "선택됨" : "선택 안 됨"
+          )
+          .accessibilityAddTraits(
+            viewModel.draft.selectedGoalTags.contains(option.tag) ? .isSelected : []
+          )
+          .accessibilityHint(
+            viewModel.draft.selectedGoalTags.contains(option.tag)
+              ? "선택한 목표를 해제합니다."
+              : "루틴 목표로 선택합니다."
+          )
         }
       }
     }
@@ -306,7 +342,7 @@ private struct SuggestedRoutinePreviewView: View {
           RoutineMetaPill(
             goalTitle: viewModel.draft.primaryGoalTitle,
             stepCount: routine.steps.count,
-            durationMinutes: OnboardingDuration.totalMinutes(for: routine)
+            durationMinutes: RoutineDuration.totalMinutes(for: routine)
           )
 
           RoutineStepListCard(routine: routine)
@@ -324,11 +360,11 @@ private struct RoutineDurationPreviewView: View {
   var body: some View {
     if let routine = viewModel.validatedPreviewRoutine {
       OnboardingStepLayout(
-        title: "예상 루틴 시간은\n\(OnboardingDuration.totalMinutes(for: routine))분이에요",
+        title: "예상 루틴 시간은\n\(RoutineDuration.totalMinutes(for: routine))분이에요",
         subtitle: "",
         titleSpacing: AppSpacing.fortyEight
       ) {
-        OnboardingClockView(durationMinutes: OnboardingDuration.totalMinutes(for: routine))
+        OnboardingClockView(durationMinutes: RoutineDuration.totalMinutes(for: routine))
           .frame(maxWidth: .infinity)
           .padding(.top, AppSpacing.xl)
       }
@@ -625,19 +661,6 @@ private struct CompletionCheckmarkBadge: View {
   }
 }
 
-enum OnboardingDuration {
-  static func roundedMinutes(for estimatedSeconds: Int?) -> Int {
-    let seconds = max(0, estimatedSeconds ?? 60)
-    return max(1, (seconds + 59) / 60)
-  }
-
-  static func totalMinutes(for routine: Routine) -> Int {
-    routine.steps.reduce(0) { total, step in
-      total + roundedMinutes(for: step.estimatedSeconds)
-    }
-  }
-}
-
 private struct PreviewUnavailableState: View {
   let errorMessage: String?
 
@@ -807,7 +830,7 @@ private struct RoutineCountSummary: View {
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.moruTextSecondary)
 
-      Text("\(routine.steps.count)개 - 총 \(OnboardingDuration.totalMinutes(for: routine))분")
+      Text("\(routine.steps.count)개 - 총 \(RoutineDuration.totalMinutes(for: routine))분")
         .font(AppFont.body1NormalSemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
     }
@@ -865,6 +888,8 @@ private struct TimeWheelControl: View {
     VStack(spacing: AppSpacing.xs) {
       HStack(spacing: AppSpacing.fortyEight) {
         wheelColumn(
+          accessibilityLabel: "알림 시",
+          accessibilityValue: "\(viewModel.draft.alarmHour)시",
           previous: hourText(viewModel.draft.alarmHour - 1),
           current: hourText(viewModel.draft.alarmHour),
           next: hourText(viewModel.draft.alarmHour + 1),
@@ -883,6 +908,8 @@ private struct TimeWheelControl: View {
         )
 
         wheelColumn(
+          accessibilityLabel: "알림 분",
+          accessibilityValue: "\(viewModel.draft.alarmMinute)분",
           previous: minuteText(viewModel.draft.alarmMinute - 1),
           current: minuteText(viewModel.draft.alarmMinute),
           next: minuteText(viewModel.draft.alarmMinute + 1),
@@ -911,6 +938,8 @@ private struct TimeWheelControl: View {
   }
 
   private func wheelColumn(
+    accessibilityLabel: String,
+    accessibilityValue: String,
     previous: String,
     current: String,
     next: String,
@@ -938,6 +967,20 @@ private struct TimeWheelControl: View {
           .frame(width: 64, height: 36)
       }
       .buttonStyle(.plain)
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(accessibilityLabel)
+    .accessibilityValue(accessibilityValue)
+    .accessibilityHint("위 또는 아래로 쓸어 넘겨 값을 조정합니다.")
+    .accessibilityAdjustableAction { direction in
+      switch direction {
+      case .increment:
+        increment()
+      case .decrement:
+        decrement()
+      @unknown default:
+        break
+      }
     }
   }
 
@@ -983,6 +1026,18 @@ private struct WeekdayCircleSelector: View {
             .clipShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(weekday.shortKoreanTitle)요일")
+        .accessibilityValue(
+          viewModel.draft.selectedWeekdays.contains(weekday) ? "선택됨" : "선택 안 됨"
+        )
+        .accessibilityAddTraits(
+          viewModel.draft.selectedWeekdays.contains(weekday) ? .isSelected : []
+        )
+        .accessibilityHint(
+          viewModel.draft.selectedWeekdays.contains(weekday)
+            ? "선택한 요일을 해제합니다."
+            : "알림 요일로 선택합니다."
+        )
       }
     }
   }
@@ -1170,7 +1225,7 @@ private extension RoutineStepType {
 
 private extension RoutineStep {
   var durationTitle: String {
-    "\(OnboardingDuration.roundedMinutes(for: estimatedSeconds))분"
+    "\(RoutineDuration.roundedMinutes(for: estimatedSeconds))분"
   }
 }
 

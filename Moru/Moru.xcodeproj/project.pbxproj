@@ -14,6 +14,13 @@
 			remoteGlobalIDString = E0D6C3B62FF1232200DA2A54;
 			remoteInfo = Moru;
 		};
+		B00500000000000000000007 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E0D6C3AF2FF1232200DA2A54 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E0D6C3B62FF1232200DA2A54;
+			remoteInfo = Moru;
+		};
 /* End PBXContainerItemProxy section */
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000005 /* Alamofire */; };
@@ -23,7 +30,104 @@
 /* Begin PBXFileReference section */
 		E0D6C3B72FF1232200DA2A54 /* Moru.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moru.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0D6C3D02FF12A0000DA2A54 /* MoruTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoruTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00500000000000000000001 /* MoruUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoruUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B00500000000000000000012 /* Exceptions for "MoruUITests" folder in "MoruUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/absence-audit.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/alarm-permission-off.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/components-default.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/history-dashboard.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/history-detail.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/history-weekly.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/home-weather-fresh.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/launch-slow.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/notification-downgrade.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/onboarding-completion.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/onboarding-experience.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/profile-root.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/regular-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/trial-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/trial-input.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/trial-step.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-AX3/voice-selection.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/absence-audit.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/alarm-permission-off.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/components-default.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/history-dashboard.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/history-detail.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/history-weekly.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/home-weather-fresh.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/launch-slow.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/notification-downgrade.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/onboarding-completion.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/onboarding-experience.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/profile-root.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/regular-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/trial-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/trial-input.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/trial-step.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/dark-M/voice-selection.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/absence-audit.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/alarm-permission-off.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/components-default.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/history-dashboard.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/history-detail.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/history-weekly.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/home-weather-fresh.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/launch-slow.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/notification-downgrade.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/onboarding-completion.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/onboarding-experience.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/profile-root.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/regular-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/trial-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/trial-input.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/trial-step.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-AX3/voice-selection.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/absence-audit.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/alarm-permission-off.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/components-default.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/history-dashboard.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/history-detail.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/history-weekly.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/home-weather-fresh.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/launch-slow.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/notification-downgrade.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/onboarding-completion.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/onboarding-experience.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/profile-root.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/regular-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/trial-complete.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/trial-input.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/trial-step.png,
+				Baselines/iPhone16-iOS26/ko-KR-Asia-Seoul/light-M/voice-selection.png,
+				FigmaReferences/1445-1113.png,
+				FigmaReferences/1656-1043.png,
+				FigmaReferences/1656-1184.png,
+				FigmaReferences/1666-3219.png,
+				FigmaReferences/1851-3687.png,
+				FigmaReferences/1851-4120.png,
+				FigmaReferences/1851-4683.png,
+				FigmaReferences/1947-2176.png,
+				FigmaReferences/1948-3859.png,
+				FigmaReferences/2022-2044.png,
+				FigmaReferences/2045-1840.png,
+				FigmaReferences/2092-4288.png,
+				FigmaReferences/2092-4936.png,
+				FigmaReferences/2323-3246.png,
+				FigmaReferences/2323-3265.png,
+				FigmaReferences/2564-4072.png,
+				FigmaReferences/2644-2640.png,
+				FigmaReferences/2644-2839.png,
+				FigmaReferences/2753-9706.png,
+			);
+			target = B00500000000000000000006 /* MoruUITests */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		E0D6C3B92FF1232200DA2A54 /* Moru */ = {
@@ -34,6 +138,14 @@
 		E0D6C3D12FF12A0000DA2A54 /* MoruTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MoruTests;
+			sourceTree = "<group>";
+		};
+		B00500000000000000000002 /* MoruUITests */ = {
+			exceptions = (
+				B00500000000000000000012 /* Exceptions for "MoruUITests" folder in "MoruUITests" target */,
+			);
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MoruUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -55,6 +167,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B00500000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -63,6 +182,7 @@
 			children = (
 				E0D6C3B92FF1232200DA2A54 /* Moru */,
 				E0D6C3D12FF12A0000DA2A54 /* MoruTests */,
+				B00500000000000000000002 /* MoruUITests */,
 				E0D6C3B82FF1232200DA2A54 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -72,6 +192,7 @@
 			children = (
 				E0D6C3B72FF1232200DA2A54 /* Moru.app */,
 				E0D6C3D02FF12A0000DA2A54 /* MoruTests.xctest */,
+				B00500000000000000000001 /* MoruUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -126,6 +247,29 @@
 			productReference = E0D6C3D02FF12A0000DA2A54 /* MoruTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		B00500000000000000000006 /* MoruUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B00500000000000000000011 /* Build configuration list for PBXNativeTarget "MoruUITests" */;
+			buildPhases = (
+				B00500000000000000000005 /* Sources */,
+				B00500000000000000000003 /* Frameworks */,
+				B00500000000000000000004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B00500000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				B00500000000000000000002 /* MoruUITests */,
+			);
+			name = MoruUITests;
+			packageProductDependencies = (
+			);
+			productName = MoruUITests;
+			productReference = B00500000000000000000001 /* MoruUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -140,6 +284,10 @@
 						CreatedOnToolsVersion = 26.5;
 					};
 					E0D6C3D32FF12A0000DA2A54 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = E0D6C3B62FF1232200DA2A54;
+					};
+					B00500000000000000000006 = {
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = E0D6C3B62FF1232200DA2A54;
 					};
@@ -165,6 +313,7 @@
 			targets = (
 				E0D6C3B62FF1232200DA2A54 /* Moru */,
 				E0D6C3D32FF12A0000DA2A54 /* MoruTests */,
+				B00500000000000000000006 /* MoruUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -178,6 +327,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E0D6C3D52FF12A0000DA2A54 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B00500000000000000000004 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -201,6 +357,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B00500000000000000000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -208,6 +371,11 @@
 			isa = PBXTargetDependency;
 			target = E0D6C3B62FF1232200DA2A54 /* Moru */;
 			targetProxy = E0D6C3D72FF12A0000DA2A54 /* PBXContainerItemProxy */;
+		};
+		B00500000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E0D6C3B62FF1232200DA2A54 /* Moru */;
+			targetProxy = B00500000000000000000007 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 /* Begin XCRemoteSwiftPackageReference section */
@@ -370,7 +538,6 @@
 				CODE_SIGN_ENTITLEMENTS = Moru/Moru.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 2RA6Y95Z22;
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -405,7 +572,6 @@
 				CODE_SIGN_ENTITLEMENTS = Moru/Moru.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 2RA6Y95Z22;
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -480,6 +646,50 @@
 			};
 			name = Release;
 		};
+		B00500000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Moru;
+			};
+			name = Debug;
+		};
+		B00500000000000000000010 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Moru;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -506,6 +716,15 @@
 			buildConfigurations = (
 				E0D6C3D82FF12A0000DA2A54 /* Debug */,
 				E0D6C3D92FF12A0000DA2A54 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B00500000000000000000011 /* Build configuration list for PBXNativeTarget "MoruUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B00500000000000000000009 /* Debug */,
+				B00500000000000000000010 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -2,8 +2,6 @@
 //  HistoryView.swift
 //  Moru
 //
-//  Created by Codex on 7/14/26.
-//
 
 import Foundation
 import SwiftUI
@@ -421,7 +419,9 @@ private struct HistoryRunDetailView: View {
     .background(AppColor.babyBlue50.ignoresSafeArea())
     .navigationTitle("실행 기록")
     .navigationBarTitleDisplayMode(.inline)
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.runDetail")
+    .accessibilityLabel("실행 기록")
   }
 }
 
@@ -499,6 +499,9 @@ private struct HistoryWeeklyReportView: View {
       .padding(.bottom, AppSpacing.xxl)
     }
     .background(AppColor.babyBlue50.ignoresSafeArea())
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("history.weekly.root")
+    .accessibilityLabel("이번 주 루틴 리포트")
     .navigationTitle(weekRangeText)
     .navigationBarTitleDisplayMode(.inline)
   }

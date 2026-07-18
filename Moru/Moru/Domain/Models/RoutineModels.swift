@@ -227,6 +227,19 @@ nonisolated struct RoutineStep: Identifiable, Codable, Hashable, Sendable {
   }
 }
 
+nonisolated enum RoutineDuration {
+  static func roundedMinutes(for estimatedSeconds: Int?) -> Int {
+    let seconds = max(0, estimatedSeconds ?? 60)
+    return max(1, (seconds + 59) / 60)
+  }
+
+  static func totalMinutes(for routine: Routine) -> Int {
+    routine.steps.reduce(0) { total, step in
+      total + roundedMinutes(for: step.estimatedSeconds)
+    }
+  }
+}
+
 nonisolated struct AlarmSchedule: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var hour: Int

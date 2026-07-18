@@ -2,8 +2,6 @@
 //  HistoryComponents.swift
 //  Moru
 //
-//  Created by Codex on 7/14/26.
-//
 
 import Foundation
 import SwiftUI
@@ -95,36 +93,27 @@ struct HistoryWeeklySummaryCard: View {
 }
 struct HistoryWakeMetricsView: View {
   let metrics: HistoryWakeMetrics
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.md) {
       HistorySectionHeader(title: "기상 기록", actionTitle: nil, action: nil)
 
       if metrics == .unavailable {
-        HistoryMetricCard(
-          title: "평균 기상 시간",
-          value: "확인할 수 없어요",
-          detail: nil
-        )
-        .accessibilityIdentifier("history.metrics.averageWake")
+        averageWakeMetricCard(value: "확인할 수 없어요")
 
         Text("알람 기상 기록을 확인할 수 없어요")
           .font(AppFont.caption1Medium)
           .foregroundStyle(AppColor.moruTextSecondary)
       } else {
-        HStack(alignment: .top, spacing: AppSpacing.sm) {
-          HistoryMetricCard(
-            title: "평균 기상 시간",
-            value: averageWakeText,
-            detail: nil
-          )
-          .accessibilityIdentifier("history.metrics.averageWake")
-
-          HistoryMetricCard(
-            title: "시작 시간 규칙성",
-            value: regularityText,
-            detail: deviationText
-          )
+        if dynamicTypeSize.isAccessibilitySize {
+          VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            metricCards
+          }
+        } else {
+          HStack(alignment: .top, spacing: AppSpacing.sm) {
+            metricCards
+          }
         }
 
         Text("최근 28일 중 \(metrics.observationCount)회 관측 기준")
@@ -132,6 +121,28 @@ struct HistoryWakeMetricsView: View {
           .foregroundStyle(AppColor.moruTextSecondary)
       }
     }
+  }
+
+  @ViewBuilder
+  private var metricCards: some View {
+    averageWakeMetricCard(value: averageWakeText)
+
+    HistoryMetricCard(
+      title: "시작 시간 규칙성",
+      value: regularityText,
+      detail: deviationText
+    )
+  }
+
+  private func averageWakeMetricCard(value: String) -> some View {
+    HistoryMetricCard(
+      title: "평균 기상 시간",
+      value: value,
+      detail: nil
+    )
+    .accessibilityElement(children: .combine)
+    .accessibilityIdentifier("history.metrics.averageWake")
+    .accessibilityLabel("평균 기상 시간, \(value)")
   }
 
   private var averageWakeText: String {
@@ -242,6 +253,8 @@ struct HistoryMonthlyHeatmapView: View {
               .font(AppFont.caption1Medium)
               .foregroundStyle(AppColor.moruTextSecondary)
               .frame(maxWidth: .infinity)
+              .accessibilityLabel("\(weekday)요일")
+              .accessibilityAddTraits(.isHeader)
           }
 
           ForEach(heatmap.days) { day in
@@ -260,6 +273,7 @@ struct HistoryMonthlyHeatmapView: View {
           .foregroundStyle(AppColor.moruTextSecondary)
       }
     }
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.heatmap")
   }
 

@@ -2,13 +2,12 @@
 //  TodayRoutineProgressCard.swift
 //  Moru
 //
-//  Created by Codex on 7/9/26.
-//
 
 import SwiftUI
 
 struct TodayRoutineProgressCard: View {
   let progress: HomeProgressState
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
     MoruCard(
@@ -21,7 +20,7 @@ struct TodayRoutineProgressCard: View {
         ZStack {
           Circle()
             .stroke(AppColor.orange150, lineWidth: 8)
-            .frame(width: 88, height: 88)
+            .frame(width: progressRingSize, height: progressRingSize)
 
           Circle()
             .trim(from: 0, to: progress.progress)
@@ -30,7 +29,7 @@ struct TodayRoutineProgressCard: View {
               style: StrokeStyle(lineWidth: 8, lineCap: .round)
             )
             .rotationEffect(.degrees(-90))
-            .frame(width: 88, height: 88)
+            .frame(width: progressRingSize, height: progressRingSize)
 
           VStack(spacing: AppSpacing.xxs) {
             Text(progress.percentText)
@@ -48,8 +47,19 @@ struct TodayRoutineProgressCard: View {
           .foregroundStyle(AppColor.moruTextSecondary)
       }
       .frame(maxWidth: .infinity)
-      .frame(height: 128)
+      .frame(
+        minHeight: cardMinimumHeight,
+        maxHeight: dynamicTypeSize.isAccessibilitySize ? nil : cardMinimumHeight
+      )
     }
+  }
+
+  private var progressRingSize: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? 144 : 88
+  }
+
+  private var cardMinimumHeight: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? 200 : 128
   }
 
   private var progressGradient: LinearGradient {

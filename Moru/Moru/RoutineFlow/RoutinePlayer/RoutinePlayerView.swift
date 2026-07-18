@@ -5,12 +5,32 @@
 
 import Foundation
 import SwiftUI
+enum RoutinePlayerAccessibility {
+  static let stepTitle = "routinePlayer.step.title"
+  static let input = "routinePlayer.input"
+  static let stepTitleLabel = "오늘의 루틴"
+  static func inputLabel(for step: RoutineStep) -> String {
+    step.title
+  }
+}
 
 struct RoutinePlayerView: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var viewModel: RoutinePlayerViewModel
 
   init(viewModel: RoutinePlayerViewModel) {
     _viewModel = State(initialValue: viewModel)
+  }
+
+  private var topBarButtonFrame: CGSize? {
+    guard !dynamicTypeSize.isAccessibilitySize else {
+      return nil
+    }
+    return CGSize(width: 56, height: 40)
+  }
+
+  private var topBarButtonMinimumHeight: CGFloat? {
+    dynamicTypeSize.isAccessibilitySize ? 44 : nil
   }
 
   var body: some View {
@@ -133,12 +153,17 @@ struct RoutinePlayerView: View {
       progressSection
         .padding(.top, 24)
 
-      Spacer()
-
-      stepContent(for: step)
-        .id(step.id)
-
-      Spacer()
+      GeometryReader { proxy in
+        ScrollView {
+          stepContent(for: step)
+            .id(step.id)
+            .frame(
+              maxWidth: .infinity,
+              minHeight: proxy.size.height
+            )
+        }
+        .scrollIndicators(.hidden)
+      }
 
       Button {
         viewModel.requestSkipStep()
@@ -154,7 +179,7 @@ struct RoutinePlayerView: View {
       .padding(.horizontal, 40)
       .padding(.bottom, 36)
     }
-    .padding(.top, 24)
+    .safeAreaPadding(.top, 24)
     .disabled(viewModel.isStepInteractionDisabled)
     .onAppear {
       viewModel.runnableContentDidAppear()
@@ -197,16 +222,30 @@ struct RoutinePlayerView: View {
         Text("닫기")
           .font(AppFont.body1NormalMedium)
           .foregroundStyle(AppColor.gray350)
-          .frame(width: 56, height: 40)
+          .fixedSize(
+            horizontal: dynamicTypeSize.isAccessibilitySize,
+            vertical: dynamicTypeSize.isAccessibilitySize
+          )
+          .frame(
+            width: topBarButtonFrame?.width,
+            height: topBarButtonFrame?.height
+          )
+          .frame(minHeight: topBarButtonMinimumHeight)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
 
       Spacer()
 
-      Text("오늘의 루틴")
+      Text(RoutinePlayerAccessibility.stepTitleLabel)
         .font(AppFont.body1NormalSemiBold)
         .foregroundStyle(AppColor.gray600)
+        .lineLimit(2)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(1)
+        .accessibilityIdentifier(RoutinePlayerAccessibility.stepTitle)
+        .accessibilityLabel(RoutinePlayerAccessibility.stepTitleLabel)
 
       Spacer()
 
@@ -216,7 +255,15 @@ struct RoutinePlayerView: View {
         Text("종료")
           .font(AppFont.body1NormalMedium)
           .foregroundStyle(AppColor.gray350)
-          .frame(width: 56, height: 40)
+          .fixedSize(
+            horizontal: dynamicTypeSize.isAccessibilitySize,
+            vertical: dynamicTypeSize.isAccessibilitySize
+          )
+          .frame(
+            width: topBarButtonFrame?.width,
+            height: topBarButtonFrame?.height
+          )
+          .frame(minHeight: topBarButtonMinimumHeight)
           .contentShape(Rectangle())
       }
       .buttonStyle(.plain)

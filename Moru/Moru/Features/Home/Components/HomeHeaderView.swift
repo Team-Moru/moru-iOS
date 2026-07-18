@@ -1,9 +1,3 @@
-//
-//  HomeHeaderView.swift
-//  Moru
-//
-//  Created by Codex on 7/9/26.
-//
 
 import SwiftUI
 
@@ -18,9 +12,9 @@ struct HomeHeaderView: View {
         .opacity(0.8)
         .blur(radius: 12)
         .scaleEffect(1.2)
-        .frame(width: 380, height: 380)
+        .frame(width: 300, height: 300)
         .frame(maxWidth: .infinity, alignment: .center)
-        .offset(y: -80)
+        .offset(y: -55)
         .allowsHitTesting(false)
 
       VStack(alignment: .leading, spacing: AppSpacing.sm) {
@@ -34,10 +28,10 @@ struct HomeHeaderView: View {
           .foregroundStyle(AppColor.moruTextSecondary)
       }
       .padding(.horizontal, AppSpacing.md)
-      .padding(.bottom, 15)
+      .padding(.bottom, 8)
     }
     .frame(maxWidth: .infinity)
-    .frame(height: 400)
+    .frame(minHeight: 320)
   }
 }
 

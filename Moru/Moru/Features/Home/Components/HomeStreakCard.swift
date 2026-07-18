@@ -2,14 +2,13 @@
 //  HomeStreakCard.swift
 //  Moru
 //
-//  Created by Codex on 7/9/26.
-//
 
 import SwiftUI
 
 struct HomeStreakCard: View {
 
   let streak: HomeStreakState
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   struct WeekdayAccessibilityConfiguration: Equatable {
     let label: String
@@ -33,7 +32,7 @@ struct HomeStreakCard: View {
       shadowY: 0
     ) {
       VStack(spacing: AppSpacing.xs) {
-        MoruFireIcon(size: 32)
+        MoruFireIcon(size: flameIconSize)
 
         HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xxs) {
           Text("\(streak.currentDays)")
@@ -45,26 +44,24 @@ struct HomeStreakCard: View {
             .foregroundStyle(AppColor.moruTextPrimary)
         }
 
-        HStack(spacing: AppSpacing.six) {
-          ForEach(streak.weekdays) { weekday in
-            let accessibility = Self.weekdayAccessibility(for: weekday)
-
-            VStack(spacing: AppSpacing.xxs) {
-              Circle()
-                .fill(
-                  weekday.isCompleted
-                    ? AppColor.orange350
-                    : AppColor.babyBlue100
-                )
-                .frame(width: 14, height: 14)
-
-              Text(weekday.label)
-                .font(AppFont.caption1Medium)
-                .foregroundStyle(AppColor.moruTextSecondary)
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: AppSpacing.six) {
+            ForEach(streak.weekdays) { weekday in
+              weekdayCell(weekday)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(accessibility.label)
-            .accessibilityValue(accessibility.value)
+          }
+          .fixedSize(horizontal: true, vertical: false)
+
+          LazyVGrid(
+            columns: Array(
+              repeating: GridItem(.flexible(), spacing: AppSpacing.six),
+              count: 4
+            ),
+            spacing: AppSpacing.xs
+          ) {
+            ForEach(streak.weekdays) { weekday in
+              weekdayCell(weekday)
+            }
           }
         }
 
@@ -77,8 +74,43 @@ struct HomeStreakCard: View {
           .clipShape(Capsule())
       }
       .frame(maxWidth: .infinity)
-      .frame(height: 128)
+      .frame(
+        minHeight: cardMinimumHeight,
+        maxHeight: dynamicTypeSize.isAccessibilitySize ? nil : cardMinimumHeight
+      )
     }
+  }
+  private func weekdayCell(_ weekday: HomeWeekdayState) -> some View {
+    let accessibility = Self.weekdayAccessibility(for: weekday)
+
+    return VStack(spacing: AppSpacing.xxs) {
+      Circle()
+        .fill(
+          weekday.isCompleted
+            ? AppColor.orange350
+            : AppColor.babyBlue100
+        )
+        .frame(width: weekdayMarkerSize, height: weekdayMarkerSize)
+
+      Text(weekday.label)
+        .font(AppFont.caption1Medium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(accessibility.label)
+    .accessibilityValue(accessibility.value)
+  }
+
+  private var flameIconSize: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? 44 : 32
+  }
+
+  private var weekdayMarkerSize: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? 20 : 14
+  }
+
+  private var cardMinimumHeight: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? 208 : 128
   }
 }
 

@@ -1,9 +1,3 @@
-//
-//  ProfileView.swift
-//  Moru
-//
-//  Created by Codex on 7/18/26.
-//
 
 import SwiftUI
 
@@ -16,8 +10,18 @@ struct ProfileView: View {
   @State private var isResetConfirmationPresented = false
 
   static let rootAccessibilityIdentifier = "profile.root"
-  static let rootAccessibilityLabel = "마이 프로필과 설정"
+  static let rootAccessibilityLabel = "마이"
   static let localResetDescription = "이 기기에 저장된 로컬 데이터를 초기화합니다."
+  static let nameAccessibilityIdentifier = "profile.name"
+  static let alarmStatusAccessibilityIdentifier = "profile.alarm.status"
+  static let resetAccessibilityIdentifier = "profile.reset"
+  static let voiceChooserAccessibilityIdentifier = "profile.voice.chooser"
+  static let voiceSelectionListAccessibilityIdentifier = "voice.selection.list"
+  static let notificationOnlyDowngradeDescription = "현재는 기기 알림으로 알려드려요."
+
+  static func voicePreviewAccessibilityIdentifier(for voice: VoiceProfile) -> String {
+    "voice.preview.\(voice.id)"
+  }
 
   init(viewModel: ProfileViewModel) {
     _viewModel = State(initialValue: viewModel)
@@ -39,6 +43,7 @@ struct ProfileView: View {
       .navigationTitle("마이")
       .navigationBarTitleDisplayMode(.large)
     }
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
     .accessibilityLabel(Self.rootAccessibilityLabel)
     .task {
@@ -125,6 +130,8 @@ struct ProfileView: View {
           Text(content.profile.displayName)
             .font(AppFont.body1NormalSemiBold)
             .foregroundStyle(AppColor.moruTextPrimary)
+            .lineLimit(2)
+            .layoutPriority(1)
 
           Spacer()
 
@@ -137,6 +144,7 @@ struct ProfileView: View {
       .buttonStyle(.plain)
       .accessibilityLabel("표시 이름, \(content.profile.displayName)")
       .accessibilityHint("표시 이름을 변경합니다.")
+      .accessibilityIdentifier(Self.nameAccessibilityIdentifier)
     }
   }
 
@@ -156,6 +164,8 @@ struct ProfileView: View {
       .buttonStyle(.borderedProminent)
       .tint(AppColor.moruBlue)
       .accessibilityHint("기기에서 사용할 수 있는 목소리를 선택합니다.")
+      .accessibilityLabel("목소리 선택")
+      .accessibilityIdentifier(Self.voiceChooserAccessibilityIdentifier)
 
       if let notice = viewModel.pendingVoiceNotice(in: content) {
         ProfileMessageCard(message: notice, isSuccess: true) {
@@ -186,36 +196,36 @@ struct ProfileView: View {
       Text("알람 상태")
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
-      Text("현재는 기기 알림으로 알려드려요.")
-        .font(AppFont.caption1Medium)
+
+      Text(Self.notificationOnlyDowngradeDescription)
+        .font(AppFont.label1NormalMedium)
         .foregroundStyle(AppColor.moruTextSecondary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.notificationOnlyDowngradeDescription)
+
+      Text(Self.alarmStatusMessage(for: viewModel.alarmStatus))
+        .font(AppFont.body1NormalMedium)
+        .foregroundStyle(AppColor.moruTextPrimary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier(Self.alarmStatusAccessibilityIdentifier)
+        .accessibilityLabel(Self.alarmStatusMessage(for: viewModel.alarmStatus))
+        .accessibilityHint(Self.alarmStatusAccessibilityHint(for: viewModel.alarmStatus))
 
       switch viewModel.alarmStatus {
       case .configured:
-        Text(Self.alarmStatusMessage(for: viewModel.alarmStatus))
-          .font(AppFont.body1NormalMedium)
-          .foregroundStyle(AppColor.moruTextPrimary)
+        EmptyView()
       case .permissionOff:
-        Text(Self.alarmStatusMessage(for: viewModel.alarmStatus))
-          .font(AppFont.body1NormalMedium)
-          .foregroundStyle(AppColor.moruTextPrimary)
-
         Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
           .buttonStyle(.bordered)
           .accessibilityHint("기기 설정에서 알림 권한을 엽니다.")
+          .accessibilityLabel("설정 열기")
       case .repairRequired:
-        Text(Self.alarmStatusMessage(for: viewModel.alarmStatus))
-          .font(AppFont.body1NormalMedium)
-          .foregroundStyle(AppColor.moruTextPrimary)
-
         Button("다시 시도", action: viewModel.alarmRepairRetryButtonDidTap)
           .buttonStyle(.bordered)
           .accessibilityHint("알림 재예약을 다시 시도합니다.")
+          .accessibilityLabel("다시 시도")
       case .unavailable:
-        Text(Self.alarmStatusMessage(for: viewModel.alarmStatus))
-          .font(AppFont.body1NormalMedium)
-          .foregroundStyle(AppColor.moruTextPrimary)
-          .accessibilityHint("알람 권한이 꺼졌다는 확인 정보가 아직 없어요.")
+        EmptyView()
       }
     }
   }
@@ -227,7 +237,7 @@ struct ProfileView: View {
         .foregroundStyle(AppColor.moruTextPrimary)
 
       Text(Self.localResetDescription)
-        .font(AppFont.caption1Medium)
+        .font(AppFont.label1NormalMedium)
         .foregroundStyle(AppColor.moruTextSecondary)
 
       Button("로컬 데이터 초기화", role: .destructive) {
@@ -236,10 +246,12 @@ struct ProfileView: View {
       .buttonStyle(.bordered)
       .disabled(viewModel.isResetInProgress || !viewModel.isResetAvailable)
       .accessibilityHint(viewModel.resetAccessibilityHint)
+      .accessibilityLabel("로컬 데이터 초기화")
+      .accessibilityIdentifier(Self.resetAccessibilityIdentifier)
 
       if let resetAvailabilityMessage = viewModel.resetAvailabilityMessage {
         Text(resetAvailabilityMessage)
-          .font(AppFont.caption1Medium)
+          .font(AppFont.label1NormalMedium)
           .foregroundStyle(AppColor.moruTextSecondary)
       }
 
@@ -247,7 +259,7 @@ struct ProfileView: View {
         HStack(spacing: AppSpacing.xs) {
           ProgressView()
           Text("초기화하고 있어요.")
-            .font(AppFont.caption1Medium)
+            .font(AppFont.label1NormalMedium)
             .foregroundStyle(AppColor.moruTextSecondary)
         }
         .accessibilityElement(children: .combine)
@@ -287,6 +299,18 @@ struct ProfileView: View {
       "알람을 다시 예약해야 해요"
     case .unavailable:
       "알람 상태를 확인할 수 없어요"
+    }
+  }
+  static func alarmStatusAccessibilityHint(for status: ProfileAlarmStatus) -> String {
+    switch status {
+    case .configured:
+      "기기 알림으로 알람 상태를 알려드려요."
+    case .permissionOff:
+      "기기 설정에서 알림 권한을 켜야 해요."
+    case .repairRequired:
+      "알림 재예약을 다시 시도할 수 있어요."
+    case .unavailable:
+      "알람 권한이 꺼졌다는 확인 정보가 아직 없어요."
     }
   }
 }
@@ -349,12 +373,12 @@ private struct ProfileDisplayNameEditor: View {
           "앞뒤 공백을 제외한 1자에서 20자까지 입력할 수 있어요.\n"
             + "이모지와 제어 문자는 사용할 수 없어요."
         )
-          .font(AppFont.caption1Medium)
+          .font(AppFont.label1NormalMedium)
           .foregroundStyle(AppColor.moruTextSecondary)
 
         if let errorMessage {
           Text(errorMessage)
-            .font(AppFont.caption1Medium)
+            .font(AppFont.label1NormalMedium)
             .foregroundStyle(AppColor.coral300)
             .accessibilityLabel(errorMessage)
         }
@@ -390,6 +414,7 @@ private struct ProfileVoiceSelectionView: View {
   let onDisappear: @MainActor () -> Void
 
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
     NavigationStack {
@@ -400,12 +425,13 @@ private struct ProfileVoiceSelectionView: View {
 
         if let voiceErrorMessage {
           Text(voiceErrorMessage)
-            .font(AppFont.caption1Medium)
+            .font(AppFont.label1NormalMedium)
             .foregroundStyle(AppColor.coral300)
             .accessibilityLabel(voiceErrorMessage)
         }
       }
-      .accessibilityIdentifier("voice.selection.list")
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier(ProfileView.voiceSelectionListAccessibilityIdentifier)
       .navigationTitle("목소리 선택")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -428,6 +454,8 @@ private struct ProfileVoiceSelectionView: View {
           Text(voice.displayName)
             .font(AppFont.label1NormalSemiBold)
             .foregroundStyle(AppColor.moruTextPrimary)
+            .lineLimit(2)
+            .layoutPriority(1)
 
           Text(isAvailable ? "사용 가능" : "목소리 설치 필요")
             .font(AppFont.caption1Medium)
@@ -443,30 +471,58 @@ private struct ProfileVoiceSelectionView: View {
         }
       }
 
-      HStack(spacing: AppSpacing.sm) {
-        Button(isSelected ? "선택됨" : "선택") {
-          onSelect(voice)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(AppColor.moruBlue)
-        .disabled(!isAvailable || isSelected)
-        .accessibilityLabel("\(voice.displayName) 목소리 선택")
-        .accessibilityHint(
-          voiceSelectionHint(isAvailable: isAvailable, isSelected: isSelected)
-        )
-
-        Button("미리 듣기") {
-          onPreview(voice)
-        }
-        .buttonStyle(.bordered)
-        .disabled(!isAvailable)
-        .accessibilityLabel("\(voice.displayName) 목소리 미리 듣기")
-        .accessibilityHint(voicePreviewHint(isAvailable: isAvailable))
-      }
+      voiceActions(for: voice, isAvailable: isAvailable, isSelected: isSelected)
     }
     .padding(.vertical, AppSpacing.xxs)
   }
 
+  @ViewBuilder
+  private func voiceActions(
+    for voice: VoiceProfile,
+    isAvailable: Bool,
+    isSelected: Bool
+  ) -> some View {
+    if dynamicTypeSize.isAccessibilitySize {
+      VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        voiceSelectionButton(for: voice, isAvailable: isAvailable, isSelected: isSelected)
+        voicePreviewButton(for: voice, isAvailable: isAvailable)
+      }
+    } else {
+      HStack(spacing: AppSpacing.sm) {
+        voiceSelectionButton(for: voice, isAvailable: isAvailable, isSelected: isSelected)
+        voicePreviewButton(for: voice, isAvailable: isAvailable)
+      }
+    }
+  }
+
+  private func voiceSelectionButton(
+    for voice: VoiceProfile,
+    isAvailable: Bool,
+    isSelected: Bool
+  ) -> some View {
+    Button(isSelected ? "선택됨" : "선택") {
+      onSelect(voice)
+    }
+    .buttonStyle(.borderedProminent)
+    .tint(AppColor.moruBlue)
+    .disabled(!isAvailable || isSelected)
+    .accessibilityLabel("\(voice.displayName) 목소리 선택")
+    .accessibilityHint(voiceSelectionHint(isAvailable: isAvailable, isSelected: isSelected))
+  }
+
+  private func voicePreviewButton(
+    for voice: VoiceProfile,
+    isAvailable: Bool
+  ) -> some View {
+    Button("미리 듣기") {
+      onPreview(voice)
+    }
+    .buttonStyle(.bordered)
+    .disabled(!isAvailable)
+    .accessibilityIdentifier(ProfileView.voicePreviewAccessibilityIdentifier(for: voice))
+    .accessibilityLabel("\(voice.displayName) 목소리 미리 듣기")
+    .accessibilityHint(voicePreviewHint(isAvailable: isAvailable))
+  }
   private func voiceSelectionHint(isAvailable: Bool, isSelected: Bool) -> String {
     if isSelected {
       return "현재 선택된 목소리예요."
@@ -492,7 +548,7 @@ private struct ProfileMessageCard<Action: View>: View {
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
       Text(message)
-        .font(AppFont.caption1Medium)
+        .font(AppFont.label1NormalMedium)
         .foregroundStyle(isSuccess ? AppColor.moruTextPrimary : AppColor.coral300)
 
       action()
