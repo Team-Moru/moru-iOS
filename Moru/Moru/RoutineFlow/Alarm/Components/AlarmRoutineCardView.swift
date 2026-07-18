@@ -24,11 +24,15 @@ struct AlarmRoutineCardView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity)
-        .alarmGlass(
-            in: RoundedRectangle(cornerRadius: 24, style: .continuous),
-            tint: AppColor.grayWhite,
-            opacity: 0.18,
-            strokeOpacity: 0.8
+        .glassEffect(
+            .regular
+                .tint(
+                    AppColor.grayWhite.opacity(0.18)
+                ),
+            in: RoundedRectangle(
+                cornerRadius: 24,
+                style: .continuous
+            )
         )
     }
 }

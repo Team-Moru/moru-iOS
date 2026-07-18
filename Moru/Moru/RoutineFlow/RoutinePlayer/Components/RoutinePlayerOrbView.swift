@@ -12,7 +12,7 @@ struct RoutinePlayerOrbView: View {
         Image(AppImage.moruImageHalo)
             .resizable()
             .scaledToFit()
-            .frame(width: 254, height: 254)
+            .frame(width: 296, height: 296)
             .accessibilityHidden(true)
     }
 }

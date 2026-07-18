@@ -15,7 +15,7 @@ struct RoutineStepCompletedView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            Image(AppIcon.moruStatusCompleted)
+            Image(AppImage.moruRoutineCompleted)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 190, height: 190)
@@ -37,7 +37,7 @@ struct RoutineStepCompletedView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 24)
+        
         .task {
             do {
                 try await Task.sleep(
@@ -53,4 +53,14 @@ struct RoutineStepCompletedView: View {
             }
         }
     }
+}
+
+#Preview {
+    RoutineStepCompletedView(
+        stepTitle: "잠자리 정리하기",
+        onFinish: {
+            print("다음 루틴 단계로 이동")
+        }
+    )
+    .background(AppColor.babyBlue50.ignoresSafeArea())
 }

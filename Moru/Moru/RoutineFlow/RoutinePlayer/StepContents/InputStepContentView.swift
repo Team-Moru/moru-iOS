@@ -36,7 +36,7 @@ struct InputStepContentView: View {
                 .frame(height: 44)
 
             VStack(spacing: 8) {
-                Text("음성 안내 중")
+                Text("AI 음성 안내 중")
                     .font(AppFont.caption1SemiBold)
                     .foregroundStyle(AppColor.gray350)
 
@@ -62,8 +62,8 @@ struct InputStepContentView: View {
     private var stepTitleSection: some View {
         VStack(spacing: 8) {
             Text(step.title)
-                .font(AppFont.title2Bold)
-                .foregroundStyle(AppColor.gray600)
+                .font(AppFont.heading1SemiBold)
+                .foregroundStyle(AppColor.gray550)
                 .multilineTextAlignment(.center)
 
             Text("입력형 · \(estimatedMinuteText)")
@@ -85,8 +85,8 @@ struct InputStepContentView: View {
         }
 
         return """
-        오늘의 다짐을 크게 말해봐요!
-        어떤 하루를 만들고 싶나요?
+        이불 정리가 끝났나요? 
+        완료됐으면 말해주세요.
         """
     }
 }
