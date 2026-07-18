@@ -11,6 +11,10 @@ struct HomeStreakCard: View {
 
   let streak: HomeStreakState
 
+  static func weekdayAccessibilityValue(isCompleted: Bool) -> String {
+    isCompleted ? "완료" : "미완료"
+  }
+
   var body: some View {
     MoruCard(
       backgroundColor: AppColor.babyBlue50,
@@ -46,6 +50,11 @@ struct HomeStreakCard: View {
                 .font(AppFont.caption1Medium)
                 .foregroundStyle(AppColor.moruTextSecondary)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(weekday.label)
+            .accessibilityValue(
+              Self.weekdayAccessibilityValue(isCompleted: weekday.isCompleted)
+            )
           }
         }
 

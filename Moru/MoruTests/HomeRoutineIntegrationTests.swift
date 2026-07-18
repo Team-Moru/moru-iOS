@@ -200,14 +200,51 @@ final class HomeRoutineIntegrationTests: XCTestCase {
 
     for outcome in outcomes {
       var receivedRoutineID: UUID?
-      let boundary = HomeRoutineLaunchBoundary { request in
-        receivedRoutineID = request.routineID
-        return outcome
-      }
+      let boundary = HomeRoutineLaunchBoundary(
+        onStartRoutine: { request in
+          receivedRoutineID = request.routineID
+          return outcome
+        },
+        announceAccessibility: { _ in }
+      )
 
       XCTAssertEqual(boundary.start(routineID: routineID), outcome)
       XCTAssertEqual(receivedRoutineID, routineID)
     }
+  }
+  @MainActor
+  func testRoutineLaunchBoundaryOnlyAnnouncesAndProvidesMessageWhenBusy() {
+    let routineID = fixtureUUID("00000000-0000-0000-0000-000000000009")
+
+    for outcome in [RoutineLaunchResult.started, .alreadyRunning, .busy] {
+      var announcements: [String] = []
+      let boundary = HomeRoutineLaunchBoundary(
+        onStartRoutine: { _ in outcome },
+        announceAccessibility: { announcements.append($0) }
+      )
+
+      XCTAssertEqual(boundary.start(routineID: routineID), outcome)
+      XCTAssertEqual(
+        HomeRoutineLaunchBoundary.message(for: outcome),
+        outcome == .busy ? HomeRoutineLaunchBoundary.busyMessage : nil
+      )
+      XCTAssertEqual(
+        announcements,
+        outcome == .busy ? [HomeRoutineLaunchBoundary.busyMessage] : []
+      )
+    }
+  }
+
+  @MainActor
+  func testHomeStreakCardWeekdayAccessibilityValueReflectsCompletion() {
+    XCTAssertEqual(
+      HomeStreakCard.weekdayAccessibilityValue(isCompleted: true),
+      "완료"
+    )
+    XCTAssertEqual(
+      HomeStreakCard.weekdayAccessibilityValue(isCompleted: false),
+      "미완료"
+    )
   }
 
   @MainActor

@@ -5,18 +5,45 @@
 //  Created by Codex on 7/9/26.
 //
 
+import Accessibility
 import SwiftUI
 
-struct HomeRoutineLaunchBoundary {
-  private let onStartRoutine: RoutineLaunchHandler
+typealias HomeAccessibilityAnnouncementHandler = @MainActor (String) -> Void
 
-  init(onStartRoutine: @escaping RoutineLaunchHandler) {
+struct HomeRoutineLaunchBoundary {
+  static let busyMessage = "다른 루틴이 실행 중이에요."
+
+  private let onStartRoutine: RoutineLaunchHandler
+  private let announceAccessibility: HomeAccessibilityAnnouncementHandler
+
+  init(
+    onStartRoutine: @escaping RoutineLaunchHandler,
+    announceAccessibility: @escaping HomeAccessibilityAnnouncementHandler = { message in
+      AccessibilityNotification.Announcement(message).post()
+    }
+  ) {
     self.onStartRoutine = onStartRoutine
+    self.announceAccessibility = announceAccessibility
   }
 
   @MainActor
   func start(routineID: UUID) -> RoutineLaunchResult {
-    onStartRoutine(RoutineLaunchRequest(routineID: routineID))
+    let result = onStartRoutine(RoutineLaunchRequest(routineID: routineID))
+
+    if result == .busy {
+      announceAccessibility(Self.busyMessage)
+    }
+
+    return result
+  }
+
+  static func message(for result: RoutineLaunchResult) -> String? {
+    switch result {
+    case .started, .alreadyRunning:
+      nil
+    case .busy:
+      busyMessage
+    }
   }
 }
 
@@ -101,14 +128,8 @@ struct HomeView: View {
           return
         }
 
-        routineLaunchMessage = nil
-
-        switch routineLaunchBoundary.start(routineID: routineID) {
-        case .started, .alreadyRunning:
-          break
-        case .busy:
-          routineLaunchMessage = "다른 루틴이 실행 중이에요."
-        }
+        let result = routineLaunchBoundary.start(routineID: routineID)
+        routineLaunchMessage = HomeRoutineLaunchBoundary.message(for: result)
       }
     )
     .padding(.horizontal, AppSpacing.screenHorizontal)
