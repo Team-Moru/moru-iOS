@@ -9,7 +9,7 @@ import SwiftUI
 
 @MainActor
 protocol HistoryFlowBuilding: AnyObject {
-  func make() -> AnyView
+  func make(destination: Binding<HistoryDestination?>) -> AnyView
 }
 
 @MainActor
@@ -20,10 +20,11 @@ final class DefaultHistoryFlowBuilder: HistoryFlowBuilding {
     self.loadHistoryUseCase = loadHistoryUseCase
   }
 
-  func make() -> AnyView {
+  func make(destination: Binding<HistoryDestination?>) -> AnyView {
     AnyView(
       HistoryView(
-        viewModel: HistoryViewModel(loadHistoryUseCase: loadHistoryUseCase)
+        viewModel: HistoryViewModel(loadHistoryUseCase: loadHistoryUseCase),
+        destination: destination
       )
     )
   }

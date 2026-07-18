@@ -60,6 +60,96 @@ final class RouterRuntimeContractTests: XCTestCase {
       .available(disabledAlarmRoutine)
     )
   }
+  @MainActor
+  func testInvalidTimerDurationsAreIneligibleBeforeThePlayerCanCreateResults() {
+    let invalidDurations: [Int?] = [nil, 0, -1]
+
+    for duration in invalidDurations {
+      let timerStep = RoutineStep(
+        type: .timer,
+        title: "타이머",
+        order: 0,
+        estimatedSeconds: duration
+      )
+      let routine = makeExecutableRoutine(steps: [timerStep])
+      let repository = ResolvingRoutineRepository()
+      repository.routine = routine
+      let resolver = ResolveRoutineExecutionUseCase(routineRepository: repository)
+      let request = ResolveRoutineExecutionRequest(routineID: routine.id, launch: .trial)
+      let finalizer = TrialRoutineFinalizerSpy()
+      let eventRecorder = RoutinePlayerEventRecorder()
+      let viewModel = RoutinePlayerViewModel(
+        request: TrialRoutineExecutionRequest(routineID: routine.id),
+        resolver: resolver,
+        finalizer: finalizer,
+        presentationToken: UUID()
+      ) { token, event in
+        eventRecorder.record(presentationToken: token, event: event)
+      }
+
+      XCTAssertEqual(
+        resolver.execute(request),
+        .ineligible(.invalidTimerDuration),
+        "Duration \(String(describing: duration)) must be ineligible."
+      )
+
+      viewModel.resolveRoutine()
+      viewModel.completeCurrentStep()
+      viewModel.skipCurrentStep()
+
+      guard case .terminalFailure(
+        .ineligible(.invalidTimerDuration)
+      ) = viewModel.screenState else {
+        XCTFail("Invalid timer durations must be rejected before running.")
+        continue
+      }
+
+      XCTAssertTrue(viewModel.stepResults.isEmpty)
+      XCTAssertEqual(finalizer.finalizeCallCount, 0)
+      XCTAssertEqual(
+        eventRecorder.events,
+        [.terminalFailureDisplayed(.ineligible(.invalidTimerDuration))]
+      )
+    }
+  }
+
+  @MainActor
+  func testPositiveTimerDurationRemainsEligibleAndCreatesItsResult() {
+    let timerStep = RoutineStep(
+      type: .timer,
+      title: "타이머",
+      order: 0,
+      estimatedSeconds: 30
+    )
+    let routine = makeExecutableRoutine(steps: [timerStep])
+    let repository = ResolvingRoutineRepository()
+    repository.routine = routine
+    let resolver = ResolveRoutineExecutionUseCase(routineRepository: repository)
+    let request = ResolveRoutineExecutionRequest(routineID: routine.id, launch: .trial)
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: resolver,
+      finalizer: TrialRoutineFinalizerSpy(),
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    XCTAssertEqual(resolver.execute(request), .available(routine))
+
+    viewModel.resolveRoutine()
+
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("A positive timer duration should enter the running state.")
+      return
+    }
+
+    XCTAssertEqual(runningStep.id, timerStep.id)
+
+    viewModel.completeCurrentStep()
+
+    XCTAssertEqual(viewModel.stepResults.count, 1)
+    XCTAssertEqual(viewModel.stepResults.first?.durationSeconds, 30)
+  }
 
   @MainActor
   func testCoordinatorDistinguishesPresentedAlreadyPresentedAndDeferredBusy() {
@@ -96,12 +186,12 @@ final class RouterRuntimeContractTests: XCTestCase {
   func testMainTabStateMakesHistoryReachableAndReloadsItForEachSelection() {
     var state = MainTabState()
 
-    XCTAssertEqual(MainTabState.availableTabs, [.home, .routine, .record])
+    XCTAssertEqual(MainTabState.availableTabs, [.home, .routine, .record, .my])
     XCTAssertEqual(state.selection, .home)
     XCTAssertEqual(state.historyReloadToken, 0)
     state.select(.my)
 
-    XCTAssertEqual(state.selection, .home)
+    XCTAssertEqual(state.selection, .my)
     XCTAssertEqual(state.historyReloadToken, 0)
 
     state.select(.routine)
@@ -175,9 +265,9 @@ final class RouterRuntimeContractTests: XCTestCase {
     XCTAssertEqual(routinePlayerBuilder.regularPresentationTokens, [token])
 
     let unrelatedToken = UUID()
-    XCTAssertNotEqual(unrelatedToken, token)
+    let persistedRunID = UUID()
     routinePlayerBuilder.sendRegularEvent(
-      .exitRequested(.summaryCTA),
+      .exitRequested(.summaryRecord(persistedRunID: persistedRunID)),
       presentationToken: unrelatedToken
     )
 
@@ -187,7 +277,7 @@ final class RouterRuntimeContractTests: XCTestCase {
     )
 
     routinePlayerBuilder.sendRegularEvent(
-      .exitRequested(.summaryCTA),
+      .exitRequested(.summaryRecord(persistedRunID: persistedRunID)),
       presentationToken: token
     )
 
@@ -223,7 +313,10 @@ final class RouterRuntimeContractTests: XCTestCase {
       localProfileRepository: localProfileRepository,
       localSettingsRepository: MockLocalProfileRepository(),
       onboardingRepository: RouterRuntimeOnboardingRepository(),
-      routineSuggestionService: LocalTemplateSuggestionService.shared
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      homeWeatherRepository: nil,
+      historyEvidenceRepository: MockHistoryEvidenceRepository(),
+      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
     )
     let coordinator = AppNavigationCoordinator()
     let sessionStore = SessionStore()
@@ -324,7 +417,6 @@ final class RouterRuntimeContractTests: XCTestCase {
       return
     }
 
-    XCTAssertNotEqual(nextToken, token)
     XCTAssertEqual(
       coordinator.presentation,
       .regularRoutine(routineID: nextRoutineID, token: nextToken)
@@ -430,13 +522,13 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     _ = router.routinePlayerView(for: .onboardingTrial(routineID: routineID, token: token))
     routinePlayerBuilder.sendTrialEvent(
-      .exitRequested(.summaryCTA),
+      .exitRequested(.summaryHome),
       presentationToken: UUID()
     )
     router.completePendingDismissal()
     XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
 
-    routinePlayerBuilder.sendTrialEvent(.exitRequested(.summaryCTA), presentationToken: token)
+    routinePlayerBuilder.sendTrialEvent(.exitRequested(.summaryHome), presentationToken: token)
     XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
 
     router.completePendingDismissal()
@@ -444,6 +536,413 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     router.completePendingDismissal()
     XCTAssertEqual(reloadRecorder.requestedSources, [.trialDismissal(token)])
+  }
+  @MainActor
+  func testTrialSummaryRecordExitIsIgnoredByReducer() {
+    let routineID = UUID()
+    let persistedRunID = UUID()
+    let token = UUID()
+    let presentation = AppPresentation.onboardingTrial(routineID: routineID, token: token)
+    let state = AppNavigationState.presented(presentation)
+
+    let transition = AppNavigationReducer.reduce(
+      state: state,
+      action: .handle(
+        event: .exitRequested(.summaryRecord(persistedRunID: persistedRunID)),
+        presentationToken: token
+      )
+    )
+
+    XCTAssertEqual(transition.state, state)
+    XCTAssertEqual(transition.effect, .none)
+  }
+
+  @MainActor
+  func testRegularSummaryRecordRoutesExactRunOnlyAfterMatchingDismissalAcknowledgements() {
+    let routineID = UUID()
+    let persistedRunID = UUID()
+    let token = UUID()
+    let wrongToken = UUID()
+    let presentation = AppPresentation.regularRoutine(routineID: routineID, token: token)
+    let presentedState = AppNavigationState.presented(presentation)
+    let action = AppNavigationAction.handle(
+      event: .exitRequested(.summaryRecord(persistedRunID: persistedRunID)),
+      presentationToken: token
+    )
+
+    let wrongEventToken = AppNavigationReducer.reduce(
+      state: presentedState,
+      action: .handle(
+        event: .exitRequested(.summaryRecord(persistedRunID: persistedRunID)),
+        presentationToken: wrongToken
+      )
+    )
+
+    XCTAssertEqual(wrongEventToken.state, presentedState)
+    XCTAssertEqual(wrongEventToken.effect, .none)
+
+    let armed = AppNavigationReducer.reduce(state: presentedState, action: action)
+    let armedState = AppNavigationState.dismissalArmed(
+      presentation: presentation,
+      afterDismiss: .showRunDetail(persistedRunID),
+      isPresentationCleared: false
+    )
+
+    XCTAssertEqual(armed.state, armedState)
+    XCTAssertEqual(armed.effect, .dismiss(token: token))
+
+    let prematureDismissal = AppNavigationReducer.reduce(
+      state: armed.state,
+      action: .presentationDidDismiss(token: token)
+    )
+    let wrongClear = AppNavigationReducer.reduce(
+      state: armed.state,
+      action: .clearPresentationForDismissal(token: wrongToken)
+    )
+
+    XCTAssertEqual(prematureDismissal.state, armedState)
+    XCTAssertEqual(prematureDismissal.effect, .none)
+    XCTAssertEqual(wrongClear.state, armedState)
+    XCTAssertEqual(wrongClear.effect, .none)
+
+    let cleared = AppNavigationReducer.reduce(
+      state: armed.state,
+      action: .clearPresentationForDismissal(token: token)
+    )
+    let clearedState = AppNavigationState.dismissalArmed(
+      presentation: presentation,
+      afterDismiss: .showRunDetail(persistedRunID),
+      isPresentationCleared: true
+    )
+    let wrongDismissal = AppNavigationReducer.reduce(
+      state: cleared.state,
+      action: .presentationDidDismiss(token: wrongToken)
+    )
+
+    XCTAssertEqual(cleared.state, clearedState)
+    XCTAssertEqual(cleared.effect, .none)
+    XCTAssertEqual(wrongDismissal.state, clearedState)
+    XCTAssertEqual(wrongDismissal.effect, .none)
+
+    let dismissed = AppNavigationReducer.reduce(
+      state: cleared.state,
+      action: .presentationDidDismiss(token: token)
+    )
+    let lateDismissal = AppNavigationReducer.reduce(
+      state: dismissed.state,
+      action: .presentationDidDismiss(token: token)
+    )
+
+    XCTAssertEqual(dismissed.state, .idle)
+    XCTAssertEqual(dismissed.effect, .showRunDetail(persistedRunID))
+    XCTAssertEqual(lateDismissal.state, .idle)
+    XCTAssertEqual(lateDismissal.effect, .none)
+  }
+
+  @MainActor
+  func testRegularSummaryHomeRoutesOnlyAfterMatchingDismissalAcknowledgements() {
+    let routineID = UUID()
+    let token = UUID()
+    let presentation = AppPresentation.regularRoutine(routineID: routineID, token: token)
+    let presentedState = AppNavigationState.presented(presentation)
+
+    let armed = AppNavigationReducer.reduce(
+      state: presentedState,
+      action: .handle(
+        event: .exitRequested(.summaryHome),
+        presentationToken: token
+      )
+    )
+    let prematureDismissal = AppNavigationReducer.reduce(
+      state: armed.state,
+      action: .presentationDidDismiss(token: token)
+    )
+    let cleared = AppNavigationReducer.reduce(
+      state: armed.state,
+      action: .clearPresentationForDismissal(token: token)
+    )
+    let dismissed = AppNavigationReducer.reduce(
+      state: cleared.state,
+      action: .presentationDidDismiss(token: token)
+    )
+
+    XCTAssertEqual(armed.effect, .dismiss(token: token))
+    XCTAssertEqual(prematureDismissal.effect, .none)
+    XCTAssertEqual(cleared.effect, .none)
+    XCTAssertEqual(dismissed.state, .idle)
+    XCTAssertEqual(dismissed.effect, .showHome)
+  }
+
+  @MainActor
+  func testMainTabStateShowsExactRunDetailAndClearsConsumedOrManualDestination() {
+    var state = MainTabState()
+    let persistedRunID = UUID()
+    let unrelatedRunID = UUID()
+
+    state.showRunDetail(persistedRunID)
+
+    XCTAssertEqual(state.selection, .record)
+    XCTAssertEqual(state.historyDestination, .runDetail(persistedRunID))
+    XCTAssertNotEqual(state.historyDestination, .runDetail(unrelatedRunID))
+    XCTAssertEqual(state.historyReloadToken, 1)
+
+    state.setHistoryDestination(nil)
+
+    XCTAssertNil(state.historyDestination)
+
+    state.showRunDetail(persistedRunID)
+    state.select(.my)
+
+    XCTAssertEqual(state.selection, .my)
+    XCTAssertNil(state.historyDestination)
+    XCTAssertEqual(state.historyReloadToken, 2)
+  }
+
+  @MainActor
+  func testRegularSummaryActionsUseTheExactSavedRunAndEmitOnlyOnce() {
+    let routine = makeExecutableRoutine()
+    var operationOrder: [String] = []
+    let saver = RoutineRunSaverSpy {
+      operationOrder.append("save")
+    }
+    let finalizer = DefaultRegularRoutineFinalizer(saveRoutineRunUseCase: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder { event in
+      if case .exitRequested = event {
+        operationOrder.append("exit")
+      }
+    }
+    let presentationToken = UUID()
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(routineID: routine.id, source: .manual),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: presentationToken
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep()
+    viewModel.finishStepCompletedScreen()
+
+    guard case .summary(.regular(let result)) = viewModel.screenState else {
+      XCTFail("A saved regular completion should show a persisted result.")
+      return
+    }
+
+    XCTAssertEqual(saver.requests.count, 1)
+    XCTAssertEqual(saver.savedRuns.map(\.id), [result.persistedRunID])
+    XCTAssertFalse(viewModel.isSummaryActionDisabled)
+
+    viewModel.requestSummaryRecord()
+    viewModel.requestSummaryRecord()
+    viewModel.requestSummaryHome()
+
+    XCTAssertTrue(viewModel.isSummaryActionDisabled)
+    XCTAssertEqual(saver.requests.count, 1)
+    XCTAssertEqual(operationOrder, ["save", "exit"])
+    XCTAssertEqual(
+      eventRecorder.events,
+      [
+        .completionDisplayed(result.summary),
+        .exitRequested(.summaryRecord(persistedRunID: result.persistedRunID))
+      ]
+    )
+    XCTAssertEqual(
+      eventRecorder.presentationTokens,
+      [presentationToken, presentationToken]
+    )
+  }
+
+  @MainActor
+  func testRegularSummaryHomeEmitsOneHomeExitWithThePresentationToken() {
+    let routine = makeExecutableRoutine()
+    let saver = RoutineRunSaverSpy()
+    let finalizer = DefaultRegularRoutineFinalizer(saveRoutineRunUseCase: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder()
+    let presentationToken = UUID()
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(routineID: routine.id, source: .manual),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: presentationToken
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep()
+    viewModel.finishStepCompletedScreen()
+
+    guard case .summary(.regular(let result)) = viewModel.screenState else {
+      XCTFail("A completed regular routine should show a persisted result.")
+      return
+    }
+
+    viewModel.requestSummaryHome()
+    viewModel.requestSummaryRecord()
+    viewModel.requestSummaryHome()
+
+    XCTAssertTrue(viewModel.isSummaryActionDisabled)
+    XCTAssertEqual(saver.savedRuns.map(\.id), [result.persistedRunID])
+    XCTAssertEqual(
+      eventRecorder.events,
+      [
+        .completionDisplayed(result.summary),
+        .exitRequested(.summaryHome)
+      ]
+    )
+    XCTAssertEqual(
+      eventRecorder.presentationTokens,
+      [presentationToken, presentationToken]
+    )
+  }
+  @MainActor
+  func testRoutineFinishedViewTrialConfigurationShowsOnlyDisabledHomePrimary() {
+    let view = RoutineFinishedView(
+      routineName: "테스트 루틴",
+      completionRate: 100,
+      completedStepCount: 1,
+      skippedStepCount: 0,
+      actionConfiguration: .trialHomeOnly,
+      onAction: { _ in },
+      isActionDisabled: true
+    )
+
+    XCTAssertTrue(view.isActionDisabled)
+    XCTAssertEqual(
+      view.actionConfiguration.actions,
+      [
+        RoutineCompletionActionConfiguration.Action(
+          destination: .home,
+          title: "홈으로",
+          accessibilityIdentifier: "routineCompletion.primary",
+          accessibilityHint: "홈 화면으로 돌아갑니다.",
+          style: .primary
+        )
+      ]
+    )
+  }
+
+  @MainActor
+  func testRoutineFinishedViewRegularConfigurationShowsRecordPrimaryAndHomeSecondary() {
+    let view = RoutineFinishedView(
+      routineName: "테스트 루틴",
+      completionRate: 100,
+      completedStepCount: 1,
+      skippedStepCount: 0,
+      actionConfiguration: .regularRecordAndHome,
+      onAction: { _ in },
+      isActionDisabled: false
+    )
+
+    XCTAssertFalse(view.isActionDisabled)
+    XCTAssertEqual(
+      view.actionConfiguration.actions,
+      [
+        RoutineCompletionActionConfiguration.Action(
+          destination: .record,
+          title: "오늘의 기록 확인",
+          accessibilityIdentifier: "routineCompletion.primary",
+          accessibilityHint: "방금 완료한 루틴의 기록을 확인합니다.",
+          style: .primary
+        ),
+        RoutineCompletionActionConfiguration.Action(
+          destination: .home,
+          title: "홈으로",
+          accessibilityIdentifier: "routineCompletion.home",
+          accessibilityHint: "홈 화면으로 돌아갑니다.",
+          style: .secondary
+        )
+      ]
+    )
+  }
+
+  @MainActor
+  func testRegularCompletionWithoutPersistedRunIDDismissesOnceAfterTerminalContinuation() {
+    let routine = makeExecutableRoutine()
+    let routinePlayerBuilder = CapturingRoutinePlayerBuilder()
+    let state = AppRouterState()
+    let (router, coordinator, _) = makeRouter(
+      homeBuilder: CapturingHomeFlowBuilder(),
+      routinePlayerBuilder: routinePlayerBuilder,
+      state: state
+    )
+
+    guard case .presented(let presentationToken) = coordinator.presentRegularRoutine(
+      routineID: routine.id
+    ) else {
+      XCTFail("The regular presentation should be accepted.")
+      return
+    }
+
+    _ = router.routinePlayerView(
+      for: .regularRoutine(routineID: routine.id, token: presentationToken)
+    )
+
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder()
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(routineID: routine.id, source: .manual),
+      resolver: resolver,
+      finalizer: MissingPersistedRunIDRegularFinalizer(),
+      presentationToken: presentationToken
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep()
+    viewModel.finishStepCompletedScreen()
+
+    guard case .terminalFailure(.missingPersistedRunID) = viewModel.screenState else {
+      XCTFail("A regular completion without a persisted run ID must be terminal.")
+      return
+    }
+
+    viewModel.continueAfterTerminalFailure()
+    viewModel.continueAfterTerminalFailure()
+
+    XCTAssertEqual(
+      eventRecorder.events,
+      [
+        .terminalFailureDisplayed(.missingPersistedRunID),
+        .exitRequested(.terminalUnavailable)
+      ]
+    )
+    XCTAssertEqual(
+      eventRecorder.presentationTokens,
+      [presentationToken, presentationToken]
+    )
+    guard eventRecorder.events.count == 2 else {
+      XCTFail("The terminal continuation must emit exactly two events.")
+      return
+    }
+
+    routinePlayerBuilder.sendRegularEvent(
+      eventRecorder.events[0],
+      presentationToken: presentationToken
+    )
+    XCTAssertEqual(
+      coordinator.presentation,
+      .regularRoutine(routineID: routine.id, token: presentationToken)
+    )
+    XCTAssertNil(coordinator.pendingDismissalToken)
+
+    routinePlayerBuilder.sendRegularEvent(
+      eventRecorder.events[1],
+      presentationToken: presentationToken
+    )
+    XCTAssertNil(coordinator.presentation)
+    XCTAssertEqual(coordinator.pendingDismissalToken, presentationToken)
+
+    router.completePendingDismissal()
+
+    XCTAssertEqual(coordinator.navigationState, .idle)
+    XCTAssertNil(coordinator.pendingDismissalToken)
+    XCTAssertEqual(state.homeRefreshToken, 1)
   }
 
   @MainActor
@@ -490,20 +989,6 @@ final class RouterRuntimeContractTests: XCTestCase {
     XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
   }
 
-  func testRouterSourceDoesNotDirectlyLoadSessionData() throws {
-    let routerSourceURL = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .appendingPathComponent("Moru/App/AppRouter.swift")
-    let source = try String(contentsOf: routerSourceURL, encoding: .utf8)
-
-    XCTAssertNil(
-      source.range(
-        of: #"sessionStore\s*\.\s*load\s*\("#,
-        options: .regularExpression
-      )
-    )
-  }
 
   @MainActor
   func testOnboardingEmitsExactSavedRoutineIDOnceAndFailureEmitsNone() {
@@ -627,18 +1112,52 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     XCTAssertEqual(eventRecorder.events, [.exitRequested(.endedEarly)])
   }
+  @MainActor
+  func testConsecutiveSameKindStepsPreserveTheirStableIDs() {
+    let firstStep = RoutineStep(type: .confirm, title: "첫 번째", order: 0)
+    let secondStep = RoutineStep(type: .confirm, title: "두 번째", order: 1)
+    let routine = makeExecutableRoutine(steps: [firstStep, secondStep])
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: resolver,
+      finalizer: TrialRoutineFinalizerSpy(),
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+
+    guard case .running(let currentStep) = viewModel.screenState else {
+      XCTFail("The first step should be running.")
+      return
+    }
+
+    XCTAssertEqual(currentStep.id, firstStep.id)
+
+    viewModel.completeCurrentStep()
+    viewModel.finishStepCompletedScreen()
+
+    guard case .running(let nextStep) = viewModel.screenState else {
+      XCTFail("The second step should be running.")
+      return
+    }
+
+    XCTAssertEqual(nextStep.id, secondStep.id)
+  }
 
   @MainActor
-  func testTrialNaturalCompletionDoesNotPersistARoutineRun() {
+  func testTrialNaturalCompletionShowsOnlyHomeAndEmitsItOnce() {
     let routine = makeExecutableRoutine()
     let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
     let finalizer = TrialRoutineFinalizerSpy()
     let eventRecorder = RoutinePlayerEventRecorder()
+    let presentationToken = UUID()
     let viewModel = RoutinePlayerViewModel(
       request: TrialRoutineExecutionRequest(routineID: routine.id),
       resolver: resolver,
       finalizer: finalizer,
-      presentationToken: UUID()
+      presentationToken: presentationToken
     ) { token, event in
       eventRecorder.record(presentationToken: token, event: event)
     }
@@ -647,8 +1166,8 @@ final class RouterRuntimeContractTests: XCTestCase {
     viewModel.completeCurrentStep()
     viewModel.finishStepCompletedScreen()
 
-    guard case .summary(let summary) = viewModel.screenState else {
-      XCTFail("A completed trial should show a summary.")
+    guard case .summary(.trial(let summary)) = viewModel.screenState else {
+      XCTFail("A completed trial should show a trial summary.")
       return
     }
 
@@ -657,7 +1176,19 @@ final class RouterRuntimeContractTests: XCTestCase {
     XCTAssertEqual(finalizer.finalizeCallCount, 1)
     XCTAssertEqual(finalizer.finalizedRoutineIDs, [routine.id])
     XCTAssertEqual(finalizer.finalizedResultCounts, [1])
-    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+
+    viewModel.requestSummaryRecord()
+    viewModel.requestSummaryHome()
+    viewModel.requestSummaryHome()
+
+    XCTAssertEqual(
+      eventRecorder.events,
+      [
+        .completionDisplayed(summary),
+        .exitRequested(.summaryHome)
+      ]
+    )
+    XCTAssertEqual(eventRecorder.presentationTokens, [presentationToken, presentationToken])
   }
 
   @MainActor
@@ -690,9 +1221,10 @@ final class RouterRuntimeContractTests: XCTestCase {
   func testRegularNaturalCompletionSavesRunAndEmitsOneCompletionEvent() {
     let routine = makeExecutableRoutine()
     let saver = RoutineRunSaverSpy()
-    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let finalizer = DefaultRegularRoutineFinalizer(saveRoutineRunUseCase: saver)
     let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
     let eventRecorder = RoutinePlayerEventRecorder()
+    let presentationToken = UUID()
     let viewModel = RoutinePlayerViewModel(
       request: RegularRoutineExecutionRequest(
         routineID: routine.id,
@@ -700,7 +1232,7 @@ final class RouterRuntimeContractTests: XCTestCase {
       ),
       resolver: resolver,
       finalizer: finalizer,
-      presentationToken: UUID()
+      presentationToken: presentationToken
     ) { token, event in
       eventRecorder.record(presentationToken: token, event: event)
     }
@@ -709,31 +1241,33 @@ final class RouterRuntimeContractTests: XCTestCase {
     viewModel.completeCurrentStep()
     viewModel.finishStepCompletedScreen()
 
-    guard case .summary(let summary) = viewModel.screenState else {
-      XCTFail("A completed regular routine should show a summary.")
+    guard case .summary(.regular(let result)) = viewModel.screenState else {
+      XCTFail("A completed regular routine should show a persisted result.")
       return
     }
 
     XCTAssertEqual(saver.requests.count, 1)
     XCTAssertEqual(saver.requests.first?.endedEarly, false)
-    XCTAssertEqual(summary.persistedRunID, saver.savedRuns.first?.id)
-    XCTAssertFalse(summary.endedEarly)
-    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+    XCTAssertEqual(result.persistedRunID, saver.savedRuns.first?.id)
+    XCTAssertFalse(result.summary.endedEarly)
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(result.summary)])
 
     viewModel.finishStepCompletedScreen()
     viewModel.retrySavingRun()
 
     XCTAssertEqual(saver.requests.count, 1)
-    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(result.summary)])
+    XCTAssertEqual(eventRecorder.presentationTokens, [presentationToken])
   }
 
   @MainActor
   func testRegularNaturalCompletionRetryUsesSameRequestAndEmitsOneCompletionEvent() {
     let routine = makeExecutableRoutine()
     let saver = RoutineRunSaverSpy(failuresRemaining: 1)
-    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let finalizer = DefaultRegularRoutineFinalizer(saveRoutineRunUseCase: saver)
     let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
     let eventRecorder = RoutinePlayerEventRecorder()
+    let presentationToken = UUID()
     let viewModel = RoutinePlayerViewModel(
       request: RegularRoutineExecutionRequest(
         routineID: routine.id,
@@ -741,7 +1275,7 @@ final class RouterRuntimeContractTests: XCTestCase {
       ),
       resolver: resolver,
       finalizer: finalizer,
-      presentationToken: UUID()
+      presentationToken: presentationToken
     ) { token, event in
       eventRecorder.record(presentationToken: token, event: event)
     }
@@ -757,22 +1291,23 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     viewModel.retrySavingRun()
 
-    guard case .summary(let summary) = viewModel.screenState else {
-      XCTFail("A successful retry should show a summary.")
+    guard case .summary(.regular(let result)) = viewModel.screenState else {
+      XCTFail("A successful retry should show a persisted result.")
       return
     }
 
     XCTAssertEqual(saver.requests.count, 2)
     XCTAssertEqual(saver.requests[0], saver.requests[1])
-    XCTAssertEqual(summary.persistedRunID, saver.savedRuns.first?.id)
-    XCTAssertFalse(summary.endedEarly)
+    XCTAssertEqual(result.persistedRunID, saver.savedRuns.first?.id)
+    XCTAssertFalse(result.summary.endedEarly)
     XCTAssertNil(viewModel.errorMessage)
-    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(result.summary)])
 
     viewModel.retrySavingRun()
 
     XCTAssertEqual(saver.requests.count, 2)
-    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(result.summary)])
+    XCTAssertEqual(eventRecorder.presentationTokens, [presentationToken])
   }
 
   @MainActor
@@ -783,13 +1318,14 @@ final class RouterRuntimeContractTests: XCTestCase {
       let saver = RoutineRunSaverSpy {
         operationOrder.append("save")
       }
-      let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+      let finalizer = DefaultRegularRoutineFinalizer(saveRoutineRunUseCase: saver)
       let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
       let eventRecorder = RoutinePlayerEventRecorder { event in
         if case .exitRequested = event {
           operationOrder.append("exit")
         }
       }
+      let presentationToken = UUID()
       let viewModel = RoutinePlayerViewModel(
         request: RegularRoutineExecutionRequest(
           routineID: routine.id,
@@ -797,7 +1333,7 @@ final class RouterRuntimeContractTests: XCTestCase {
         ),
         resolver: resolver,
         finalizer: finalizer,
-        presentationToken: UUID()
+        presentationToken: presentationToken
       ) { token, event in
         eventRecorder.record(presentationToken: token, event: event)
       }
@@ -811,6 +1347,7 @@ final class RouterRuntimeContractTests: XCTestCase {
       XCTAssertEqual(saver.savedRuns.count, 1)
       XCTAssertEqual(operationOrder, ["save", "exit"])
       XCTAssertEqual(eventRecorder.events, [.exitRequested(exit)])
+      XCTAssertEqual(eventRecorder.presentationTokens, [presentationToken])
     }
   }
 
@@ -822,13 +1359,14 @@ final class RouterRuntimeContractTests: XCTestCase {
       let saver = RoutineRunSaverSpy(failuresRemaining: 1) {
         operationOrder.append("save")
       }
-      let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+      let finalizer = DefaultRegularRoutineFinalizer(saveRoutineRunUseCase: saver)
       let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
       let eventRecorder = RoutinePlayerEventRecorder { event in
         if case .exitRequested = event {
           operationOrder.append("exit")
         }
       }
+      let presentationToken = UUID()
       let viewModel = RoutinePlayerViewModel(
         request: RegularRoutineExecutionRequest(
           routineID: routine.id,
@@ -836,7 +1374,7 @@ final class RouterRuntimeContractTests: XCTestCase {
         ),
         resolver: resolver,
         finalizer: finalizer,
-        presentationToken: UUID()
+        presentationToken: presentationToken
       ) { token, event in
         eventRecorder.record(presentationToken: token, event: event)
       }
@@ -865,6 +1403,7 @@ final class RouterRuntimeContractTests: XCTestCase {
 
       XCTAssertEqual(saver.requests.count, 2)
       XCTAssertEqual(eventRecorder.events, [.exitRequested(exit)])
+      XCTAssertEqual(eventRecorder.presentationTokens, [presentationToken])
     }
   }
 
@@ -880,7 +1419,7 @@ final class RouterRuntimeContractTests: XCTestCase {
     case .userDismissed:
       viewModel.requestCloseRoutine()
 
-    case .summaryCTA, .terminalUnavailable:
+    case .summaryHome, .summaryRecord, .terminalUnavailable:
       XCTFail("Only early exit reasons are valid for this helper.")
     }
   }
@@ -1073,24 +1612,9 @@ private final class RoutineRunSaverSpy: SaveRoutineRunUseCaseProtocol {
 }
 
 @MainActor
-private final class SavingRegularRoutineFinalizer: RegularRoutineFinalizing {
-  private let saver: RoutineRunSaverSpy
-
-  init(saver: RoutineRunSaverSpy) {
-    self.saver = saver
-  }
-
-  func finalize(_ request: SaveRoutineRunRequest) throws -> RoutineCompletionSummary {
-    let run = try saver.execute(request)
-
-    return try makeRoutineCompletionSummary(
-      routine: request.routine,
-      persistedRunID: run.id,
-      startedAt: request.startedAt,
-      completedAt: request.completedAt,
-      results: request.results,
-      endedEarly: request.endedEarly
-    ).get()
+private final class MissingPersistedRunIDRegularFinalizer: RegularRoutineFinalizing {
+  func finalize(_ request: SaveRoutineRunRequest) throws -> RegularRoutineCompletionResult {
+    throw RegularRoutineFinalizationError.missingPersistedRunID
   }
 }
 

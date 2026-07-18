@@ -2,7 +2,6 @@
 //  AppNavigationCoordinator.swift
 //  Moru
 //
-//  Created by Codex on 7/13/26.
 //
 
 import Combine
@@ -56,6 +55,8 @@ enum AppNavigationEffect: Equatable {
   case none
   case dismiss(token: UUID)
   case reloadSession(SessionReloadSource)
+  case showHome
+  case showRunDetail(UUID)
 }
 
 enum AppNavigationState: Equatable {
@@ -157,7 +158,7 @@ enum AppNavigationReducer {
     presentationToken: UUID,
     from state: AppNavigationState
   ) -> AppNavigationTransition {
-    guard case .exitRequested = event,
+    guard case .exitRequested(let exit) = event,
           case .presented(let presentation) = state,
           presentation.id == presentationToken else {
       return AppNavigationTransition(state: state, effect: .none)
@@ -165,10 +166,20 @@ enum AppNavigationReducer {
 
     let afterDismiss: AppNavigationEffect
 
-    switch presentation {
-    case .onboardingTrial:
+    switch (presentation, exit) {
+    case (.onboardingTrial, .summaryRecord(persistedRunID: _)):
+      return AppNavigationTransition(state: state, effect: .none)
+
+    case (.onboardingTrial, _):
       afterDismiss = .reloadSession(.trialDismissal(presentation.id))
-    case .regularRoutine:
+
+    case (.regularRoutine, .summaryRecord(let persistedRunID)):
+      afterDismiss = .showRunDetail(persistedRunID)
+
+    case (.regularRoutine, .summaryHome):
+      afterDismiss = .showHome
+
+    case (.regularRoutine, _):
       afterDismiss = .none
     }
 

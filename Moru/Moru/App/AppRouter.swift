@@ -2,18 +2,43 @@
 //  AppRouter.swift
 //  Moru
 //
-//  Created by Codex on 7/6/26.
 //
 
 import Combine
 import SwiftUI
+import UIKit
 
 @MainActor
 final class AppRouterState: ObservableObject {
   @Published private(set) var homeRefreshToken = 0
+  @Published private(set) var mainTabState = MainTabState()
 
   func refreshHome() {
     homeRefreshToken += 1
+  }
+
+  func selectMainTab(_ tab: MoruTabItem) {
+    var nextState = mainTabState
+    nextState.select(tab)
+    mainTabState = nextState
+  }
+
+  func showHome() {
+    var nextState = mainTabState
+    nextState.showHome()
+    mainTabState = nextState
+  }
+
+  func showRunDetail(_ runID: UUID) {
+    var nextState = mainTabState
+    nextState.showRunDetail(runID)
+    mainTabState = nextState
+  }
+
+  func setHistoryDestination(_ destination: HistoryDestination?) {
+    var nextState = mainTabState
+    nextState.setHistoryDestination(destination)
+    mainTabState = nextState
   }
 }
 
@@ -22,7 +47,7 @@ struct AppRouter: View {
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
-  @StateObject private var observedState: AppRouterState
+  @ObservedObject private var state: AppRouterState
 
   private let dependencies: DependencyContainer
   private let onboardingBuilder: any OnboardingFlowBuilding
@@ -30,7 +55,6 @@ struct AppRouter: View {
   private let homeBuilder: any HomeFlowBuilding
   private let requestSessionReload: @MainActor (SessionReloadSource) -> Void
   private let retrySessionReloadAction: @MainActor () -> Void
-  private let stateReference: AppRouterState
 
   @MainActor
   init(
@@ -41,8 +65,8 @@ struct AppRouter: View {
     routinePlayerBuilder: any RoutinePlayerBuilding,
     requestSessionReload: @escaping @MainActor (SessionReloadSource) -> Void,
     retrySessionReload: @escaping @MainActor () -> Void,
-    homeBuilder: (any HomeFlowBuilding)? = nil,
-    state: AppRouterState? = nil
+    homeBuilder: any HomeFlowBuilding,
+    state: AppRouterState
   ) {
     _sessionStore = ObservedObject(wrappedValue: sessionStore)
     _coordinator = ObservedObject(wrappedValue: coordinator)
@@ -51,27 +75,11 @@ struct AppRouter: View {
     self.routinePlayerBuilder = routinePlayerBuilder
     self.requestSessionReload = requestSessionReload
     retrySessionReloadAction = retrySessionReload
-    let routerState = state ?? AppRouterState()
-    _observedState = StateObject(wrappedValue: routerState)
-    stateReference = routerState
-    if let homeBuilder {
-      self.homeBuilder = homeBuilder
-    } else {
-      self.homeBuilder = DefaultHomeFlowBuilder(
-        loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
-          routineRepository: dependencies.routineRepository,
-          routineRunRepository: dependencies.routineRunRepository,
-          localProfileRepository: dependencies.localProfileRepository
-        ),
-        routineSettingContentFactory: {
-          AnyView(RoutineSettingView(dependencies: dependencies))
-        }
-      )
-    }
+    _state = ObservedObject(wrappedValue: state)
+    self.homeBuilder = homeBuilder
   }
 
   var body: some View {
-    let _ = observedState.homeRefreshToken
     Group {
       switch sessionStore.phase {
       case .loading:
@@ -168,21 +176,88 @@ struct AppRouter: View {
   }
   @MainActor
   var mainTabView: MainTabView {
-
     let historyBuilder = DefaultHistoryFlowBuilder(
       loadHistoryUseCase: LoadHistoryUseCase(
-        routineRunRepository: dependencies.routineRunRepository
+        routineRunRepository: dependencies.routineRunRepository,
+        historyEvidenceRepository: dependencies.historyEvidenceRepository,
+        currentResetGeneration: { sessionStore.snapshot?.resetGeneration }
       )
     )
+    let profileSettingsUseCase = ProfileSettingsUseCase(
+      localProfileRepository: dependencies.localProfileRepository,
+      localSettingsRepository: dependencies.localSettingsRepository,
+      voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
+    )
+    let profileBuilder = DefaultProfileFlowBuilder(
+      profileSettingsUseCase: profileSettingsUseCase,
+      voicePreviewPlayer: AVSpeechVoicePreviewPlayer(
+        availabilityProbe: dependencies.voiceAvailabilityProbe
+      ),
+      alarmStatusProvider: { profileAlarmStatus },
+      resetPerformer: AlarmResetPendingProfileLocalResetPerformer(coordinator: coordinator),
+      onOpenSettings: {
+        openSystemSettings()
+      },
+      onRetryAlarmRepair: {
+        retrySessionReload()
+      }
+    )
+    let mainTabState = state.mainTabState
 
     return MainTabView(
       home: homeBuilder.make(
         onStartRoutine: handleRegularRoutineLaunch,
-        refreshToken: stateReference.homeRefreshToken
+        refreshToken: state.homeRefreshToken
       ),
       routineSetting: RoutineSettingView(dependencies: dependencies),
-      history: historyBuilder.make()
+      history: historyBuilder.make(destination: historyDestinationBinding),
+      profile: profileBuilder.make(),
+      selection: mainTabSelectionBinding,
+      historyReloadToken: mainTabState.historyReloadToken
     )
+  }
+
+  private var mainTabSelectionBinding: Binding<MoruTabItem> {
+    Binding(
+      get: { state.mainTabState.selection },
+      set: { tab in
+        state.selectMainTab(tab)
+      }
+    )
+  }
+
+  private var historyDestinationBinding: Binding<HistoryDestination?> {
+    Binding(
+      get: { state.mainTabState.historyDestination },
+      set: { destination in
+        state.setHistoryDestination(destination)
+      }
+    )
+  }
+
+  private var profileAlarmStatus: ProfileAlarmStatus {
+    guard let platformStates = sessionStore.snapshot?.platformStates,
+          !platformStates.isEmpty else {
+      return .unavailable
+    }
+
+    if platformStates.contains(where: { $0.state == .repairRequired }) {
+      return .repairRequired
+    }
+
+    if platformStates.contains(where: { $0.state == .configured }) {
+      return .configured
+    }
+
+    return .unavailable
+  }
+
+  private func openSystemSettings() {
+    guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else {
+      return
+    }
+
+    UIApplication.shared.open(settingsURL)
   }
 
   @MainActor
@@ -202,6 +277,10 @@ struct AppRouter: View {
       presentationBinding.wrappedValue = nil
     case .reloadSession(let source):
       requestSessionReload(source)
+    case .showHome:
+      state.showHome()
+    case .showRunDetail(let runID):
+      state.showRunDetail(runID)
     }
   }
 
@@ -217,7 +296,7 @@ struct AppRouter: View {
     }
 
     let effect = coordinator.presentationDidDismiss()
-    stateReference.refreshHome()
+    state.refreshHome()
     retryDeferredOnboardingTrial()
     execute(effect)
   }
@@ -234,6 +313,31 @@ struct AppRouter: View {
     case .deferredBusy:
       break
     }
+  }
+}
+
+private enum ProfileLocalResetUnavailableError: Error {
+  case alarmResetRequired
+}
+
+@MainActor
+private final class AlarmResetPendingProfileLocalResetPerformer: ProfileLocalResetPerforming {
+  private let coordinator: AppNavigationCoordinator
+
+  init(coordinator: AppNavigationCoordinator) {
+    self.coordinator = coordinator
+  }
+
+  func availability() -> LocalResetAvailability {
+    if coordinator.presentation != nil || coordinator.pendingDismissalToken != nil {
+      return .blockedByActiveRoutine
+    }
+
+    return .blockedByAlarmReset
+  }
+
+  func reset() async throws {
+    throw ProfileLocalResetUnavailableError.alarmResetRequired
   }
 }
 

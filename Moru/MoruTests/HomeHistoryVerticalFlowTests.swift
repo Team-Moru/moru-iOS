@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 import XCTest
 @testable import Moru
 
@@ -46,7 +47,9 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
         localProfileRepository: VerticalFlowProfileRepository(),
         calendar: calendar,
         now: { now }
-      )
+      ),
+      weatherRepository: nil,
+      weatherService: nil
     )
 
     homeViewModel.load()
@@ -72,12 +75,12 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     regularPlayer.completeCurrentStep()
     regularPlayer.finishStepCompletedScreen()
 
-    guard case .summary(let regularSummary) = regularPlayer.screenState else {
+    guard case .summary(.regular(let regularCompletion)) = regularPlayer.screenState else {
       XCTFail("A regular Home launch should finish with a saved summary.")
       return
     }
 
-    let savedRunID = try XCTUnwrap(regularSummary.persistedRunID)
+    let savedRunID = regularCompletion.persistedRunID
     let savedRuns = try runRepository.fetchRuns()
     let savedRun = try XCTUnwrap(savedRuns.first)
     XCTAssertEqual(savedRunID, savedRun.id)
@@ -95,7 +98,7 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     trialPlayer.completeCurrentStep()
     trialPlayer.finishStepCompletedScreen()
 
-    guard case .summary(let trialSummary) = trialPlayer.screenState else {
+    guard case .summary(.trial(let trialSummary)) = trialPlayer.screenState else {
       XCTFail("A trial launch should finish with a summary.")
       return
     }
@@ -105,6 +108,8 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
 
     let overview = try LoadHistoryUseCase(
       routineRunRepository: runRepository,
+      historyEvidenceRepository: MockHistoryEvidenceRepository(),
+      currentResetGeneration: { nil },
       calendar: calendar,
       now: { now }
     ).load()
@@ -201,6 +206,141 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     XCTAssertEqual(useCase.loadCount, 1)
   }
 
+  @MainActor
+  func testHistoryViewModelKeepsWakeOnlyOverviewAsContent() {
+    let expectedOverview = makeHistoryOverview(
+      recentDays: [],
+      wakeMetrics: .insufficient(observationCount: 1)
+    )
+    let viewModel = HistoryViewModel(
+      loadHistoryUseCase: SequencedHistoryLoadUseCase(results: [.success(expectedOverview)])
+    )
+
+    viewModel.load()
+
+    guard case .content(let overview) = viewModel.state else {
+      XCTFail("Wake observations should keep the History dashboard visible.")
+      return
+    }
+
+    XCTAssertEqual(overview, expectedOverview)
+  }
+
+  @MainActor
+  func testHistoryViewModelKeepsHeatmapOnlyOverviewAsContent() {
+    let date = Date(timeIntervalSince1970: 0)
+    let expectedOverview = makeHistoryOverview(
+      recentDays: [],
+      monthlyHeatmap: HistoryMonthlyHeatmap(
+        monthStartDate: date,
+        days: [HistoryHeatmapDay(id: "1970-01-01", date: date, completionRate: 1)]
+      )
+    )
+    let viewModel = HistoryViewModel(
+      loadHistoryUseCase: SequencedHistoryLoadUseCase(results: [.success(expectedOverview)])
+    )
+
+    viewModel.load()
+
+    guard case .content(let overview) = viewModel.state else {
+      XCTFail("Heatmap evidence should keep the History dashboard visible.")
+      return
+    }
+
+    XCTAssertEqual(overview, expectedOverview)
+  }
+
+  @MainActor
+  func testHistoryRunDetailDestinationSelectsExactRunAndConsumesBinding() {
+    let requestedID = UUID()
+    let otherID = UUID()
+    let requestedRun = makeHistoryRun(id: requestedID)
+    let otherRun = makeHistoryRun(id: otherID)
+    let overview = makeHistoryOverview(
+      recentDays: [
+        HistoryDaySummary(
+          date: Date(timeIntervalSince1970: 0),
+          completedRunCount: 2,
+          totalRunCount: 2,
+          completionRate: 1,
+          runs: [otherRun, requestedRun]
+        ),
+      ]
+    )
+    var pendingDestination: HistoryDestination? = .runDetail(requestedID)
+    let destination = Binding<HistoryDestination?>(
+      get: { pendingDestination },
+      set: { pendingDestination = $0 }
+    )
+
+    let resolution = HistoryRunDetailDestinationResolver.resolve(
+      destination: destination,
+      in: overview
+    )
+
+    guard case .selected(let presentation) = resolution else {
+      XCTFail("The requested run should resolve when exactly one matching ID exists.")
+      return
+    }
+
+    XCTAssertEqual(presentation.run, requestedRun)
+    XCTAssertEqual(presentation.calendar, overview.calendar)
+    XCTAssertNil(pendingDestination)
+  }
+
+  @MainActor
+  func testHistoryRunDetailDestinationFailsClosedForMissingAndDuplicateIDs() {
+    let missingID = UUID()
+    let matchingID = UUID()
+    let firstRun = makeHistoryRun(id: matchingID)
+    let duplicateRun = makeHistoryRun(id: matchingID)
+    let missingOverview = makeHistoryOverview(recentDays: [makeHistoryDaySummary()])
+    var missingDestination: HistoryDestination? = .runDetail(missingID)
+    let missingBinding = Binding<HistoryDestination?>(
+      get: { missingDestination },
+      set: { missingDestination = $0 }
+    )
+
+    let missingResolution = HistoryRunDetailDestinationResolver.resolve(
+      destination: missingBinding,
+      in: missingOverview
+    )
+
+    XCTAssertEqual(missingResolution, .missing)
+    XCTAssertEqual(missingDestination, .runDetail(missingID))
+
+    let duplicateOverview = makeHistoryOverview(
+      recentDays: [
+        HistoryDaySummary(
+          date: Date(timeIntervalSince1970: 0),
+          completedRunCount: 1,
+          totalRunCount: 1,
+          completionRate: 1,
+          runs: [firstRun]
+        ),
+        HistoryDaySummary(
+          date: Date(timeIntervalSince1970: 86_400),
+          completedRunCount: 1,
+          totalRunCount: 1,
+          completionRate: 1,
+          runs: [duplicateRun]
+        ),
+      ]
+    )
+    var duplicateDestination: HistoryDestination? = .runDetail(matchingID)
+    let duplicateBinding = Binding<HistoryDestination?>(
+      get: { duplicateDestination },
+      set: { duplicateDestination = $0 }
+    )
+
+    let duplicateResolution = HistoryRunDetailDestinationResolver.resolve(
+      destination: duplicateBinding,
+      in: duplicateOverview
+    )
+
+    XCTAssertEqual(duplicateResolution, .missing)
+    XCTAssertEqual(duplicateDestination, .runDetail(matchingID))
+  }
 }
 
 @MainActor
@@ -238,7 +378,11 @@ private enum HistoryLoadTestError: Error {
   case noResultAvailable
 }
 
-private func makeHistoryOverview(recentDays: [HistoryDaySummary]) -> HistoryOverview {
+private func makeHistoryOverview(
+  recentDays: [HistoryDaySummary],
+  wakeMetrics: HistoryWakeMetrics = .insufficient(observationCount: 0),
+  monthlyHeatmap: HistoryMonthlyHeatmap = .empty
+) -> HistoryOverview {
   let date = Date(timeIntervalSince1970: 0)
 
   return HistoryOverview(
@@ -251,7 +395,9 @@ private func makeHistoryOverview(recentDays: [HistoryDaySummary]) -> HistoryOver
       totalRunCount: 0,
       completionRate: 0,
       dailyCompletionRates: []
-    )
+    ),
+    wakeMetrics: wakeMetrics,
+    monthlyHeatmap: monthlyHeatmap
   )
 }
 
@@ -264,6 +410,18 @@ private func makeHistoryDaySummary() -> HistoryDaySummary {
     runs: []
   )
 }
+private func makeHistoryRun(id: UUID) -> HistoryRun {
+  HistoryRun(
+    id: id,
+    routineName: "동일한 루틴",
+    startedAt: Date(timeIntervalSince1970: 0),
+    completedAt: Date(timeIntervalSince1970: 60),
+    status: .completed,
+    completionRate: 1,
+    stepResults: []
+  )
+}
+
 @MainActor
 private final class VerticalFlowRoutineRepository: RoutineRepository {
   private var routines: [Routine]
@@ -395,10 +553,9 @@ private final class VerticalFlowRegularFinalizer: RegularRoutineFinalizing {
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
   }
 
-  func finalize(_ request: SaveRoutineRunRequest) throws -> RoutineCompletionSummary {
+  func finalize(_ request: SaveRoutineRunRequest) throws -> RegularRoutineCompletionResult {
     let savedRun = try saveRoutineRunUseCase.execute(request)
-
-    return try makeRoutineCompletionSummary(
+    let summary = try makeRoutineCompletionSummary(
       routine: request.routine,
       persistedRunID: savedRun.id,
       startedAt: request.startedAt,
@@ -406,6 +563,12 @@ private final class VerticalFlowRegularFinalizer: RegularRoutineFinalizing {
       results: request.results,
       endedEarly: request.endedEarly
     ).get()
+
+    guard let result = RegularRoutineCompletionResult(summary) else {
+      throw RegularRoutineFinalizationError.missingPersistedRunID
+    }
+
+    return result
   }
 }
 

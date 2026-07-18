@@ -29,7 +29,9 @@ struct MoruApp: App {
             onboardingBuilder: app.onboardingBuilder,
             routinePlayerBuilder: app.routinePlayerBuilder,
             requestSessionReload: launchCoordinator.requestSessionReload,
-            retrySessionReload: launchCoordinator.retrySessionReload
+            retrySessionReload: launchCoordinator.retrySessionReload,
+            homeBuilder: app.homeBuilder,
+            state: app.routerState
           )
         case .bootstrapFailed(let failure), .sessionFailed(_, let failure):
           LaunchFailureView(message: failure.message, onRetry: launchCoordinator.retry)

@@ -40,6 +40,27 @@ enum HomeFailure: Equatable {
   }
 }
 
+enum HomeWeatherError: Error, Equatable {
+  case cacheReadFailed
+  case cacheEraseFailed
+  case cacheWriteFailed
+  case service(HomeWeatherServiceError)
+  case unavailableConfiguration
+}
+
+enum HomeWeatherState: Equatable {
+  case notRequested
+  case requestingPermission
+  case locating(UUID)
+  case loading(UUID)
+  case fresh(HomeWeatherSnapshot)
+  case stale(HomeWeatherSnapshot)
+  case denied
+  case restricted
+  case noFix
+  case unavailable(HomeWeatherError)
+}
+
 enum HomeViewState: Equatable {
   case loading(previousContent: HomeContentState?)
   case content(HomeContentState)
@@ -122,6 +143,7 @@ struct HomeContentState: Equatable {
   var manualRoutines: [HomeRoutineState]
   var todayProgress: HomeProgressState
   var streak: HomeStreakState
+  var weather: HomeWeatherState = .notRequested
 }
 
 struct HomeProgressState: Equatable {
@@ -135,11 +157,13 @@ struct HomeProgressState: Equatable {
     progress: 0
   )
 
+  #if DEBUG
   static let placeholder = HomeProgressState(
     percentText: "100%",
     completedText: "8/8 완료",
     progress: 1
   )
+  #endif
 }
 
 struct HomeStreakState: Equatable {
@@ -153,6 +177,7 @@ struct HomeStreakState: Equatable {
     weekdays: HomeWeekdayState.ordered(completedIDs: [])
   )
 
+  #if DEBUG
   static let placeholder = HomeStreakState(
     currentDays: 12,
     bestDays: 18,
@@ -160,6 +185,7 @@ struct HomeStreakState: Equatable {
       completedIDs: ["sunday", "monday", "tuesday", "wednesday", "thursday"]
     )
   )
+  #endif
 }
 
 struct HomeWeekdayState: Equatable, Identifiable {
@@ -197,6 +223,7 @@ struct HomeRoutineState: Equatable, Identifiable {
   var progress: Double
   var steps: [HomeRoutineStepState]
 
+  #if DEBUG
   static let placeholder = HomeRoutineState(
     id: UUID(),
     title: "기본 루틴",
@@ -211,6 +238,7 @@ struct HomeRoutineState: Equatable, Identifiable {
       HomeRoutineStepState(title: "햇빛 5분 쬐기", detail: "5:02", isCompleted: true),
     ]
   )
+  #endif
 }
 
 struct HomeRoutineStepState: Equatable, Identifiable {

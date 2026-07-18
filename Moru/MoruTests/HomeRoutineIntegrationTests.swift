@@ -138,7 +138,11 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       localProfileRepository: TestProfileRepository(profile: LocalProfile(displayName: "모루")),
       now: { now }
     )
-    let viewModel = HomeViewModel(loadHomeRoutinesUseCase: useCase)
+    let viewModel = HomeViewModel(
+      loadHomeRoutinesUseCase: useCase,
+      weatherRepository: nil,
+      weatherService: nil
+    )
 
     viewModel.load()
 
@@ -178,7 +182,9 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     let viewModel = HomeViewModel(
       loadHomeRoutinesUseCase: SequencedHomeRoutinesUseCase(
         results: [.success(successfulResult), .failure(.unavailable)]
-      )
+      ),
+      weatherRepository: nil,
+      weatherService: nil
     )
 
     viewModel.load()
@@ -215,7 +221,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     }
   }
   @MainActor
-  func testRoutineLaunchBoundaryOnlyAnnouncesAndProvidesMessageWhenBusy() {
+  func testRoutineLaunchBoundaryOnlyAnnouncesAndProvidesFeedbackWhenBusy() {
     let routineID = fixtureUUID("00000000-0000-0000-0000-000000000009")
 
     for outcome in [RoutineLaunchResult.started, .alreadyRunning, .busy] {
@@ -225,32 +231,57 @@ final class HomeRoutineIntegrationTests: XCTestCase {
         announceAccessibility: { announcements.append($0) }
       )
 
-      XCTAssertEqual(boundary.start(routineID: routineID), outcome)
+      let result = boundary.start(routineID: routineID)
+
+      XCTAssertEqual(result, outcome)
       XCTAssertEqual(
-        HomeRoutineLaunchBoundary.message(for: outcome),
+        HomeRoutineLaunchBoundary.message(for: result),
         outcome == .busy ? HomeRoutineLaunchBoundary.busyMessage : nil
       )
       XCTAssertEqual(
         announcements,
         outcome == .busy ? [HomeRoutineLaunchBoundary.busyMessage] : []
       )
+
+      if outcome == .busy {
+        XCTAssertEqual(
+          HomeRoutineLaunchFeedback.configuration(for: result),
+          HomeRoutineLaunchFeedback(
+            visibleMessage: HomeRoutineLaunchBoundary.busyMessage,
+            accessibilityLabel: HomeRoutineLaunchBoundary.busyMessage
+          )
+        )
+      } else {
+        XCTAssertNil(HomeRoutineLaunchFeedback.configuration(for: result))
+      }
     }
   }
 
   @MainActor
-  func testHomeStreakCardWeekdayAccessibilityValueReflectsCompletion() {
+  func testHomeStreakCardWeekdayAccessibilityUsesMondayConfiguration() {
+    let completedMonday = HomeWeekdayState(
+      id: "monday",
+      label: "월",
+      isCompleted: true
+    )
+    let incompleteMonday = HomeWeekdayState(
+      id: "monday",
+      label: "월",
+      isCompleted: false
+    )
+
     XCTAssertEqual(
-      HomeStreakCard.weekdayAccessibilityValue(isCompleted: true),
-      "완료"
+      HomeStreakCard.weekdayAccessibility(for: completedMonday),
+      HomeStreakCard.WeekdayAccessibilityConfiguration(label: "월", value: "완료")
     )
     XCTAssertEqual(
-      HomeStreakCard.weekdayAccessibilityValue(isCompleted: false),
-      "미완료"
+      HomeStreakCard.weekdayAccessibility(for: incompleteMonday),
+      HomeStreakCard.WeekdayAccessibilityConfiguration(label: "월", value: "미완료")
     )
   }
 
   @MainActor
-  func testHomeBusyFeedbackRendersInNativeHomeSurface() throws {
+  func testHomeBusyFeedbackRendersBoundaryResultSemanticsInNativeSurface() throws {
     let routine = makeRoutine(
       id: fixtureUUID("00000000-0000-0000-0000-000000000010"),
       name: "아침 준비 루틴"
@@ -261,14 +292,22 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     )
     viewModel.load()
 
+    var announcements: [String] = []
+    let launchBoundary = HomeRoutineLaunchBoundary(
+      onStartRoutine: { _ in .busy },
+      announceAccessibility: { announcements.append($0) }
+    )
+    let launchResult = launchBoundary.start(routineID: routine.id)
+    let feedback = try XCTUnwrap(
+      HomeRoutineLaunchFeedback.configuration(for: launchResult)
+    )
     let view = HomeView(
       viewModel: viewModel,
       onStartRoutine: { _ in .busy },
       refreshToken: 0,
       routineSettingContent: AnyView(EmptyView()),
-      initialRoutineLaunchMessage: HomeRoutineLaunchBoundary.busyMessage
+      initialRoutineLaunchResult: launchResult
     )
-
     let bounds = CGRect(x: 0, y: 0, width: 393, height: 1_400)
     let windowScene = try XCTUnwrap(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
@@ -280,17 +319,21 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     window.makeKeyAndVisible()
     hostingController.view.frame = bounds
     hostingController.view.layoutIfNeeded()
+    defer {
+      window.isHidden = true
+    }
 
     let renderer = UIGraphicsImageRenderer(bounds: bounds)
-    let image = renderer.image { _ in
-      hostingController.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
-    }
-    window.isHidden = true
+    let pngData = try XCTUnwrap(
+      renderer.image { _ in
+        hostingController.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+      }.pngData()
+    )
 
-    let pngData = try XCTUnwrap(image.pngData())
-    let screenshotURL = URL(fileURLWithPath: "/tmp/moru-g006-home-busy.png")
-    try pngData.write(to: screenshotURL, options: .atomic)
-
+    XCTAssertEqual(launchResult, .busy)
+    XCTAssertEqual(announcements, [HomeRoutineLaunchBoundary.busyMessage])
+    XCTAssertEqual(feedback.visibleMessage, HomeRoutineLaunchBoundary.busyMessage)
+    XCTAssertEqual(feedback.accessibilityLabel, HomeRoutineLaunchBoundary.busyMessage)
     XCTAssertGreaterThan(pngData.count, 1_000)
   }
 
@@ -458,7 +501,9 @@ final class HomeRoutineIntegrationTests: XCTestCase {
         profile: profile,
         calendar: calendar,
         now: now
-      )
+      ),
+      weatherRepository: nil,
+      weatherService: nil
     )
   }
 

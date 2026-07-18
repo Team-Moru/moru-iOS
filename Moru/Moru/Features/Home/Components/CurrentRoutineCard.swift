@@ -149,6 +149,7 @@ struct CurrentRoutineCard: View {
   }
 }
 
+#if DEBUG
 #Preview {
   CurrentRoutineCard(
     routine: .placeholder,
@@ -158,3 +159,4 @@ struct CurrentRoutineCard: View {
   .padding()
   .background(AppColor.babyBlue50)
 }
+#endif

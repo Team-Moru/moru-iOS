@@ -11,8 +11,18 @@ struct HomeStreakCard: View {
 
   let streak: HomeStreakState
 
-  static func weekdayAccessibilityValue(isCompleted: Bool) -> String {
-    isCompleted ? "완료" : "미완료"
+  struct WeekdayAccessibilityConfiguration: Equatable {
+    let label: String
+    let value: String
+  }
+
+  static func weekdayAccessibility(
+    for weekday: HomeWeekdayState
+  ) -> WeekdayAccessibilityConfiguration {
+    WeekdayAccessibilityConfiguration(
+      label: weekday.label,
+      value: weekday.isCompleted ? "완료" : "미완료"
+    )
   }
 
   var body: some View {
@@ -37,6 +47,8 @@ struct HomeStreakCard: View {
 
         HStack(spacing: AppSpacing.six) {
           ForEach(streak.weekdays) { weekday in
+            let accessibility = Self.weekdayAccessibility(for: weekday)
+
             VStack(spacing: AppSpacing.xxs) {
               Circle()
                 .fill(
@@ -51,10 +63,8 @@ struct HomeStreakCard: View {
                 .foregroundStyle(AppColor.moruTextSecondary)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(weekday.label)
-            .accessibilityValue(
-              Self.weekdayAccessibilityValue(isCompleted: weekday.isCompleted)
-            )
+            .accessibilityLabel(accessibility.label)
+            .accessibilityValue(accessibility.value)
           }
         }
 
@@ -72,8 +82,10 @@ struct HomeStreakCard: View {
   }
 }
 
+#if DEBUG
 #Preview {
   HomeStreakCard(streak: .placeholder)
     .padding()
     .background(AppColor.babyBlue50)
 }
+#endif

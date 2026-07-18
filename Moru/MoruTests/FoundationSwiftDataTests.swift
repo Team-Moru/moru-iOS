@@ -572,6 +572,12 @@ final class FoundationSwiftDataTests: XCTestCase {
     assertLocalSettingsRepository(dependencyContainer.localSettingsRepository)
     assertOnboardingRepository(dependencyContainer.onboardingRepository)
     assertRoutineSuggestionService(dependencyContainer.routineSuggestionService)
+    let homeWeatherRepository = try XCTUnwrap(dependencyContainer.homeWeatherRepository)
+    XCTAssertTrue(homeWeatherRepository is SwiftDataHomeWeatherRepository)
+    XCTAssertTrue(
+      dependencyContainer.historyEvidenceRepository is SwiftDataHistoryEvidenceRepository
+    )
+    XCTAssertTrue(dependencyContainer.voiceAvailabilityProbe is AVSpeechVoiceAvailabilityProbe)
   }
 
   private func assertRoutineRepository(_ dependency: any RoutineRepository) {}

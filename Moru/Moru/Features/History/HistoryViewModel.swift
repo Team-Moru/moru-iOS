@@ -31,7 +31,10 @@ final class HistoryViewModel {
 
     do {
       let overview = try loadHistoryUseCase.load()
-      state = overview.recentDays.isEmpty ? .empty : .content(overview)
+      let hasDashboardContent = !overview.recentDays.isEmpty
+        || overview.wakeMetrics.observationCount > 0
+        || overview.monthlyHeatmap.days.contains { $0.completionRate != nil }
+      state = hasDashboardContent ? .content(overview) : .empty
     } catch {
       state = .failed(message: "기록을 불러오지 못했어요.")
     }

@@ -74,7 +74,10 @@ extension DependencyContainer {
         localProfileRepository: localProfileRepository,
         routineRepository: routineRepository
       ),
-      routineSuggestionService: LocalTemplateSuggestionService.shared
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      homeWeatherRepository: nil,
+      historyEvidenceRepository: MockHistoryEvidenceRepository(),
+      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
     )
   }
 }

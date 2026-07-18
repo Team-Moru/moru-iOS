@@ -299,4 +299,16 @@ final class MockOnboardingRepository: OnboardingRepository {
     try routineRepository.saveRoutine(routine)
   }
 }
+@MainActor
+final class MockHistoryEvidenceRepository: HistoryEvidenceRepository {
+  private let evidence: HistoryEvidence
+
+  init(evidence: HistoryEvidence = .empty) {
+    self.evidence = evidence
+  }
+
+  func fetchEvidence() throws -> HistoryEvidence {
+    evidence
+  }
+}
 #endif

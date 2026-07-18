@@ -88,7 +88,7 @@ private final class DefaultTrialRoutineFinalizer: TrialRoutineFinalizing {
 }
 
 @MainActor
-private final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
+final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
   private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
 
   init(saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol) {
@@ -97,15 +97,14 @@ private final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
 
   func finalize(
     _ request: SaveRoutineRunRequest
-  ) throws -> RoutineCompletionSummary {
+  ) throws -> RegularRoutineCompletionResult {
     _ = try validateRoutineCompletionTimestamps(
       startedAt: request.startedAt,
       completedAt: request.completedAt
     ).get()
 
     let savedRun = try saveRoutineRunUseCase.execute(request)
-
-    return try makeRoutineCompletionSummary(
+    let summary = try makeRoutineCompletionSummary(
       routine: request.routine,
       persistedRunID: savedRun.id,
       startedAt: request.startedAt,
@@ -113,5 +112,11 @@ private final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
       results: request.results,
       endedEarly: request.endedEarly
     ).get()
+
+    guard let result = RegularRoutineCompletionResult(summary) else {
+      throw RegularRoutineFinalizationError.missingPersistedRunID
+    }
+
+    return result
   }
 }

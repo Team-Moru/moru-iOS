@@ -52,8 +52,8 @@ struct RoutinePlayerView: View {
         viewModel.finishStepCompletedScreen()
       }
 
-    case .summary(let summary):
-      summaryView(summary: summary)
+    case .summary(let presentation):
+      summaryView(presentation)
     }
   }
 
@@ -136,6 +136,7 @@ struct RoutinePlayerView: View {
       Spacer()
 
       stepContent(for: step)
+        .id(step.id)
 
       Spacer()
 
@@ -247,7 +248,6 @@ struct RoutinePlayerView: View {
       TimerStepContentView(step: step) {
         viewModel.completeCurrentStep()
       }
-      .id(step.id)
 
     case .input:
       InputStepContentView(step: step) { inputText in
@@ -256,31 +256,50 @@ struct RoutinePlayerView: View {
     }
   }
 
+  @ViewBuilder
   private func summaryView(
-    summary: RoutineCompletionSummary
+    _ presentation: RoutineCompletionPresentation
   ) -> some View {
-    VStack(spacing: 0) {
+    switch presentation {
+    case .trial(let summary):
       RoutineFinishedView(
         routineName: summary.routineName,
         completionRate: Int((summary.completionRate * 100).rounded()),
         completedStepCount: summary.completedStepCount,
-        skippedStepCount: summary.skippedStepCount
+        skippedStepCount: summary.skippedStepCount,
+        actionConfiguration: .trialHomeOnly,
+        onAction: { action in
+          switch action {
+          case .home:
+            viewModel.requestSummaryHome()
+
+          case .record:
+            assertionFailure("Trial completion cannot record a routine run.")
+          }
+        },
+        isActionDisabled: viewModel.isSummaryActionDisabled
       )
 
-      Button {
-        viewModel.requestSummaryExit()
-      } label: {
-        Text("닫기")
-          .font(AppFont.body1NormalSemiBold)
-          .foregroundStyle(AppColor.babyBlue250)
-          .frame(maxWidth: .infinity)
-          .frame(height: 56)
-          .background(AppColor.grayWhite)
-          .clipShape(Capsule())
-      }
-      .buttonStyle(.plain)
-      .padding(.horizontal, 24)
-      .padding(.bottom, 24)
+    case .regular(let result):
+      let summary = result.summary
+
+      RoutineFinishedView(
+        routineName: summary.routineName,
+        completionRate: Int((summary.completionRate * 100).rounded()),
+        completedStepCount: summary.completedStepCount,
+        skippedStepCount: summary.skippedStepCount,
+        actionConfiguration: .regularRecordAndHome,
+        onAction: { action in
+          switch action {
+          case .record:
+            viewModel.requestSummaryRecord()
+
+          case .home:
+            viewModel.requestSummaryHome()
+          }
+        },
+        isActionDisabled: viewModel.isSummaryActionDisabled
+      )
     }
   }
 
@@ -346,6 +365,8 @@ struct RoutinePlayerView: View {
 
     case .invalidCompletionSummary:
       return "루틴 실행 시간을 확인할 수 없어요. 다시 시작해 주세요."
+    case .missingPersistedRunID:
+      return "저장된 루틴 실행 기록을 확인할 수 없어요. 다시 시작해 주세요."
     }
   }
 
@@ -359,6 +380,8 @@ struct RoutinePlayerView: View {
     case .alarmDisabled:
       return "알람이 켜진 루틴만 예약 실행할 수 있어요."
 
+    case .invalidTimerDuration:
+      return "타이머 단계의 시간이 설정되지 않았거나 올바르지 않아요. 루틴을 수정한 뒤 다시 시작해 주세요."
     case .noExecutableSteps:
       return "실행할 단계가 있는 루틴을 선택해 주세요."
     }
@@ -399,15 +422,22 @@ private final class RoutinePlayerPreviewTrialFinalizer: TrialRoutineFinalizing {
 private final class RoutinePlayerPreviewRegularFinalizer: RegularRoutineFinalizing {
   func finalize(
     _ request: SaveRoutineRunRequest
-  ) throws -> RoutineCompletionSummary {
-    return try makeRoutineCompletionSummary(
+  ) throws -> RegularRoutineCompletionResult {
+    let persistedRunID = UUID()
+    let summary = try makeRoutineCompletionSummary(
       routine: request.routine,
-      persistedRunID: UUID(),
+      persistedRunID: persistedRunID,
       startedAt: request.startedAt,
       completedAt: request.completedAt,
       results: request.results,
       endedEarly: request.endedEarly
     ).get()
+
+    guard let result = RegularRoutineCompletionResult(summary) else {
+      throw RegularRoutineFinalizationError.missingPersistedRunID
+    }
+
+    return result
   }
 }
 

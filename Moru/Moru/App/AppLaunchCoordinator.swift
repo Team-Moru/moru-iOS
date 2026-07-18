@@ -8,6 +8,7 @@
 import Combine
 import Foundation
 import SwiftData
+import SwiftUI
 
 nonisolated struct SendableModelContainer: @unchecked Sendable {
   fileprivate let rawModelContainer: ModelContainer
@@ -499,6 +500,8 @@ final class LaunchedApp {
   let navigationCoordinator: AppNavigationCoordinator
   let onboardingBuilder: any OnboardingFlowBuilding
   let routinePlayerBuilder: any RoutinePlayerBuilding
+  let homeBuilder: any HomeFlowBuilding
+  let routerState: AppRouterState
 
   fileprivate let sessionLoader: any SessionSnapshotLoader
   fileprivate let ownedContainer: SendableModelContainer
@@ -507,12 +510,28 @@ final class LaunchedApp {
     ownedContainer = resources.container
     modelContainer = resources.container.rawModelContainer
     sessionLoader = resources.loader
-    dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
-    sessionStore = dependencies.makeSessionStore()
+    let appDependencies = DependencyContainer.local(
+      modelContext: resources.container.rawModelContainer.mainContext
+    )
+    dependencies = appDependencies
+    sessionStore = appDependencies.makeSessionStore()
     sessionStore.apply(snapshot: snapshot)
     navigationCoordinator = AppNavigationCoordinator()
-    onboardingBuilder = dependencies.makeOnboardingBuilder()
-    routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
+    routerState = AppRouterState()
+    onboardingBuilder = appDependencies.makeOnboardingBuilder()
+    routinePlayerBuilder = appDependencies.makeRoutinePlayerBuilder()
+    homeBuilder = DefaultHomeFlowBuilder(
+      loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
+        routineRepository: appDependencies.routineRepository,
+        routineRunRepository: appDependencies.routineRunRepository,
+        localProfileRepository: appDependencies.localProfileRepository
+      ),
+      weatherRepository: appDependencies.homeWeatherRepository,
+      weatherService: CoreLocationWeatherService(),
+      routineSettingContentFactory: {
+        AnyView(RoutineSettingView(dependencies: appDependencies))
+      }
+    )
   }
 }
 

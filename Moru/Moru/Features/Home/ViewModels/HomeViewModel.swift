@@ -5,6 +5,7 @@
 //  Created by Codex on 7/9/26.
 //
 
+import CoreLocation
 import Foundation
 import Observation
 
@@ -12,12 +13,30 @@ import Observation
 @Observable
 final class HomeViewModel {
   private let loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol
+  private let weatherRepository: (any HomeWeatherRepository)?
+  private let weatherService: (any HomeWeatherService)?
+  private let now: @Sendable () -> Date
+  private var activeWeatherRequestID: UUID?
+  private var weatherTask: Task<Void, Never>?
+#if DEBUG
+  var onStaleWeatherResultDiscarded: ((UUID) -> Void)?
+#endif
 
   var state: HomeViewState
+  private(set) var weatherState: HomeWeatherState
 
-  init(loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol) {
+  init(
+    loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol,
+    weatherRepository: (any HomeWeatherRepository)?,
+    weatherService: (any HomeWeatherService)?,
+    now: @escaping @Sendable () -> Date = Date.init
+  ) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
+    self.weatherRepository = weatherRepository
+    self.weatherService = weatherService
+    self.now = now
     self.state = .loading(previousContent: nil)
+    self.weatherState = .notRequested
   }
 
   func load() {
@@ -36,6 +55,255 @@ final class HomeViewModel {
 
   func retry() {
     load()
+  }
+
+  func requestWeather() {
+    weatherTask?.cancel()
+    weatherService?.cancelCurrentLocationRequests()
+
+    let requestID = UUID()
+    activeWeatherRequestID = requestID
+
+    guard weatherRepository != nil, weatherService != nil else {
+      apply(weatherState: .unavailable(.unavailableConfiguration), for: requestID)
+      return
+    }
+
+    weatherTask = Task { [weak self] in
+      await self?.loadWeather(requestID: requestID)
+    }
+  }
+
+  private func loadWeather(requestID: UUID) async {
+    guard let weatherRepository, let weatherService else {
+      apply(weatherState: .unavailable(.unavailableConfiguration), for: requestID)
+      return
+    }
+
+
+    var authorizationStatus = weatherService.authorizationStatus
+    if authorizationStatus == .notDetermined {
+      guard weatherService.isLocationServiceEnabled else {
+        apply(weatherState: .noFix, for: requestID)
+        return
+      }
+
+      apply(weatherState: .requestingPermission, for: requestID)
+      authorizationStatus = await weatherService.requestWhenInUseAuthorization()
+
+      guard isCurrentWeatherRequest(requestID) else {
+        return
+      }
+    }
+
+    switch authorizationStatus {
+    case .authorized:
+      guard weatherService.isLocationServiceEnabled else {
+        apply(weatherState: .noFix, for: requestID)
+        return
+      }
+
+      await loadAuthorizedWeather(
+        requestID: requestID,
+        weatherRepository: weatherRepository,
+        weatherService: weatherService
+      )
+    case .denied:
+      eraseCachedWeatherAndApply(.denied, requestID: requestID, repository: weatherRepository)
+    case .restricted:
+      eraseCachedWeatherAndApply(.restricted, requestID: requestID, repository: weatherRepository)
+    case .notDetermined:
+      apply(weatherState: .noFix, for: requestID)
+    }
+  }
+
+  private func loadAuthorizedWeather(
+    requestID: UUID,
+    weatherRepository: any HomeWeatherRepository,
+    weatherService: any HomeWeatherService
+  ) async {
+    let cachedWeather: HomeWeatherSnapshot?
+    do {
+      cachedWeather = try weatherRepository.cachedWeather()
+    } catch {
+      apply(weatherState: .unavailable(.cacheReadFailed), for: requestID)
+      return
+    }
+
+    apply(weatherState: .locating(requestID), for: requestID)
+
+    let location: CLLocation
+    do {
+      location = try await weatherService.currentLocation()
+    } catch is CancellationError {
+      return
+    } catch let error as HomeWeatherServiceError {
+      handleLocationError(
+        error,
+        cachedWeather: cachedWeather,
+        requestID: requestID,
+        repository: weatherRepository
+      )
+      return
+    } catch {
+      apply(weatherState: .unavailable(.service(.noLocationFix)), for: requestID)
+      return
+    }
+
+    guard isCurrentWeatherRequest(requestID) else {
+      return
+    }
+
+    let usableCachedWeather: HomeWeatherSnapshot?
+    if let cachedWeather, isWithinMaximumCacheDistance(cachedWeather, of: location) {
+      usableCachedWeather = cachedWeather
+    } else if cachedWeather != nil {
+      do {
+        try weatherRepository.eraseCachedWeather()
+      } catch {
+        apply(weatherState: .unavailable(.cacheEraseFailed), for: requestID)
+        return
+      }
+      usableCachedWeather = nil
+    } else {
+      usableCachedWeather = nil
+    }
+
+    apply(weatherState: .loading(requestID), for: requestID)
+
+    do {
+      let snapshot = try await weatherService.weatherSnapshot(for: location)
+
+      guard isCurrentWeatherRequest(requestID) else {
+#if DEBUG
+        onStaleWeatherResultDiscarded?(requestID)
+#endif
+        return
+      }
+
+      do {
+        try weatherRepository.saveWeather(snapshot)
+      } catch {
+        apply(weatherState: .unavailable(.cacheWriteFailed), for: requestID)
+        return
+      }
+
+      apply(weatherState: .fresh(snapshot), for: requestID)
+    } catch is CancellationError {
+      return
+    } catch let error as HomeWeatherServiceError {
+      if let usableCachedWeather {
+        apply(weatherState: cacheState(for: usableCachedWeather), for: requestID)
+      } else {
+        apply(weatherState: .unavailable(.service(error)), for: requestID)
+      }
+    } catch {
+      if let usableCachedWeather {
+        apply(weatherState: cacheState(for: usableCachedWeather), for: requestID)
+      } else {
+        apply(weatherState: .unavailable(.service(.weatherUnavailable)), for: requestID)
+      }
+    }
+  }
+
+  private func handleLocationError(
+    _ error: HomeWeatherServiceError,
+    cachedWeather: HomeWeatherSnapshot?,
+    requestID: UUID,
+    repository: any HomeWeatherRepository
+  ) {
+    guard isCurrentWeatherRequest(requestID) else {
+      return
+    }
+
+    switch error {
+    case .authorizationDenied:
+      eraseCachedWeatherAndApply(.denied, requestID: requestID, repository: repository)
+    case .authorizationRestricted:
+      eraseCachedWeatherAndApply(.restricted, requestID: requestID, repository: repository)
+    case .locationServicesDisabled, .noLocationFix:
+      guard let cachedWeather, case .fresh = cacheState(for: cachedWeather) else {
+        apply(weatherState: .noFix, for: requestID)
+        return
+      }
+
+      apply(weatherState: .fresh(cachedWeather), for: requestID)
+    case .weatherUnavailable, .invalidWeatherData:
+      apply(weatherState: .unavailable(.service(error)), for: requestID)
+    }
+  }
+
+  private func eraseCachedWeatherAndApply(
+    _ weatherState: HomeWeatherState,
+    requestID: UUID,
+    repository: any HomeWeatherRepository
+  ) {
+    guard isCurrentWeatherRequest(requestID) else {
+      return
+    }
+
+    do {
+      try repository.eraseCachedWeather()
+      apply(weatherState: weatherState, for: requestID)
+    } catch {
+      apply(weatherState: .unavailable(.cacheEraseFailed), for: requestID)
+    }
+  }
+
+  private func cacheState(for snapshot: HomeWeatherSnapshot) -> HomeWeatherState {
+    let freshnessInterval: TimeInterval = 30 * 60
+    let age = now().timeIntervalSince(snapshot.fetchedAt)
+    return age <= freshnessInterval ? .fresh(snapshot) : .stale(snapshot)
+  }
+
+  private func isWithinMaximumCacheDistance(
+    _ snapshot: HomeWeatherSnapshot,
+    of location: CLLocation
+  ) -> Bool {
+    let earthRadiusMeters = 6_371_000.0
+    let cachedLatitude = Double(snapshot.latitudeE4) / 10_000
+    let cachedLongitude = Double(snapshot.longitudeE4) / 10_000
+    let currentLatitude = location.coordinate.latitude
+    let currentLongitude = location.coordinate.longitude
+    let latitudeDelta = (currentLatitude - cachedLatitude) * .pi / 180
+    let longitudeDelta = (currentLongitude - cachedLongitude) * .pi / 180
+    let cachedLatitudeRadians = cachedLatitude * .pi / 180
+    let currentLatitudeRadians = currentLatitude * .pi / 180
+    let haversine = pow(sin(latitudeDelta / 2), 2)
+      + cos(cachedLatitudeRadians) * cos(currentLatitudeRadians) * pow(sin(longitudeDelta / 2), 2)
+    let boundedHaversine = min(max(haversine, 0), 1)
+    let distance = 2 * earthRadiusMeters * atan2(
+      sqrt(boundedHaversine),
+      sqrt(1 - boundedHaversine)
+    )
+
+    return distance <= 2_000
+  }
+
+  private func isCurrentWeatherRequest(_ requestID: UUID) -> Bool {
+    activeWeatherRequestID == requestID && !Task.isCancelled
+  }
+
+  private func apply(weatherState: HomeWeatherState, for requestID: UUID) {
+    guard isCurrentWeatherRequest(requestID) else {
+      return
+    }
+
+    self.weatherState = weatherState
+    switch state {
+    case .loading(var previousContent):
+      previousContent?.weather = weatherState
+      state = .loading(previousContent: previousContent)
+    case .content(var content):
+      content.weather = weatherState
+      state = .content(content)
+    case .empty(var content):
+      content.weather = weatherState
+      state = .empty(content)
+    case .failed(let failure, var previousContent):
+      previousContent?.weather = weatherState
+      state = .failed(failure, previousContent: previousContent)
+    }
   }
 
   private func makeViewState(from result: HomeRoutineLoadResult) -> HomeViewState {
@@ -60,7 +328,8 @@ final class HomeViewModel {
         weekdays: makeWeekdayStates(
           completedWeekdays: result.streak.completedWeekdays
         )
-      )
+      ),
+      weather: weatherState
     )
 
     return manualRoutines.isEmpty ? .empty(content) : .content(content)

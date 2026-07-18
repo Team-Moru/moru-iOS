@@ -30,9 +30,31 @@ struct RoutineCompletionSummary: Equatable {
   let endedEarly: Bool
   let completionRate: Double
 }
+struct RegularRoutineCompletionResult: Equatable {
+  let summary: RoutineCompletionSummary
+  let persistedRunID: UUID
+
+  init?(_ summary: RoutineCompletionSummary) {
+    guard let persistedRunID = summary.persistedRunID else {
+      return nil
+    }
+
+    self.summary = summary
+    self.persistedRunID = persistedRunID
+  }
+}
+
+enum RoutineCompletionPresentation: Equatable {
+  case trial(RoutineCompletionSummary)
+  case regular(RegularRoutineCompletionResult)
+}
 enum RoutineCompletionSummaryValidationError: Error, Equatable {
   case completedBeforeStarted
 }
+enum RegularRoutineFinalizationError: Error, Equatable {
+  case missingPersistedRunID
+}
+
 func validateRoutineCompletionTimestamps(
   startedAt: Date,
   completedAt: Date
@@ -48,10 +70,12 @@ enum RoutineTerminalReason: Equatable {
   case notFound
   case ineligible(RoutineIneligibilityReason)
   case invalidCompletionSummary(RoutineCompletionSummaryValidationError)
+  case missingPersistedRunID
 }
 
 enum RoutinePlayerExit: Equatable {
-  case summaryCTA
+  case summaryHome
+  case summaryRecord(persistedRunID: UUID)
   case endedEarly
   case terminalUnavailable
   case userDismissed
@@ -84,7 +108,7 @@ protocol TrialRoutineFinalizing: AnyObject {
 protocol RegularRoutineFinalizing: AnyObject {
   func finalize(
     _ request: SaveRoutineRunRequest
-  ) throws -> RoutineCompletionSummary
+  ) throws -> RegularRoutineCompletionResult
 }
 
 func makeRoutineCompletionSummary(

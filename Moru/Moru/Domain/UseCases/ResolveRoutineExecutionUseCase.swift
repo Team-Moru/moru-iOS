@@ -19,6 +19,7 @@ enum RoutineIneligibilityReason: Equatable {
   case inactive
   case alarmDisabled
   case noExecutableSteps
+  case invalidTimerDuration
 }
 
 enum RoutineResolutionRetryReason: Equatable {
@@ -64,6 +65,19 @@ final class ResolveRoutineExecutionUseCase: ResolveRoutineExecutionUseCaseProtoc
 
     guard !routine.steps.isEmpty else {
       return .ineligible(.noExecutableSteps)
+    }
+    guard routine.steps.allSatisfy({ step in
+      guard step.type == .timer else {
+        return true
+      }
+
+      guard let estimatedSeconds = step.estimatedSeconds else {
+        return false
+      }
+
+      return estimatedSeconds > 0
+    }) else {
+      return .ineligible(.invalidTimerDuration)
     }
 
     guard request.launch == .scheduled else {

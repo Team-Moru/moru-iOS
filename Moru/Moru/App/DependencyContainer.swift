@@ -15,9 +15,38 @@ struct DependencyContainer {
   let localSettingsRepository: any LocalSettingsRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
+  let homeWeatherRepository: (any HomeWeatherRepository)?
+  let historyEvidenceRepository: any HistoryEvidenceRepository
+  let voiceAvailabilityProbe: any VoiceAvailabilityProbing
+
+  init(
+    routineRepository: any RoutineRepository,
+    routineRunRepository: any RoutineRunRepository,
+    localProfileRepository: any LocalProfileRepository,
+    localSettingsRepository: any LocalSettingsRepository,
+    onboardingRepository: any OnboardingRepository,
+    routineSuggestionService: any RoutineSuggestionService,
+    homeWeatherRepository: (any HomeWeatherRepository)?,
+    historyEvidenceRepository: any HistoryEvidenceRepository,
+    voiceAvailabilityProbe: any VoiceAvailabilityProbing
+  ) {
+    self.routineRepository = routineRepository
+    self.routineRunRepository = routineRunRepository
+    self.localProfileRepository = localProfileRepository
+    self.localSettingsRepository = localSettingsRepository
+    self.onboardingRepository = onboardingRepository
+    self.routineSuggestionService = routineSuggestionService
+    self.homeWeatherRepository = homeWeatherRepository
+    self.historyEvidenceRepository = historyEvidenceRepository
+    self.voiceAvailabilityProbe = voiceAvailabilityProbe
+  }
 
   static func local(modelContext: ModelContext) -> DependencyContainer {
-    let localProfileRepository = SwiftDataLocalProfileRepository(modelContext: modelContext)
+    let voiceAvailabilityProbe = AVSpeechVoiceAvailabilityProbe()
+    let localProfileRepository = SwiftDataLocalProfileRepository(
+      modelContext: modelContext,
+      availabilityProbe: voiceAvailabilityProbe
+    )
 
     return DependencyContainer(
       routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
@@ -25,7 +54,10 @@ struct DependencyContainer {
       localProfileRepository: localProfileRepository,
       localSettingsRepository: localProfileRepository,
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
-      routineSuggestionService: LocalTemplateSuggestionService.shared
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      homeWeatherRepository: SwiftDataHomeWeatherRepository(modelContext: modelContext),
+      historyEvidenceRepository: SwiftDataHistoryEvidenceRepository(modelContext: modelContext),
+      voiceAvailabilityProbe: voiceAvailabilityProbe
     )
   }
 
@@ -76,7 +108,10 @@ struct DependencyContainer {
         localProfileRepository: localProfileRepository,
         routineRepository: routineRepository
       ),
-      routineSuggestionService: LocalTemplateSuggestionService.shared
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      homeWeatherRepository: nil,
+      historyEvidenceRepository: MockHistoryEvidenceRepository(),
+      voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
     )
   }
   #endif

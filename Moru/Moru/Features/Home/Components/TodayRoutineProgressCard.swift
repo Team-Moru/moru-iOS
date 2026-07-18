@@ -64,8 +64,10 @@ struct TodayRoutineProgressCard: View {
   }
 }
 
+#if DEBUG
 #Preview {
   TodayRoutineProgressCard(progress: .placeholder)
     .padding()
     .background(AppColor.babyBlue50)
 }
+#endif

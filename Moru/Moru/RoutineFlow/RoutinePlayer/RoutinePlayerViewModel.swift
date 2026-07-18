@@ -15,7 +15,7 @@ final class RoutinePlayerViewModel {
     case terminalFailure(RoutineTerminalReason)
     case running(RoutineStep)
     case stepCompleted(RoutineStep)
-    case summary(RoutineCompletionSummary)
+    case summary(RoutineCompletionPresentation)
   }
 
   enum DialogState: Equatable {
@@ -66,6 +66,9 @@ final class RoutinePlayerViewModel {
 
   var isStepInteractionDisabled: Bool {
     dialogState != nil || pendingSave != nil || isSavingRun || didRequestExit
+  }
+  var isSummaryActionDisabled: Bool {
+    didRequestExit
   }
 
   init(
@@ -251,6 +254,9 @@ final class RoutinePlayerViewModel {
     guard !stepResults.contains(where: { $0.stepID == step.id }) else {
       return
     }
+    guard validateTimerDuration(for: step) else {
+      return
+    }
 
     let result = RoutineStepResult(
       stepID: step.id,
@@ -260,9 +266,7 @@ final class RoutinePlayerViewModel {
       skipped: false,
       inputText: inputText,
       transcript: transcript,
-      durationSeconds: step.type == .timer
-        ? (step.estimatedSeconds ?? 60)
-        : nil
+      durationSeconds: step.type == .timer ? step.estimatedSeconds : nil
     )
 
     stepResults.append(result)
@@ -279,6 +283,9 @@ final class RoutinePlayerViewModel {
     }
 
     guard !stepResults.contains(where: { $0.stepID == step.id }) else {
+      return
+    }
+    guard validateTimerDuration(for: step) else {
       return
     }
 
@@ -314,12 +321,20 @@ final class RoutinePlayerViewModel {
     persistPendingSave()
   }
 
-  func requestSummaryExit() {
+  func requestSummaryRecord() {
+    guard case .summary(.regular(let result)) = screenState else {
+      return
+    }
+
+    emitExit(.summaryRecord(persistedRunID: result.persistedRunID))
+  }
+
+  func requestSummaryHome() {
     guard case .summary = screenState else {
       return
     }
 
-    emitExit(.summaryCTA)
+    emitExit(.summaryHome)
   }
 
   private func requestExitDialog(_ exit: DialogState.Exit) {
@@ -384,7 +399,7 @@ final class RoutinePlayerViewModel {
         results: stepResults
       ) {
       case .success(let summary):
-        screenState = .summary(summary)
+        screenState = .summary(.trial(summary))
         emit(.completionDisplayed(summary))
 
       case .failure(let error):
@@ -459,18 +474,26 @@ final class RoutinePlayerViewModel {
     errorMessage = nil
 
     do {
-      let summary = try pendingSave.finalizer.finalize(pendingSave.request)
+      let result = try pendingSave.finalizer.finalize(pendingSave.request)
 
       self.pendingSave = nil
       isSavingRun = false
 
       switch pendingSave.terminalIntent {
       case .natural:
-        screenState = .summary(summary)
-        emit(.completionDisplayed(summary))
+        screenState = .summary(.regular(result))
+        emit(.completionDisplayed(result.summary))
 
       case .exit(let exit):
         emitExit(exit)
+      }
+    } catch let error as RegularRoutineFinalizationError {
+      self.pendingSave = nil
+      isSavingRun = false
+
+      switch error {
+      case .missingPersistedRunID:
+        displayTerminalFailure(.missingPersistedRunID)
       }
     } catch let error as RoutineCompletionSummaryValidationError {
       self.pendingSave = nil
@@ -482,6 +505,18 @@ final class RoutinePlayerViewModel {
     }
   }
 
+  private func validateTimerDuration(for step: RoutineStep) -> Bool {
+    guard step.type == .timer else {
+      return true
+    }
+
+    guard let estimatedSeconds = step.estimatedSeconds, estimatedSeconds > 0 else {
+      displayTerminalFailure(.ineligible(.invalidTimerDuration))
+      return false
+    }
+
+    return true
+  }
   private func displayTerminalFailure(_ reason: RoutineTerminalReason) {
     screenState = .terminalFailure(reason)
     emit(.terminalFailureDisplayed(reason))
