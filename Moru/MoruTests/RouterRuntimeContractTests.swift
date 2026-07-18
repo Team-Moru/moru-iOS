@@ -6,8 +6,9 @@
 //
 
 import Foundation
-import XCTest
 import SwiftUI
+import UIKit
+import XCTest
 @testable import Moru
 
 final class RouterRuntimeContractTests: XCTestCase {
@@ -122,11 +123,14 @@ final class RouterRuntimeContractTests: XCTestCase {
   func testInstalledHomeLaunchHandlerPresentsExactRoutineAndRefreshesAfterDismissal() {
     let homeBuilder = CapturingHomeFlowBuilder()
     let routinePlayerBuilder = CapturingRoutinePlayerBuilder()
+    let reloadRecorder = RouterReloadRecorder()
     let state = AppRouterState()
-    let (router, coordinator) = makeRouter(
+    let (router, coordinator, _) = makeRouter(
       homeBuilder: homeBuilder,
       routinePlayerBuilder: routinePlayerBuilder,
-      state: state
+      state: state,
+      requestSessionReload: reloadRecorder.request,
+      retrySessionReload: reloadRecorder.retry
     )
     let routineID = UUID()
     let competingRoutineID = UUID()
@@ -199,14 +203,17 @@ final class RouterRuntimeContractTests: XCTestCase {
     _ = router.mainTabView
 
     XCTAssertEqual(homeBuilder.refreshTokens, [0, 1])
+    XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
   }
 
   @MainActor
   private func makeRouter(
     homeBuilder: CapturingHomeFlowBuilder,
     routinePlayerBuilder: CapturingRoutinePlayerBuilder,
-    state: AppRouterState
-  ) -> (AppRouter, AppNavigationCoordinator) {
+    state: AppRouterState,
+    requestSessionReload: @escaping @MainActor (SessionReloadSource) -> Void = { _ in },
+    retrySessionReload: @escaping @MainActor () -> Void = {}
+  ) -> (AppRouter, AppNavigationCoordinator, SessionStore) {
     let routineRepository = ResolvingRoutineRepository()
     let routineRunRepository = RouterRuntimeRoutineRunRepository()
     let localProfileRepository = RouterRuntimeLocalProfileRepository()
@@ -214,14 +221,12 @@ final class RouterRuntimeContractTests: XCTestCase {
       routineRepository: routineRepository,
       routineRunRepository: routineRunRepository,
       localProfileRepository: localProfileRepository,
+      localSettingsRepository: MockLocalProfileRepository(),
       onboardingRepository: RouterRuntimeOnboardingRepository(),
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
     let coordinator = AppNavigationCoordinator()
-    let sessionStore = SessionStore(
-      localProfileRepository: localProfileRepository,
-      routineRepository: routineRepository
-    )
+    let sessionStore = SessionStore()
 
     return (
       AppRouter(
@@ -230,10 +235,13 @@ final class RouterRuntimeContractTests: XCTestCase {
         coordinator: coordinator,
         onboardingBuilder: EmptyOnboardingFlowBuilder(),
         routinePlayerBuilder: routinePlayerBuilder,
+        requestSessionReload: requestSessionReload,
+        retrySessionReload: retrySessionReload,
         homeBuilder: homeBuilder,
         state: state
       ),
-      coordinator
+      coordinator,
+      sessionStore
     )
   }
 
@@ -391,39 +399,110 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     coordinator.presentationBindingDidChange(to: nil)
 
-    XCTAssertEqual(coordinator.presentationDidDismiss(), .reloadSession)
+    XCTAssertEqual(
+      coordinator.presentationDidDismiss(),
+      .reloadSession(.trialDismissal(token))
+    )
     XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
     XCTAssertEqual(coordinator.navigationState, .idle)
   }
 
   @MainActor
-  func testCoordinatorReloadsTrialSessionOnceAfterMatchingDismissal() {
-    let coordinator = AppNavigationCoordinator()
+  func testRouterForwardsMatchingTrialDismissalSourceOnce() {
+    let homeBuilder = CapturingHomeFlowBuilder()
+    let routinePlayerBuilder = CapturingRoutinePlayerBuilder()
+    let reloadRecorder = RouterReloadRecorder()
+    let routineID = UUID()
+    let (router, coordinator, _) = makeRouter(
+      homeBuilder: homeBuilder,
+      routinePlayerBuilder: routinePlayerBuilder,
+      state: AppRouterState(),
+      requestSessionReload: reloadRecorder.request,
+      retrySessionReload: reloadRecorder.retry
+    )
 
-    guard case .presented(let token) = coordinator.presentOnboardingTrial(routineID: UUID()) else {
+    guard case .presented(let token) = coordinator.presentOnboardingTrial(
+      routineID: routineID
+    ) else {
       XCTFail("The trial presentation should be accepted.")
       return
     }
 
-    XCTAssertEqual(
-      coordinator.handle(
-        event: .exitRequested(.summaryCTA),
-        presentationToken: token
-      ),
-      .dismiss(token: token)
+    _ = router.routinePlayerView(for: .onboardingTrial(routineID: routineID, token: token))
+    routinePlayerBuilder.sendTrialEvent(
+      .exitRequested(.summaryCTA),
+      presentationToken: UUID()
     )
-    coordinator.presentationBindingDidChange(to: nil)
+    router.completePendingDismissal()
+    XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
 
-    XCTAssertEqual(coordinator.presentationDidDismiss(), .reloadSession)
-    XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
+    routinePlayerBuilder.sendTrialEvent(.exitRequested(.summaryCTA), presentationToken: token)
+    XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
+
+    router.completePendingDismissal()
+    XCTAssertEqual(reloadRecorder.requestedSources, [.trialDismissal(token)])
+
+    router.completePendingDismissal()
+    XCTAssertEqual(reloadRecorder.requestedSources, [.trialDismissal(token)])
   }
 
   @MainActor
-  func testCoordinatorBeginsInitialSessionLoadOnlyOnce() {
-    let coordinator = AppNavigationCoordinator()
+  func testRouterAppearanceDoesNotRequestOrRetrySessionReload() throws {
+    let reloadRecorder = RouterReloadRecorder()
+    let (router, _, _) = makeRouter(
+      homeBuilder: CapturingHomeFlowBuilder(),
+      routinePlayerBuilder: CapturingRoutinePlayerBuilder(),
+      state: AppRouterState(),
+      requestSessionReload: reloadRecorder.request,
+      retrySessionReload: reloadRecorder.retry
+    )
 
-    XCTAssertTrue(coordinator.beginInitialSessionLoadIfNeeded())
-    XCTAssertFalse(coordinator.beginInitialSessionLoadIfNeeded())
+    let windowScene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+    )
+    let hostingController = UIHostingController(rootView: router)
+    let window = UIWindow(windowScene: windowScene)
+    window.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
+    window.rootViewController = hostingController
+    window.makeKeyAndVisible()
+    defer { window.isHidden = true }
+    hostingController.view.layoutIfNeeded()
+
+    XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
+    XCTAssertEqual(reloadRecorder.retryCount, 0)
+  }
+
+  @MainActor
+  func testRouterFailureRetryDelegatesToTheLaunchCoordinator() {
+    let reloadRecorder = RouterReloadRecorder()
+    let (router, _, sessionStore) = makeRouter(
+      homeBuilder: CapturingHomeFlowBuilder(),
+      routinePlayerBuilder: CapturingRoutinePlayerBuilder(),
+      state: AppRouterState(),
+      requestSessionReload: reloadRecorder.request,
+      retrySessionReload: reloadRecorder.retry
+    )
+
+    sessionStore.apply(failure: .session)
+    router.retrySessionReload()
+
+    XCTAssertEqual(reloadRecorder.retryCount, 1)
+    XCTAssertTrue(reloadRecorder.requestedSources.isEmpty)
+  }
+
+  func testRouterSourceDoesNotDirectlyLoadSessionData() throws {
+    let routerSourceURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent("Moru/App/AppRouter.swift")
+    let source = try String(contentsOf: routerSourceURL, encoding: .utf8)
+
+    XCTAssertNil(
+      source.range(
+        of: #"sessionStore\s*\.\s*load\s*\("#,
+        options: .regularExpression
+      )
+    )
   }
 
   @MainActor
@@ -1032,6 +1111,19 @@ private final class RoutinePlayerEventRecorder {
     onRecord(event)
   }
 }
+@MainActor
+private final class RouterReloadRecorder {
+  private(set) var requestedSources: [SessionReloadSource] = []
+  private(set) var retryCount = 0
+
+  func request(_ source: SessionReloadSource) {
+    requestedSources.append(source)
+  }
+
+  func retry() {
+    retryCount += 1
+  }
+}
 
 @MainActor
 private final class CapturingHomeFlowBuilder: HomeFlowBuilding {
@@ -1050,6 +1142,9 @@ private final class CapturingHomeFlowBuilder: HomeFlowBuilding {
 
 @MainActor
 private final class CapturingRoutinePlayerBuilder: RoutinePlayerBuilding {
+  private(set) var trialRequests: [TrialRoutineExecutionRequest] = []
+  private(set) var trialPresentationTokens: [UUID] = []
+  private var trialOnEvent: RoutinePlayerEventHandler?
   private(set) var regularRequests: [RegularRoutineExecutionRequest] = []
   private(set) var regularPresentationTokens: [UUID] = []
   private var regularOnEvent: RoutinePlayerEventHandler?
@@ -1059,7 +1154,10 @@ private final class CapturingRoutinePlayerBuilder: RoutinePlayerBuilding {
     presentationToken: UUID,
     onEvent: @escaping RoutinePlayerEventHandler
   ) -> AnyView {
-    AnyView(EmptyView())
+    trialRequests.append(request)
+    trialPresentationTokens.append(presentationToken)
+    trialOnEvent = onEvent
+    return AnyView(EmptyView())
   }
 
   func makeRegular(
@@ -1078,6 +1176,12 @@ private final class CapturingRoutinePlayerBuilder: RoutinePlayerBuilding {
     presentationToken: UUID
   ) {
     regularOnEvent?(presentationToken, event)
+  }
+  func sendTrialEvent(
+    _ event: RoutinePlayerEvent,
+    presentationToken: UUID
+  ) {
+    trialOnEvent?(presentationToken, event)
   }
 }
 

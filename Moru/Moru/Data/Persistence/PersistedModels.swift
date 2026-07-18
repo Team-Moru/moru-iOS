@@ -249,3 +249,205 @@ final class PersistedLocalProfile {
     self.updatedAt = updatedAt
   }
 }
+
+@Model
+final class PersistedScheduledAlarmStartObservation {
+  @Attribute(.unique) var id: UUID
+  @Attribute(.unique) var occurrenceID: String
+  var rootOccurrenceID: String
+  var parentOccurrenceID: String?
+  var routineID: UUID
+  var scheduleID: UUID
+  var actionObservedAt: Date
+  var scheduledFireAt: Date
+  var resetGeneration: UInt64
+  var sourceRawValue: String
+  var immutableFingerprint: String
+  var timeZoneIdentifier: String
+  var utcOffsetSeconds: Int
+  var localGregorianDayKey: String
+  var localGregorianDayOrdinal: Int
+  var localMinute: Int
+  var receivedAt: Date
+
+  init(
+    id: UUID,
+    occurrenceID: String,
+    rootOccurrenceID: String,
+    parentOccurrenceID: String?,
+    routineID: UUID,
+    scheduleID: UUID,
+    actionObservedAt: Date,
+    scheduledFireAt: Date,
+    resetGeneration: UInt64,
+    sourceRawValue: String,
+    immutableFingerprint: String,
+    timeZoneIdentifier: String,
+    utcOffsetSeconds: Int,
+    localGregorianDayKey: String,
+    localGregorianDayOrdinal: Int,
+    localMinute: Int,
+    receivedAt: Date
+  ) {
+    self.id = id
+    self.occurrenceID = occurrenceID
+    self.rootOccurrenceID = rootOccurrenceID
+    self.parentOccurrenceID = parentOccurrenceID
+    self.routineID = routineID
+    self.scheduleID = scheduleID
+    self.actionObservedAt = actionObservedAt
+    self.scheduledFireAt = scheduledFireAt
+    self.resetGeneration = resetGeneration
+    self.sourceRawValue = sourceRawValue
+    self.immutableFingerprint = immutableFingerprint
+    self.timeZoneIdentifier = timeZoneIdentifier
+    self.utcOffsetSeconds = utcOffsetSeconds
+    self.localGregorianDayKey = localGregorianDayKey
+    self.localGregorianDayOrdinal = localGregorianDayOrdinal
+    self.localMinute = localMinute
+    self.receivedAt = receivedAt
+  }
+}
+
+@Model
+final class PersistedHomeWeatherSnapshot {
+  @Attribute(.unique) var id: UUID
+  var conditionRawValue: String
+  var temperatureCelsius: Double
+  var latitudeE4: Int
+  var longitudeE4: Int
+  var fetchedAt: Date
+  var fetchedTimeZoneIdentifier: String
+  var fetchedUTCOffsetSeconds: Int
+
+  init(
+    id: UUID,
+    conditionRawValue: String,
+    temperatureCelsius: Double,
+    latitudeE4: Int,
+    longitudeE4: Int,
+    fetchedAt: Date,
+    fetchedTimeZoneIdentifier: String,
+    fetchedUTCOffsetSeconds: Int
+  ) {
+    self.id = id
+    self.conditionRawValue = conditionRawValue
+    self.temperatureCelsius = temperatureCelsius
+    self.latitudeE4 = latitudeE4
+    self.longitudeE4 = longitudeE4
+    self.fetchedAt = fetchedAt
+    self.fetchedTimeZoneIdentifier = fetchedTimeZoneIdentifier
+    self.fetchedUTCOffsetSeconds = fetchedUTCOffsetSeconds
+  }
+}
+
+@Model
+final class PersistedLocalSettings {
+  @Attribute(.unique) var id: UUID
+  @Attribute(.unique) var profileID: UUID
+  var voiceMigrationStateRawValue: String
+  var voiceMigrationOriginalVoiceID: String?
+  var voiceMigrationResolvedVoiceID: String?
+  var voiceMigrationUpdatedAt: Date?
+  var schemaMigrationMarkerRawValue: String
+
+  init(
+    id: UUID,
+    profileID: UUID,
+    voiceMigrationStateRawValue: String = VoiceMigrationState.unresolved.rawValue,
+    voiceMigrationOriginalVoiceID: String? = nil,
+    voiceMigrationResolvedVoiceID: String? = nil,
+    voiceMigrationUpdatedAt: Date? = nil,
+    schemaMigrationMarkerRawValue: String = SchemaMigrationMarker.v2Unresolved.rawValue
+  ) {
+    self.id = id
+    self.profileID = profileID
+    self.voiceMigrationStateRawValue = voiceMigrationStateRawValue
+    self.voiceMigrationOriginalVoiceID = voiceMigrationOriginalVoiceID
+    self.voiceMigrationResolvedVoiceID = voiceMigrationResolvedVoiceID
+    self.voiceMigrationUpdatedAt = voiceMigrationUpdatedAt
+    self.schemaMigrationMarkerRawValue = schemaMigrationMarkerRawValue
+  }
+}
+
+@Model
+final class PersistedAlarmRootChainState {
+  @Attribute(.unique) var id: UUID
+  @Attribute(.unique) var rootOccurrenceID: String
+  var routineID: UUID
+  var scheduleID: UUID
+  var resetGeneration: UInt64
+  var rootFingerprint: String
+  var earliestObservedOccurrenceID: String?
+  var earliestObservedAt: Date?
+  var latestObservedOccurrenceID: String?
+  var latestObservedAt: Date?
+  var terminalOccurrenceID: String?
+  var terminalAt: Date?
+  var stateRawValue: String
+  var updatedAt: Date
+
+  init(
+    id: UUID,
+    rootOccurrenceID: String,
+    routineID: UUID,
+    scheduleID: UUID,
+    resetGeneration: UInt64,
+    rootFingerprint: String,
+    earliestObservedOccurrenceID: String?,
+    earliestObservedAt: Date?,
+    latestObservedOccurrenceID: String?,
+    latestObservedAt: Date?,
+    terminalOccurrenceID: String?,
+    terminalAt: Date?,
+    stateRawValue: String = AlarmRootChainState.open.rawValue,
+    updatedAt: Date
+  ) {
+    self.id = id
+    self.rootOccurrenceID = rootOccurrenceID
+    self.routineID = routineID
+    self.scheduleID = scheduleID
+    self.resetGeneration = resetGeneration
+    self.rootFingerprint = rootFingerprint
+    self.earliestObservedOccurrenceID = earliestObservedOccurrenceID
+    self.earliestObservedAt = earliestObservedAt
+    self.latestObservedOccurrenceID = latestObservedOccurrenceID
+    self.latestObservedAt = latestObservedAt
+    self.terminalOccurrenceID = terminalOccurrenceID
+    self.terminalAt = terminalAt
+    self.stateRawValue = stateRawValue
+    self.updatedAt = updatedAt
+  }
+}
+
+@Model
+final class PersistedAlarmPlatformState {
+  @Attribute(.unique) var id: UUID
+  @Attribute(.unique) var scheduleID: UUID
+  @Attribute(.unique) var routineID: UUID
+  var desiredScheduleFingerprint: String
+  var platformRequestID: UUID
+  var stateRawValue: String
+  var updatedAt: Date
+  var lastErrorCode: String?
+
+  init(
+    id: UUID,
+    scheduleID: UUID,
+    routineID: UUID,
+    desiredScheduleFingerprint: String,
+    platformRequestID: UUID,
+    stateRawValue: String,
+    updatedAt: Date,
+    lastErrorCode: String?
+  ) {
+    self.id = id
+    self.scheduleID = scheduleID
+    self.routineID = routineID
+    self.desiredScheduleFingerprint = desiredScheduleFingerprint
+    self.platformRequestID = platformRequestID
+    self.stateRawValue = stateRawValue
+    self.updatedAt = updatedAt
+    self.lastErrorCode = lastErrorCode
+  }
+}

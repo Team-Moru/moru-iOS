@@ -69,6 +69,7 @@ extension DependencyContainer {
       routineRepository: routineRepository,
       routineRunRepository: MockRoutineRunRepository(runs: [run]),
       localProfileRepository: localProfileRepository,
+      localSettingsRepository: localProfileRepository,
       onboardingRepository: MockOnboardingRepository(
         localProfileRepository: localProfileRepository,
         routineRepository: routineRepository

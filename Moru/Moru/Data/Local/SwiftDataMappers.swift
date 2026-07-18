@@ -8,7 +8,7 @@
 import Foundation
 import SwiftData
 
-enum SwiftDataMappingError: Error, Equatable, LocalizedError {
+nonisolated enum SwiftDataMappingError: Error, Equatable, LocalizedError {
   case malformedStringArray(field: String, rawValue: String)
   case malformedIntArray(field: String, rawValue: String)
   case unknownStepType(field: String, rawValue: String)
@@ -34,7 +34,7 @@ enum SwiftDataMappingError: Error, Equatable, LocalizedError {
   }
 }
 
-enum SwiftDataMapper {
+nonisolated enum SwiftDataMapper {
   static func makePersistedRoutine(from routine: Routine) -> PersistedRoutine {
     let sync = v1Sync(for: routine.sync)
 
@@ -196,10 +196,15 @@ enum SwiftDataMapper {
     LocalProfile(
       id: persisted.id,
       displayName: persisted.displayName,
-      selectedVoice: VoiceProfile.fallback(id: persisted.selectedVoiceID),
+      selectedVoice: VoiceProfile.preserving(id: persisted.selectedVoiceID),
       createdAt: persisted.createdAt,
       updatedAt: persisted.updatedAt
     )
+  }
+  static func makeDomainSettings(
+    from persisted: PersistedLocalSettings
+  ) throws -> LocalSettingsSnapshot {
+    try SwiftDataV2Mapper.makeLocalSettingsSnapshot(from: persisted)
   }
 
   private static func makePersistedRoutineStep(
@@ -247,8 +252,8 @@ enum SwiftDataMapper {
       weekdaysRawValue: encodeIntArray(schedule.weekdays.map(\.rawValue)),
       soundName: schedule.soundName,
       isEnabled: schedule.isEnabled,
-      includeWeather: schedule.includeWeather,
-      includeFortune: schedule.includeFortune
+      includeWeather: false,
+      includeFortune: false
     )
   }
 
@@ -271,8 +276,8 @@ enum SwiftDataMapper {
       ),
       soundName: persisted.soundName,
       isEnabled: persisted.isEnabled,
-      includeWeather: persisted.includeWeather,
-      includeFortune: persisted.includeFortune
+      includeWeather: false,
+      includeFortune: false
     )
   }
 

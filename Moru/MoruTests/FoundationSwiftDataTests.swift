@@ -11,22 +11,6 @@ import XCTest
 @testable import Moru
 
 final class FoundationSwiftDataTests: XCTestCase {
-  @MainActor
-  func testBootstrapFailureDoesNotCrash() {
-    let bootstrapper = AppBootstrapper {
-      throw TestBootstrapError.storageUnavailable
-    }
-
-    bootstrapper.start()
-
-    switch bootstrapper.state {
-    case .failed(let failure):
-      XCTAssertEqual(failure.message, "저장소를 초기화할 수 없어요. 다시 시도해 주세요.")
-      XCTAssertFalse(failure.message.contains("storage unavailable"))
-    case .idle, .loading, .ready:
-      XCTFail("Bootstrap should surface storage failures instead of creating runtime.")
-    }
-  }
 
   @MainActor
   func testDomainDefaultsUseLocalOnlySync() throws {
@@ -43,6 +27,23 @@ final class FoundationSwiftDataTests: XCTestCase {
     XCTAssertNil(run.sync?.remoteRevision)
     XCTAssertEqual(run.plannedStepCount, 0)
     XCTAssertEqual(run.completionRate, 0)
+  }
+
+  @MainActor
+  func testMockProfileIdentityChangeCannotReusePreviousSettings() throws {
+    let firstProfile = LocalProfile(id: UUID(), selectedVoice: .moru)
+    let secondProfile = LocalProfile(id: UUID(), selectedVoice: .moru)
+    let repository = MockLocalProfileRepository(profile: firstProfile)
+
+    let firstSettings = try repository.resolveVoiceSettings(profileID: firstProfile.id)
+    XCTAssertEqual(firstSettings.profileID, firstProfile.id)
+
+    try repository.saveProfile(secondProfile)
+
+    XCTAssertNil(try repository.fetchSettings(profileID: secondProfile.id))
+    let secondSettings = try repository.resolveVoiceSettings(profileID: secondProfile.id)
+    XCTAssertEqual(secondSettings.id, secondProfile.id)
+    XCTAssertEqual(secondSettings.profileID, secondProfile.id)
   }
 
   @MainActor
@@ -107,62 +108,114 @@ final class FoundationSwiftDataTests: XCTestCase {
   }
 
   @MainActor
-  func testSessionStoreRequiresProfileActiveRoutineAndEnabledAlarmBeforeReady() throws {
-    let profile = LocalProfile()
-    let noAlarmRoutine = makeRoutine(
+  func testSessionStoreRequiresProfileRoutineAlarmAndConfiguredPlatformStateBeforeReady() {
+    let profile = makeSessionProfile()
+    let routineID = UUID()
+    let scheduleID = UUID()
+    let noAlarmRoutine = makeSessionRoutine(
+      id: routineID,
       name: "알람 없음",
-      createdAt: Date(timeIntervalSince1970: 1)
+      alarmSchedule: nil
     )
-    let disabledAlarmRoutine = makeRoutine(
+    let disabledAlarmRoutine = makeSessionRoutine(
+      id: routineID,
       name: "꺼진 알람",
-      createdAt: Date(timeIntervalSince1970: 2),
-      alarmSchedule: makeAlarm(isEnabled: false)
+      alarmSchedule: makeSessionAlarm(id: scheduleID, isEnabled: false)
     )
-    let readyRoutine = makeRoutine(
+    let readyRoutine = makeSessionRoutine(
+      id: routineID,
       name: "완료 루틴",
-      createdAt: Date(timeIntervalSince1970: 3),
-      alarmSchedule: makeAlarm(isEnabled: true)
+      alarmSchedule: makeSessionAlarm(id: scheduleID, isEnabled: true)
+    )
+    let configuredPlatformState = makePlatformState(
+      routineID: routineID,
+      scheduleID: scheduleID,
+      state: .configured
     )
 
     XCTAssertFalse(
       SessionStore.isOnboardingComplete(
-        profile: nil,
-        activeRoutines: [readyRoutine]
+        snapshot: makeSessionSnapshot(
+          profile: nil,
+          activeRoutines: [readyRoutine],
+          platformStates: [configuredPlatformState]
+        )
       )
     )
     XCTAssertFalse(
       SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: []
+        snapshot: makeSessionSnapshot(
+          profile: profile,
+          activeRoutines: [],
+          platformStates: [configuredPlatformState]
+        )
       )
     )
     XCTAssertFalse(
       SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: [noAlarmRoutine]
+        snapshot: makeSessionSnapshot(
+          profile: profile,
+          activeRoutines: [noAlarmRoutine],
+          platformStates: [configuredPlatformState]
+        )
       )
     )
     XCTAssertFalse(
       SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: [disabledAlarmRoutine]
+        snapshot: makeSessionSnapshot(
+          profile: profile,
+          activeRoutines: [disabledAlarmRoutine],
+          platformStates: [configuredPlatformState]
+        )
+      )
+    )
+    XCTAssertFalse(
+      SessionStore.isOnboardingComplete(
+        snapshot: makeSessionSnapshot(
+          profile: profile,
+          activeRoutines: [readyRoutine],
+          platformStates: []
+        )
+      )
+    )
+    XCTAssertFalse(
+      SessionStore.isOnboardingComplete(
+        snapshot: makeSessionSnapshot(
+          profile: profile,
+          activeRoutines: [readyRoutine],
+          platformStates: [
+            makePlatformState(
+              routineID: UUID(),
+              scheduleID: UUID(),
+              state: .configured
+            )
+          ]
+        )
       )
     )
     XCTAssertTrue(
       SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: [readyRoutine]
+        snapshot: makeSessionSnapshot(
+          profile: profile,
+          activeRoutines: [readyRoutine],
+          platformStates: [configuredPlatformState]
+        )
       )
     )
-
-  }
-
-  @MainActor
-  func testDefaultProfileAloneDoesNotCompleteOnboarding() throws {
     XCTAssertFalse(
       SessionStore.isOnboardingComplete(
-        profile: LocalProfile(),
-        activeRoutines: []
+        snapshot: makeSessionSnapshot(
+          profile: profile,
+          activeRoutines: [readyRoutine],
+          platformStates: [
+            configuredPlatformState,
+            makePlatformState(
+              routineID: UUID(),
+              scheduleID: UUID(),
+              state: .repairRequired
+            )
+          ]
+        )
       )
     )
   }
@@ -516,6 +569,7 @@ final class FoundationSwiftDataTests: XCTestCase {
     assertRoutineRepository(dependencyContainer.routineRepository)
     assertRoutineRunRepository(dependencyContainer.routineRunRepository)
     assertLocalProfileRepository(dependencyContainer.localProfileRepository)
+    assertLocalSettingsRepository(dependencyContainer.localSettingsRepository)
     assertOnboardingRepository(dependencyContainer.onboardingRepository)
     assertRoutineSuggestionService(dependencyContainer.routineSuggestionService)
   }
@@ -525,6 +579,7 @@ final class FoundationSwiftDataTests: XCTestCase {
   private func assertRoutineRunRepository(_ dependency: any RoutineRunRepository) {}
 
   private func assertLocalProfileRepository(_ dependency: any LocalProfileRepository) {}
+  private func assertLocalSettingsRepository(_ dependency: any LocalSettingsRepository) {}
 
   private func assertOnboardingRepository(_ dependency: any OnboardingRepository) {}
 
@@ -585,6 +640,81 @@ final class FoundationSwiftDataTests: XCTestCase {
     )
   }
 
+  private func makeSessionSnapshot(
+    profile: SessionProfileSnapshot?,
+    activeRoutines: [SessionRoutineSnapshot],
+    platformStates: [AlarmPlatformSnapshot]
+  ) -> SessionSnapshot {
+    SessionSnapshot(
+      profile: profile,
+      activeRoutines: activeRoutines,
+      platformStates: platformStates,
+      settings: nil,
+      resetGeneration: nil
+    )
+  }
+
+  private func makeSessionProfile() -> SessionProfileSnapshot {
+    SessionProfileSnapshot(
+      id: UUID(),
+      displayName: "모루 사용자",
+      selectedVoiceID: VoiceProfile.yuna.id,
+      createdAt: Date(timeIntervalSince1970: 1),
+      updatedAt: Date(timeIntervalSince1970: 1)
+    )
+  }
+
+  private func makeSessionRoutine(
+    id: UUID,
+    name: String,
+    alarmSchedule: SessionAlarmScheduleSnapshot?
+  ) -> SessionRoutineSnapshot {
+    SessionRoutineSnapshot(
+      id: id,
+      name: name,
+      summary: "",
+      goalTags: [],
+      steps: [],
+      alarmSchedule: alarmSchedule,
+      isActive: true,
+      createdAt: Date(timeIntervalSince1970: 1),
+      updatedAt: Date(timeIntervalSince1970: 1)
+    )
+  }
+
+  private func makeSessionAlarm(
+    id: UUID,
+    isEnabled: Bool
+  ) -> SessionAlarmScheduleSnapshot {
+    SessionAlarmScheduleSnapshot(
+      id: id,
+      hour: 7,
+      minute: 0,
+      weekdays: [.monday],
+      soundName: "moru-default",
+      isEnabled: isEnabled,
+      includeWeather: false,
+      includeFortune: false
+    )
+  }
+
+  private func makePlatformState(
+    routineID: UUID,
+    scheduleID: UUID,
+    state: AlarmPlatformState
+  ) -> AlarmPlatformSnapshot {
+    AlarmPlatformSnapshot(
+      id: UUID(),
+      scheduleID: scheduleID,
+      routineID: routineID,
+      desiredScheduleFingerprint: "weekday-7-00",
+      platformRequestID: UUID(),
+      state: state,
+      updatedAt: Date(timeIntervalSince1970: 1),
+      lastErrorCode: nil
+    )
+  }
+
   private func makePersistedRoutine(
     goalTagsRawValue: String = "[]",
     steps: [PersistedRoutineStep] = [],
@@ -611,12 +741,4 @@ final class FoundationSwiftDataTests: XCTestCase {
     )
   }
 
-}
-
-private enum TestBootstrapError: LocalizedError {
-  case storageUnavailable
-
-  var errorDescription: String? {
-    "storage unavailable"
-  }
 }

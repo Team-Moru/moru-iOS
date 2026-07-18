@@ -12,14 +12,18 @@ struct DependencyContainer {
   let routineRepository: any RoutineRepository
   let routineRunRepository: any RoutineRunRepository
   let localProfileRepository: any LocalProfileRepository
+  let localSettingsRepository: any LocalSettingsRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
 
   static func local(modelContext: ModelContext) -> DependencyContainer {
-    DependencyContainer(
+    let localProfileRepository = SwiftDataLocalProfileRepository(modelContext: modelContext)
+
+    return DependencyContainer(
       routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
       routineRunRepository: SwiftDataRoutineRunRepository(modelContext: modelContext),
-      localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
+      localProfileRepository: localProfileRepository,
+      localSettingsRepository: localProfileRepository,
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
@@ -27,10 +31,7 @@ struct DependencyContainer {
 
   @MainActor
   func makeSessionStore() -> SessionStore {
-    SessionStore(
-      localProfileRepository: localProfileRepository,
-      routineRepository: routineRepository
-    )
+    SessionStore()
   }
 
   @MainActor
@@ -70,6 +71,7 @@ struct DependencyContainer {
       routineRepository: routineRepository,
       routineRunRepository: MockRoutineRunRepository(),
       localProfileRepository: localProfileRepository,
+      localSettingsRepository: localProfileRepository,
       onboardingRepository: MockOnboardingRepository(
         localProfileRepository: localProfileRepository,
         routineRepository: routineRepository

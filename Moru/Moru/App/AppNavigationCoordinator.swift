@@ -55,7 +55,7 @@ enum PresentationAttempt: Equatable {
 enum AppNavigationEffect: Equatable {
   case none
   case dismiss(token: UUID)
-  case reloadSession
+  case reloadSession(SessionReloadSource)
 }
 
 enum AppNavigationState: Equatable {
@@ -167,7 +167,7 @@ enum AppNavigationReducer {
 
     switch presentation {
     case .onboardingTrial:
-      afterDismiss = .reloadSession
+      afterDismiss = .reloadSession(.trialDismissal(presentation.id))
     case .regularRoutine:
       afterDismiss = .none
     }
@@ -219,8 +219,6 @@ enum AppNavigationReducer {
 final class AppNavigationCoordinator: ObservableObject {
   @Published private(set) var navigationState: AppNavigationState
 
-  private var hasStartedInitialSessionLoad = false
-
   var presentation: AppPresentation? {
     navigationState.visiblePresentation
   }
@@ -231,15 +229,6 @@ final class AppNavigationCoordinator: ObservableObject {
 
   init(navigationState: AppNavigationState = .idle) {
     self.navigationState = navigationState
-  }
-
-  func beginInitialSessionLoadIfNeeded() -> Bool {
-    guard !hasStartedInitialSessionLoad else {
-      return false
-    }
-
-    hasStartedInitialSessionLoad = true
-    return true
   }
 
   func presentOnboardingTrial(routineID: UUID) -> PresentationAttempt {

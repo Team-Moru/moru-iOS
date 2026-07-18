@@ -133,11 +133,20 @@ final class MockRoutineRunRepository: RoutineRunRepository {
   }
 }
 
-final class MockLocalProfileRepository: LocalProfileRepository {
+final class MockLocalProfileRepository:
+  LocalProfileRepository,
+  LocalSettingsRepository,
+  @unchecked Sendable {
   private var profile: LocalProfile?
+  private var settings: LocalSettingsSnapshot?
+  private let now: @Sendable () -> Date
 
-  init(profile: LocalProfile? = nil) {
+  init(
+    profile: LocalProfile? = nil,
+    now: @escaping @Sendable () -> Date = Date.init
+  ) {
     self.profile = profile
+    self.now = now
   }
 
   @MainActor
@@ -158,12 +167,112 @@ final class MockLocalProfileRepository: LocalProfileRepository {
 
   @MainActor
   func saveProfile(_ profile: LocalProfile) throws {
+    if self.profile?.id != profile.id {
+      settings = nil
+    }
     self.profile = profile
   }
 
   @MainActor
   func deleteProfile() throws {
     profile = nil
+    settings = nil
+  }
+}
+
+extension MockLocalProfileRepository {
+  @MainActor
+  func fetchSettings(profileID: UUID) throws -> LocalSettingsSnapshot? {
+    guard profile?.id == profileID, settings?.profileID == profileID else {
+      return nil
+    }
+
+    return settings
+  }
+
+  @MainActor
+  func resolveVoiceSettings(profileID: UUID) throws -> LocalSettingsSnapshot {
+    guard let profile, profile.id == profileID else {
+      throw LocalSettingsRepositoryError.profileNotFound(profileID)
+    }
+
+    if let settings, settings.profileID == profileID {
+      return settings
+    }
+
+    let snapshot = LocalSettingsSnapshot(
+      id: profileID,
+      profileID: profileID,
+      voiceMigrationState: .noFallbackNoticePending,
+      originalVoiceID: profile.selectedVoice.id,
+      resolvedVoiceID: nil,
+      migrationUpdatedAt: now(),
+      schemaMigrationMarker: .v2Unresolved
+    )
+    settings = snapshot
+    return snapshot
+  }
+
+  @MainActor
+  func acknowledgeVoiceNotice(profileID: UUID) throws {
+    guard let settings, settings.profileID == profileID else {
+      throw LocalSettingsRepositoryError.settingsNotFound(profileID)
+    }
+
+    let nextState: VoiceMigrationState
+    switch settings.voiceMigrationState {
+    case .fallbackNoticePending:
+      nextState = .fallbackNoticeAcknowledged
+    case .noFallbackNoticePending:
+      nextState = .noFallbackNoticeAcknowledged
+    case .unresolved,
+         .resolved,
+         .fallbackNoticeAcknowledged,
+         .noFallbackNoticeAcknowledged,
+         .corruptRecoveryPending:
+      throw LocalSettingsRepositoryError.acknowledgementNotPending(
+        settings.voiceMigrationState
+      )
+    }
+
+    self.settings = LocalSettingsSnapshot(
+      id: settings.id,
+      profileID: settings.profileID,
+      voiceMigrationState: nextState,
+      originalVoiceID: settings.originalVoiceID,
+      resolvedVoiceID: settings.resolvedVoiceID,
+      migrationUpdatedAt: settings.migrationUpdatedAt,
+      schemaMigrationMarker: settings.schemaMigrationMarker
+    )
+  }
+
+  @MainActor
+  func selectVoice(
+    profileID: UUID,
+    voiceID: String
+  ) throws -> LocalSettingsSnapshot {
+    guard var profile, profile.id == profileID else {
+      throw LocalSettingsRepositoryError.profileNotFound(profileID)
+    }
+    guard let voice = VoiceProfile.catalogueVoice(id: voiceID) else {
+      throw LocalSettingsRepositoryError.unavailableVoiceSelection(voiceID)
+    }
+
+    profile.selectedVoice = voice
+    profile.updatedAt = now()
+    self.profile = profile
+
+    let snapshot = LocalSettingsSnapshot(
+      id: profileID,
+      profileID: profileID,
+      voiceMigrationState: .resolved,
+      originalVoiceID: nil,
+      resolvedVoiceID: voiceID,
+      migrationUpdatedAt: profile.updatedAt,
+      schemaMigrationMarker: .v2Resolved
+    )
+    settings = snapshot
+    return snapshot
   }
 }
 

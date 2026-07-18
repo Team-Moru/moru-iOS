@@ -12,13 +12,15 @@ import XCTest
 
 final class OnboardingHappyPathTests: XCTestCase {
   @MainActor
-  func testCompleteOnboardingUseCaseSavesProfileActiveRoutineAndEnabledAlarm() throws {
+  func testCompleteOnboardingUseCaseSavesDefaultYunaProfileActiveRoutineAndEnabledAlarm() throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let dependencies = DependencyContainer.local(modelContext: container.mainContext)
     let useCase = CompleteOnboardingUseCase(
       onboardingRepository: dependencies.onboardingRepository,
       routineSuggestionService: dependencies.routineSuggestionService
     )
+
+    let defaultVoice = OnboardingDraft().selectedVoice
 
     let result = try useCase.execute(
       CompleteOnboardingRequest(
@@ -31,7 +33,7 @@ final class OnboardingHappyPathTests: XCTestCase {
           wakeUpMinute: 30,
           weekdays: [.monday, .wednesday]
         ),
-        selectedVoice: .moru
+        selectedVoice: defaultVoice
       )
     )
 
@@ -39,8 +41,8 @@ final class OnboardingHappyPathTests: XCTestCase {
     let activeRoutines = try dependencies.routineRepository.fetchActiveRoutines()
     let savedRoutine = try XCTUnwrap(activeRoutines.first)
 
-    XCTAssertEqual(result.profile.selectedVoice, .moru)
-    XCTAssertEqual(savedProfile.selectedVoice, .moru)
+    XCTAssertEqual(result.profile.selectedVoice, .yuna)
+    XCTAssertEqual(savedProfile.selectedVoice, .yuna)
     XCTAssertEqual(activeRoutines.count, 1)
     XCTAssertEqual(savedRoutine.id, result.routine.id)
     XCTAssertTrue(savedRoutine.isActive)
@@ -53,12 +55,6 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertNil(savedRoutine.sync?.remoteID)
     XCTAssertNil(savedRoutine.sync?.lastSyncedAt)
     XCTAssertNil(savedRoutine.sync?.remoteRevision)
-    XCTAssertTrue(
-      SessionStore.isOnboardingComplete(
-        profile: savedProfile,
-        activeRoutines: activeRoutines
-      )
-    )
   }
 
   @MainActor
@@ -78,7 +74,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 0,
             weekdays: [.monday]
           ),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
     ) {
@@ -92,7 +88,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       try useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(weekdays: []),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
     ) {
@@ -119,6 +115,15 @@ final class OnboardingHappyPathTests: XCTestCase {
 
     XCTAssertNil(try dependencies.localProfileRepository.fetchProfile())
     XCTAssertEqual(try dependencies.routineRepository.fetchActiveRoutines(), [])
+  }
+
+  @MainActor
+  func testOnboardingDefaultsToYunaAndExcludesLegacyVoiceFromCatalogue() {
+    let draft = OnboardingDraft()
+
+    XCTAssertEqual(draft.selectedVoice, .yuna)
+    XCTAssertEqual(VoiceProfile.localVoices, [.yuna, .sora])
+    XCTAssertFalse(VoiceProfile.localVoices.contains { $0.id == "moru-local" })
   }
 
   @MainActor
@@ -168,6 +173,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     }
 
     XCTAssertEqual(viewModel.step, .experience)
+    XCTAssertEqual(viewModel.draft.selectedVoice, .yuna)
 
     viewModel.selectExperience(.wantsRecommendation)
     viewModel.primaryButtonDidTap()
@@ -205,7 +211,6 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .voice)
 
-    viewModel.selectVoice(.moru)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .completion)
 
@@ -217,7 +222,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(completedRoutineID, useCase.resultRoutineIDs.first)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpHour, 6)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpMinute, 40)
-    XCTAssertEqual(useCase.requests.first?.selectedVoice, .moru)
+    XCTAssertEqual(useCase.requests.first?.selectedVoice, .yuna)
   }
 
   @MainActor
@@ -322,7 +327,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(OnboardingDuration.totalMinutes(for: routine), 3)
   }
   @MainActor
-  func testSwiftDataRelaunchPersistenceAfterOnboardingCompletion() throws {
+  func testDiskReopenSnapshotPreservesOnboardingCompletionFacts() async throws {
     let temporaryDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -354,7 +359,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 10,
             weekdays: [.monday, .tuesday, .wednesday, .thursday, .friday]
           ),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
       routineID = result.routine.id
@@ -362,25 +367,23 @@ final class OnboardingHappyPathTests: XCTestCase {
 
     do {
       let container = try ModelContainer.moruContainer(storeURL: storeURL)
-      let dependencies = DependencyContainer.local(modelContext: container.mainContext)
-      let sessionStore = SessionStore(
-        localProfileRepository: dependencies.localProfileRepository,
-        routineRepository: dependencies.routineRepository
-      )
+      let loader = SessionSnapshotLoading(modelContainer: container)
+      let snapshot = try await loader.loadSnapshot()
+      let sessionStore = SessionStore()
 
-      sessionStore.load()
+      sessionStore.apply(snapshot: snapshot)
 
       let profile = try XCTUnwrap(sessionStore.profile)
-      let activeRoutine = try XCTUnwrap(
-        try dependencies.routineRepository.fetchActiveRoutines().first
-      )
+      let activeRoutine = try XCTUnwrap(snapshot.activeRoutines.first)
 
-      XCTAssertEqual(sessionStore.phase, .ready)
-      XCTAssertEqual(profile.selectedVoice, .moru)
+      XCTAssertEqual(sessionStore.phase, .onboardingRequired)
+      XCTAssertFalse(SessionStore.isOnboardingComplete(snapshot: snapshot))
+      XCTAssertEqual(profile.selectedVoice, .yuna)
       XCTAssertEqual(activeRoutine.id, routineID)
       XCTAssertTrue(activeRoutine.isActive)
       XCTAssertEqual(activeRoutine.alarmSchedule?.isEnabled, true)
       XCTAssertEqual(activeRoutine.steps.count, 10)
+      XCTAssertEqual(snapshot.platformStates, [])
     }
   }
 }

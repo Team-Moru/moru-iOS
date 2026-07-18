@@ -22,12 +22,15 @@ struct AppRouter: View {
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
-  @StateObject private var state: AppRouterState
+  @StateObject private var observedState: AppRouterState
 
   private let dependencies: DependencyContainer
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
   private let homeBuilder: any HomeFlowBuilding
+  private let requestSessionReload: @MainActor (SessionReloadSource) -> Void
+  private let retrySessionReloadAction: @MainActor () -> Void
+  private let stateReference: AppRouterState
 
   @MainActor
   init(
@@ -36,6 +39,8 @@ struct AppRouter: View {
     coordinator: AppNavigationCoordinator,
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
+    requestSessionReload: @escaping @MainActor (SessionReloadSource) -> Void,
+    retrySessionReload: @escaping @MainActor () -> Void,
     homeBuilder: (any HomeFlowBuilding)? = nil,
     state: AppRouterState? = nil
   ) {
@@ -44,7 +49,11 @@ struct AppRouter: View {
     self.dependencies = dependencies
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
-    _state = StateObject(wrappedValue: state ?? AppRouterState())
+    self.requestSessionReload = requestSessionReload
+    retrySessionReloadAction = retrySessionReload
+    let routerState = state ?? AppRouterState()
+    _observedState = StateObject(wrappedValue: routerState)
+    stateReference = routerState
     if let homeBuilder {
       self.homeBuilder = homeBuilder
     } else {
@@ -62,6 +71,7 @@ struct AppRouter: View {
   }
 
   var body: some View {
+    let _ = observedState.homeRefreshToken
     Group {
       switch sessionStore.phase {
       case .loading:
@@ -75,18 +85,14 @@ struct AppRouter: View {
           SessionFailureView(
             title: "프로필 정보를 확인할 수 없어요",
             message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요.",
-            onRetry: { @MainActor in
-              sessionStore.load()
-            }
+            onRetry: retrySessionReload
           )
         }
       case .failed(let message):
         SessionFailureView(
           title: "저장소를 열 수 없어요",
           message: message,
-          onRetry: { @MainActor in
-            sessionStore.load()
-          }
+          onRetry: retrySessionReload
         )
       }
     }
@@ -96,11 +102,6 @@ struct AppRouter: View {
     ) { presentation in
       routinePlayerView(for: presentation)
         .interactiveDismissDisabled()
-    }
-    .task {
-      if coordinator.beginInitialSessionLoadIfNeeded() {
-        sessionStore.load()
-      }
     }
   }
 
@@ -177,7 +178,7 @@ struct AppRouter: View {
     return MainTabView(
       home: homeBuilder.make(
         onStartRoutine: handleRegularRoutineLaunch,
-        refreshToken: state.homeRefreshToken
+        refreshToken: stateReference.homeRefreshToken
       ),
       routineSetting: RoutineSettingView(dependencies: dependencies),
       history: historyBuilder.make()
@@ -199,9 +200,14 @@ struct AppRouter: View {
       break
     case .dismiss(_):
       presentationBinding.wrappedValue = nil
-    case .reloadSession:
-      sessionStore.load()
+    case .reloadSession(let source):
+      requestSessionReload(source)
     }
+  }
+
+  @MainActor
+  func retrySessionReload() {
+    retrySessionReloadAction()
   }
 
   @MainActor
@@ -211,7 +217,7 @@ struct AppRouter: View {
     }
 
     let effect = coordinator.presentationDidDismiss()
-    state.refreshHome()
+    stateReference.refreshHome()
     retryDeferredOnboardingTrial()
     execute(effect)
   }

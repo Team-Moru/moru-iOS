@@ -7,11 +7,11 @@
 
 import Foundation
 
-enum SyncStatus: String, Codable, CaseIterable, Hashable {
+nonisolated enum SyncStatus: String, Codable, CaseIterable, Hashable, Sendable {
   case localOnly
 }
 
-struct SyncMetadata: Codable, Hashable {
+nonisolated struct SyncMetadata: Codable, Hashable, Sendable {
   var remoteID: String?
   var status: SyncStatus
   var lastSyncedAt: Date?
@@ -32,7 +32,7 @@ struct SyncMetadata: Codable, Hashable {
   static let localOnly = SyncMetadata()
 }
 
-enum Weekday: Int, Codable, CaseIterable, Hashable, Identifiable {
+nonisolated enum Weekday: Int, Codable, CaseIterable, Hashable, Identifiable, Sendable {
   case sunday = 1
   case monday
   case tuesday
@@ -82,31 +82,121 @@ extension Sequence where Element == Weekday {
   }
 }
 
-struct VoiceProfile: Codable, Hashable, Identifiable {
+nonisolated struct VoiceProfile: Codable, Hashable, Identifiable, Sendable {
   var id: String
   var displayName: String
   var localeIdentifier: String
+  var avSpeechVoiceIdentifier: String?
 
+  init(
+    id: String,
+    displayName: String,
+    localeIdentifier: String,
+    avSpeechVoiceIdentifier: String? = nil
+  ) {
+    self.id = id
+    self.displayName = displayName
+    self.localeIdentifier = localeIdentifier
+    self.avSpeechVoiceIdentifier = avSpeechVoiceIdentifier
+  }
+
+  static let yuna = VoiceProfile(
+    id: "moru.ko.yuna",
+    displayName: "유나",
+    localeIdentifier: "ko-KR",
+    avSpeechVoiceIdentifier: "com.apple.ttsbundle.Yuna-compact"
+  )
+  static let sora = VoiceProfile(
+    id: "moru.ko.sora",
+    displayName: "소라",
+    localeIdentifier: "ko-KR",
+    avSpeechVoiceIdentifier: "com.apple.ttsbundle.Sora-compact"
+  )
   static let moru = VoiceProfile(
     id: "moru-local",
     displayName: "모루 기본 목소리",
     localeIdentifier: "ko-KR"
   )
 
-  static let localVoices = [VoiceProfile.moru]
+  static let localVoices = [VoiceProfile.yuna, .sora]
 
-  static func fallback(id: String) -> VoiceProfile {
-    localVoices.first { $0.id == id } ?? .moru
+  static func catalogueVoice(id: String) -> VoiceProfile? {
+    localVoices.first { $0.id == id }
+  }
+
+  static func preserving(id: String) -> VoiceProfile {
+    if id == moru.id {
+      return .moru
+    }
+
+    return catalogueVoice(id: id) ?? VoiceProfile(
+      id: id,
+      displayName: id,
+      localeIdentifier: ""
+    )
   }
 }
 
-enum RoutineStepType: String, Codable, CaseIterable, Hashable {
+nonisolated enum VoiceSelection: Sendable, Equatable {
+  case available(VoiceProfile)
+  case unavailable(rawID: String)
+
+  init(rawID: String) {
+    if let voice = VoiceProfile.catalogueVoice(id: rawID) {
+      self = .available(voice)
+    } else {
+      self = .unavailable(rawID: rawID)
+    }
+  }
+
+  var rawID: String {
+    switch self {
+    case .available(let voice):
+      voice.id
+    case .unavailable(let rawID):
+      rawID
+    }
+  }
+}
+
+nonisolated enum VoiceMigrationState: String, Sendable, Equatable {
+  case unresolved
+  case resolved
+  case fallbackNoticePending
+  case fallbackNoticeAcknowledged
+  case noFallbackNoticePending
+  case noFallbackNoticeAcknowledged
+  case corruptRecoveryPending
+}
+
+nonisolated enum SchemaMigrationMarker: String, Sendable, Equatable {
+  case v2Unresolved
+  case v2Resolved
+}
+
+nonisolated struct LocalSettingsSnapshot: Sendable, Equatable {
+  let id: UUID
+  let profileID: UUID
+  let voiceMigrationState: VoiceMigrationState
+  let originalVoiceID: String?
+  let resolvedVoiceID: String?
+  let migrationUpdatedAt: Date?
+  let schemaMigrationMarker: SchemaMigrationMarker
+
+  var pendingVoiceMigrationNotice: String? {
+    voiceMigrationState == .fallbackNoticePending ? Self.fallbackNotice : nil
+  }
+
+  private static let fallbackNotice = "사용 가능한 목소리로 변경했어요"
+}
+
+nonisolated enum RoutineStepType: String, Codable, CaseIterable, Hashable, Sendable {
   case confirm
   case timer
   case input
 }
 
-struct RoutineStep: Identifiable, Codable, Hashable {
+nonisolated struct RoutineStep: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var presetItemID: String?
   var type: RoutineStepType
@@ -137,7 +227,7 @@ struct RoutineStep: Identifiable, Codable, Hashable {
   }
 }
 
-struct AlarmSchedule: Identifiable, Codable, Hashable {
+nonisolated struct AlarmSchedule: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var hour: Int
   var minute: Int
@@ -168,7 +258,7 @@ struct AlarmSchedule: Identifiable, Codable, Hashable {
   }
 }
 
-struct Routine: Identifiable, Codable, Hashable {
+nonisolated struct Routine: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var name: String
   var summary: String
@@ -205,7 +295,7 @@ struct Routine: Identifiable, Codable, Hashable {
   }
 }
 
-struct RoutineStepSnapshot: Identifiable, Codable, Hashable {
+nonisolated struct RoutineStepSnapshot: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var stepID: UUID
   var stepTitle: String
@@ -244,7 +334,7 @@ struct RoutineStepSnapshot: Identifiable, Codable, Hashable {
   }
 }
 
-struct RoutineStepResult: Identifiable, Codable, Hashable {
+nonisolated struct RoutineStepResult: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var stepID: UUID
   var stepTitle: String
@@ -282,7 +372,7 @@ struct RoutineStepResult: Identifiable, Codable, Hashable {
   }
 }
 
-struct RoutineRun: Identifiable, Codable, Hashable {
+nonisolated struct RoutineRun: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var routineID: UUID
   var routineName: String
@@ -357,7 +447,7 @@ struct RoutineRun: Identifiable, Codable, Hashable {
   }
 }
 
-struct LocalProfile: Identifiable, Codable, Hashable {
+nonisolated struct LocalProfile: Identifiable, Codable, Hashable, Sendable {
   var id: UUID
   var displayName: String
   var selectedVoice: VoiceProfile
