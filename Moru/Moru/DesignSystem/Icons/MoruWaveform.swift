@@ -8,19 +8,40 @@
 import SwiftUI
 
 struct MoruWaveform: View {
-  private let heights: [CGFloat] = [
-    8, 12, 18, 24, 20, 14, 10, 16, 22, 18,
-    12, 8, 16, 20, 24, 18, 14, 10, 14, 8
+  private let levels: [CGFloat]
+  private let usesReducedMotion: Bool
+
+  private let staticLevels: [CGFloat] = [
+    0, 0.25, 0.625, 1, 0.75, 0.375, 0.125, 0.5, 0.875, 0.625,
+    0.25, 0, 0.5, 0.75, 1, 0.625, 0.375, 0.125, 0.375, 0
   ]
 
+  init(levels: [CGFloat] = [], usesReducedMotion: Bool = false) {
+    self.levels = levels
+    self.usesReducedMotion = usesReducedMotion
+  }
+
   var body: some View {
-    HStack(alignment: .center, spacing: 4.4) {
-      ForEach(heights.indices, id: \.self) { index in
+    HStack(alignment: .center, spacing: 4.6667) {
+      ForEach(displayedLevels.indices, id: \.self) { index in
         Capsule()
           .fill(AppColor.grayWhite)
-          .frame(width: 4.7, height: heights[index])
+          .frame(width: 4.6667, height: 8 + 16 * displayedLevels[index])
       }
     }
     .frame(width: 182, height: 24)
+    .animation(
+      usesReducedMotion ? nil : .linear(duration: 0.05),
+      value: displayedLevels
+    )
+    .accessibilityHidden(true)
+  }
+
+  private var displayedLevels: [CGFloat] {
+    if usesReducedMotion || levels.count != staticLevels.count {
+      return staticLevels
+    }
+
+    return levels.map { min(max($0, 0), 1) }
   }
 }
