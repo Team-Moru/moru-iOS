@@ -7,8 +7,21 @@
 
 import SwiftUI
 
-struct HomeView: View {
+struct HomeRoutineLaunchBoundary {
   private let onStartRoutine: RoutineLaunchHandler
+
+  init(onStartRoutine: @escaping RoutineLaunchHandler) {
+    self.onStartRoutine = onStartRoutine
+  }
+
+  @MainActor
+  func start(routineID: UUID) -> RoutineLaunchResult {
+    onStartRoutine(RoutineLaunchRequest(routineID: routineID))
+  }
+}
+
+struct HomeView: View {
+  private let routineLaunchBoundary: HomeRoutineLaunchBoundary
   private let refreshToken: Int
   private let routineSettingContent: AnyView
 
@@ -22,7 +35,7 @@ struct HomeView: View {
     refreshToken: Int,
     routineSettingContent: AnyView
   ) {
-    self.onStartRoutine = onStartRoutine
+    self.routineLaunchBoundary = HomeRoutineLaunchBoundary(onStartRoutine: onStartRoutine)
     self.refreshToken = refreshToken
     self.routineSettingContent = routineSettingContent
     _viewModel = State(initialValue: viewModel)
@@ -31,45 +44,27 @@ struct HomeView: View {
   var body: some View {
     ScrollView(showsIndicators: false) {
       VStack(spacing: AppSpacing.lg) {
-        HomeHeaderView(userName: viewModel.state.userName)
-
-        HStack(spacing: AppSpacing.md) {
-          TodayRoutineProgressCard(progress: viewModel.state.todayProgress)
-          HomeStreakCard(streak: viewModel.state.streak)
-        }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-
-        CurrentRoutineCard(
-          routine: viewModel.state.todayRoutine,
-          onTap: {
-            isRoutineSettingPresented = true
-          },
-          onStart: {
-            guard let routineID = viewModel.state.todayRoutine?.id else {
-              return
-            }
-
-            switch onStartRoutine(RoutineLaunchRequest(routineID: routineID)) {
-            case .started, .alreadyRunning:
-              break
-            case .busy:
-              routineLaunchMessage = "다른 루틴이 실행 중이에요."
-            }
+        switch viewModel.state {
+        case .loading(let previousContent):
+          if let previousContent {
+            homeContent(previousContent)
+            HomeRefreshIndicator()
+          } else {
+            HomeLoadingView()
           }
-        )
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-
-        if let errorMessage = viewModel.state.errorMessage {
-          Text(errorMessage)
-            .font(AppFont.caption1Medium)
-            .foregroundStyle(AppColor.orange500)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
-        }
-        if let routineLaunchMessage {
-          Text(routineLaunchMessage)
-            .font(AppFont.caption1Medium)
-            .foregroundStyle(AppColor.orange500)
-            .padding(.horizontal, AppSpacing.screenHorizontal)
+        case .content(let content):
+          homeContent(content)
+        case .empty:
+          HomeEmptyView(onOpenRoutineSettings: {
+            isRoutineSettingPresented = true
+          })
+        case .failed(let failure, let previousContent):
+          if let previousContent {
+            homeContent(previousContent)
+            HomeFailureBanner(failure: failure, retryAction: viewModel.retry)
+          } else {
+            HomeFailureView(failure: failure, retryAction: viewModel.retry)
+          }
         }
       }
       .padding(.bottom, AppSpacing.xxl)
@@ -86,6 +81,46 @@ struct HomeView: View {
     }
   }
 
+  @ViewBuilder
+  private func homeContent(_ content: HomeContentState) -> some View {
+    HomeHeaderView(userName: content.userName)
+
+    HStack(spacing: AppSpacing.md) {
+      TodayRoutineProgressCard(progress: content.todayProgress)
+      HomeStreakCard(streak: content.streak)
+    }
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+
+    CurrentRoutineCard(
+      routine: content.todayRoutine,
+      onTap: {
+        isRoutineSettingPresented = true
+      },
+      onStart: {
+        guard let routineID = content.todayRoutine?.id else {
+          return
+        }
+
+        routineLaunchMessage = nil
+
+        switch routineLaunchBoundary.start(routineID: routineID) {
+        case .started, .alreadyRunning:
+          break
+        case .busy:
+          routineLaunchMessage = "다른 루틴이 실행 중이에요."
+        }
+      }
+    )
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+
+    if let routineLaunchMessage {
+      Text(routineLaunchMessage)
+        .font(AppFont.caption1Medium)
+        .foregroundStyle(AppColor.orange500)
+        .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+  }
+
   private var homeBackground: LinearGradient {
     LinearGradient(
       stops: [
@@ -95,6 +130,98 @@ struct HomeView: View {
       startPoint: UnitPoint(x: 0.5, y: 0),
       endPoint: UnitPoint(x: 0.5, y: 1)
     )
+  }
+}
+
+private struct HomeLoadingView: View {
+  var body: some View {
+    VStack(spacing: AppSpacing.sm) {
+      ProgressView()
+        .tint(AppColor.orange400)
+      Text("홈 정보를 불러오는 중이에요.")
+        .font(AppFont.label1NormalMedium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+    }
+    .frame(maxWidth: .infinity, minHeight: 320)
+    .accessibilityElement(children: .combine)
+  }
+}
+
+private struct HomeRefreshIndicator: View {
+  var body: some View {
+    HStack(spacing: AppSpacing.sm) {
+      ProgressView()
+        .tint(AppColor.orange400)
+      Text("홈 정보를 새로 불러오는 중이에요.")
+        .font(AppFont.caption1Medium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+    }
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .accessibilityElement(children: .combine)
+  }
+}
+
+private struct HomeEmptyView: View {
+  let onOpenRoutineSettings: () -> Void
+
+  var body: some View {
+    VStack(spacing: AppSpacing.md) {
+      Image(systemName: "checklist")
+        .font(AppFont.title1SemiBold)
+        .foregroundStyle(AppColor.orange300)
+
+      Text("아직 설정한 루틴이 없어요.")
+        .font(AppFont.heading3SemiBold)
+        .foregroundStyle(AppColor.moruTextPrimary)
+
+      Text("루틴 탭에서 아침 루틴을 만들어 보세요.")
+        .font(AppFont.label1NormalMedium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+        .multilineTextAlignment(.center)
+
+      MoruButton("루틴 설정하기", style: .secondary, action: onOpenRoutineSettings)
+    }
+    .frame(maxWidth: .infinity, minHeight: 320)
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+  }
+}
+
+private struct HomeFailureView: View {
+  let failure: HomeFailure
+  let retryAction: () -> Void
+
+  var body: some View {
+    VStack(spacing: AppSpacing.md) {
+      Image(systemName: "exclamationmark.triangle.fill")
+        .font(AppFont.title1SemiBold)
+        .foregroundStyle(AppColor.orange500)
+
+      Text(failure.userMessage)
+        .font(AppFont.heading3SemiBold)
+        .foregroundStyle(AppColor.moruTextPrimary)
+        .multilineTextAlignment(.center)
+
+      MoruButton("다시 시도", style: .secondary, action: retryAction)
+    }
+    .frame(maxWidth: .infinity, minHeight: 320)
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+  }
+}
+
+private struct HomeFailureBanner: View {
+  let failure: HomeFailure
+  let retryAction: () -> Void
+
+  var body: some View {
+    VStack(spacing: AppSpacing.sm) {
+      Text(failure.userMessage)
+        .font(AppFont.label1NormalMedium)
+        .foregroundStyle(AppColor.moruTextPrimary)
+        .multilineTextAlignment(.center)
+
+      MoruButton("다시 시도", style: .secondary, action: retryAction)
+    }
+    .padding(.horizontal, AppSpacing.screenHorizontal)
   }
 }
 

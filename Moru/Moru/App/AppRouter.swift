@@ -5,18 +5,29 @@
 //  Created by Codex on 7/6/26.
 //
 
+import Combine
 import SwiftUI
+
+@MainActor
+final class AppRouterState: ObservableObject {
+  @Published private(set) var homeRefreshToken = 0
+
+  func refreshHome() {
+    homeRefreshToken += 1
+  }
+}
 
 struct AppRouter: View {
   @ObservedObject private var sessionStore: SessionStore
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
-  @State private var homeRefreshToken = 0
+  @StateObject private var state: AppRouterState
 
   private let dependencies: DependencyContainer
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
+  private let homeBuilder: any HomeFlowBuilding
 
   @MainActor
   init(
@@ -24,13 +35,30 @@ struct AppRouter: View {
     sessionStore: SessionStore,
     coordinator: AppNavigationCoordinator,
     onboardingBuilder: any OnboardingFlowBuilding,
-    routinePlayerBuilder: any RoutinePlayerBuilding
+    routinePlayerBuilder: any RoutinePlayerBuilding,
+    homeBuilder: (any HomeFlowBuilding)? = nil,
+    state: AppRouterState? = nil
   ) {
     _sessionStore = ObservedObject(wrappedValue: sessionStore)
     _coordinator = ObservedObject(wrappedValue: coordinator)
     self.dependencies = dependencies
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
+    _state = StateObject(wrappedValue: state ?? AppRouterState())
+    if let homeBuilder {
+      self.homeBuilder = homeBuilder
+    } else {
+      self.homeBuilder = DefaultHomeFlowBuilder(
+        loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
+          routineRepository: dependencies.routineRepository,
+          routineRunRepository: dependencies.routineRunRepository,
+          localProfileRepository: dependencies.localProfileRepository
+        ),
+        routineSettingContentFactory: {
+          AnyView(RoutineSettingView(dependencies: dependencies))
+        }
+      )
+    }
   }
 
   var body: some View {
@@ -86,7 +114,7 @@ struct AppRouter: View {
   }
 
   @MainActor
-  private func routinePlayerView(for presentation: AppPresentation) -> AnyView {
+  func routinePlayerView(for presentation: AppPresentation) -> AnyView {
     switch presentation {
     case .onboardingTrial(let routineID, let token):
       return routinePlayerBuilder.makeTrial(
@@ -138,17 +166,7 @@ struct AppRouter: View {
     }
   }
   @MainActor
-  private var mainTabView: MainTabView {
-    let homeBuilder = DefaultHomeFlowBuilder(
-      loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
-        routineRepository: dependencies.routineRepository,
-        routineRunRepository: dependencies.routineRunRepository,
-        localProfileRepository: dependencies.localProfileRepository
-      ),
-      routineSettingContentFactory: {
-        AnyView(RoutineSettingView(dependencies: dependencies))
-      }
-    )
+  var mainTabView: MainTabView {
 
     let historyBuilder = DefaultHistoryFlowBuilder(
       loadHistoryUseCase: LoadHistoryUseCase(
@@ -159,7 +177,7 @@ struct AppRouter: View {
     return MainTabView(
       home: homeBuilder.make(
         onStartRoutine: handleRegularRoutineLaunch,
-        refreshToken: homeRefreshToken
+        refreshToken: state.homeRefreshToken
       ),
       routineSetting: RoutineSettingView(dependencies: dependencies),
       history: historyBuilder.make()
@@ -187,13 +205,13 @@ struct AppRouter: View {
   }
 
   @MainActor
-  private func completePendingDismissal() {
+  func completePendingDismissal() {
     guard coordinator.pendingDismissalToken != nil else {
       return
     }
 
     let effect = coordinator.presentationDidDismiss()
-    homeRefreshToken += 1
+    state.refreshHome()
     retryDeferredOnboardingTrial()
     execute(effect)
   }

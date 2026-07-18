@@ -128,7 +128,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
   }
 
   @MainActor
-  func testLoadingFailureProducesFailedState() {
+  func testLoadingFailureProducesTypedLocalFailure() {
     let now = fixtureDate("2026-07-13T08:00:00Z")
     let useCase = LoadHomeRoutinesUseCase(
       routineRepository: FailingRoutineRepository(),
@@ -141,7 +141,73 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     viewModel.load()
 
     XCTAssertEqual(viewModel.state.loadState, .failed)
-    XCTAssertEqual(viewModel.state.errorMessage, "홈 정보를 불러오지 못했어요.")
+    XCTAssertEqual(
+      viewModel.state.failure,
+      .localRoutineDataUnavailable(
+        diagnostic: String(reflecting: TestRepositoryError.unavailable)
+      )
+    )
+    XCTAssertEqual(viewModel.state.errorMessage, "홈 정보를 불러오지 못했어요. 다시 시도해 주세요.")
+    XCTAssertEqual(viewModel.state.failure?.diagnosticCategory, .localRoutineData)
+    XCTAssertEqual(
+      viewModel.state.failure?.diagnosticDescription,
+      String(reflecting: TestRepositoryError.unavailable)
+    )
+    XCTAssertNil(viewModel.state.routineContent)
+  }
+
+  @MainActor
+  func testRetryPreservesLoadedLocalRoutineContentWhenReloadFails() {
+    let routine = makeRoutine(
+      id: fixtureUUID("00000000-0000-0000-0000-000000000007"),
+      name: "보존할 루틴"
+    )
+    let successfulResult = HomeRoutineLoadResult(
+      profile: LocalProfile(displayName: "모루"),
+      todayRoutine: routine,
+      manualRoutines: [routine],
+      todayRun: nil,
+      streak: HomeRoutineStreak(
+        currentDays: 1,
+        bestDays: 1,
+        completedWeekdays: [.monday]
+      )
+    )
+    let viewModel = HomeViewModel(
+      loadHomeRoutinesUseCase: SequencedHomeRoutinesUseCase(
+        results: [.success(successfulResult), .failure(.unavailable)]
+      )
+    )
+
+    viewModel.load()
+    viewModel.retry()
+
+    XCTAssertEqual(viewModel.state.loadState, .failed)
+    XCTAssertEqual(viewModel.state.todayRoutine?.id, routine.id)
+    XCTAssertEqual(viewModel.state.manualRoutines.map(\.id), [routine.id])
+    XCTAssertEqual(
+      viewModel.state.failure,
+      .localRoutineDataUnavailable(
+        diagnostic: String(reflecting: TestRepositoryError.unavailable)
+      )
+    )
+  }
+
+  @MainActor
+  func testRoutineLaunchBoundaryForwardsExactRoutineIDForEveryOutcome() {
+    let routineID = fixtureUUID("00000000-0000-0000-0000-000000000008")
+    let outcomes: [RoutineLaunchResult] = [.started, .alreadyRunning, .busy]
+
+    for outcome in outcomes {
+      var receivedRoutineID: UUID?
+      let boundary = HomeRoutineLaunchBoundary { request in
+        receivedRoutineID = request.routineID
+        return outcome
+      }
+
+      XCTAssertEqual(boundary.start(routineID: routineID), outcome)
+      XCTAssertEqual(receivedRoutineID, routineID)
+    }
   }
 
   @MainActor
@@ -251,8 +317,16 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     XCTAssertEqual(viewModel.state.streak.currentDays, 2)
     XCTAssertEqual(viewModel.state.streak.bestDays, 2)
     XCTAssertEqual(
-      viewModel.state.streak.completedWeekdays,
-      Set([.sunday, .monday])
+      viewModel.state.streak.weekdays.map(\.id),
+      ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    )
+    XCTAssertEqual(
+      viewModel.state.streak.weekdays.map(\.label),
+      ["월", "화", "수", "목", "금", "토", "일"]
+    )
+    XCTAssertEqual(
+      viewModel.state.streak.weekdays.filter(\.isCompleted).map(\.id),
+      ["monday", "sunday"]
     )
   }
 
@@ -393,6 +467,23 @@ final class HomeRoutineIntegrationTests: XCTestCase {
 
   private func fixtureUUID(_ value: String) -> UUID {
     UUID(uuidString: value)!
+  }
+}
+
+@MainActor
+private final class SequencedHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
+  private var results: [Result<HomeRoutineLoadResult, TestRepositoryError>]
+
+  init(results: [Result<HomeRoutineLoadResult, TestRepositoryError>]) {
+    self.results = results
+  }
+
+  func execute() throws -> HomeRoutineLoadResult {
+    guard !results.isEmpty else {
+      throw TestRepositoryError.unavailable
+    }
+
+    return try results.removeFirst().get()
   }
 }
 

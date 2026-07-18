@@ -7,6 +7,7 @@
 
 import Foundation
 import XCTest
+import SwiftUI
 @testable import Moru
 
 final class RouterRuntimeContractTests: XCTestCase {
@@ -116,6 +117,124 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     XCTAssertEqual(state.selection, .record)
     XCTAssertEqual(state.historyReloadToken, 2)
+  }
+  @MainActor
+  func testInstalledHomeLaunchHandlerPresentsExactRoutineAndRefreshesAfterDismissal() {
+    let homeBuilder = CapturingHomeFlowBuilder()
+    let routinePlayerBuilder = CapturingRoutinePlayerBuilder()
+    let state = AppRouterState()
+    let (router, coordinator) = makeRouter(
+      homeBuilder: homeBuilder,
+      routinePlayerBuilder: routinePlayerBuilder,
+      state: state
+    )
+    let routineID = UUID()
+    let competingRoutineID = UUID()
+
+    _ = router.mainTabView
+
+    XCTAssertEqual(homeBuilder.refreshTokens, [0])
+
+    guard let launchRoutine = homeBuilder.onStartRoutine else {
+      XCTFail("The Home builder should receive the AppRouter launch handler.")
+      return
+    }
+
+    XCTAssertEqual(
+      launchRoutine(RoutineLaunchRequest(routineID: routineID)),
+      .started
+    )
+
+    guard case .regularRoutine(let activeRoutineID, let token) = coordinator.presentation else {
+      XCTFail("The installed Home handler should present the requested regular routine.")
+      return
+    }
+
+    XCTAssertEqual(activeRoutineID, routineID)
+    XCTAssertEqual(
+      launchRoutine(RoutineLaunchRequest(routineID: routineID)),
+      .alreadyRunning
+    )
+    XCTAssertEqual(
+      launchRoutine(RoutineLaunchRequest(routineID: competingRoutineID)),
+      .busy
+    )
+
+    _ = router.routinePlayerView(
+      for: .regularRoutine(routineID: activeRoutineID, token: token)
+    )
+
+    XCTAssertEqual(
+      routinePlayerBuilder.regularRequests,
+      [RegularRoutineExecutionRequest(routineID: routineID, source: .manual)]
+    )
+    XCTAssertEqual(routinePlayerBuilder.regularPresentationTokens, [token])
+
+    let unrelatedToken = UUID()
+    XCTAssertNotEqual(unrelatedToken, token)
+    routinePlayerBuilder.sendRegularEvent(
+      .exitRequested(.summaryCTA),
+      presentationToken: unrelatedToken
+    )
+
+    XCTAssertEqual(
+      coordinator.presentation,
+      .regularRoutine(routineID: routineID, token: token)
+    )
+
+    routinePlayerBuilder.sendRegularEvent(
+      .exitRequested(.summaryCTA),
+      presentationToken: token
+    )
+
+    XCTAssertNil(coordinator.presentation)
+    XCTAssertEqual(coordinator.pendingDismissalToken, token)
+
+    router.completePendingDismissal()
+
+    XCTAssertNil(coordinator.pendingDismissalToken)
+    XCTAssertEqual(coordinator.navigationState, .idle)
+    XCTAssertEqual(state.homeRefreshToken, 1)
+
+    _ = router.mainTabView
+
+    XCTAssertEqual(homeBuilder.refreshTokens, [0, 1])
+  }
+
+  @MainActor
+  private func makeRouter(
+    homeBuilder: CapturingHomeFlowBuilder,
+    routinePlayerBuilder: CapturingRoutinePlayerBuilder,
+    state: AppRouterState
+  ) -> (AppRouter, AppNavigationCoordinator) {
+    let routineRepository = ResolvingRoutineRepository()
+    let routineRunRepository = RouterRuntimeRoutineRunRepository()
+    let localProfileRepository = RouterRuntimeLocalProfileRepository()
+    let dependencies = DependencyContainer(
+      routineRepository: routineRepository,
+      routineRunRepository: routineRunRepository,
+      localProfileRepository: localProfileRepository,
+      onboardingRepository: RouterRuntimeOnboardingRepository(),
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+    let coordinator = AppNavigationCoordinator()
+    let sessionStore = SessionStore(
+      localProfileRepository: localProfileRepository,
+      routineRepository: routineRepository
+    )
+
+    return (
+      AppRouter(
+        dependencies: dependencies,
+        sessionStore: sessionStore,
+        coordinator: coordinator,
+        onboardingBuilder: EmptyOnboardingFlowBuilder(),
+        routinePlayerBuilder: routinePlayerBuilder,
+        homeBuilder: homeBuilder,
+        state: state
+      ),
+      coordinator
+    )
   }
 
 
@@ -912,4 +1031,134 @@ private final class RoutinePlayerEventRecorder {
     events.append(event)
     onRecord(event)
   }
+}
+
+@MainActor
+private final class CapturingHomeFlowBuilder: HomeFlowBuilding {
+  private(set) var refreshTokens: [Int] = []
+  private(set) var onStartRoutine: RoutineLaunchHandler?
+
+  func make(
+    onStartRoutine: @escaping RoutineLaunchHandler,
+    refreshToken: Int
+  ) -> AnyView {
+    self.onStartRoutine = onStartRoutine
+    refreshTokens.append(refreshToken)
+    return AnyView(EmptyView())
+  }
+}
+
+@MainActor
+private final class CapturingRoutinePlayerBuilder: RoutinePlayerBuilding {
+  private(set) var regularRequests: [RegularRoutineExecutionRequest] = []
+  private(set) var regularPresentationTokens: [UUID] = []
+  private var regularOnEvent: RoutinePlayerEventHandler?
+
+  func makeTrial(
+    request: TrialRoutineExecutionRequest,
+    presentationToken: UUID,
+    onEvent: @escaping RoutinePlayerEventHandler
+  ) -> AnyView {
+    AnyView(EmptyView())
+  }
+
+  func makeRegular(
+    request: RegularRoutineExecutionRequest,
+    presentationToken: UUID,
+    onEvent: @escaping RoutinePlayerEventHandler
+  ) -> AnyView {
+    regularRequests.append(request)
+    regularPresentationTokens.append(presentationToken)
+    regularOnEvent = onEvent
+    return AnyView(EmptyView())
+  }
+
+  func sendRegularEvent(
+    _ event: RoutinePlayerEvent,
+    presentationToken: UUID
+  ) {
+    regularOnEvent?(presentationToken, event)
+  }
+}
+
+@MainActor
+private final class EmptyOnboardingFlowBuilder: OnboardingFlowBuilding {
+  func make(onCompleted: @escaping OnboardingCompletionHandler) -> AnyView {
+    AnyView(EmptyView())
+  }
+}
+
+@MainActor
+private final class RouterRuntimeRoutineRunRepository: RoutineRunRepository {
+  func fetchRuns() throws -> [RoutineRun] {
+    []
+  }
+
+  func fetchRecentRuns(limit: Int) throws -> [RoutineRun] {
+    []
+  }
+
+  func fetchRuns(for routineID: UUID) throws -> [RoutineRun] {
+    []
+  }
+
+  func fetchRuns(from startDate: Date, to endDate: Date) throws -> [RoutineRun] {
+    []
+  }
+
+  func fetchRuns(
+    for routineID: UUID,
+    from startDate: Date,
+    to endDate: Date
+  ) throws -> [RoutineRun] {
+    []
+  }
+
+  func latestRun(for routineID: UUID) throws -> RoutineRun? {
+    nil
+  }
+
+  func run(id: UUID) throws -> RoutineRun? {
+    nil
+  }
+
+  func saveRun(_ run: RoutineRun) throws {}
+
+  func deleteAllRuns() throws {}
+}
+
+@MainActor
+private final class RouterRuntimeLocalProfileRepository: LocalProfileRepository {
+  private var profile: LocalProfile?
+
+  func fetchProfile() throws -> LocalProfile? {
+    profile
+  }
+
+  func loadOrCreateDefaultProfile() throws -> LocalProfile {
+    if let profile {
+      return profile
+    }
+
+    let profile = LocalProfile()
+    self.profile = profile
+    return profile
+  }
+
+  func saveProfile(_ profile: LocalProfile) throws {
+    self.profile = profile
+  }
+
+  func deleteProfile() throws {
+    profile = nil
+  }
+}
+
+@MainActor
+private final class RouterRuntimeOnboardingRepository: OnboardingRepository {
+  func fetchProfile() throws -> LocalProfile? {
+    nil
+  }
+
+  func saveCompletion(profile: LocalProfile, routine: Routine) throws {}
 }

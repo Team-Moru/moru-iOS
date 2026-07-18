@@ -17,17 +17,25 @@ final class HomeViewModel {
 
   init(loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
-    self.state = .loading
+    self.state = .loading(previousContent: nil)
   }
 
   func load() {
-    state = .loading
+    let previousContent = state.routineContent
+    state = .loading(previousContent: previousContent)
 
     do {
       state = makeViewState(from: try loadHomeRoutinesUseCase.execute())
     } catch {
-      state = .failed
+      state = .failed(
+        .localRoutineDataUnavailable(diagnostic: String(reflecting: error)),
+        previousContent: previousContent
+      )
     }
+  }
+
+  func retry() {
+    load()
   }
 
   private func makeViewState(from result: HomeRoutineLoadResult) -> HomeViewState {
@@ -49,11 +57,37 @@ final class HomeViewModel {
       streak: HomeStreakState(
         currentDays: result.streak.currentDays,
         bestDays: result.streak.bestDays,
-        completedWeekdays: result.streak.completedWeekdays
+        weekdays: makeWeekdayStates(
+          completedWeekdays: result.streak.completedWeekdays
+        )
       )
     )
 
     return manualRoutines.isEmpty ? .empty(content) : .content(content)
+  }
+
+  private func makeWeekdayStates(completedWeekdays: Set<Weekday>) -> [HomeWeekdayState] {
+    let completedIDs = Set(completedWeekdays.map(weekdayID))
+    return HomeWeekdayState.ordered(completedIDs: completedIDs)
+  }
+
+  private func weekdayID(_ weekday: Weekday) -> String {
+    switch weekday {
+    case .monday:
+      "monday"
+    case .tuesday:
+      "tuesday"
+    case .wednesday:
+      "wednesday"
+    case .thursday:
+      "thursday"
+    case .friday:
+      "friday"
+    case .saturday:
+      "saturday"
+    case .sunday:
+      "sunday"
+    }
   }
 
   private func makeProgressState(

@@ -8,9 +8,6 @@
 import SwiftUI
 
 struct HomeStreakCard: View {
-  private let weekdays: [Weekday] = [
-    .monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday,
-  ]
 
   let streak: HomeStreakState
 
@@ -35,17 +32,17 @@ struct HomeStreakCard: View {
         }
 
         HStack(spacing: AppSpacing.six) {
-          ForEach(weekdays) { weekday in
+          ForEach(streak.weekdays) { weekday in
             VStack(spacing: AppSpacing.xxs) {
               Circle()
                 .fill(
-                  streak.completedWeekdays.contains(weekday)
+                  weekday.isCompleted
                     ? AppColor.orange350
                     : AppColor.babyBlue100
                 )
                 .frame(width: 14, height: 14)
 
-              Text(weekday.shortTitle)
+              Text(weekday.label)
                 .font(AppFont.caption1Medium)
                 .foregroundStyle(AppColor.moruTextSecondary)
             }
