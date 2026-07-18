@@ -69,6 +69,7 @@ struct MoruTabBar: View {
                 selection == item ? AppColor.orange350 : AppColor.moruTextBody
               )
               .frame(width: 60, height: 24)
+              .accessibilityHidden(true)
 
             Text(item.title)
               .font(
@@ -83,6 +84,8 @@ struct MoruTabBar: View {
           .frame(maxWidth: .infinity, minHeight: 45)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(selection == item ? .isSelected : [])
+        .accessibilityValue(selection == item ? "선택됨" : "")
       }
     }
     .frame(maxWidth: .infinity, minHeight: 45)

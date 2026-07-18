@@ -27,7 +27,7 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
   }
 
   func load() throws -> HistoryOverview {
-    let runs = try routineRunRepository.fetchRuns()
+    let runs = try routineRunRepository.fetchRuns().filter { $0.completedAt != nil }
 
     return HistoryOverview(
       calendar: calendar,
@@ -160,7 +160,9 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
       return 0
     }
 
-    return runs.reduce(0) { $0 + $1.completionRate } / Double(runs.count)
+    return runs
+      .sorted(by: isRunOrderedBefore)
+      .reduce(0) { $0 + $1.completionRate } / Double(runs.count)
   }
 
   private func isRunOrderedBefore(_ lhs: RoutineRun, _ rhs: RoutineRun) -> Bool {

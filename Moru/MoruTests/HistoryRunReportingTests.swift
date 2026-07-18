@@ -252,6 +252,111 @@ final class HistoryRunReportingTests: XCTestCase {
     XCTAssertFalse(historyRun.stepResults[0].isCompleted)
     XCTAssertTrue(historyRun.stepResults[0].isSkipped)
   }
+  @MainActor
+  func testHistoryExcludesNonterminalRunsAndRetainsFinalizedNaturalAndEndedEarlyRuns() throws {
+    let calendar = makeCalendar()
+    let naturalID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000010"))
+    let endedEarlyID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000011"))
+    let nonterminalID = try XCTUnwrap(UUID(uuidString: "00000000-0000-0000-0000-000000000012"))
+    let monday = makeDate(2026, 7, 13, 0, 0, calendar: calendar)
+    let naturalStep = makeSnapshot(title: "자연 완료")
+    let endedEarlyCompletedStep = makeSnapshot(title: "중단 전 완료", order: 0)
+    let endedEarlyIncompleteStep = makeSnapshot(title: "중단 미완료", order: 1)
+    let nonterminalStep = makeSnapshot(title: "진행 중")
+    let naturalRun = makeRun(
+      id: naturalID,
+      startedAt: monday.addingTimeInterval(9 * 60 * 60),
+      plannedSteps: [naturalStep],
+      results: [makeCompletedResult(for: naturalStep)]
+    )
+    let endedEarlyRun = makeRun(
+      id: endedEarlyID,
+      startedAt: monday.addingTimeInterval(10 * 60 * 60),
+      plannedSteps: [endedEarlyCompletedStep, endedEarlyIncompleteStep],
+      results: [makeCompletedResult(for: endedEarlyCompletedStep)],
+      endedEarly: true
+    )
+    let nonterminalRun = makeRun(
+      id: nonterminalID,
+      startedAt: monday.addingTimeInterval(24 * 60 * 60),
+      plannedSteps: [nonterminalStep],
+      results: [makeCompletedResult(for: nonterminalStep)],
+      isFinalized: false
+    )
+    let overview = try makeUseCase(
+      runs: [nonterminalRun, naturalRun, endedEarlyRun],
+      calendar: calendar,
+      now: monday
+    ).load()
+
+    let day = try XCTUnwrap(overview.recentDays.first)
+
+    XCTAssertEqual(overview.recentDays.map(\.date), [monday])
+    XCTAssertEqual(day.runs.map(\.id), [endedEarlyID, naturalID])
+    XCTAssertEqual(day.runs.map(\.status), [.endedEarly, .completed])
+    XCTAssertFalse(day.runs.contains { $0.id == nonterminalID })
+    XCTAssertEqual(day.totalRunCount, day.runs.count)
+    XCTAssertEqual(day.totalRunCount, 2)
+    XCTAssertEqual(day.completedRunCount, 1)
+    XCTAssertEqual(day.completionRate, 0.75)
+    XCTAssertEqual(overview.week.totalRunCount, 2)
+    XCTAssertEqual(overview.week.completedRunCount, 1)
+    XCTAssertEqual(overview.week.completionRate, 0.75)
+    XCTAssertEqual(overview.week.dailyCompletionRates[0].completionRate, 0.75)
+    XCTAssertTrue(overview.week.dailyCompletionRates.dropFirst().allSatisfy { $0.completionRate == 0 })
+  }
+
+  @MainActor
+  func testHistoryCompletionRateIsDeterministicAcrossInputPermutations() throws {
+    let calendar = makeCalendar()
+    let thirdSteps = [
+      makeSnapshot(title: "3분의 1 - 1", order: 0),
+      makeSnapshot(title: "3분의 1 - 2", order: 1),
+      makeSnapshot(title: "3분의 1 - 3", order: 2),
+    ]
+    let halfSteps = [
+      makeSnapshot(title: "2분의 1 - 1", order: 0),
+      makeSnapshot(title: "2분의 1 - 2", order: 1),
+    ]
+    let twoThirdsSteps = [
+      makeSnapshot(title: "3분의 2 - 1", order: 0),
+      makeSnapshot(title: "3분의 2 - 2", order: 1),
+      makeSnapshot(title: "3분의 2 - 3", order: 2),
+    ]
+    let thirdRun = makeRun(
+      startedAt: makeDate(2026, 7, 14, 9, 0, calendar: calendar),
+      plannedSteps: thirdSteps,
+      results: [makeCompletedResult(for: thirdSteps[0])]
+    )
+    let halfRun = makeRun(
+      startedAt: makeDate(2026, 7, 14, 8, 0, calendar: calendar),
+      plannedSteps: halfSteps,
+      results: [makeCompletedResult(for: halfSteps[0])]
+    )
+    let twoThirdsRun = makeRun(
+      startedAt: makeDate(2026, 7, 14, 7, 0, calendar: calendar),
+      plannedSteps: twoThirdsSteps,
+      results: [
+        makeCompletedResult(for: twoThirdsSteps[0]),
+        makeCompletedResult(for: twoThirdsSteps[1]),
+      ]
+    )
+    let now = makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+
+    let firstOverview = try makeUseCase(
+      runs: [halfRun, twoThirdsRun, thirdRun],
+      calendar: calendar,
+      now: now
+    ).load()
+    let permutedOverview = try makeUseCase(
+      runs: [thirdRun, halfRun, twoThirdsRun],
+      calendar: calendar,
+      now: now
+    ).load()
+
+    XCTAssertEqual(firstOverview, permutedOverview)
+    XCTAssertEqual(firstOverview.week.completionRate, 0.5)
+  }
 
   @MainActor
   func testHistoryOrderingIsDeterministicForDaysAndRuns() throws {
@@ -379,14 +484,15 @@ final class HistoryRunReportingTests: XCTestCase {
     startedAt: Date,
     plannedSteps: [RoutineStepSnapshot],
     results: [RoutineStepResult] = [],
-    endedEarly: Bool = false
+    endedEarly: Bool = false,
+    isFinalized: Bool = true
   ) -> RoutineRun {
     RoutineRun(
       id: id,
       routineID: routineID,
       routineName: routineName,
       startedAt: startedAt,
-      completedAt: startedAt.addingTimeInterval(60),
+      completedAt: isFinalized ? startedAt.addingTimeInterval(60) : nil,
       results: results,
       plannedSteps: plannedSteps,
       endedEarly: endedEarly

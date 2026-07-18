@@ -115,8 +115,155 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     XCTAssertEqual(historyRun.status, .completed)
     XCTAssertEqual(historyRun.stepResults.map(\.stepTitle), [step.title])
   }
+  @MainActor
+  func testHistoryViewModelTransitionsFromLoadingToFailed() {
+    let useCase = SequencedHistoryLoadUseCase(results: [.failure(.loadFailed)])
+    let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
+
+    guard case .loading = viewModel.state else {
+      XCTFail("A new History view model should begin in the loading state.")
+      return
+    }
+
+    viewModel.load()
+
+    guard case .failed(let message) = viewModel.state else {
+      XCTFail("A failed History load should produce the failed state.")
+      return
+    }
+
+    XCTAssertEqual(message, "기록을 불러오지 못했어요.")
+  }
+
+  @MainActor
+  func testHistoryViewModelMapsEmptyOverviewToEmptyState() {
+    let useCase = SequencedHistoryLoadUseCase(
+      results: [.success(makeHistoryOverview(recentDays: []))]
+    )
+    let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
+
+    viewModel.load()
+
+    guard case .empty = viewModel.state else {
+      XCTFail("An overview without recent days should produce the empty state.")
+      return
+    }
+
+    XCTAssertEqual(useCase.loadCount, 1)
+  }
+
+  @MainActor
+  func testHistoryViewModelRetriesFromFailureToContent() {
+    let expectedOverview = makeHistoryOverview(recentDays: [makeHistoryDaySummary()])
+    let useCase = SequencedHistoryLoadUseCase(
+      results: [
+        .failure(.loadFailed),
+        .success(expectedOverview)
+      ]
+    )
+    let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
+
+    viewModel.load()
+
+    guard case .failed = viewModel.state else {
+      XCTFail("The first sequenced result should fail.")
+      return
+    }
+
+    viewModel.retryButtonDidTap()
+
+    guard case .content(let overview) = viewModel.state else {
+      XCTFail("Retry should load the next successful result.")
+      return
+    }
+
+    XCTAssertEqual(overview, expectedOverview)
+    XCTAssertEqual(useCase.loadCount, 2)
+  }
+
+  @MainActor
+  func testHistoryViewModelDoesNotLoadAlternateFallbackAfterFailure() {
+    let useCase = SequencedHistoryLoadUseCase(
+      results: [
+        .failure(.loadFailed),
+        .success(makeHistoryOverview(recentDays: [makeHistoryDaySummary()]))
+      ]
+    )
+    let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
+
+    viewModel.load()
+
+    guard case .failed = viewModel.state else {
+      XCTFail("The first failure should remain visible until the user retries.")
+      return
+    }
+
+    XCTAssertEqual(useCase.loadCount, 1)
+  }
+
 }
 
+@MainActor
+private final class SequencedHistoryLoadUseCase: LoadHistoryUseCaseProtocol {
+  private var results: [HistoryLoadResult]
+  private(set) var loadCount = 0
+
+  init(results: [HistoryLoadResult]) {
+    self.results = results
+  }
+
+  func load() throws -> HistoryOverview {
+    loadCount += 1
+
+    guard !results.isEmpty else {
+      throw HistoryLoadTestError.noResultAvailable
+    }
+
+    switch results.removeFirst() {
+    case .success(let overview):
+      return overview
+    case .failure(let error):
+      throw error
+    }
+  }
+}
+
+private enum HistoryLoadResult {
+  case success(HistoryOverview)
+  case failure(HistoryLoadTestError)
+}
+
+private enum HistoryLoadTestError: Error {
+  case loadFailed
+  case noResultAvailable
+}
+
+private func makeHistoryOverview(recentDays: [HistoryDaySummary]) -> HistoryOverview {
+  let date = Date(timeIntervalSince1970: 0)
+
+  return HistoryOverview(
+    calendar: Calendar(identifier: .gregorian),
+    recentDays: recentDays,
+    week: HistoryWeekReport(
+      weekStartDate: date,
+      weekEndDate: date.addingTimeInterval(7 * 24 * 60 * 60),
+      completedRunCount: 0,
+      totalRunCount: 0,
+      completionRate: 0,
+      dailyCompletionRates: []
+    )
+  )
+}
+
+private func makeHistoryDaySummary() -> HistoryDaySummary {
+  HistoryDaySummary(
+    date: Date(timeIntervalSince1970: 0),
+    completedRunCount: 1,
+    totalRunCount: 1,
+    completionRate: 1,
+    runs: []
+  )
+}
 @MainActor
 private final class VerticalFlowRoutineRepository: RoutineRepository {
   private var routines: [Routine]

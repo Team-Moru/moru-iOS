@@ -86,7 +86,10 @@ struct HistoryWeeklySummaryCard: View {
       }
     }
     .buttonStyle(.plain)
-    .accessibilityLabel("이번 주 루틴 리포트, 완료율 \(Int((completionRate * 100).rounded()))퍼센트")
+    .accessibilityLabel(
+      "\(title), 이번 주 루틴 리포트, \(completedRuns)/\(totalRuns)회 완료, "
+        + "완료율 \(Int((completionRate * 100).rounded()))퍼센트"
+    )
   }
 }
 
@@ -259,11 +262,11 @@ struct HistoryFailureView: View {
         .font(AppFont.title1SemiBold)
         .foregroundStyle(AppColor.orange500)
 
-      Text("기록을 불러오지 못했어요.")
+      Text(message)
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
 
-      Text(message)
+      Text("잠시 후 다시 시도해 주세요.")
         .font(AppFont.label1NormalMedium)
         .foregroundStyle(AppColor.moruTextSecondary)
         .multilineTextAlignment(.center)
