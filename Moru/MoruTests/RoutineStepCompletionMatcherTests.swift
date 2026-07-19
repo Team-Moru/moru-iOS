@@ -25,9 +25,48 @@ final class RoutineStepCompletionMatcherTests: XCTestCase {
     )
   }
 
+  func testClassifiesExplicitCompletionCommand() {
+    XCTAssertEqual(
+      RoutineStepCompletionMatcher.match("완료했어", for: waterStep),
+      .explicit
+    )
+  }
+
+  func testClassifiesWeakCompletedActionPhrases() {
+    let transcripts = [
+      "잠자리 정리했어",
+      "잠자리 정리했어요",
+      "잠자리 정리했다",
+      "잠자리 정리 마쳤어",
+      "잠자리 정리 끝냈다"
+    ]
+
+    XCTAssertTrue(
+      transcripts.allSatisfy { transcript in
+        RoutineStepCompletionMatcher.match(transcript, for: waterStep) == .weak
+      }
+    )
+  }
+
+  func testClassifiesWaterDrinkingCompletionAsContextual() {
+    XCTAssertEqual(
+      RoutineStepCompletionMatcher.match("물 한잔 마셨어", for: waterStep),
+      .contextual
+    )
+  }
+
   func testWaterDrinkingCompletionRejectsNegativeResponse() {
-    XCTAssertFalse(
-      RoutineStepCompletionMatcher.isCompleted("물 안 마셨어", for: waterStep)
+    let transcripts = [
+      "물 안 마셨어",
+      "잠자리 정리 안 마쳤어",
+      "아직 안 됐어",
+      "못 끝냈어"
+    ]
+
+    XCTAssertTrue(
+      transcripts.allSatisfy { transcript in
+        RoutineStepCompletionMatcher.match(transcript, for: waterStep) == .none
+      }
     )
   }
 

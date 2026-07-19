@@ -44,8 +44,8 @@ struct InputStepContentView: View {
 
       VoiceInputControlView(
         speechInputController: speechInputController,
-        autoFinishWhen: { transcript in
-          RoutineStepCompletionMatcher.isCompleted(transcript, for: step)
+        autoFinishMatch: { transcript in
+          RoutineStepCompletionMatcher.match(transcript, for: step)
         }
       ) { transcript in
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

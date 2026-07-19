@@ -25,6 +25,11 @@ enum SpeechInputSessionEvent {
   case failed(SpeechInputFailure)
 }
 
+struct SpeechTranscriptUpdate: Equatable {
+  let text: String
+  let isFinal: Bool
+}
+
 @MainActor
 protocol SpeechInputSession: AnyObject {
   var eventHandler: ((SpeechInputSessionEvent) -> Void)? { get set }
@@ -68,6 +73,7 @@ final class SpeechInputController {
   private(set) var waveformLevels = Array(repeating: CGFloat.zero, count: 20)
   private(set) var displayTranscript = ""
   private(set) var latestFinalTranscript = ""
+  private(set) var latestTranscriptUpdate: SpeechTranscriptUpdate?
 
   init(
     makeSession: @escaping @MainActor () -> any SpeechInputSession = {
@@ -211,6 +217,32 @@ final class SpeechInputController {
     }
   }
 
+  func finishImmediately(using transcript: String) -> String? {
+    guard phase == .listening else {
+      return nil
+    }
+
+    let completedSegment = cleaned(transcript)
+    guard !completedSegment.isEmpty else {
+      return nil
+    }
+
+    activeAttemptID = nil
+    silenceTask?.cancel()
+    silenceTask = nil
+    phase = .finishing
+
+    session?.cancel()
+    session = nil
+
+    let finalTranscript = (committedSegments + [completedSegment])
+      .map(cleaned)
+      .filter { !$0.isEmpty }
+      .joined(separator: " ")
+    resetAfterFinish()
+    return finalTranscript.isEmpty ? nil : finalTranscript
+  }
+
   func cancel() {
     activeAttemptID = nil
     silenceTask?.cancel()
@@ -237,13 +269,18 @@ final class SpeechInputController {
 
     switch event {
     case .transcript(let transcript, let isFinal):
+      let cleanedTranscript = cleaned(transcript)
       if isFinal {
-        currentFinalTranscript = cleaned(transcript)
+        currentFinalTranscript = cleanedTranscript
         latestFinalTranscript = currentFinalTranscript
         currentVolatileTranscript = ""
       } else {
-        currentVolatileTranscript = cleaned(transcript)
+        currentVolatileTranscript = cleanedTranscript
       }
+      latestTranscriptUpdate = SpeechTranscriptUpdate(
+        text: cleanedTranscript,
+        isFinal: isFinal
+      )
       lastTranscriptAt = Date()
       updateDisplayTranscript()
 
@@ -317,6 +354,7 @@ final class SpeechInputController {
     currentFinalTranscript = ""
     currentVolatileTranscript = ""
     latestFinalTranscript = ""
+    latestTranscriptUpdate = nil
     updateDisplayTranscript()
   }
 

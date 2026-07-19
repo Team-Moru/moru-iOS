@@ -5,18 +5,35 @@
 
 import Foundation
 
+enum RoutineStepCompletionMatch: Equatable {
+  case none
+  case explicit
+  case contextual
+  case weak
+}
+
 enum RoutineStepCompletionMatcher {
   static func isCompleted(_ transcript: String, for step: RoutineStep) -> Bool {
-    if ConfirmTranscriptMatcher.isConfirmed(transcript)
-      || ConfirmTranscriptMatcher.isExplicitCompletionCommand(transcript) {
-      return true
-    }
+    match(transcript, for: step) != .none
+  }
 
+  static func match(
+    _ transcript: String,
+    for step: RoutineStep
+  ) -> RoutineStepCompletionMatch {
     guard !ConfirmTranscriptMatcher.hasNegativeIntent(transcript) else {
-      return false
+      return .none
     }
 
-    return isWaterDrinkingCompletion(transcript, for: step)
+    if ConfirmTranscriptMatcher.isExplicitCompletionCommand(transcript) {
+      return .explicit
+    }
+
+    if isWaterDrinkingCompletion(transcript, for: step) {
+      return .contextual
+    }
+
+    return ConfirmTranscriptMatcher.isConfirmed(transcript) ? .weak : .none
   }
 
   private static func isWaterDrinkingCompletion(

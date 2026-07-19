@@ -108,6 +108,35 @@ final class SpeechInputControllerTests: XCTestCase {
     controller.cancel()
   }
 
+  func testVolatileTranscriptUpdateIsExposedForAutomaticCompletion() async {
+    let session = SpeechInputSessionSpy()
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+    session.send(.transcript("정리했어", isFinal: false))
+
+    XCTAssertEqual(
+      controller.latestTranscriptUpdate,
+      SpeechTranscriptUpdate(text: "정리했어", isFinal: false)
+    )
+    controller.cancel()
+  }
+
+  func testFinishImmediatelyPreservesCandidateAndIgnoresLateResults() async {
+    let session = SpeechInputSessionSpy()
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+    session.send(.transcript("정리했어", isFinal: false))
+    let transcript = controller.finishImmediately(using: "정리했어")
+    session.send(.transcript("늦은 결과", isFinal: true))
+
+    XCTAssertEqual(transcript, "정리했어")
+    XCTAssertEqual(session.cancelCallCount, 1)
+    XCTAssertEqual(controller.phase, .idle)
+    XCTAssertNil(controller.latestTranscriptUpdate)
+  }
+
   func testStaleSessionFailureDoesNotStopNewListeningAttempt() async {
     let firstSession = SpeechInputSessionSpy()
     let secondSession = SpeechInputSessionSpy()

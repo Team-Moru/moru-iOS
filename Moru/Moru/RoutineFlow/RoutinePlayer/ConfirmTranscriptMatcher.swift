@@ -12,16 +12,29 @@ enum ConfirmTranscriptMatcher {
     "안했",
     "못했",
     "안끝",
+    "못끝",
     "덜했",
-    "않았"
+    "않았",
+    "안됐",
+    "못됐",
+    "안마셨",
+    "못마셨",
+    "안마쳤",
+    "못마쳤"
   ]
 
   private static let positiveExpressions = [
     "완료",
     "끝",
     "다했",
+    "했어",
     "했어요",
-    "됐어"
+    "했다",
+    "했음",
+    "마쳤",
+    "끝냈",
+    "됐어",
+    "됐다"
   ]
 
   private static let standaloneAffirmations = ["네", "응"]
@@ -84,7 +97,5 @@ enum ConfirmTranscriptMatcher {
 
   private static func hasNegativeIntent(in normalizedTranscript: String) -> Bool {
     negativeExpressions.contains(where: normalizedTranscript.contains)
-      || normalizedTranscript.contains("안마셨")
-      || normalizedTranscript.contains("못마셨")
   }
 }

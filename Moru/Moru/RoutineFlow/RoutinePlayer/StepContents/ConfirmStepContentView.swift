@@ -44,8 +44,8 @@ struct ConfirmStepContentView: View {
 
       VoiceInputControlView(
         speechInputController: speechInputController,
-        autoFinishWhen: { transcript in
-          RoutineStepCompletionMatcher.isCompleted(transcript, for: step)
+        autoFinishMatch: { transcript in
+          RoutineStepCompletionMatcher.match(transcript, for: step)
         }
       ) { transcript in
         guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
