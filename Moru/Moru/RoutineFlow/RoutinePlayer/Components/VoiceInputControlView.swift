@@ -8,8 +8,21 @@ import UIKit
 
 struct VoiceInputControlView: View {
   let speechInputController: SpeechInputController
+  let autoFinishWhen: ((String) -> Bool)?
   let onFinished: (String) -> Void
   @Environment(\.openURL) private var openURL
+  @State private var isAutomaticallyFinishing = false
+  @State private var hasStartedAutomatically = false
+
+  init(
+    speechInputController: SpeechInputController,
+    autoFinishWhen: ((String) -> Bool)? = nil,
+    onFinished: @escaping (String) -> Void
+  ) {
+    self.speechInputController = speechInputController
+    self.autoFinishWhen = autoFinishWhen
+    self.onFinished = onFinished
+  }
 
   var body: some View {
     VStack(spacing: 16) {
@@ -29,6 +42,38 @@ struct VoiceInputControlView: View {
     }
     .onDisappear {
       speechInputController.cancel()
+    }
+    .task {
+      guard !hasStartedAutomatically else {
+        return
+      }
+
+      hasStartedAutomatically = true
+      await speechInputController.start()
+    }
+    .onChange(of: speechInputController.latestFinalTranscript) { _, transcript in
+      automaticallyFinishIfNeeded(for: transcript)
+    }
+  }
+
+  private func automaticallyFinishIfNeeded(for transcript: String) {
+    guard
+      let autoFinishWhen,
+      !isAutomaticallyFinishing,
+      speechInputController.phase == .listening,
+      autoFinishWhen(transcript)
+    else {
+      return
+    }
+
+    isAutomaticallyFinishing = true
+    Task {
+      guard let finalTranscript = await speechInputController.finish() else {
+        isAutomaticallyFinishing = false
+        return
+      }
+
+      onFinished(finalTranscript)
     }
   }
 

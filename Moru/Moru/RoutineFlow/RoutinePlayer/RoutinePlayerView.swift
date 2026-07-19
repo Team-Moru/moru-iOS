@@ -256,6 +256,7 @@ struct RoutinePlayerView: View {
       ) { transcript in
         viewModel.completeCurrentStep(transcript: transcript)
       }
+      .id(step.id)
 
     case .timer:
       TimerStepContentView(step: step) {
@@ -270,6 +271,7 @@ struct RoutinePlayerView: View {
       ) { transcript in
         viewModel.completeCurrentStep(transcript: transcript)
       }
+      .id(step.id)
     }
   }
 

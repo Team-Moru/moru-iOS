@@ -32,4 +32,11 @@ final class ConfirmTranscriptMatcherTests: XCTestCase {
     XCTAssertFalse(ConfirmTranscriptMatcher.isConfirmed("오늘 날씨가 좋아"))
     XCTAssertFalse(ConfirmTranscriptMatcher.isConfirmed("네, 아직이에요"))
   }
+
+  func testExplicitCompletionCommandDoesNotTreatFreeformInputAsFinished() {
+    XCTAssertTrue(ConfirmTranscriptMatcher.isExplicitCompletionCommand("완료했어"))
+    XCTAssertTrue(ConfirmTranscriptMatcher.isExplicitCompletionCommand("다 했어"))
+    XCTAssertFalse(ConfirmTranscriptMatcher.isExplicitCompletionCommand("물을 마시고 완료할 거야"))
+    XCTAssertFalse(ConfirmTranscriptMatcher.isExplicitCompletionCommand("아직 완료 안 했어"))
+  }
 }

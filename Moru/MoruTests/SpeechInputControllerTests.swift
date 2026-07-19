@@ -68,15 +68,43 @@ final class SpeechInputControllerTests: XCTestCase {
     XCTAssertTrue(controller.waveformLevels.allSatisfy { $0 == 0 })
   }
 
-  func testAudioLevelEventUpdatesTwentyWaveformBars() async {
+  func testAudioLevelsEventUpdatesTwentyWaveformBars() async {
     let session = SpeechInputSessionSpy()
     let controller = SpeechInputController { session }
 
     await controller.start()
-    session.send(.audioLevel(1))
+    session.send(.audioLevels(Array(repeating: 1, count: 20)))
 
     XCTAssertEqual(controller.waveformLevels.count, 20)
     XCTAssertGreaterThan(controller.waveformLevels.last ?? 0, 0)
+    controller.cancel()
+  }
+
+  func testAudioLevelsEventPreservesPerBarWaveformShape() async {
+    let session = SpeechInputSessionSpy()
+    let controller = SpeechInputController { session }
+    let levels = (0..<20).map { Float($0) / 19 }
+
+    await controller.start()
+    session.send(.audioLevels(levels))
+
+    XCTAssertLessThan(controller.waveformLevels.first ?? 1, 0.01)
+    XCTAssertGreaterThan(controller.waveformLevels.last ?? 0, 0.4)
+    XCTAssertLessThan(
+      controller.waveformLevels[5],
+      controller.waveformLevels[15]
+    )
+    controller.cancel()
+  }
+
+  func testFinalTranscriptIsExposedForAutomaticCompletion() async {
+    let session = SpeechInputSessionSpy()
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+    session.send(.transcript("완료했어요", isFinal: true))
+
+    XCTAssertEqual(controller.latestFinalTranscript, "완료했어요")
     controller.cancel()
   }
 
@@ -93,6 +121,62 @@ final class SpeechInputControllerTests: XCTestCase {
 
     XCTAssertEqual(controller.phase, .listening)
     controller.cancel()
+  }
+
+  func testStartMapsTranscriberUnavailableToDeviceFailure() async {
+    let session = SpeechInputSessionSpy(
+      startError: AppleSpeechRecognitionSessionError.transcriberUnavailable
+    )
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+
+    XCTAssertEqual(controller.phase, .failed(.transcriberUnavailable))
+    XCTAssertEqual(
+      controller.statusText,
+      "이 기기에서는 음성 인식 기능을 사용할 수 없어요."
+    )
+  }
+
+  func testStartMapsModelPreparationFailureWithoutLocaleUnavailable() async {
+    let session = SpeechInputSessionSpy(
+      startError: AppleSpeechRecognitionSessionError.modelDownloadFailed
+    )
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+
+    XCTAssertEqual(controller.phase, .failed(.modelDownloadFailed))
+    XCTAssertEqual(
+      controller.statusText,
+      "음성 인식 준비에 실패했어요. 네트워크를 확인해 주세요."
+    )
+  }
+
+  func testStartMapsUnsupportedLocaleToLocaleUnavailable() async {
+    let session = SpeechInputSessionSpy(
+      startError: AppleSpeechRecognitionSessionError.localeUnavailable
+    )
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+
+    XCTAssertEqual(controller.phase, .failed(.localeUnavailable))
+  }
+
+  func testStartMapsUnavailableAudioInputToRetryableFailure() async {
+    let session = SpeechInputSessionSpy(
+      startError: AppleSpeechRecognitionSessionError.audioSession
+    )
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+
+    XCTAssertEqual(controller.phase, .failed(.audioSession))
+    XCTAssertEqual(
+      controller.statusText,
+      "마이크를 시작할 수 없어요. 다시 시도해 주세요."
+    )
   }
 }
 
@@ -116,13 +200,21 @@ private final class SpeechInputSessionSpy: SpeechInputSession {
   var finishCallCount = 0
   var cancelCallCount = 0
   var finishTranscript: String
+  var startError: Error?
 
-  init(finishTranscript: String = "") {
+  init(
+    finishTranscript: String = "",
+    startError: Error? = nil
+  ) {
     self.finishTranscript = finishTranscript
+    self.startError = startError
   }
 
   func start() async throws {
     startCallCount += 1
+    if let startError {
+      throw startError
+    }
   }
 
   func finish() async throws -> String {

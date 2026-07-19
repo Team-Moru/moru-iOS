@@ -18,7 +18,11 @@ struct ConfirmStepContentView: View {
       Spacer()
         .frame(height: 42)
 
-      RoutinePlayerOrbView()
+      RoutinePlayerOrbView(
+        levels: speechInputController.waveformLevels,
+        isListening: speechInputController.phase == .listening,
+        isPaused: speechInputController.isPaused
+      )
 
       Spacer()
         .frame(height: 44)
@@ -38,8 +42,13 @@ struct ConfirmStepContentView: View {
       Spacer()
         .frame(height: 32)
 
-      VoiceInputControlView(speechInputController: speechInputController) { transcript in
-        guard ConfirmTranscriptMatcher.isConfirmed(transcript) else {
+      VoiceInputControlView(
+        speechInputController: speechInputController,
+        autoFinishWhen: { transcript in
+          RoutineStepCompletionMatcher.isCompleted(transcript, for: step)
+        }
+      ) { transcript in
+        guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
           feedbackText = "완료했다고 들리지 않아요. 다시 말해 주세요."
           return
         }

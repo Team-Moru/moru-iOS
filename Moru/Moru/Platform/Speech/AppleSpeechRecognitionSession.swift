@@ -5,10 +5,12 @@
 
 import AVFAudio
 import Foundation
+import OSLog
 import Speech
 
 enum AppleSpeechRecognitionSessionError: Error {
   case microphonePermissionDenied
+  case transcriberUnavailable
   case localeUnavailable
   case modelDownloadFailed
   case audioSession
@@ -21,16 +23,147 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     static let audioBufferSize: AVAudioFrameCount = 4_096
   }
 
+  nonisolated private final class AudioInputSink: @unchecked Sendable {
+    private final class ConverterInput: @unchecked Sendable {
+      let buffer: AVAudioPCMBuffer
+      var hasBeenSupplied = false
+
+      init(buffer: AVAudioPCMBuffer) {
+        self.buffer = buffer
+      }
+    }
+
+    private let converter: AVAudioConverter
+    private let analyzerFormat: AVAudioFormat
+    private let continuation: AsyncStream<AnalyzerInput>.Continuation
+    private let onConversionFailure: @Sendable () -> Void
+    private var didFail = false
+
+    init(
+      converter: AVAudioConverter,
+      analyzerFormat: AVAudioFormat,
+      continuation: AsyncStream<AnalyzerInput>.Continuation,
+      onConversionFailure: @escaping @Sendable () -> Void
+    ) {
+      self.converter = converter
+      self.analyzerFormat = analyzerFormat
+      self.continuation = continuation
+      self.onConversionFailure = onConversionFailure
+    }
+
+    func installTap(
+      on inputNode: AVAudioInputNode,
+      format: AVAudioFormat,
+      bufferSize: AVAudioFrameCount,
+      reportAudioLevels: @escaping @Sendable ([Float]) -> Void
+    ) {
+      inputNode.installTap(
+        onBus: 0,
+        bufferSize: bufferSize,
+        format: format
+      ) { [self] buffer, _ in
+        let normalizedLevels = Self.normalizedLevels(from: buffer)
+        yieldConvertedInput(from: buffer)
+        reportAudioLevels(normalizedLevels)
+      }
+    }
+
+    func yieldConvertedInput(from buffer: AVAudioPCMBuffer) {
+      guard !didFail else {
+        return
+      }
+
+      let outputFrameCapacity = AVAudioFrameCount(
+        max(
+          1,
+          ceil(
+            Double(buffer.frameLength) * analyzerFormat.sampleRate
+              / buffer.format.sampleRate
+          )
+        )
+      )
+      guard let outputBuffer = AVAudioPCMBuffer(
+        pcmFormat: analyzerFormat,
+        frameCapacity: outputFrameCapacity
+      ) else {
+        reportConversionFailure()
+        return
+      }
+
+      let converterInput = ConverterInput(buffer: buffer)
+      var conversionError: NSError?
+      let status = converter.convert(
+        to: outputBuffer,
+        error: &conversionError
+      ) { _, inputStatus in
+        guard !converterInput.hasBeenSupplied else {
+          inputStatus.pointee = .noDataNow
+          return nil
+        }
+
+        converterInput.hasBeenSupplied = true
+        inputStatus.pointee = .haveData
+        return converterInput.buffer
+      }
+      guard status != .error, conversionError == nil else {
+        reportConversionFailure()
+        return
+      }
+
+      guard outputBuffer.frameLength > 0 else {
+        return
+      }
+
+      continuation.yield(AnalyzerInput(buffer: outputBuffer))
+    }
+
+    private func reportConversionFailure() {
+      guard !didFail else {
+        return
+      }
+
+      didFail = true
+      onConversionFailure()
+    }
+
+    private static func normalizedLevels(from buffer: AVAudioPCMBuffer) -> [Float] {
+      guard let channelData = buffer.floatChannelData else {
+        return Array(repeating: .zero, count: 20)
+      }
+
+      let sampleCount = Int(buffer.frameLength)
+      guard sampleCount > 0 else {
+        return Array(repeating: .zero, count: 20)
+      }
+
+      return (0..<20).map { index in
+        let start = index * sampleCount / 20
+        let end = (index + 1) * sampleCount / 20
+        let samples = UnsafeBufferPointer(
+          start: channelData[0].advanced(by: start),
+          count: end - start
+        )
+        return SpeechAudioLevelProcessor.normalizedLevel(for: samples)
+      }
+    }
+  }
+
   var eventHandler: ((SpeechInputSessionEvent) -> Void)?
 
   private let audioEngine = AVAudioEngine()
   private let audioSessionCoordinator: RoutineAudioSessionCoordinator
   private let locale = Locale(identifier: "ko-KR")
+#if DEBUG
+  private static let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "SpeechRecognition"
+  )
+#endif
   private var analyzer: SpeechAnalyzer?
   private var transcriber: SpeechTranscriber?
+  private var inputSink: AudioInputSink?
   private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
   private var resultTask: Task<Void, Never>?
-  private var reservedLocale: Locale?
   private var isTapInstalled = false
   private var isStopping = false
   private var finalTranscript = ""
@@ -49,9 +182,16 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
       throw AppleSpeechRecognitionSessionError.microphonePermissionDenied
     }
 
+    await logDeviceSupport()
+    guard SpeechTranscriber.isAvailable else {
+      log("SpeechTranscriber is unavailable on this device")
+      throw AppleSpeechRecognitionSessionError.transcriberUnavailable
+    }
+
     guard let supportedLocale = await SpeechTranscriber.supportedLocale(
       equivalentTo: locale
     ) else {
+      log("Requested locale is not supported: \(locale.identifier(.bcp47))")
       throw AppleSpeechRecognitionSessionError.localeUnavailable
     }
 
@@ -62,10 +202,6 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     let modules: [any SpeechModule] = [transcriber]
 
     try await installAssetsIfNeeded(for: modules)
-    guard try await AssetInventory.reserve(locale: supportedLocale) else {
-      throw AppleSpeechRecognitionSessionError.localeUnavailable
-    }
-    reservedLocale = supportedLocale
 
     do {
       try await audioSessionCoordinator.activateForSpeechInput()
@@ -75,15 +211,23 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     }
 
     let inputNode = audioEngine.inputNode
-    let inputFormat = inputNode.outputFormat(forBus: 0)
-    guard inputFormat.sampleRate > 0 else {
+    // AVAudioInputNode exposes the physical microphone format on its input scope.
+    let hardwareInputFormat = inputNode.inputFormat(forBus: 0)
+    let tapFormat = inputNode.outputFormat(forBus: 0)
+    guard
+      hardwareInputFormat.sampleRate > 0,
+      hardwareInputFormat.channelCount > 0,
+      tapFormat.sampleRate > 0,
+      tapFormat.channelCount > 0,
+      hardwareInputFormat.isEqual(tapFormat)
+    else {
       cleanup()
       throw AppleSpeechRecognitionSessionError.audioSession
     }
 
     guard let analysisFormat = await SpeechAnalyzer.bestAvailableAudioFormat(
       compatibleWith: modules,
-      considering: inputFormat
+      considering: tapFormat
     ) else {
       cleanup()
       throw AppleSpeechRecognitionSessionError.recognition
@@ -97,16 +241,51 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
       throw AppleSpeechRecognitionSessionError.recognition
     }
 
+    guard let audioConverter = AVAudioConverter(
+      from: tapFormat,
+      to: analysisFormat
+    ) else {
+      cleanup()
+      throw AppleSpeechRecognitionSessionError.recognition
+    }
+    audioConverter.primeMethod = .none
+
     let inputStream = AsyncStream<AnalyzerInput>(bufferingPolicy: .bufferingNewest(8)) {
       [weak self] continuation in
       self?.inputContinuation = continuation
     }
+    guard let inputContinuation else {
+      cleanup()
+      throw AppleSpeechRecognitionSessionError.recognition
+    }
+
+    let inputSink = AudioInputSink(
+      converter: audioConverter,
+      analyzerFormat: analysisFormat,
+      continuation: inputContinuation,
+      onConversionFailure: { [weak self] in
+        Task { @MainActor [weak self] in
+          self?.handleInputConversionFailure()
+        }
+      }
+    )
+    let reportAudioLevels: @Sendable ([Float]) -> Void = { [weak self] levels in
+      Task { @MainActor [weak self] in
+        self?.eventHandler?(.audioLevels(levels))
+      }
+    }
 
     self.analyzer = analyzer
     self.transcriber = transcriber
+    self.inputSink = inputSink
     observeAudioSessionChanges()
     startReceivingResults(from: transcriber)
-    installInputTap(on: inputNode, format: analysisFormat)
+    installInputTap(
+      on: inputNode,
+      format: tapFormat,
+      inputSink: inputSink,
+      reportAudioLevels: reportAudioLevels
+    )
 
     do {
       try await analyzer.start(inputSequence: inputStream)
@@ -126,10 +305,10 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     isStopping = true
     removeInputTap()
     audioEngine.stop()
-    inputContinuation?.finish()
-    inputContinuation = nil
 
     do {
+      inputContinuation?.finish()
+      inputContinuation = nil
       try await analyzer.finalizeAndFinishThroughEndOfInput()
       await resultTask?.value
       let transcript = preferredTranscript()
@@ -160,7 +339,10 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
   }
 
   private func installAssetsIfNeeded(for modules: [any SpeechModule]) async throws {
-    switch await AssetInventory.status(forModules: modules) {
+    let initialStatus = await AssetInventory.status(forModules: modules)
+    await logAssetStatus(initialStatus)
+
+    switch initialStatus {
     case .installed:
       return
 
@@ -169,31 +351,59 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
         let request = try await AssetInventory.assetInstallationRequest(supporting: modules)
         try await request?.downloadAndInstall()
       } catch {
+        log("Speech asset installation failed")
         throw AppleSpeechRecognitionSessionError.modelDownloadFailed
       }
 
     case .unsupported:
+      log("Speech asset configuration is unsupported")
       throw AppleSpeechRecognitionSessionError.localeUnavailable
 
     @unknown default:
+      log("Speech asset configuration returned an unknown status")
+      throw AppleSpeechRecognitionSessionError.modelDownloadFailed
+    }
+
+    let finalStatus = await AssetInventory.status(forModules: modules)
+    await logAssetStatus(finalStatus)
+    switch finalStatus {
+    case .installed:
+      return
+    case .unsupported:
+      log("Speech asset configuration became unsupported after installation")
+      throw AppleSpeechRecognitionSessionError.localeUnavailable
+    case .supported, .downloading:
+      log("Speech assets did not finish installing")
+      throw AppleSpeechRecognitionSessionError.modelDownloadFailed
+    @unknown default:
+      log("Speech asset configuration returned an unknown post-install status")
       throw AppleSpeechRecognitionSessionError.modelDownloadFailed
     }
   }
 
-  private func installInputTap(on inputNode: AVAudioInputNode, format: AVAudioFormat) {
-    inputNode.installTap(
-      onBus: 0,
+  private func installInputTap(
+    on inputNode: AVAudioInputNode,
+    format: AVAudioFormat,
+    inputSink: AudioInputSink,
+    reportAudioLevels: @escaping @Sendable ([Float]) -> Void
+  ) {
+    inputSink.installTap(
+      on: inputNode,
+      format: format,
       bufferSize: Metric.audioBufferSize,
-      format: format
-    ) { [weak self] buffer, _ in
-      let normalizedLevel = Self.normalizedLevel(from: buffer)
-      self?.inputContinuation?.yield(AnalyzerInput(buffer: buffer))
-
-      Task { @MainActor [weak self] in
-        self?.eventHandler?(.audioLevel(normalizedLevel))
-      }
-    }
+      reportAudioLevels: reportAudioLevels
+    )
     isTapInstalled = true
+  }
+
+  private func handleInputConversionFailure() {
+    guard !isStopping else {
+      return
+    }
+
+    log("Speech input conversion failed")
+    eventHandler?(.failed(.recognition))
+    cancel()
   }
 
   private func removeInputTap() {
@@ -270,14 +480,8 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     resultTask = nil
     analyzer = nil
     transcriber = nil
+    inputSink = nil
     audioSessionCoordinator.deactivateSpeechInput()
-
-    if let reservedLocale {
-      Task {
-        await AssetInventory.release(reservedLocale: reservedLocale)
-      }
-      self.reservedLocale = nil
-    }
 
     NotificationCenter.default.removeObserver(interruptionObserver as Any)
     NotificationCenter.default.removeObserver(routeChangeObserver as Any)
@@ -285,17 +489,40 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     routeChangeObserver = nil
   }
 
-  nonisolated private static func normalizedLevel(from buffer: AVAudioPCMBuffer) -> Float {
-    guard let channelData = buffer.floatChannelData else {
-      return 0
+  private func logDeviceSupport() async {
+#if DEBUG
+    let requestedLocale = locale.identifier(.bcp47)
+    let supportedLocales = await SpeechTranscriber.supportedLocales
+    let installedLocales = await SpeechTranscriber.installedLocales
+    let supportsRequestedLocale = supportedLocales.contains {
+      $0.identifier(.bcp47) == requestedLocale
     }
-
-    let sampleCount = Int(buffer.frameLength)
-    guard sampleCount > 0 else {
-      return 0
+    let hasInstalledRequestedLocale = installedLocales.contains {
+      $0.identifier(.bcp47) == requestedLocale
     }
+    let message = "Speech support | available=\(SpeechTranscriber.isAvailable) "
+      + "requested=\(requestedLocale) "
+      + "supportsRequested=\(supportsRequestedLocale) "
+      + "installedRequested=\(hasInstalledRequestedLocale) "
+      + "supportedCount=\(supportedLocales.count) "
+      + "installedCount=\(installedLocales.count)"
+    Self.logger.debug("\(message, privacy: .public)")
+#endif
+  }
 
-    let samples = Array(UnsafeBufferPointer(start: channelData[0], count: sampleCount))
-    return SpeechAudioLevelProcessor.normalizedLevel(for: samples)
+  private func logAssetStatus(_ status: AssetInventory.Status) async {
+#if DEBUG
+    let reservedLocales = await AssetInventory.reservedLocales
+    let message = "Speech assets | status=\(String(describing: status)) "
+      + "reservedCount=\(reservedLocales.count) "
+      + "maximumReservedLocales=\(AssetInventory.maximumReservedLocales)"
+    Self.logger.debug("\(message, privacy: .public)")
+#endif
+  }
+
+  private func log(_ message: String) {
+#if DEBUG
+    Self.logger.debug("\(message, privacy: .public)")
+#endif
   }
 }

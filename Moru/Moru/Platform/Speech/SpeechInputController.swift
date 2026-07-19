@@ -8,6 +8,7 @@ import Observation
 
 enum SpeechInputFailure: Equatable {
   case microphonePermissionDenied
+  case transcriberUnavailable
   case localeUnavailable
   case modelDownloadFailed
   case audioSession
@@ -18,7 +19,7 @@ enum SpeechInputFailure: Equatable {
 @MainActor
 enum SpeechInputSessionEvent {
   case transcript(String, isFinal: Bool)
-  case audioLevel(Float)
+  case audioLevels([Float])
   case interrupted
   case routeChanged
   case failed(SpeechInputFailure)
@@ -66,6 +67,7 @@ final class SpeechInputController {
   private(set) var isPreparing = false
   private(set) var waveformLevels = Array(repeating: CGFloat.zero, count: 20)
   private(set) var displayTranscript = ""
+  private(set) var latestFinalTranscript = ""
 
   init(
     makeSession: @escaping @MainActor () -> any SpeechInputSession = {
@@ -237,6 +239,7 @@ final class SpeechInputController {
     case .transcript(let transcript, let isFinal):
       if isFinal {
         currentFinalTranscript = cleaned(transcript)
+        latestFinalTranscript = currentFinalTranscript
         currentVolatileTranscript = ""
       } else {
         currentVolatileTranscript = cleaned(transcript)
@@ -244,16 +247,16 @@ final class SpeechInputController {
       lastTranscriptAt = Date()
       updateDisplayTranscript()
 
-    case .audioLevel(let level):
+    case .audioLevels(let levels):
       guard Date().timeIntervalSince(lastWaveformUpdate) >= Metric.waveformUpdateInterval else {
         return
       }
 
       lastWaveformUpdate = Date()
-      if level >= Metric.audibleLevelThreshold {
+      if (levels.max() ?? .zero) >= Metric.audibleLevelThreshold {
         lastAudibleAt = Date()
       }
-      _ = levelProcessor.append(normalizedLevel: level)
+      _ = levelProcessor.append(normalizedLevels: levels)
       waveformLevels = levelProcessor.levels
 
     case .interrupted, .routeChanged:
@@ -313,6 +316,7 @@ final class SpeechInputController {
   private func resetCurrentSegment() {
     currentFinalTranscript = ""
     currentVolatileTranscript = ""
+    latestFinalTranscript = ""
     updateDisplayTranscript()
   }
 
@@ -356,6 +360,8 @@ final class SpeechInputController {
     switch error {
     case .microphonePermissionDenied:
       return .microphonePermissionDenied
+    case .transcriberUnavailable:
+      return .transcriberUnavailable
     case .localeUnavailable:
       return .localeUnavailable
     case .modelDownloadFailed:
@@ -371,6 +377,8 @@ final class SpeechInputController {
     switch failure {
     case .microphonePermissionDenied:
       return "마이크 권한이 필요해요. 설정에서 허용해 주세요."
+    case .transcriberUnavailable:
+      return "이 기기에서는 음성 인식 기능을 사용할 수 없어요."
     case .localeUnavailable:
       return "이 기기에서는 한국어 음성 인식을 사용할 수 없어요."
     case .modelDownloadFailed:

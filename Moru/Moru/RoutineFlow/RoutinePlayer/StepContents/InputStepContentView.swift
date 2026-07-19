@@ -18,7 +18,11 @@ struct InputStepContentView: View {
       Spacer()
         .frame(height: 42)
 
-      RoutinePlayerOrbView()
+      RoutinePlayerOrbView(
+        levels: speechInputController.waveformLevels,
+        isListening: speechInputController.phase == .listening,
+        isPaused: speechInputController.isPaused
+      )
 
       Spacer()
         .frame(height: 44)
@@ -38,7 +42,12 @@ struct InputStepContentView: View {
       Spacer()
         .frame(height: 32)
 
-      VoiceInputControlView(speechInputController: speechInputController) { transcript in
+      VoiceInputControlView(
+        speechInputController: speechInputController,
+        autoFinishWhen: { transcript in
+          RoutineStepCompletionMatcher.isCompleted(transcript, for: step)
+        }
+      ) { transcript in
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
           feedbackText = "음성이 들리지 않았어요. 다시 말해 주세요."
           return

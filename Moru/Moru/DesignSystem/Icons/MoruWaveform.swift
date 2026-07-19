@@ -11,10 +11,14 @@ struct MoruWaveform: View {
   private let levels: [CGFloat]
   private let usesReducedMotion: Bool
 
-  private let staticLevels: [CGFloat] = [
-    0, 0.25, 0.625, 1, 0.75, 0.375, 0.125, 0.5, 0.875, 0.625,
-    0.25, 0, 0.5, 0.75, 1, 0.625, 0.375, 0.125, 0.375, 0
-  ]
+  private enum Metric {
+    static let barCount = 20
+    static let barWidth: CGFloat = 4.6667
+    static let barSpacing: CGFloat = 4.6667
+    static let minimumHeight: CGFloat = 8
+    static let maximumHeight: CGFloat = 24
+    static let contrastGain: CGFloat = 1.8
+  }
 
   init(levels: [CGFloat] = [], usesReducedMotion: Bool = false) {
     self.levels = levels
@@ -22,11 +26,15 @@ struct MoruWaveform: View {
   }
 
   var body: some View {
-    HStack(alignment: .center, spacing: 4.6667) {
+    HStack(alignment: .center, spacing: Metric.barSpacing) {
       ForEach(displayedLevels.indices, id: \.self) { index in
         Capsule()
           .fill(AppColor.grayWhite)
-          .frame(width: 4.6667, height: 8 + 16 * displayedLevels[index])
+          .frame(
+            width: Metric.barWidth,
+            height: Metric.minimumHeight
+              + (Metric.maximumHeight - Metric.minimumHeight) * displayedLevels[index]
+          )
       }
     }
     .frame(width: 182, height: 24)
@@ -37,11 +45,19 @@ struct MoruWaveform: View {
     .accessibilityHidden(true)
   }
 
-  private var displayedLevels: [CGFloat] {
-    if usesReducedMotion || levels.count != staticLevels.count {
-      return staticLevels
+  var displayedLevels: [CGFloat] {
+    guard levels.count == Metric.barCount else {
+      return Array(repeating: .zero, count: Metric.barCount)
     }
 
-    return levels.map { min(max($0, 0), 1) }
+    let clampedLevels = levels.map { min(max($0, 0), 1) }
+    let averageLevel = clampedLevels.reduce(.zero, +) / CGFloat(Metric.barCount)
+
+    return clampedLevels.map { level in
+      min(
+        max(averageLevel + (level - averageLevel) * Metric.contrastGain, 0),
+        1
+      )
+    }
   }
 }
