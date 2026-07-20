@@ -21,10 +21,15 @@ final class FoundationSwiftDataTests: XCTestCase {
 
     switch bootstrapper.state {
     case .failed(let failure):
-      XCTAssertEqual(failure.message, "저장소를 초기화할 수 없어요. 다시 시도해 주세요.")
+      XCTAssertEqual(
+        failure.message,
+        "저장소를 초기화할 수 없어요. 다시 시도해 주세요."
+      )
       XCTAssertFalse(failure.message.contains("storage unavailable"))
     case .idle, .loading, .ready:
-      XCTFail("Bootstrap should surface storage failures instead of creating runtime.")
+      XCTFail(
+        "Bootstrap should surface storage failures instead of creating runtime."
+      )
     }
   }
 
@@ -518,6 +523,51 @@ final class FoundationSwiftDataTests: XCTestCase {
     assertLocalProfileRepository(dependencyContainer.localProfileRepository)
     assertOnboardingRepository(dependencyContainer.onboardingRepository)
     assertRoutineSuggestionService(dependencyContainer.routineSuggestionService)
+  }
+
+  @MainActor
+  func testRoutineRunRepositoryRoundTripKeepsConfirmAndInputTranscripts() throws {
+    let container = try makeContainer()
+    let routineRepository = SwiftDataRoutineRepository(modelContext: container.mainContext)
+    let runRepository = SwiftDataRoutineRunRepository(modelContext: container.mainContext)
+    let confirmStep = RoutineStep(type: .confirm, title: "물 마시기", order: 0)
+    let inputStep = RoutineStep(type: .input, title: "오늘의 다짐", order: 1)
+    let routine = Routine(name: "음성 저장 루틴", steps: [confirmStep, inputStep])
+    let run = RoutineRun(
+      routine: routine,
+      completedAt: Date(),
+      results: [
+        RoutineStepResult(
+          stepID: confirmStep.id,
+          stepTitle: confirmStep.title,
+          stepType: .confirm,
+          completedAt: Date(),
+          transcript: "완료했어요"
+        ),
+        RoutineStepResult(
+          stepID: inputStep.id,
+          stepTitle: inputStep.title,
+          stepType: .input,
+          completedAt: Date(),
+          transcript: "차분하게 하루를 시작할게요"
+        )
+      ]
+    )
+
+    try routineRepository.saveRoutine(routine)
+    try runRepository.saveRun(run)
+
+    let reloadedContext = ModelContext(container)
+    let reloadedRunRepository = SwiftDataRoutineRunRepository(modelContext: reloadedContext)
+    let fetchedRun = try XCTUnwrap(try reloadedRunRepository.fetchRuns().first)
+
+    let transcriptByStepID = Dictionary(
+      uniqueKeysWithValues: fetchedRun.results.map { ($0.stepID, $0.transcript) }
+    )
+
+    XCTAssertEqual(transcriptByStepID[confirmStep.id], "완료했어요")
+    XCTAssertEqual(transcriptByStepID[inputStep.id], "차분하게 하루를 시작할게요")
+    XCTAssertTrue(fetchedRun.results.allSatisfy { $0.inputText == nil })
   }
 
   private func assertRoutineRepository(_ dependency: any RoutineRepository) {}
