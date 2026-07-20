@@ -32,7 +32,9 @@ struct MoruApp: App {
         if launchCoordinator.showsLaunchStatus {
           LaunchStatusView()
         } else {
-          EmptyView()
+          Color.clear
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
         }
       case .ready(let app):
         AppRouter(
