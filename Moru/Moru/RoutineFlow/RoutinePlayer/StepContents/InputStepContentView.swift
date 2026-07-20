@@ -9,7 +9,9 @@ import SwiftUI
 
 struct InputStepContentView: View {
   let step: RoutineStep
-  let onComplete: (String?) -> Void
+  let speechInputController: SpeechInputController
+  let onComplete: (String) -> Void
+  @State private var feedbackText: String?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -18,7 +20,11 @@ struct InputStepContentView: View {
       Spacer()
         .frame(height: 42)
 
-      RoutinePlayerOrbView()
+      RoutinePlayerOrbView(
+        levels: speechInputController.waveformLevels,
+        isListening: speechInputController.phase == .listening,
+        isPaused: speechInputController.isPaused
+      )
 
       Spacer()
         .frame(height: 44)
@@ -28,7 +34,7 @@ struct InputStepContentView: View {
           .font(AppFont.caption1SemiBold)
           .foregroundStyle(AppColor.gray350)
 
-        Text(inputGuideText)
+        Text(feedbackText ?? inputGuideText)
           .font(AppFont.body1NormalSemiBold)
           .foregroundStyle(AppColor.gray500)
           .multilineTextAlignment(.center)
@@ -38,10 +44,18 @@ struct InputStepContentView: View {
       Spacer()
         .frame(height: 32)
 
-      VoiceMicButton {
-        // TODO: Speech Framework 연결 후
-        // 인식된 transcript를 전달합니다.
-        onComplete(nil)
+      VoiceInputControlView(
+        speechInputController: speechInputController,
+        autoFinishMatch: { transcript in
+          RoutineStepCompletionMatcher.match(transcript, for: step)
+        }
+      ) { transcript in
+        guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+          feedbackText = "음성이 들리지 않았어요. 다시 말해 주세요."
+          return
+        }
+
+        onComplete(transcript)
       }
     }
     .padding(.horizontal, 24)

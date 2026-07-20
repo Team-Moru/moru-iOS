@@ -35,3 +35,14 @@ struct MoruSoundStopButtonIcon: View {
       .frame(width: 52, height: 52)
   }
 }
+
+struct MoruSoundResumeButtonIcon: View {
+  var body: some View {
+    Image(systemName: "play.fill")
+      .font(.system(size: 18, weight: .bold))
+      .foregroundStyle(AppColor.grayWhite)
+      .frame(width: 52, height: 52)
+      .background(AppColor.orange350)
+      .clipShape(Circle())
+  }
+}

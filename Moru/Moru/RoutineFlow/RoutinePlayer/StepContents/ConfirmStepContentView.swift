@@ -9,7 +9,9 @@ import SwiftUI
 
 struct ConfirmStepContentView: View {
   let step: RoutineStep
-  let onComplete: () -> Void
+  let speechInputController: SpeechInputController
+  let onComplete: (String) -> Void
+  @State private var feedbackText: String?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -18,7 +20,11 @@ struct ConfirmStepContentView: View {
       Spacer()
         .frame(height: 42)
 
-      RoutinePlayerOrbView()
+      RoutinePlayerOrbView(
+        levels: speechInputController.waveformLevels,
+        isListening: speechInputController.phase == .listening,
+        isPaused: speechInputController.isPaused
+      )
 
       Spacer()
         .frame(height: 44)
@@ -28,7 +34,7 @@ struct ConfirmStepContentView: View {
           .font(AppFont.caption1SemiBold)
           .foregroundStyle(AppColor.gray350)
 
-        Text(confirmGuideText)
+        Text(feedbackText ?? confirmGuideText)
           .font(AppFont.body1NormalSemiBold)
           .foregroundStyle(AppColor.gray500)
           .multilineTextAlignment(.center)
@@ -38,8 +44,18 @@ struct ConfirmStepContentView: View {
       Spacer()
         .frame(height: 32)
 
-      VoiceMicButton {
-        onComplete()
+      VoiceInputControlView(
+        speechInputController: speechInputController,
+        autoFinishMatch: { transcript in
+          RoutineStepCompletionMatcher.match(transcript, for: step)
+        }
+      ) { transcript in
+        guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
+          feedbackText = "완료했다고 들리지 않아요. 다시 말해 주세요."
+          return
+        }
+
+        onComplete(transcript)
       }
     }
     .padding(.horizontal, 24)

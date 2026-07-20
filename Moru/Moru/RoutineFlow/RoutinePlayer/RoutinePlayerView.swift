@@ -17,9 +17,14 @@ enum RoutinePlayerAccessibility {
 struct RoutinePlayerView: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var viewModel: RoutinePlayerViewModel
+  @State private var speechInputController: SpeechInputController
 
-  init(viewModel: RoutinePlayerViewModel) {
+  init(
+    viewModel: RoutinePlayerViewModel,
+    speechInputController: SpeechInputController = SpeechInputController()
+  ) {
     _viewModel = State(initialValue: viewModel)
+    _speechInputController = State(initialValue: speechInputController)
   }
 
   private var topBarButtonFrame: CGSize? {
@@ -49,6 +54,9 @@ struct RoutinePlayerView: View {
     .navigationBarBackButtonHidden(true)
     .task {
       viewModel.resolveRoutine()
+    }
+    .onDisappear {
+      speechInputController.cancel()
     }
   }
 
@@ -166,6 +174,7 @@ struct RoutinePlayerView: View {
       }
 
       Button {
+        speechInputController.cancel()
         viewModel.requestSkipStep()
       } label: {
         Text("건너뛰기")
@@ -217,6 +226,7 @@ struct RoutinePlayerView: View {
   private var topBar: some View {
     HStack {
       Button {
+        speechInputController.cancel()
         viewModel.requestCloseRoutine()
       } label: {
         Text("닫기")
@@ -250,6 +260,7 @@ struct RoutinePlayerView: View {
       Spacer()
 
       Button {
+        speechInputController.cancel()
         viewModel.requestEndRoutine()
       } label: {
         Text("종료")
@@ -287,9 +298,13 @@ struct RoutinePlayerView: View {
   private func stepContent(for step: RoutineStep) -> some View {
     switch step.type {
     case .confirm:
-      ConfirmStepContentView(step: step) {
-        viewModel.completeCurrentStep()
+      ConfirmStepContentView(
+        step: step,
+        speechInputController: speechInputController
+      ) { transcript in
+        viewModel.completeCurrentStep(transcript: transcript)
       }
+      .id(step.id)
 
     case .timer:
       TimerStepContentView(step: step) {
@@ -297,9 +312,13 @@ struct RoutinePlayerView: View {
       }
 
     case .input:
-      InputStepContentView(step: step) { inputText in
-        viewModel.completeCurrentStep(inputText: inputText)
+      InputStepContentView(
+        step: step,
+        speechInputController: speechInputController
+      ) { transcript in
+        viewModel.completeCurrentStep(transcript: transcript)
       }
+      .id(step.id)
     }
   }
 
