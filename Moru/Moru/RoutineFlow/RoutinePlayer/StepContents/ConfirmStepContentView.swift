@@ -18,7 +18,7 @@ struct ConfirmStepContentView: View {
       stepTitleSection
 
       Spacer()
-        .frame(height: 42)
+        .frame(height: speechInputController.shouldShowControls ? 12 : 42)
 
       RoutinePlayerOrbView(
         levels: speechInputController.waveformLevels,
@@ -27,7 +27,7 @@ struct ConfirmStepContentView: View {
       )
 
       Spacer()
-        .frame(height: 44)
+        .frame(height: speechInputController.shouldShowControls ? 12 : 44)
 
       VStack(spacing: 8) {
         Text("음성 안내 중")
@@ -42,7 +42,7 @@ struct ConfirmStepContentView: View {
       }
 
       Spacer()
-        .frame(height: 32)
+        .frame(height: speechInputController.shouldShowControls ? 8 : 32)
 
       VoiceInputControlView(
         speechInputController: speechInputController,
