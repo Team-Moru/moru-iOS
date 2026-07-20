@@ -61,14 +61,21 @@ extension DependencyContainer {
     )
 
     let routineRepository = MockRoutineRepository(routines: [routine])
+    let routineRunRepository = MockRoutineRunRepository(runs: [run])
     let localProfileRepository = MockLocalProfileRepository(
       profile: LocalProfile(displayName: "다인")
+    )
+    let localDataResetRepository = MockLocalDataResetRepository(
+      routineRepository: routineRepository,
+      routineRunRepository: routineRunRepository,
+      localProfileRepository: localProfileRepository
     )
 
     return DependencyContainer(
       routineRepository: routineRepository,
-      routineRunRepository: MockRoutineRunRepository(runs: [run]),
+      routineRunRepository: routineRunRepository,
       localProfileRepository: localProfileRepository,
+      localDataResetRepository: localDataResetRepository,
       onboardingRepository: MockOnboardingRepository(
         localProfileRepository: localProfileRepository,
         routineRepository: routineRepository

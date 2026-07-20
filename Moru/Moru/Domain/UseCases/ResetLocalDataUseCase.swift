@@ -9,27 +9,13 @@ import Foundation
 
 @MainActor
 struct ResetLocalDataUseCase {
-  private let routineRepository: any RoutineRepository
-  private let routineRunRepository: any RoutineRunRepository
-  private let localProfileRepository: any LocalProfileRepository
+  private let localDataResetRepository: any LocalDataResetRepository
 
-  init(
-    routineRepository: any RoutineRepository,
-    routineRunRepository: any RoutineRunRepository,
-    localProfileRepository: any LocalProfileRepository
-  ) {
-    self.routineRepository = routineRepository
-    self.routineRunRepository = routineRunRepository
-    self.localProfileRepository = localProfileRepository
+  init(localDataResetRepository: any LocalDataResetRepository) {
+    self.localDataResetRepository = localDataResetRepository
   }
 
   func reset() throws {
-    let routines = try routineRepository.fetchRoutines()
-    for routine in routines {
-      try routineRepository.deleteRoutine(id: routine.id)
-    }
-
-    try routineRunRepository.deleteAllRuns()
-    try localProfileRepository.deleteProfile()
+    try localDataResetRepository.resetToFreshInstallState()
   }
 }

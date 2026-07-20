@@ -19,9 +19,7 @@ final class MyPageViewModel {
   init(dependencies: DependencyContainer) {
     self.localProfileRepository = dependencies.localProfileRepository
     self.resetLocalDataUseCase = ResetLocalDataUseCase(
-      routineRepository: dependencies.routineRepository,
-      routineRunRepository: dependencies.routineRunRepository,
-      localProfileRepository: dependencies.localProfileRepository
+      localDataResetRepository: dependencies.localDataResetRepository
     )
   }
 
@@ -84,7 +82,7 @@ final class MyPageViewModel {
       state = .placeholder
       return true
     } catch {
-      state.errorMessage = "로컬 데이터를 초기화하지 못했어요."
+      state.errorMessage = "초기화에 실패했어요. 기존 데이터는 유지됩니다."
       return false
     }
   }

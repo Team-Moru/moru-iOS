@@ -61,6 +61,11 @@ final class MockRoutineRepository: RoutineRepository {
   func deleteRoutine(id: UUID) throws {
     routines.removeAll { $0.id == id }
   }
+
+  @MainActor
+  func deleteAllRoutines() {
+    routines.removeAll()
+  }
 }
 
 final class MockRoutineRunRepository: RoutineRunRepository {
@@ -164,6 +169,29 @@ final class MockLocalProfileRepository: LocalProfileRepository {
   @MainActor
   func deleteProfile() throws {
     profile = nil
+  }
+}
+
+final class MockLocalDataResetRepository: LocalDataResetRepository {
+  private let routineRepository: MockRoutineRepository
+  private let routineRunRepository: MockRoutineRunRepository
+  private let localProfileRepository: MockLocalProfileRepository
+
+  init(
+    routineRepository: MockRoutineRepository,
+    routineRunRepository: MockRoutineRunRepository,
+    localProfileRepository: MockLocalProfileRepository
+  ) {
+    self.routineRepository = routineRepository
+    self.routineRunRepository = routineRunRepository
+    self.localProfileRepository = localProfileRepository
+  }
+
+  @MainActor
+  func resetToFreshInstallState() throws {
+    routineRepository.deleteAllRoutines()
+    try routineRunRepository.deleteAllRuns()
+    try localProfileRepository.deleteProfile()
   }
 }
 

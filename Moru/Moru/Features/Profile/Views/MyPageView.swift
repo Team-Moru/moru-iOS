@@ -54,7 +54,7 @@ struct MyPageView: View {
               MyPageSectionHeader(title: "데이터")
               MyPageMenuRow(
                 title: "로컬 데이터 초기화",
-                subtitle: "프로필, 루틴, 수행 기록을 기기에서 삭제합니다.",
+                subtitle: "프로필, 음성 설정, 루틴, 수행 기록을 기기에서 삭제합니다.",
                 titleColor: AppColor.orange500,
                 action: {
                   isResetDialogPresented = true
@@ -100,15 +100,15 @@ struct MyPageView: View {
 
       MoruDialog(
         title: "로컬 데이터를 초기화할까요?",
-        message: "삭제된 프로필, 루틴, 기록은 되돌릴 수 없어요.",
+        message: "앱을 처음 설치한 상태로 되돌리고 온보딩으로 이동합니다.",
         primaryTitle: "뒤로가기",
         secondaryTitle: "초기화",
         primaryAction: {
           isResetDialogPresented = false
         },
         secondaryAction: {
+          isResetDialogPresented = false
           if viewModel.resetLocalData() {
-            isResetDialogPresented = false
             onLocalDataReset()
           }
         }

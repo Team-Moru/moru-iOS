@@ -12,6 +12,7 @@ struct DependencyContainer {
     "routineRepository",
     "routineRunRepository",
     "localProfileRepository",
+    "localDataResetRepository",
     "onboardingRepository",
     "routineSuggestionService",
   ]
@@ -19,6 +20,7 @@ struct DependencyContainer {
   let routineRepository: any RoutineRepository
   let routineRunRepository: any RoutineRunRepository
   let localProfileRepository: any LocalProfileRepository
+  let localDataResetRepository: any LocalDataResetRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
 
@@ -27,6 +29,7 @@ struct DependencyContainer {
       routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
       routineRunRepository: SwiftDataRoutineRunRepository(modelContext: modelContext),
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
+      localDataResetRepository: SwiftDataLocalDataResetRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
@@ -35,12 +38,19 @@ struct DependencyContainer {
   #if DEBUG
   static func mock() -> DependencyContainer {
     let routineRepository = MockRoutineRepository()
+    let routineRunRepository = MockRoutineRunRepository()
     let localProfileRepository = MockLocalProfileRepository()
+    let localDataResetRepository = MockLocalDataResetRepository(
+      routineRepository: routineRepository,
+      routineRunRepository: routineRunRepository,
+      localProfileRepository: localProfileRepository
+    )
 
     return DependencyContainer(
       routineRepository: routineRepository,
-      routineRunRepository: MockRoutineRunRepository(),
+      routineRunRepository: routineRunRepository,
       localProfileRepository: localProfileRepository,
+      localDataResetRepository: localDataResetRepository,
       onboardingRepository: MockOnboardingRepository(
         localProfileRepository: localProfileRepository,
         routineRepository: routineRepository

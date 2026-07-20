@@ -71,6 +71,11 @@ protocol LocalProfileRepository: AnyObject {
   func deleteProfile() throws
 }
 
+protocol LocalDataResetRepository: AnyObject {
+  @MainActor
+  func resetToFreshInstallState() throws
+}
+
 protocol OnboardingRepository: AnyObject {
   @MainActor
   func fetchProfile() throws -> LocalProfile?
