@@ -47,10 +47,22 @@ struct DependencyContainer {
   @MainActor
   static func local(modelContext: ModelContext) -> DependencyContainer {
     let voiceAvailabilityProbe = AVSpeechVoiceAvailabilityProbe()
+    let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
+      modelContext: modelContext
+    )
+    #if DEBUG
+    let routineRunRepository: any RoutineRunRepository = DebugHistoryDummyData.isEnabled
+      ? DebugHistoryDummyData.makeRepository(
+        baseRepository: swiftDataRoutineRunRepository
+      )
+      : swiftDataRoutineRunRepository
+    #else
+    let routineRunRepository: any RoutineRunRepository = swiftDataRoutineRunRepository
+    #endif
 
     return DependencyContainer(
       routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
-      routineRunRepository: SwiftDataRoutineRunRepository(modelContext: modelContext),
+      routineRunRepository: routineRunRepository,
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
       routineSuggestionService: LocalTemplateSuggestionService.shared,
