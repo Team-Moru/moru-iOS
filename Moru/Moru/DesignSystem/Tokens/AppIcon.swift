@@ -27,6 +27,7 @@ enum AppIcon {
   static let iconCoffee = "iconCoffee"
   static let iconMoon = "iconMoon"
   static let iconSun = "iconSun"
+  static let iconSunHaze = "iconSunHaze"
   static let iconWaterDrop = "iconWaterDrop"
 
   // MARK: - Media
@@ -35,6 +36,7 @@ enum AppIcon {
   static let iconImage = "iconImage"
   static let iconStopCircle = "iconStopCircle"
   static let iconVolumeMax = "iconVolumeMax"
+  static let iconCopy = "iconCopy"
 
   // MARK: - Moru Custom Icons
 

@@ -33,53 +33,58 @@ struct AppRouter: View {
     self.routinePlayerBuilder = routinePlayerBuilder
   }
 
-  var body: some View {
-    Group {
-      switch sessionStore.phase {
-      case .loading:
-        ProgressView()
-      case .onboardingRequired:
-        onboardingBuilder.make(onCompleted: handleOnboardingCompleted)
-      case .ready:
-        if sessionStore.profile != nil {
-          HomeView(
-            dependencies: dependencies,
-            onStartRoutine: handleRegularRoutineStart,
-            refreshToken: homeRefreshToken
+    var body: some View {
+      Group {
+        switch sessionStore.phase {
+        case .loading:
+          ProgressView()
+
+        case .onboardingRequired:
+          onboardingBuilder.make(
+            onCompleted: handleOnboardingCompleted
           )
-        } else {
+
+        case .ready:
+          if sessionStore.profile != nil {
+            HomeView(
+              dependencies: dependencies,
+              onStartRoutine: handleRegularRoutineStart,
+              refreshToken: homeRefreshToken
+            )
+          } else {
+            SessionFailureView(
+              title: "프로필 정보를 확인할 수 없어요",
+              message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요.",
+              onRetry: { @MainActor in
+                sessionStore.load()
+              }
+            )
+          }
+
+        case .failed(let message):
           SessionFailureView(
-            title: "프로필 정보를 확인할 수 없어요",
-            message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요.",
+            title: "저장소를 열 수 없어요",
+            message: message,
             onRetry: { @MainActor in
               sessionStore.load()
             }
           )
         }
-      case .failed(let message):
-        SessionFailureView(
-          title: "저장소를 열 수 없어요",
-          message: message,
-          onRetry: { @MainActor in
-            sessionStore.load()
-          }
-        )
+      }
+      .fullScreenCover(
+        item: presentationBinding,
+        onDismiss: completePendingDismissal
+      ) { presentation in
+        routinePlayerView(for: presentation)
+          .interactiveDismissDisabled()
+      }
+      .task {
+        if coordinator.beginInitialSessionLoadIfNeeded() {
+          sessionStore.load()
+        }
       }
     }
-    .fullScreenCover(
-      item: presentationBinding,
-      onDismiss: completePendingDismissal
-    ) { presentation in
-      routinePlayerView(for: presentation)
-        .interactiveDismissDisabled()
-    }
-    .task {
-      if coordinator.beginInitialSessionLoadIfNeeded() {
-        sessionStore.load()
-      }
-    }
-  }
-
+    
   private var presentationBinding: Binding<AppPresentation?> {
     Binding(
       get: { coordinator.presentation },

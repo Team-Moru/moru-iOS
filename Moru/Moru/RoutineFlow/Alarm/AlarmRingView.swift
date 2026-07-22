@@ -36,23 +36,14 @@ struct AlarmRingView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Spacer(minLength: 20)
-
                 timeSection
-
-                Spacer(minLength: 28)
+                    .padding(.top, 146)
+                    .padding(.bottom, 157)
 
                 routineSection
-
-                Spacer(minLength: 32)
-
-                SlideToStartControl {
-                    onStartRoutine()
-                }
+                    .padding(.bottom, 294)
             }
             .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 24)
         }
         .sheet(isPresented: $isShowingSnoozeSheet) {
             SnoozeSheetView(
@@ -65,7 +56,7 @@ struct AlarmRingView: View {
                     isShowingSnoozeSheet = false
                 }
             )
-            .presentationDetents([.height(540)])
+            .presentationDetents([.height(489)])
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(32)
         }
@@ -108,17 +99,23 @@ struct AlarmRingView: View {
             } label: {
                 Text("5분 후 다시 알림")
                     .font(AppFont.label1NormalMedium)
-                    .foregroundStyle(AppColor.grayWhite)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .alarmGlass(
-                        in: Capsule(),
-                        tint: AppColor.grayWhite,
-                        opacity: 0.2,
-                        strokeOpacity: 0.6
-                    )
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .frame(width: 132, height: 40)
             }
             .buttonStyle(.plain)
+            .glassEffect(
+                .clear
+                    .interactive(),
+                in: Capsule()
+            )
+            .overlay {
+                Capsule()
+                    .stroke(
+                        Color.white.opacity(0.22),
+                        lineWidth: 0.7
+                    )
+            }
             .contentShape(Capsule())
         }
     }
@@ -138,44 +135,6 @@ struct AlarmRingView: View {
     }
 }
 
-struct AlarmGlassModifier<S: Shape>: ViewModifier {
-    let shape: S
-    let tint: Color
-    let opacity: Double
-    let strokeOpacity: Double
-    
-    func body(content: Content) -> some View {
-        content
-            .background {
-                shape
-                    .fill(tint.opacity(opacity))
-                    .background(.ultraThinMaterial, in: shape)
-            }
-            .overlay {
-                shape
-                    .stroke(AppColor.grayWhite.opacity(strokeOpacity), lineWidth: 1)
-            }
-            .clipShape(shape)
-    }
-}
-
-extension View {
-    func alarmGlass<S: Shape>(
-        in shape: S,
-        tint: Color = AppColor.grayWhite,
-        opacity: Double = 0.16,
-        strokeOpacity: Double = 0.7
-    ) -> some View {
-        modifier(
-            AlarmGlassModifier(
-                shape: shape,
-                tint: tint,
-                opacity: opacity,
-                strokeOpacity: strokeOpacity
-            )
-        )
-    }
-}
 
 #Preview("Alarm Ring") {
     AlarmRingView(
