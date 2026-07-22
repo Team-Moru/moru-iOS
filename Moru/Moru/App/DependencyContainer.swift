@@ -13,6 +13,8 @@ struct DependencyContainer {
   let localProfileRepository: any LocalProfileRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
+  let homeWeatherRepository: (any HomeWeatherRepository)?
+  let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
   let voiceAvailabilityProbe: any VoiceAvailabilityProbing
   let profileAlarmService: (any ProfileAlarmServicing)?
@@ -23,6 +25,8 @@ struct DependencyContainer {
     localProfileRepository: any LocalProfileRepository,
     onboardingRepository: any OnboardingRepository,
     routineSuggestionService: any RoutineSuggestionService,
+    homeWeatherRepository: (any HomeWeatherRepository)? = nil,
+    homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
     voiceAvailabilityProbe: any VoiceAvailabilityProbing =
       UnavailableVoiceAvailabilityProbe(),
@@ -33,6 +37,8 @@ struct DependencyContainer {
     self.localProfileRepository = localProfileRepository
     self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
+    self.homeWeatherRepository = homeWeatherRepository
+    self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
     self.voiceAvailabilityProbe = voiceAvailabilityProbe
     self.profileAlarmService = profileAlarmService
@@ -48,6 +54,8 @@ struct DependencyContainer {
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
       routineSuggestionService: LocalTemplateSuggestionService.shared,
+      homeWeatherRepository: SwiftDataHomeWeatherRepository(modelContext: modelContext),
+      homeWeatherService: CoreLocationWeatherService(),
       localDataResetRepository: SwiftDataLocalDataResetRepository(
         modelContext: modelContext
       ),

@@ -24,13 +24,32 @@ enum MoruSchemaV1: VersionedSchema {
   }
 }
 
+enum MoruSchemaV2: VersionedSchema {
+  static let versionIdentifier = Schema.Version(2, 0, 0)
+
+  static var models: [any PersistentModel.Type] {
+    [
+      PersistedRoutine.self,
+      PersistedRoutineStep.self,
+      PersistedAlarmSchedule.self,
+      PersistedRoutineRun.self,
+      PersistedRoutineStepSnapshot.self,
+      PersistedRoutineStepResult.self,
+      PersistedLocalProfile.self,
+      PersistedHomeWeatherSnapshot.self
+    ]
+  }
+}
+
 enum MoruMigrationPlan: SchemaMigrationPlan {
   static var schemas: [any VersionedSchema.Type] {
-    [MoruSchemaV1.self]
+    [MoruSchemaV1.self, MoruSchemaV2.self]
   }
 
   static var stages: [MigrationStage] {
-    []
+    [
+      .lightweight(fromVersion: MoruSchemaV1.self, toVersion: MoruSchemaV2.self)
+    ]
   }
 }
 
@@ -40,7 +59,7 @@ extension ModelContainer {
     isStoredInMemoryOnly: Bool = false,
     storeURL: URL? = nil
   ) throws -> ModelContainer {
-    let schema = Schema(versionedSchema: MoruSchemaV1.self)
+    let schema = Schema(versionedSchema: MoruSchemaV2.self)
     let configuration: ModelConfiguration
 
     if let storeURL {

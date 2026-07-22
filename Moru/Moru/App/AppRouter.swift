@@ -55,6 +55,8 @@ struct AppRouter: View {
           routineRunRepository: dependencies.routineRunRepository,
           localProfileRepository: dependencies.localProfileRepository
         ),
+        weatherRepository: dependencies.homeWeatherRepository,
+        weatherService: dependencies.homeWeatherService,
         routineSettingContentFactory: {
           AnyView(RoutineSettingView(dependencies: dependencies))
         }
