@@ -4,6 +4,8 @@
 //
 
 import Foundation
+import SwiftUI
+import UIKit
 import XCTest
 @testable import Moru
 
@@ -126,6 +128,283 @@ final class HistoryRunReportingTests: XCTestCase {
     XCTAssertEqual(overview.week.completionRate, 0)
     XCTAssertEqual(overview.week.dailyCompletionRates.count, 7)
     XCTAssertTrue(overview.week.dailyCompletionRates.allSatisfy { $0.completionRate == 0 })
+    XCTAssertEqual(overview.wakeMetrics, .unavailable)
+    XCTAssertEqual(
+      overview.monthlyHeatmap.monthStartDate,
+      makeDate(2026, 7, 1, 0, 0, calendar: calendar)
+    )
+    XCTAssertEqual(overview.monthlyHeatmap.days.filter { $0.date != nil }.count, 31)
+    XCTAssertTrue(
+      overview.monthlyHeatmap.days.allSatisfy { $0.completionRate == nil }
+    )
+    XCTAssertEqual(Array(overview.monthlyHeatmap.days.prefix(2)).map(\.date), [nil, nil])
+    XCTAssertEqual(
+      overview.monthlyHeatmap.days[2].date,
+      makeDate(2026, 7, 1, 0, 0, calendar: calendar)
+    )
+  }
+
+  @MainActor
+  func testWakeMetricsRequireThreeDifferentDaysOfCompletedRuns() throws {
+    let calendar = makeCalendar()
+    let firstRun = makeRun(
+      startedAt: makeDate(2026, 7, 13, 7, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let laterSameDayRun = makeRun(
+      startedAt: makeDate(2026, 7, 13, 9, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let secondDayRun = makeRun(
+      startedAt: makeDate(2026, 7, 14, 7, 10, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let expiredRun = makeRun(
+      startedAt: makeDate(2026, 6, 16, 7, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let futureRun = makeRun(
+      startedAt: makeDate(2026, 7, 15, 7, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let overview = try makeUseCase(
+      runs: [
+        expiredRun,
+        laterSameDayRun,
+        futureRun,
+        secondDayRun,
+        firstRun,
+      ],
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load()
+
+    XCTAssertEqual(overview.wakeMetrics, .insufficient(observationCount: 2))
+  }
+
+  @MainActor
+  func testWakeMetricsUseCircularMeanAcrossMidnight() throws {
+    let calendar = makeCalendar()
+    let runs = [
+      makeRun(
+        startedAt: makeDate(2026, 7, 12, 23, 50, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 13, 0, 0, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 14, 0, 10, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      ),
+    ]
+    let overview = try makeUseCase(
+      runs: runs,
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load()
+
+    XCTAssertEqual(
+      overview.wakeMetrics,
+      .calculated(
+        observationCount: 3,
+        averageWakeMinute: 0,
+        averageDeviationMinutes: 7,
+        regularity: .veryConsistent
+      )
+    )
+  }
+
+  @MainActor
+  func testWakeMetricsClassifyAverageStartTimeDeviationWithoutMakingAScore() throws {
+    let calendar = makeCalendar()
+    let runs = [7, 8, 9].map { hour in
+      makeRun(
+        startedAt: makeDate(2026, 7, hour + 5, hour, 0, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      )
+    }
+    let overview = try makeUseCase(
+      runs: runs,
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load()
+
+    XCTAssertEqual(
+      overview.wakeMetrics,
+      .calculated(
+        observationCount: 3,
+        averageWakeMinute: 8 * 60,
+        averageDeviationMinutes: 40,
+        regularity: .variable
+      )
+    )
+  }
+
+  @MainActor
+  func testMonthlyHeatmapUsesDocumentedCompletionBuckets() throws {
+    let calendar = makeCalendar()
+    let steps = (0..<4).map { makeSnapshot(order: $0) }
+    let completedResults = steps.map { makeCompletedResult(for: $0) }
+    let runs = [
+      makeRun(
+        startedAt: makeDate(2026, 7, 1, 7, 0, calendar: calendar),
+        plannedSteps: steps
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 2, 7, 0, calendar: calendar),
+        plannedSteps: steps,
+        results: Array(completedResults.prefix(1))
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 3, 7, 0, calendar: calendar),
+        plannedSteps: steps,
+        results: Array(completedResults.prefix(3))
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 4, 7, 0, calendar: calendar),
+        plannedSteps: steps,
+        results: completedResults
+      ),
+    ]
+    let heatmap = try makeUseCase(
+      runs: runs,
+      calendar: calendar,
+      now: makeDate(2026, 7, 31, 12, 0, calendar: calendar)
+    ).load().monthlyHeatmap
+    let datedDays = heatmap.days.compactMap { day -> (Date, HistoryHeatmapBucket)? in
+      guard let date = day.date else {
+        return nil
+      }
+
+      return (date, day.bucket)
+    }
+    let buckets = Dictionary(uniqueKeysWithValues: datedDays)
+
+    XCTAssertEqual(
+      buckets[makeDate(2026, 7, 1, 0, 0, calendar: calendar)],
+      .zero
+    )
+    XCTAssertEqual(
+      buckets[makeDate(2026, 7, 2, 0, 0, calendar: calendar)],
+      .low
+    )
+    XCTAssertEqual(
+      buckets[makeDate(2026, 7, 3, 0, 0, calendar: calendar)],
+      .high
+    )
+    XCTAssertEqual(
+      buckets[makeDate(2026, 7, 4, 0, 0, calendar: calendar)],
+      .complete
+    )
+    XCTAssertEqual(
+      buckets[makeDate(2026, 7, 5, 0, 0, calendar: calendar)],
+      .noData
+    )
+  }
+
+  @MainActor
+  func testRunDetailDestinationResolvesExactlyOneMatchingRun() throws {
+    let calendar = makeCalendar()
+    let runID = UUID()
+    let run = makeRun(
+      id: runID,
+      startedAt: makeDate(2026, 7, 14, 7, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let overview = try makeUseCase(
+      runs: [run],
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load()
+    let resolution = HistoryRunDetailDestinationResolver.resolve(
+      destination: .runDetail(runID),
+      in: overview
+    )
+
+    guard case .selected(let presentation) = resolution else {
+      XCTFail("A unique stored run should resolve to its detail.")
+      return
+    }
+
+    XCTAssertEqual(presentation.run.id, runID)
+    XCTAssertEqual(presentation.calendar, calendar)
+  }
+
+  @MainActor
+  func testRunDetailDestinationRejectsMissingAndDuplicateRunIDs() throws {
+    let calendar = makeCalendar()
+    let duplicateID = UUID()
+    let firstRun = makeRun(
+      id: duplicateID,
+      startedAt: makeDate(2026, 7, 13, 7, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let secondRun = makeRun(
+      id: duplicateID,
+      startedAt: makeDate(2026, 7, 14, 7, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()]
+    )
+    let overview = try makeUseCase(
+      runs: [firstRun, secondRun],
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load()
+
+    XCTAssertEqual(
+      HistoryRunDetailDestinationResolver.resolve(
+        destination: .runDetail(UUID()),
+        in: overview
+      ),
+      .missing
+    )
+    XCTAssertEqual(
+      HistoryRunDetailDestinationResolver.resolve(
+        destination: .runDetail(duplicateID),
+        in: overview
+      ),
+      .missing
+    )
+  }
+
+  @MainActor
+  func testHistoryMetricsRenderAtReferenceAccessibilitySizes() throws {
+    let calendar = makeCalendar()
+    let steps = (0..<4).map { makeSnapshot(order: $0) }
+    let completedResults = steps.map { makeCompletedResult(for: $0) }
+    let runs = (0..<6).map { offset in
+      makeRun(
+        startedAt: makeDate(
+          2026,
+          7,
+          9 + offset,
+          7,
+          offset * 4,
+          calendar: calendar
+        ),
+        plannedSteps: steps,
+        results: Array(completedResults.prefix((offset % 4) + 1))
+      )
+    }
+    let overview = try makeUseCase(
+      runs: runs,
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load()
+
+    try renderHistoryMetrics(
+      overview: overview,
+      dynamicTypeSize: .medium,
+      colorScheme: .light,
+      filename: "moru-pr32-history-light-medium.png"
+    )
+    try renderHistoryMetrics(
+      overview: overview,
+      dynamicTypeSize: .accessibility3,
+      colorScheme: .dark,
+      filename: "moru-pr32-history-dark-ax3.png"
+    )
   }
 
   @MainActor
@@ -303,7 +582,11 @@ final class HistoryRunReportingTests: XCTestCase {
     XCTAssertEqual(overview.week.completedRunCount, 1)
     XCTAssertEqual(overview.week.completionRate, 0.75)
     XCTAssertEqual(overview.week.dailyCompletionRates[0].completionRate, 0.75)
-    XCTAssertTrue(overview.week.dailyCompletionRates.dropFirst().allSatisfy { $0.completionRate == 0 })
+    XCTAssertTrue(
+      overview.week.dailyCompletionRates
+        .dropFirst()
+        .allSatisfy { $0.completionRate == 0 }
+    )
   }
 
   @MainActor
@@ -446,6 +729,52 @@ final class HistoryRunReportingTests: XCTestCase {
         minute: minute
       )
     )!
+  }
+
+  @MainActor
+  private func renderHistoryMetrics(
+    overview: HistoryOverview,
+    dynamicTypeSize: DynamicTypeSize,
+    colorScheme: ColorScheme,
+    filename: String
+  ) throws {
+    let content = ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: AppSpacing.xl) {
+        HistoryWakeMetricsView(metrics: overview.wakeMetrics)
+        HistoryMonthlyHeatmapView(
+          heatmap: overview.monthlyHeatmap,
+          calendar: overview.calendar
+        )
+      }
+      .padding(AppSpacing.screenHorizontal)
+    }
+    .background(AppColor.babyBlue50)
+    .environment(\.dynamicTypeSize, dynamicTypeSize)
+    .environment(\.colorScheme, colorScheme)
+
+    let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
+    let windowScene = try XCTUnwrap(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+    )
+    let hostingController = UIHostingController(rootView: content)
+    let window = UIWindow(windowScene: windowScene)
+    window.frame = bounds
+    window.rootViewController = hostingController
+    window.makeKeyAndVisible()
+    hostingController.view.frame = bounds
+    hostingController.view.layoutIfNeeded()
+
+    let renderer = UIGraphicsImageRenderer(bounds: bounds)
+    let image = renderer.image { _ in
+      hostingController.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
+    }
+    window.isHidden = true
+
+    let data = try XCTUnwrap(image.pngData())
+    let url = URL(fileURLWithPath: "/private/tmp/\(filename)")
+    try data.write(to: url, options: .atomic)
+
+    XCTAssertGreaterThan(data.count, 1_000)
   }
 
   @MainActor

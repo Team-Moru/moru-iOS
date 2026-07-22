@@ -12,9 +12,34 @@ import UIKit
 @MainActor
 final class AppRouterState: ObservableObject {
   @Published private(set) var homeRefreshToken = 0
+  @Published private(set) var mainTabState = MainTabState()
 
   func refreshHome() {
     homeRefreshToken += 1
+  }
+
+  func selectMainTab(_ tab: MoruTabItem) {
+    var nextState = mainTabState
+    nextState.select(tab)
+    mainTabState = nextState
+  }
+
+  func showHome() {
+    var nextState = mainTabState
+    nextState.showHome()
+    mainTabState = nextState
+  }
+
+  func showRunDetail(_ runID: UUID) {
+    var nextState = mainTabState
+    nextState.showRunDetail(runID)
+    mainTabState = nextState
+  }
+
+  func setHistoryDestination(_ destination: HistoryDestination?) {
+    var nextState = mainTabState
+    nextState.setHistoryDestination(destination)
+    mainTabState = nextState
   }
 }
 
@@ -214,6 +239,7 @@ struct AppRouter: View {
         sessionStore.load()
       }
     )
+    let mainTabState = state.mainTabState
 
     return MainTabView(
       home: homeBuilder.make(
@@ -221,8 +247,28 @@ struct AppRouter: View {
         refreshToken: state.homeRefreshToken
       ),
       routineSetting: RoutineSettingView(dependencies: dependencies),
-      history: historyBuilder.make(),
-      profile: profileBuilder.make()
+      history: historyBuilder.make(destination: historyDestinationBinding),
+      profile: profileBuilder.make(),
+      selection: mainTabSelectionBinding,
+      historyReloadToken: mainTabState.historyReloadToken
+    )
+  }
+
+  private var mainTabSelectionBinding: Binding<MoruTabItem> {
+    Binding(
+      get: { state.mainTabState.selection },
+      set: { tab in
+        state.selectMainTab(tab)
+      }
+    )
+  }
+
+  private var historyDestinationBinding: Binding<HistoryDestination?> {
+    Binding(
+      get: { state.mainTabState.historyDestination },
+      set: { destination in
+        state.setHistoryDestination(destination)
+      }
     )
   }
 
@@ -243,6 +289,10 @@ struct AppRouter: View {
       presentationBinding.wrappedValue = nil
     case .reloadSession:
       sessionStore.load()
+    case .showHome:
+      state.showHome()
+    case .showRunDetail(let runID):
+      state.showRunDetail(runID)
     }
   }
 

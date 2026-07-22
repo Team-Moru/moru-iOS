@@ -117,6 +117,59 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     XCTAssertEqual(state.selection, .record)
     XCTAssertEqual(state.historyReloadToken, 2)
+
+    let runID = UUID()
+    state.showRunDetail(runID)
+
+    XCTAssertEqual(state.selection, .record)
+    XCTAssertEqual(state.historyReloadToken, 3)
+    XCTAssertEqual(state.historyDestination, .runDetail(runID))
+
+    state.setHistoryDestination(nil)
+    state.showHome()
+
+    XCTAssertEqual(state.selection, .home)
+    XCTAssertNil(state.historyDestination)
+  }
+
+  @MainActor
+  func testCoordinatorRoutesRegularSummaryActionsAfterDismissal() {
+    let coordinator = AppNavigationCoordinator()
+    let runID = UUID()
+
+    guard case .presented(let recordToken) = coordinator.presentRegularRoutine(
+      routineID: UUID()
+    ) else {
+      XCTFail("The regular routine should be presented.")
+      return
+    }
+
+    XCTAssertEqual(
+      coordinator.handle(
+        event: .exitRequested(.summaryRecord(persistedRunID: runID)),
+        presentationToken: recordToken
+      ),
+      .dismiss(token: recordToken)
+    )
+    coordinator.presentationBindingDidChange(to: nil)
+    XCTAssertEqual(coordinator.presentationDidDismiss(), .showRunDetail(runID))
+
+    guard case .presented(let homeToken) = coordinator.presentRegularRoutine(
+      routineID: UUID()
+    ) else {
+      XCTFail("A second regular routine should be presented.")
+      return
+    }
+
+    XCTAssertEqual(
+      coordinator.handle(
+        event: .exitRequested(.summaryCTA),
+        presentationToken: homeToken
+      ),
+      .dismiss(token: homeToken)
+    )
+    coordinator.presentationBindingDidChange(to: nil)
+    XCTAssertEqual(coordinator.presentationDidDismiss(), .showHome)
   }
   @MainActor
   func testInstalledHomeLaunchHandlerPresentsExactRoutineAndRefreshesAfterDismissal() {
@@ -169,6 +222,7 @@ final class RouterRuntimeContractTests: XCTestCase {
       [RegularRoutineExecutionRequest(routineID: routineID, source: .manual)]
     )
     XCTAssertEqual(routinePlayerBuilder.regularPresentationTokens, [token])
+    state.selectMainTab(.my)
 
     let unrelatedToken = UUID()
     XCTAssertNotEqual(unrelatedToken, token)
@@ -195,10 +249,47 @@ final class RouterRuntimeContractTests: XCTestCase {
     XCTAssertNil(coordinator.pendingDismissalToken)
     XCTAssertEqual(coordinator.navigationState, .idle)
     XCTAssertEqual(state.homeRefreshToken, 1)
+    XCTAssertEqual(state.mainTabState.selection, .home)
 
     _ = router.mainTabView
 
     XCTAssertEqual(homeBuilder.refreshTokens, [0, 1])
+  }
+
+  @MainActor
+  func testRouterOpensThePersistedRunAfterRegularSummaryDismissal() {
+    let homeBuilder = CapturingHomeFlowBuilder()
+    let routinePlayerBuilder = CapturingRoutinePlayerBuilder()
+    let state = AppRouterState()
+    let (router, coordinator) = makeRouter(
+      homeBuilder: homeBuilder,
+      routinePlayerBuilder: routinePlayerBuilder,
+      state: state
+    )
+    let routineID = UUID()
+    let runID = UUID()
+
+    guard case .presented(let token) = coordinator.presentRegularRoutine(
+      routineID: routineID
+    ) else {
+      XCTFail("The regular routine should be presented.")
+      return
+    }
+
+    _ = router.routinePlayerView(
+      for: .regularRoutine(routineID: routineID, token: token)
+    )
+    routinePlayerBuilder.sendRegularEvent(
+      .exitRequested(.summaryRecord(persistedRunID: runID)),
+      presentationToken: token
+    )
+
+    XCTAssertNil(coordinator.presentation)
+    router.completePendingDismissal()
+
+    XCTAssertEqual(state.mainTabState.selection, .record)
+    XCTAssertEqual(state.mainTabState.historyDestination, .runDetail(runID))
+    XCTAssertEqual(state.mainTabState.historyReloadToken, 1)
   }
 
   @MainActor
@@ -641,11 +732,25 @@ final class RouterRuntimeContractTests: XCTestCase {
     XCTAssertFalse(summary.endedEarly)
     XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
 
+    guard let persistedRunID = summary.persistedRunID else {
+      XCTFail("A regular completion must retain its saved run ID.")
+      return
+    }
+
+    viewModel.requestSummaryRecord()
+
     viewModel.finishStepCompletedScreen()
     viewModel.retrySavingRun()
+    viewModel.requestSummaryRecord()
 
     XCTAssertEqual(saver.requests.count, 1)
-    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+    XCTAssertEqual(
+      eventRecorder.events,
+      [
+        .completionDisplayed(summary),
+        .exitRequested(.summaryRecord(persistedRunID: persistedRunID)),
+      ]
+    )
   }
 
   @MainActor
@@ -801,7 +906,7 @@ final class RouterRuntimeContractTests: XCTestCase {
     case .userDismissed:
       viewModel.requestCloseRoutine()
 
-    case .summaryCTA, .terminalUnavailable:
+    case .summaryCTA, .summaryRecord, .terminalUnavailable:
       XCTFail("Only early exit reasons are valid for this helper.")
     }
   }

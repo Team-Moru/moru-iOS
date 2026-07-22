@@ -5,13 +5,25 @@
 //  Created by Codex on 7/14/26.
 //
 
+import Foundation
 import SwiftUI
 
 struct MainTabState: Equatable {
   static let availableTabs: [MoruTabItem] = [.home, .routine, .record, .my]
 
-  private(set) var selection: MoruTabItem = .home
-  private(set) var historyReloadToken = 0
+  private(set) var selection: MoruTabItem
+  private(set) var historyReloadToken: Int
+  private(set) var historyDestination: HistoryDestination?
+
+  init(
+    selection: MoruTabItem = .home,
+    historyReloadToken: Int = 0,
+    historyDestination: HistoryDestination? = nil
+  ) {
+    self.selection = selection
+    self.historyReloadToken = historyReloadToken
+    self.historyDestination = historyDestination
+  }
 
   mutating func select(_ tab: MoruTabItem) {
     guard Self.availableTabs.contains(tab) else {
@@ -19,6 +31,7 @@ struct MainTabState: Equatable {
     }
 
     selection = tab
+    historyDestination = nil
 
     guard tab == .record else {
       return
@@ -26,26 +39,45 @@ struct MainTabState: Equatable {
 
     historyReloadToken += 1
   }
+
+  mutating func showHome() {
+    selection = .home
+    historyDestination = nil
+  }
+
+  mutating func showRunDetail(_ runID: UUID) {
+    selection = .record
+    historyDestination = .runDetail(runID)
+    historyReloadToken += 1
+  }
+
+  mutating func setHistoryDestination(_ destination: HistoryDestination?) {
+    historyDestination = destination
+  }
 }
 
 struct MainTabView: View {
-  @State private var state = MainTabState()
-
   private let home: AnyView
   private let routineSetting: RoutineSettingView
   private let history: AnyView
   private let profile: AnyView
+  @Binding private var selection: MoruTabItem
+  private let historyReloadToken: Int
 
   init(
     home: AnyView,
     routineSetting: RoutineSettingView,
     history: AnyView,
-    profile: AnyView = AnyView(EmptyView())
+    profile: AnyView = AnyView(EmptyView()),
+    selection: Binding<MoruTabItem>,
+    historyReloadToken: Int
   ) {
     self.home = home
     self.routineSetting = routineSetting
     self.history = history
     self.profile = profile
+    _selection = selection
+    self.historyReloadToken = historyReloadToken
   }
 
   var body: some View {
@@ -54,10 +86,7 @@ struct MainTabView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
       MoruTabBar(
-        selection: Binding(
-          get: { state.selection },
-          set: { state.select($0) }
-        ),
+        selection: $selection,
         items: MainTabState.availableTabs
       )
     }
@@ -65,12 +94,12 @@ struct MainTabView: View {
 
   @ViewBuilder
   private var selectedContent: some View {
-    if state.selection == .home {
+    if selection == .home {
       home
-    } else if state.selection == .routine {
+    } else if selection == .routine {
       routineSetting
-    } else if state.selection == .record {
-      history.id(state.historyReloadToken)
+    } else if selection == .record {
+      history.id(historyReloadToken)
     } else {
       profile
     }

@@ -28,6 +28,78 @@ struct HistoryOverview: Sendable, Equatable {
   let calendar: Calendar
   let recentDays: [HistoryDaySummary]
   let week: HistoryWeekReport
+  let wakeMetrics: HistoryWakeMetrics
+  let monthlyHeatmap: HistoryMonthlyHeatmap
+}
+
+enum HistoryDestination: Hashable, Sendable {
+  case runDetail(UUID)
+}
+
+enum HistoryStartTimeRegularity: Sendable, Equatable {
+  case veryConsistent
+  case consistent
+  case variable
+  case highlyVariable
+}
+
+enum HistoryWakeMetrics: Sendable, Equatable {
+  case unavailable
+  case insufficient(observationCount: Int)
+  case calculated(
+    observationCount: Int,
+    averageWakeMinute: Int,
+    averageDeviationMinutes: Int,
+    regularity: HistoryStartTimeRegularity
+  )
+
+  var observationCount: Int {
+    switch self {
+    case .unavailable:
+      return 0
+    case .insufficient(let observationCount),
+         .calculated(let observationCount, _, _, _):
+      return observationCount
+    }
+  }
+}
+
+struct HistoryMonthlyHeatmap: Sendable, Equatable {
+  let monthStartDate: Date
+  let days: [HistoryHeatmapDay]
+}
+
+struct HistoryHeatmapDay: Identifiable, Sendable, Equatable {
+  let id: String
+  let date: Date?
+  let completionRate: Double?
+
+  var bucket: HistoryHeatmapBucket {
+    guard let completionRate else {
+      return .noData
+    }
+
+    let rate = min(max(completionRate, 0), 1)
+
+    switch rate {
+    case 0:
+      return .zero
+    case ..<0.5:
+      return .low
+    case ..<1:
+      return .high
+    default:
+      return .complete
+    }
+  }
+}
+
+enum HistoryHeatmapBucket: Sendable, Equatable {
+  case noData
+  case zero
+  case low
+  case high
+  case complete
 }
 
 struct HistoryDaySummary: Sendable, Equatable {

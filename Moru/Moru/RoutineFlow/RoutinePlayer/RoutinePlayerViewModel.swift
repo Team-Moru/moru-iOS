@@ -366,6 +366,15 @@ final class RoutinePlayerViewModel {
         
         emitExit(.summaryCTA)
     }
+
+    func requestSummaryRecord() {
+        guard case .summary(let summary) = screenState,
+              let persistedRunID = summary.persistedRunID else {
+            return
+        }
+
+        emitExit(.summaryRecord(persistedRunID: persistedRunID))
+    }
     
     private func requestExitDialog(_ exit: DialogState.Exit) {
         guard !isStepInteractionDisabled else {
