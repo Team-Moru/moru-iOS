@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MainTabState: Equatable {
-  static let availableTabs: [MoruTabItem] = [.home, .routine, .record]
+  static let availableTabs: [MoruTabItem] = [.home, .routine, .record, .my]
 
   private(set) var selection: MoruTabItem = .home
   private(set) var historyReloadToken = 0
@@ -34,15 +34,18 @@ struct MainTabView: View {
   private let home: AnyView
   private let routineSetting: RoutineSettingView
   private let history: AnyView
+  private let profile: AnyView
 
   init(
     home: AnyView,
     routineSetting: RoutineSettingView,
-    history: AnyView
+    history: AnyView,
+    profile: AnyView = AnyView(EmptyView())
   ) {
     self.home = home
     self.routineSetting = routineSetting
     self.history = history
+    self.profile = profile
   }
 
   var body: some View {
@@ -66,8 +69,10 @@ struct MainTabView: View {
       home
     } else if state.selection == .routine {
       routineSetting
-    } else {
+    } else if state.selection == .record {
       history.id(state.historyReloadToken)
+    } else {
+      profile
     }
   }
 }

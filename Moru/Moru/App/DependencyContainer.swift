@@ -8,20 +8,51 @@
 import SwiftData
 
 struct DependencyContainer {
-
   let routineRepository: any RoutineRepository
   let routineRunRepository: any RoutineRunRepository
   let localProfileRepository: any LocalProfileRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
+  let localDataResetRepository: (any LocalDataResetRepository)?
+  let voiceAvailabilityProbe: any VoiceAvailabilityProbing
+  let profileAlarmService: (any ProfileAlarmServicing)?
 
+  init(
+    routineRepository: any RoutineRepository,
+    routineRunRepository: any RoutineRunRepository,
+    localProfileRepository: any LocalProfileRepository,
+    onboardingRepository: any OnboardingRepository,
+    routineSuggestionService: any RoutineSuggestionService,
+    localDataResetRepository: (any LocalDataResetRepository)? = nil,
+    voiceAvailabilityProbe: any VoiceAvailabilityProbing =
+      UnavailableVoiceAvailabilityProbe(),
+    profileAlarmService: (any ProfileAlarmServicing)? = nil
+  ) {
+    self.routineRepository = routineRepository
+    self.routineRunRepository = routineRunRepository
+    self.localProfileRepository = localProfileRepository
+    self.onboardingRepository = onboardingRepository
+    self.routineSuggestionService = routineSuggestionService
+    self.localDataResetRepository = localDataResetRepository
+    self.voiceAvailabilityProbe = voiceAvailabilityProbe
+    self.profileAlarmService = profileAlarmService
+  }
+
+  @MainActor
   static func local(modelContext: ModelContext) -> DependencyContainer {
-    DependencyContainer(
+    let voiceAvailabilityProbe = AVSpeechVoiceAvailabilityProbe()
+
+    return DependencyContainer(
       routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
       routineRunRepository: SwiftDataRoutineRunRepository(modelContext: modelContext),
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
-      routineSuggestionService: LocalTemplateSuggestionService.shared
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      localDataResetRepository: SwiftDataLocalDataResetRepository(
+        modelContext: modelContext
+      ),
+      voiceAvailabilityProbe: voiceAvailabilityProbe,
+      profileAlarmService: AlarmKitProfileService()
     )
   }
 

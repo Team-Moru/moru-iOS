@@ -86,17 +86,49 @@ struct VoiceProfile: Codable, Hashable, Identifiable {
   var id: String
   var displayName: String
   var localeIdentifier: String
+  var avSpeechVoiceIdentifier: String?
 
+  init(
+    id: String,
+    displayName: String,
+    localeIdentifier: String,
+    avSpeechVoiceIdentifier: String? = nil
+  ) {
+    self.id = id
+    self.displayName = displayName
+    self.localeIdentifier = localeIdentifier
+    self.avSpeechVoiceIdentifier = avSpeechVoiceIdentifier
+  }
+
+  static let yuna = VoiceProfile(
+    id: "moru.ko.yuna",
+    displayName: "유나",
+    localeIdentifier: "ko-KR",
+    avSpeechVoiceIdentifier: "com.apple.ttsbundle.Yuna-compact"
+  )
+
+  static let sora = VoiceProfile(
+    id: "moru.ko.sora",
+    displayName: "소라",
+    localeIdentifier: "ko-KR",
+    avSpeechVoiceIdentifier: "com.apple.ttsbundle.Sora-compact"
+  )
+
+  /// Legacy value kept so profiles written before the v1 voice catalogue remain decodable.
   static let moru = VoiceProfile(
     id: "moru-local",
     displayName: "모루 기본 목소리",
     localeIdentifier: "ko-KR"
   )
 
-  static let localVoices = [VoiceProfile.moru]
+  static let localVoices = [VoiceProfile.yuna, .sora]
 
   static func fallback(id: String) -> VoiceProfile {
-    localVoices.first { $0.id == id } ?? .moru
+    if id == moru.id {
+      return .moru
+    }
+
+    return localVoices.first { $0.id == id } ?? .moru
   }
 }
 
@@ -367,7 +399,7 @@ struct LocalProfile: Identifiable, Codable, Hashable {
   init(
     id: UUID = UUID(),
     displayName: String = "모루 사용자",
-    selectedVoice: VoiceProfile = .moru,
+    selectedVoice: VoiceProfile = .yuna,
     createdAt: Date = Date(),
     updatedAt: Date = Date()
   ) {
