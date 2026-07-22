@@ -98,7 +98,6 @@ struct MoruTabBar: View {
         .buttonStyle(.plain)
         .accessibilityLabel(item.title)
         .accessibilityAddTraits(selection == item ? .isSelected : [])
-        .accessibilityValue(selection == item ? "선택됨" : "")
         .accessibilityIdentifier(Self.accessibilityIdentifier(for: item))
       }
     }
