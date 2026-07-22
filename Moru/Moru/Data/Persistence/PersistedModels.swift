@@ -249,3 +249,35 @@ final class PersistedLocalProfile {
     self.updatedAt = updatedAt
   }
 }
+
+@Model
+final class PersistedHomeWeatherSnapshot {
+  @Attribute(.unique) var id: UUID
+  var conditionRawValue: String
+  var temperatureCelsius: Double
+  var latitudeE4: Int
+  var longitudeE4: Int
+  var fetchedAt: Date
+  var fetchedTimeZoneIdentifier: String
+  var fetchedUTCOffsetSeconds: Int
+
+  init(
+    id: UUID,
+    conditionRawValue: String,
+    temperatureCelsius: Double,
+    latitudeE4: Int,
+    longitudeE4: Int,
+    fetchedAt: Date,
+    fetchedTimeZoneIdentifier: String,
+    fetchedUTCOffsetSeconds: Int
+  ) {
+    self.id = id
+    self.conditionRawValue = conditionRawValue
+    self.temperatureCelsius = temperatureCelsius
+    self.latitudeE4 = latitudeE4
+    self.longitudeE4 = longitudeE4
+    self.fetchedAt = fetchedAt
+    self.fetchedTimeZoneIdentifier = fetchedTimeZoneIdentifier
+    self.fetchedUTCOffsetSeconds = fetchedUTCOffsetSeconds
+  }
+}

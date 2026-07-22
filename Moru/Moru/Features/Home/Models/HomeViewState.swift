@@ -40,6 +40,27 @@ enum HomeFailure: Equatable {
   }
 }
 
+enum HomeWeatherError: Error, Equatable {
+  case cacheReadFailed
+  case cacheEraseFailed
+  case cacheWriteFailed
+  case service(HomeWeatherServiceError)
+  case unavailableConfiguration
+}
+
+enum HomeWeatherState: Equatable {
+  case notRequested
+  case requestingPermission
+  case locating(UUID)
+  case loading(UUID)
+  case fresh(HomeWeatherSnapshot)
+  case stale(HomeWeatherSnapshot)
+  case denied
+  case restricted
+  case noFix
+  case unavailable(HomeWeatherError)
+}
+
 enum HomeViewState: Equatable {
   case loading(previousContent: HomeContentState?)
   case content(HomeContentState)
@@ -122,6 +143,7 @@ struct HomeContentState: Equatable {
   var manualRoutines: [HomeRoutineState]
   var todayProgress: HomeProgressState
   var streak: HomeStreakState
+  var weather: HomeWeatherState = .notRequested
 }
 
 struct HomeProgressState: Equatable {

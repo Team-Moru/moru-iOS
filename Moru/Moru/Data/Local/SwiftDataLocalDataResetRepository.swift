@@ -18,6 +18,7 @@ nonisolated final class SwiftDataLocalDataResetRepository: LocalDataResetReposit
   @MainActor
   func resetToFreshInstallState() throws {
     do {
+      try deleteAll(PersistedHomeWeatherSnapshot.self)
       try deleteAll(PersistedRoutineRun.self)
       try deleteAll(PersistedRoutine.self)
       try deleteAll(PersistedLocalProfile.self)
