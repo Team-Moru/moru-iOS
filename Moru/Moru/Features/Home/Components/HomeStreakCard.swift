@@ -10,6 +10,7 @@ import SwiftUI
 struct HomeStreakCard: View {
 
   let streak: HomeStreakState
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   static func weekdayAccessibilityValue(isCompleted: Bool) -> String {
     isCompleted ? "완료" : "미완료"
@@ -23,7 +24,7 @@ struct HomeStreakCard: View {
       shadowY: 0
     ) {
       VStack(spacing: AppSpacing.xs) {
-        MoruFireIcon(size: 32)
+        MoruFireIcon(size: dynamicTypeSize.isAccessibilitySize ? 44 : 32)
 
         HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xxs) {
           Text("\(streak.currentDays)")
@@ -35,26 +36,23 @@ struct HomeStreakCard: View {
             .foregroundStyle(AppColor.moruTextPrimary)
         }
 
-        HStack(spacing: AppSpacing.six) {
-          ForEach(streak.weekdays) { weekday in
-            VStack(spacing: AppSpacing.xxs) {
-              Circle()
-                .fill(
-                  weekday.isCompleted
-                    ? AppColor.orange350
-                    : AppColor.babyBlue100
-                )
-                .frame(width: 14, height: 14)
-
-              Text(weekday.label)
-                .font(AppFont.caption1Medium)
-                .foregroundStyle(AppColor.moruTextSecondary)
+        if dynamicTypeSize.isAccessibilitySize {
+          LazyVGrid(
+            columns: Array(
+              repeating: GridItem(.flexible(), spacing: AppSpacing.sm),
+              count: 4
+            ),
+            spacing: AppSpacing.sm
+          ) {
+            ForEach(streak.weekdays) { weekday in
+              weekdayCell(weekday)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(weekday.label)
-            .accessibilityValue(
-              Self.weekdayAccessibilityValue(isCompleted: weekday.isCompleted)
-            )
+          }
+        } else {
+          HStack(spacing: AppSpacing.six) {
+            ForEach(streak.weekdays) { weekday in
+              weekdayCell(weekday)
+            }
           }
         }
 
@@ -67,8 +65,32 @@ struct HomeStreakCard: View {
           .clipShape(Capsule())
       }
       .frame(maxWidth: .infinity)
-      .frame(height: 128)
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 264 : 128)
     }
+  }
+
+  private func weekdayCell(_ weekday: HomeWeekdayState) -> some View {
+    VStack(spacing: AppSpacing.xxs) {
+      Circle()
+        .fill(
+          weekday.isCompleted
+            ? AppColor.orange350
+            : AppColor.babyBlue100
+        )
+        .frame(
+          width: dynamicTypeSize.isAccessibilitySize ? 20 : 14,
+          height: dynamicTypeSize.isAccessibilitySize ? 20 : 14
+        )
+
+      Text(weekday.label)
+        .font(AppFont.caption1Medium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(weekday.label)
+    .accessibilityValue(
+      Self.weekdayAccessibilityValue(isCompleted: weekday.isCompleted)
+    )
   }
 }
 

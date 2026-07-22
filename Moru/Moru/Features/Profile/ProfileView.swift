@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct ProfileView: View {
+  static let rootAccessibilityIdentifier = "profile.root"
+
   @State private var viewModel: ProfileViewModel
   @Environment(\.scenePhase) private var scenePhase
   @State private var displayNameDraft = ""
@@ -36,7 +38,7 @@ struct ProfileView: View {
       .navigationBarTitleDisplayMode(.large)
     }
     .accessibilityElement(children: .contain)
-    .accessibilityIdentifier("profile.root")
+    .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
     .task {
       viewModel.loadProfileSettings()
     }

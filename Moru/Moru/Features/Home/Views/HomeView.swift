@@ -48,11 +48,14 @@ struct HomeRoutineLaunchBoundary {
 }
 
 struct HomeView: View {
+  static let rootAccessibilityIdentifier = "home.root"
+
   private let routineLaunchBoundary: HomeRoutineLaunchBoundary
   private let refreshToken: Int
   private let routineSettingContent: AnyView
   private let clearsRoutineLaunchMessageOnRefresh: Bool
 
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var viewModel: HomeViewModel
   @State private var isRoutineSettingPresented = false
   @State private var routineLaunchMessage: String?
@@ -103,6 +106,9 @@ struct HomeView: View {
       }
       .padding(.bottom, AppSpacing.xxl)
     }
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
+    .accessibilityLabel("홈")
     .background(homeBackground.ignoresSafeArea())
     .task(id: refreshToken) {
       if clearsRoutineLaunchMessageOnRefresh {
@@ -129,11 +135,8 @@ struct HomeView: View {
   private func homeContent(_ content: HomeContentState) -> some View {
     HomeHeaderView(userName: content.userName)
 
-    HStack(spacing: AppSpacing.md) {
-      TodayRoutineProgressCard(progress: content.todayProgress)
-      HomeStreakCard(streak: content.streak)
-    }
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    routineProgressCards(content)
+      .padding(.horizontal, AppSpacing.screenHorizontal)
 
     weatherCard
 
@@ -158,6 +161,21 @@ struct HomeView: View {
         .font(AppFont.caption1Medium)
         .foregroundStyle(AppColor.orange500)
         .padding(.horizontal, AppSpacing.screenHorizontal)
+    }
+  }
+
+  @ViewBuilder
+  private func routineProgressCards(_ content: HomeContentState) -> some View {
+    if dynamicTypeSize.isAccessibilitySize {
+      VStack(spacing: AppSpacing.md) {
+        TodayRoutineProgressCard(progress: content.todayProgress)
+        HomeStreakCard(streak: content.streak)
+      }
+    } else {
+      HStack(spacing: AppSpacing.md) {
+        TodayRoutineProgressCard(progress: content.todayProgress)
+        HomeStreakCard(streak: content.streak)
+      }
     }
   }
 

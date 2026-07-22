@@ -50,6 +50,8 @@ enum HistoryRunDetailDestinationResolver {
 }
 
 struct HistoryView: View {
+  static let rootAccessibilityIdentifier = "history.root"
+
   @State private var viewModel: HistoryViewModel
   @State private var isWeeklyReportPresented = false
   @Binding private var pendingDestination: HistoryDestination?
@@ -118,6 +120,9 @@ struct HistoryView: View {
         }
       }
     }
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
+    .accessibilityLabel("이력")
     .task {
       viewModel.load()
       resolveLoadedDestination()

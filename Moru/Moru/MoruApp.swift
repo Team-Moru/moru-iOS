@@ -35,6 +35,7 @@ struct MoruApp: App {
       .task {
         bootstrapper.start()
       }
+      .preferredColorScheme(.light)
     }
   }
 }
