@@ -2,51 +2,47 @@
 //  VoiceSendingBarView.swift
 //  Moru
 //
-//  Created by 김승겸 on 7/8/26.
-//
+
 import SwiftUI
 
 struct VoiceSendingBarView: View {
-    let onPause: () -> Void
-    let onStop: () -> Void
+  let phase: SpeechInputController.Phase
+  let waveformLevels: [CGFloat]
+  let onPauseResume: () -> Void
+  let onStop: () -> Void
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
-        HStack(spacing: 16) {
-            Button {
-                onPause()
-            } label: {
-                Image(AppIcon.moruSoundPauseButton)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 64, height: 64)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("일시정지")
+  var body: some View {
+    VStack(spacing: 8) {
+      Text(statusText)
+        .font(AppFont.caption1SemiBold)
+        .foregroundStyle(AppColor.gray350)
+        .accessibilityAddTraits(.updatesFrequently)
 
-            RoundedRectangle(cornerRadius: 3)
-                .fill(AppColor.grayWhite.opacity(0.8))
-                .frame(height: 24)
-                .overlay {
-                    Text("음성 전송 중")
-                        .font(AppFont.caption1SemiBold)
-                        .foregroundStyle(AppColor.gray500)
-                }
-
-            Button {
-                onStop()
-            } label: {
-                Image(AppIcon.moruSoundStopButton)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 64, height: 64)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("정지")
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 76)
-        .background(AppColor.orange200.opacity(0.7))
-        .clipShape(Capsule())
-        .padding(.horizontal, 20)
+      MoruSoundModule(
+        levels: waveformLevels,
+        isPaused: phase == .paused,
+        isFinishing: phase == .finishing,
+        usesReducedMotion: reduceMotion,
+        pauseAction: onPauseResume,
+        stopAction: onStop
+      )
     }
+    .frame(maxWidth: .infinity)
+  }
+
+  private var statusText: String {
+    switch phase {
+    case .idle:
+      return ""
+    case .listening:
+      return "음성 인식 중"
+    case .paused:
+      return "음성 인식 일시정지"
+    case .finishing:
+      return "음성 인식 마무리 중…"
+    case .failed:
+      return "음성 인식에 실패했어요"
+    }
+  }
 }

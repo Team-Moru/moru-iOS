@@ -149,7 +149,10 @@ final class HomeRoutineIntegrationTests: XCTestCase {
         diagnostic: String(reflecting: TestRepositoryError.unavailable)
       )
     )
-    XCTAssertEqual(viewModel.state.errorMessage, "홈 정보를 불러오지 못했어요. 다시 시도해 주세요.")
+    XCTAssertEqual(
+      viewModel.state.errorMessage,
+      "홈 정보를 불러오지 못했어요. 다시 시도해 주세요."
+    )
     XCTAssertEqual(viewModel.state.failure?.diagnosticCategory, .localRoutineData)
     XCTAssertEqual(
       viewModel.state.failure?.diagnosticDescription,
@@ -448,7 +451,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     routines: [Routine],
     runs: [RoutineRun] = [],
     profile: LocalProfile? = LocalProfile(displayName: "모루"),
-    calendar: Calendar = Calendar(identifier: .gregorian),
+    calendar: Calendar = makeUTCGregorianCalendar(),
     now: Date
   ) -> HomeViewModel {
     HomeViewModel(
@@ -467,7 +470,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     routines: [Routine],
     runs: [RoutineRun] = [],
     profile: LocalProfile? = LocalProfile(displayName: "모루"),
-    calendar: Calendar = Calendar(identifier: .gregorian),
+    calendar: Calendar = makeUTCGregorianCalendar(),
     now: Date
   ) -> LoadHomeRoutinesUseCase {
     LoadHomeRoutinesUseCase(
@@ -552,6 +555,12 @@ final class HomeRoutineIntegrationTests: XCTestCase {
   private func fixtureUUID(_ value: String) -> UUID {
     UUID(uuidString: value)!
   }
+}
+
+private func makeUTCGregorianCalendar() -> Calendar {
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = TimeZone(identifier: "UTC")!
+  return calendar
 }
 
 @MainActor

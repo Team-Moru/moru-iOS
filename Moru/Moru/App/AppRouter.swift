@@ -66,8 +66,12 @@ struct AppRouter: View {
       switch sessionStore.phase {
       case .loading:
         ProgressView()
+
       case .onboardingRequired:
-        onboardingBuilder.make(onCompleted: handleOnboardingCompleted)
+        onboardingBuilder.make(
+          onCompleted: handleOnboardingCompleted
+        )
+
       case .ready:
         if sessionStore.profile != nil {
           mainTabView
@@ -80,6 +84,7 @@ struct AppRouter: View {
             }
           )
         }
+
       case .failed(let message):
         SessionFailureView(
           title: "저장소를 열 수 없어요",
@@ -165,9 +170,9 @@ struct AppRouter: View {
       .busy
     }
   }
+
   @MainActor
   var mainTabView: MainTabView {
-
     let historyBuilder = DefaultHistoryFlowBuilder(
       loadHistoryUseCase: LoadHistoryUseCase(
         routineRunRepository: dependencies.routineRunRepository
