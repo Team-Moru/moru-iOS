@@ -31,7 +31,7 @@ final class OnboardingHappyPathTests: XCTestCase {
           wakeUpMinute: 30,
           weekdays: [.monday, .wednesday]
         ),
-        selectedVoice: .moru
+        selectedVoice: .yuna
       )
     )
 
@@ -39,8 +39,8 @@ final class OnboardingHappyPathTests: XCTestCase {
     let activeRoutines = try dependencies.routineRepository.fetchActiveRoutines()
     let savedRoutine = try XCTUnwrap(activeRoutines.first)
 
-    XCTAssertEqual(result.profile.selectedVoice, .moru)
-    XCTAssertEqual(savedProfile.selectedVoice, .moru)
+    XCTAssertEqual(result.profile.selectedVoice, .yuna)
+    XCTAssertEqual(savedProfile.selectedVoice, .yuna)
     XCTAssertEqual(activeRoutines.count, 1)
     XCTAssertEqual(savedRoutine.id, result.routine.id)
     XCTAssertTrue(savedRoutine.isActive)
@@ -78,7 +78,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 0,
             weekdays: [.monday]
           ),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
     ) {
@@ -92,7 +92,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       try useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(weekdays: []),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
     ) {
@@ -205,7 +205,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .voice)
 
-    viewModel.selectVoice(.moru)
+    viewModel.selectVoice(.yuna)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .completion)
 
@@ -217,7 +217,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(completedRoutineID, useCase.resultRoutineIDs.first)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpHour, 6)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpMinute, 40)
-    XCTAssertEqual(useCase.requests.first?.selectedVoice, .moru)
+    XCTAssertEqual(useCase.requests.first?.selectedVoice, .yuna)
   }
 
   @MainActor
@@ -354,7 +354,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 10,
             weekdays: [.monday, .tuesday, .wednesday, .thursday, .friday]
           ),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
       routineID = result.routine.id
@@ -376,7 +376,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       )
 
       XCTAssertEqual(sessionStore.phase, .ready)
-      XCTAssertEqual(profile.selectedVoice, .moru)
+      XCTAssertEqual(profile.selectedVoice, .yuna)
       XCTAssertEqual(activeRoutine.id, routineID)
       XCTAssertTrue(activeRoutine.isActive)
       XCTAssertEqual(activeRoutine.alarmSchedule?.isEnabled, true)

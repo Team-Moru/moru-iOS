@@ -7,6 +7,7 @@
 
 import Combine
 import SwiftUI
+import UIKit
 
 @MainActor
 final class AppRouterState: ObservableObject {
@@ -178,6 +179,39 @@ struct AppRouter: View {
         routineRunRepository: dependencies.routineRunRepository
       )
     )
+    let profileSettingsUseCase = ProfileSettingsUseCase(
+      localProfileRepository: dependencies.localProfileRepository,
+      voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
+    )
+    let profileAlarmService = dependencies.profileAlarmService
+      ?? UnavailableProfileAlarmService()
+    let resetUseCase = dependencies.localDataResetRepository.map {
+      ResetLocalDataUseCase(
+        localDataResetRepository: $0,
+        alarmService: profileAlarmService
+      )
+    }
+    let profileBuilder = DefaultProfileFlowBuilder(
+      profileSettingsUseCase: profileSettingsUseCase,
+      voicePreviewPlayer: AVSpeechVoicePreviewPlayer(
+        availabilityProbe: dependencies.voiceAvailabilityProbe
+      ),
+      alarmService: profileAlarmService,
+      resetUseCase: resetUseCase,
+      resetAvailability: {
+        coordinator.presentation == nil && coordinator.pendingDismissalToken == nil
+      },
+      onOpenSettings: {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+          return
+        }
+
+        UIApplication.shared.open(url)
+      },
+      onResetSucceeded: {
+        sessionStore.load()
+      }
+    )
 
     return MainTabView(
       home: homeBuilder.make(
@@ -185,7 +219,8 @@ struct AppRouter: View {
         refreshToken: state.homeRefreshToken
       ),
       routineSetting: RoutineSettingView(dependencies: dependencies),
-      history: historyBuilder.make()
+      history: historyBuilder.make(),
+      profile: profileBuilder.make()
     )
   }
 

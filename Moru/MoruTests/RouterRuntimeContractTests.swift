@@ -95,12 +95,12 @@ final class RouterRuntimeContractTests: XCTestCase {
   func testMainTabStateMakesHistoryReachableAndReloadsItForEachSelection() {
     var state = MainTabState()
 
-    XCTAssertEqual(MainTabState.availableTabs, [.home, .routine, .record])
+    XCTAssertEqual(MainTabState.availableTabs, [.home, .routine, .record, .my])
     XCTAssertEqual(state.selection, .home)
     XCTAssertEqual(state.historyReloadToken, 0)
     state.select(.my)
 
-    XCTAssertEqual(state.selection, .home)
+    XCTAssertEqual(state.selection, .my)
     XCTAssertEqual(state.historyReloadToken, 0)
 
     state.select(.routine)
