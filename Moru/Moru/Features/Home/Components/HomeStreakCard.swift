@@ -8,11 +8,12 @@
 import SwiftUI
 
 struct HomeStreakCard: View {
-  private let weekdays: [Weekday] = [
-    .monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday,
-  ]
 
   let streak: HomeStreakState
+
+  static func weekdayAccessibilityValue(isCompleted: Bool) -> String {
+    isCompleted ? "완료" : "미완료"
+  }
 
   var body: some View {
     MoruCard(
@@ -35,20 +36,25 @@ struct HomeStreakCard: View {
         }
 
         HStack(spacing: AppSpacing.six) {
-          ForEach(weekdays) { weekday in
+          ForEach(streak.weekdays) { weekday in
             VStack(spacing: AppSpacing.xxs) {
               Circle()
                 .fill(
-                  streak.completedWeekdays.contains(weekday)
+                  weekday.isCompleted
                     ? AppColor.orange350
                     : AppColor.babyBlue100
                 )
                 .frame(width: 14, height: 14)
 
-              Text(weekday.shortTitle)
+              Text(weekday.label)
                 .font(AppFont.caption1Medium)
                 .foregroundStyle(AppColor.moruTextSecondary)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(weekday.label)
+            .accessibilityValue(
+              Self.weekdayAccessibilityValue(isCompleted: weekday.isCompleted)
+            )
           }
         }
 

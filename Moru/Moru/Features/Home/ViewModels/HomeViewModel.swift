@@ -11,85 +11,83 @@ import Observation
 @MainActor
 @Observable
 final class HomeViewModel {
-  private let routineRepository: any RoutineRepository
-  private let routineRunRepository: any RoutineRunRepository
-  private let localProfileRepository: any LocalProfileRepository
-  private let calendar: Calendar
+  private let loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol
 
   var state: HomeViewState
 
-  init(
-    dependencies: DependencyContainer,
-    calendar: Calendar = .current
-  ) {
-    self.routineRepository = dependencies.routineRepository
-    self.routineRunRepository = dependencies.routineRunRepository
-    self.localProfileRepository = dependencies.localProfileRepository
-    self.calendar = calendar
-    self.state = .placeholder
+  init(loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol) {
+    self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
+    self.state = .loading(previousContent: nil)
   }
 
   func load() {
-    state.isLoading = true
-    state.errorMessage = nil
+    let previousContent = state.routineContent
+    state = .loading(previousContent: previousContent)
 
     do {
-      let profile = try localProfileRepository.loadOrCreateDefaultProfile()
-      let routines = try routineRepository.fetchActiveRoutines()
-      let runs = try routineRunRepository.fetchRuns()
-      let todayRoutine = currentRoutine(from: routines)
-      let latestTodayRun: RoutineRun?
-      if let todayRoutine {
-        latestTodayRun = try todayRun(for: todayRoutine.id)
-      } else {
-        latestTodayRun = nil
-      }
-
-      state = HomeViewState(
-        userName: profile.displayName,
-        todayRoutine: todayRoutine.map { routine in
-          makeRoutineState(routine: routine, todayRun: latestTodayRun)
-        },
-        todayProgress: makeProgressState(routine: todayRoutine, todayRun: latestTodayRun),
-        streak: makeStreakState(from: runs),
-        isLoading: false,
-        errorMessage: nil
-      )
+      state = makeViewState(from: try loadHomeRoutinesUseCase.execute())
     } catch {
-      state.isLoading = false
-      state.errorMessage = "홈 정보를 불러오지 못했어요."
+      state = .failed(
+        .localRoutineDataUnavailable(diagnostic: String(reflecting: error)),
+        previousContent: previousContent
+      )
     }
   }
 
-  func currentRoutineCardDidTap() {
-    // TODO: RoutineSetting 상세 화면 라우팅이 정해지면 연결합니다.
+  func retry() {
+    load()
   }
 
-  private func currentRoutine(from routines: [Routine]) -> Routine? {
-    let today = currentWeekday()
-    let scheduledToday = routines.filter { routine in
-      guard let schedule = routine.alarmSchedule else {
-        return routine.isActive
-      }
-
-      return routine.isActive
-        && schedule.isEnabled
-        && schedule.weekdays.contains(today)
+  private func makeViewState(from result: HomeRoutineLoadResult) -> HomeViewState {
+    let todayRoutineState = result.todayRoutine.map { routine in
+      makeRoutineState(routine: routine, todayRun: result.todayRun)
     }
+    let manualRoutines = result.manualRoutines.map { routine in
+      let todayRun = routine.id == result.todayRoutine?.id ? result.todayRun : nil
+      return makeRoutineState(routine: routine, todayRun: todayRun)
+    }
+    let content = HomeContentState(
+      userName: result.profile?.displayName ?? "",
+      todayRoutine: todayRoutineState,
+      manualRoutines: manualRoutines,
+      todayProgress: makeProgressState(
+        routine: result.todayRoutine,
+        todayRun: result.todayRun
+      ),
+      streak: HomeStreakState(
+        currentDays: result.streak.currentDays,
+        bestDays: result.streak.bestDays,
+        weekdays: makeWeekdayStates(
+          completedWeekdays: result.streak.completedWeekdays
+        )
+      )
+    )
 
-    return scheduledToday.first ?? routines.first
+    return manualRoutines.isEmpty ? .empty(content) : .content(content)
   }
 
-  private func todayRun(for routineID: UUID) throws -> RoutineRun? {
-    let startOfDay = calendar.startOfDay(for: Date())
+  private func makeWeekdayStates(completedWeekdays: Set<Weekday>) -> [HomeWeekdayState] {
+    let completedIDs = Set(completedWeekdays.map(weekdayID))
+    return HomeWeekdayState.ordered(completedIDs: completedIDs)
+  }
 
-    guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
-      return nil
+  private func weekdayID(_ weekday: Weekday) -> String {
+    switch weekday {
+    case .monday:
+      "monday"
+    case .tuesday:
+      "tuesday"
+    case .wednesday:
+      "wednesday"
+    case .thursday:
+      "thursday"
+    case .friday:
+      "friday"
+    case .saturday:
+      "saturday"
+    case .sunday:
+      "sunday"
     }
-
-    return try routineRunRepository
-      .fetchRuns(for: routineID, from: startOfDay, to: endOfDay)
-      .first
   }
 
   private func makeProgressState(
@@ -100,13 +98,13 @@ final class HomeViewModel {
       return .empty
     }
 
-    let total = routine.steps.count
-    let completed = completedStepCount(routine: routine, todayRun: todayRun)
-    let progress = total == 0 ? 0 : Double(completed) / Double(total)
+    let steps = plannedSteps(for: routine, todayRun: todayRun)
+    let completed = completedStepCount(steps: steps, todayRun: todayRun)
+    let progress = progress(completed: completed, total: steps.count)
 
     return HomeProgressState(
       percentText: "\(Int((progress * 100).rounded()))%",
-      completedText: "\(completed)/\(total) 완료",
+      completedText: "\(completed)/\(steps.count) 완료",
       progress: progress
     )
   }
@@ -115,134 +113,66 @@ final class HomeViewModel {
     routine: Routine,
     todayRun: RoutineRun?
   ) -> HomeRoutineState {
-    let total = routine.steps.count
-    let completed = completedStepCount(routine: routine, todayRun: todayRun)
-    let progress = total == 0 ? 0 : Double(completed) / Double(total)
+    let steps = plannedSteps(for: routine, todayRun: todayRun)
     let completedStepIDs = Set(todayRun?.results.filter(\.isCompleted).map(\.stepID) ?? [])
+    let completed = completedStepCount(steps: steps, todayRun: todayRun)
+    let progress = progress(completed: completed, total: steps.count)
 
     return HomeRoutineState(
       id: routine.id,
       title: routine.name,
       statusText: progress >= 1 ? "진행 완료" : "진행 전",
-      estimatedDurationText: "소요 시간 \(estimatedMinutes(for: routine))분",
+      estimatedDurationText: "소요 시간 \(estimatedMinutes(for: steps))분",
       progressText: "\(Int((progress * 100).rounded()))%",
       progress: progress,
-      steps: routine.steps
-        .sorted { $0.order < $1.order }
-        .map { step in
-          HomeRoutineStepState(
-            id: step.id,
-            title: step.title,
-            detail: stepDurationText(step),
-            isCompleted: completedStepIDs.contains(step.id)
-          )
-        }
+      steps: steps.map { step in
+        HomeRoutineStepState(
+          id: step.stepID,
+          title: step.stepTitle,
+          detail: stepDurationText(step),
+          isCompleted: completedStepIDs.contains(step.stepID)
+        )
+      }
     )
+  }
+
+  private func plannedSteps(for routine: Routine, todayRun: RoutineRun?) -> [RoutineStepSnapshot] {
+    if let todayRun {
+      return todayRun.plannedSteps.sorted { $0.stepOrder < $1.stepOrder }
+    }
+
+    return routine.steps
+      .sorted { $0.order < $1.order }
+      .map(RoutineStepSnapshot.init)
   }
 
   private func completedStepCount(
-    routine: Routine,
+    steps: [RoutineStepSnapshot],
     todayRun: RoutineRun?
   ) -> Int {
-    guard let todayRun else {
+    let completedStepIDs = Set(todayRun?.results.filter(\.isCompleted).map(\.stepID) ?? [])
+    return steps.filter { completedStepIDs.contains($0.stepID) }.count
+  }
+
+  private func progress(completed: Int, total: Int) -> Double {
+    guard total > 0 else {
       return 0
     }
 
-    let completedStepIDs = Set(todayRun.results.filter(\.isCompleted).map(\.stepID))
-    return routine.steps.filter { completedStepIDs.contains($0.id) }.count
+    return Double(completed) / Double(total)
   }
 
-  private func makeStreakState(from runs: [RoutineRun]) -> HomeStreakState {
-    let completedDates = Set(
-      runs.compactMap { run -> Date? in
-        guard let completedAt = run.completedAt, !run.endedEarly else {
-          return nil
-        }
-
-        return calendar.startOfDay(for: completedAt)
-      }
-    )
-
-    let currentStreak = consecutiveCompletedDays(from: completedDates)
-    let completedWeekdays = Set(
-      completedDates
-        .filter { calendar.isDate($0, equalTo: Date(), toGranularity: .weekOfYear) }
-        .map(weekday(from:))
-    )
-
-    return HomeStreakState(
-      currentDays: currentStreak,
-      bestDays: calculateBestStreak(from: completedDates),
-      completedWeekdays: completedWeekdays
-    )
-  }
-
-  private func consecutiveCompletedDays(from completedDates: Set<Date>) -> Int {
-    let today = calendar.startOfDay(for: Date())
-    guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else {
-      return 0
-    }
-
-    let startPoint: Date
-    if completedDates.contains(today) {
-      startPoint = today
-    } else if completedDates.contains(yesterday) {
-      startPoint = yesterday
-    } else {
-      return 0
-    }
-
-    var count = 0
-    var cursor = startPoint
-
-    while completedDates.contains(cursor) {
-      count += 1
-
-      guard let previousDay = calendar.date(byAdding: .day, value: -1, to: cursor) else {
-        break
-      }
-
-      cursor = previousDay
-    }
-
-    return count
-  }
-
-  private func calculateBestStreak(from completedDates: Set<Date>) -> Int {
-    guard !completedDates.isEmpty else { return 0 }
-    let sortedDates = completedDates.sorted()
-    var maxStreak = 0
-    var currentStreak = 0
-    var previousDate: Date? = nil
-
-    for date in sortedDates {
-      if let prev = previousDate {
-        if let nextDay = calendar.date(byAdding: .day, value: 1, to: prev),
-           calendar.isDate(date, inSameDayAs: nextDay) {
-          currentStreak += 1
-        } else {
-          maxStreak = max(maxStreak, currentStreak)
-          currentStreak = 1
-        }
-      } else {
-        currentStreak = 1
-      }
-      previousDate = date
-    }
-    return max(maxStreak, currentStreak)
-  }
-
-  private func estimatedMinutes(for routine: Routine) -> Int {
-    let seconds = routine.steps.compactMap(\.estimatedSeconds).reduce(0, +)
+  private func estimatedMinutes(for steps: [RoutineStepSnapshot]) -> Int {
+    let seconds = steps.compactMap(\.estimatedSeconds).reduce(0, +)
 
     guard seconds > 0 else {
-      return max(routine.steps.count * 3, 1)
+      return max(steps.count * 3, 1)
     }
 
     return max(Int(ceil(Double(seconds) / 60)), 1)
   }
 
-  private func stepDurationText(_ step: RoutineStep) -> String {
+  private func stepDurationText(_ step: RoutineStepSnapshot) -> String {
     guard let seconds = step.estimatedSeconds else {
       return "-"
     }
@@ -251,14 +181,5 @@ final class HomeViewModel {
     let remainder = seconds % 60
 
     return "\(minutes):\(String(format: "%02d", remainder))"
-  }
-
-  private func currentWeekday() -> Weekday {
-    weekday(from: Date())
-  }
-
-  private func weekday(from date: Date) -> Weekday {
-    let weekday = calendar.component(.weekday, from: date)
-    return Weekday(rawValue: weekday) ?? .monday
   }
 }

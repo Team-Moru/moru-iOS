@@ -5,18 +5,29 @@
 //  Created by Codex on 7/6/26.
 //
 
+import Combine
 import SwiftUI
+
+@MainActor
+final class AppRouterState: ObservableObject {
+  @Published private(set) var homeRefreshToken = 0
+
+  func refreshHome() {
+    homeRefreshToken += 1
+  }
+}
 
 struct AppRouter: View {
   @ObservedObject private var sessionStore: SessionStore
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
-  @State private var homeRefreshToken = 0
+  @StateObject private var state: AppRouterState
 
   private let dependencies: DependencyContainer
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
+  private let homeBuilder: any HomeFlowBuilding
 
   @MainActor
   init(
@@ -24,67 +35,80 @@ struct AppRouter: View {
     sessionStore: SessionStore,
     coordinator: AppNavigationCoordinator,
     onboardingBuilder: any OnboardingFlowBuilding,
-    routinePlayerBuilder: any RoutinePlayerBuilding
+    routinePlayerBuilder: any RoutinePlayerBuilding,
+    homeBuilder: (any HomeFlowBuilding)? = nil,
+    state: AppRouterState? = nil
   ) {
     _sessionStore = ObservedObject(wrappedValue: sessionStore)
     _coordinator = ObservedObject(wrappedValue: coordinator)
     self.dependencies = dependencies
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
+    _state = StateObject(wrappedValue: state ?? AppRouterState())
+    if let homeBuilder {
+      self.homeBuilder = homeBuilder
+    } else {
+      self.homeBuilder = DefaultHomeFlowBuilder(
+        loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
+          routineRepository: dependencies.routineRepository,
+          routineRunRepository: dependencies.routineRunRepository,
+          localProfileRepository: dependencies.localProfileRepository
+        ),
+        routineSettingContentFactory: {
+          AnyView(RoutineSettingView(dependencies: dependencies))
+        }
+      )
+    }
   }
 
-    var body: some View {
-      Group {
-        switch sessionStore.phase {
-        case .loading:
-          ProgressView()
+  var body: some View {
+    Group {
+      switch sessionStore.phase {
+      case .loading:
+        ProgressView()
 
-        case .onboardingRequired:
-          onboardingBuilder.make(
-            onCompleted: handleOnboardingCompleted
-          )
+      case .onboardingRequired:
+        onboardingBuilder.make(
+          onCompleted: handleOnboardingCompleted
+        )
 
-        case .ready:
-          if sessionStore.profile != nil {
-            HomeView(
-              dependencies: dependencies,
-              onStartRoutine: handleRegularRoutineStart,
-              refreshToken: homeRefreshToken
-            )
-          } else {
-            SessionFailureView(
-              title: "프로필 정보를 확인할 수 없어요",
-              message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요.",
-              onRetry: { @MainActor in
-                sessionStore.load()
-              }
-            )
-          }
-
-        case .failed(let message):
+      case .ready:
+        if sessionStore.profile != nil {
+          mainTabView
+        } else {
           SessionFailureView(
-            title: "저장소를 열 수 없어요",
-            message: message,
+            title: "프로필 정보를 확인할 수 없어요",
+            message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요.",
             onRetry: { @MainActor in
               sessionStore.load()
             }
           )
         }
-      }
-      .fullScreenCover(
-        item: presentationBinding,
-        onDismiss: completePendingDismissal
-      ) { presentation in
-        routinePlayerView(for: presentation)
-          .interactiveDismissDisabled()
-      }
-      .task {
-        if coordinator.beginInitialSessionLoadIfNeeded() {
-          sessionStore.load()
-        }
+
+      case .failed(let message):
+        SessionFailureView(
+          title: "저장소를 열 수 없어요",
+          message: message,
+          onRetry: { @MainActor in
+            sessionStore.load()
+          }
+        )
       }
     }
-    
+    .fullScreenCover(
+      item: presentationBinding,
+      onDismiss: completePendingDismissal
+    ) { presentation in
+      routinePlayerView(for: presentation)
+        .interactiveDismissDisabled()
+    }
+    .task {
+      if coordinator.beginInitialSessionLoadIfNeeded() {
+        sessionStore.load()
+      }
+    }
+  }
+
   private var presentationBinding: Binding<AppPresentation?> {
     Binding(
       get: { coordinator.presentation },
@@ -95,7 +119,7 @@ struct AppRouter: View {
   }
 
   @MainActor
-  private func routinePlayerView(for presentation: AppPresentation) -> AnyView {
+  func routinePlayerView(for presentation: AppPresentation) -> AnyView {
     switch presentation {
     case .onboardingTrial(let routineID, let token):
       return routinePlayerBuilder.makeTrial(
@@ -126,8 +150,43 @@ struct AppRouter: View {
   }
 
   @MainActor
-  private func handleRegularRoutineStart(routineID: UUID) {
-    _ = coordinator.presentRegularRoutine(routineID: routineID)
+  private func handleRegularRoutineLaunch(
+    _ request: RoutineLaunchRequest
+  ) -> RoutineLaunchResult {
+    Self.regularRoutineLaunchResult(
+      from: coordinator.presentRegularRoutine(routineID: request.routineID)
+    )
+  }
+
+  static func regularRoutineLaunchResult(
+    from admission: PresentationAttempt
+  ) -> RoutineLaunchResult {
+    switch admission {
+    case .presented:
+      .started
+    case .alreadyPresented:
+      .alreadyRunning
+    case .deferredBusy:
+      .busy
+    }
+  }
+
+  @MainActor
+  var mainTabView: MainTabView {
+    let historyBuilder = DefaultHistoryFlowBuilder(
+      loadHistoryUseCase: LoadHistoryUseCase(
+        routineRunRepository: dependencies.routineRunRepository
+      )
+    )
+
+    return MainTabView(
+      home: homeBuilder.make(
+        onStartRoutine: handleRegularRoutineLaunch,
+        refreshToken: state.homeRefreshToken
+      ),
+      routineSetting: RoutineSettingView(dependencies: dependencies),
+      history: historyBuilder.make()
+    )
   }
 
   @MainActor
@@ -151,9 +210,13 @@ struct AppRouter: View {
   }
 
   @MainActor
-  private func completePendingDismissal() {
+  func completePendingDismissal() {
+    guard coordinator.pendingDismissalToken != nil else {
+      return
+    }
+
     let effect = coordinator.presentationDidDismiss()
-    homeRefreshToken += 1
+    state.refreshHome()
     retryDeferredOnboardingTrial()
     execute(effect)
   }
