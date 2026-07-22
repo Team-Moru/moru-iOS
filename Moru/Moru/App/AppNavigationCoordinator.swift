@@ -56,6 +56,8 @@ enum AppNavigationEffect: Equatable {
   case none
   case dismiss(token: UUID)
   case reloadSession
+  case showHome
+  case showRunDetail(UUID)
 }
 
 enum AppNavigationState: Equatable {
@@ -157,7 +159,7 @@ enum AppNavigationReducer {
     presentationToken: UUID,
     from state: AppNavigationState
   ) -> AppNavigationTransition {
-    guard case .exitRequested = event,
+    guard case .exitRequested(let exit) = event,
           case .presented(let presentation) = state,
           presentation.id == presentationToken else {
       return AppNavigationTransition(state: state, effect: .none)
@@ -165,10 +167,16 @@ enum AppNavigationReducer {
 
     let afterDismiss: AppNavigationEffect
 
-    switch presentation {
-    case .onboardingTrial:
+    switch (presentation, exit) {
+    case (.onboardingTrial, .summaryRecord):
+      return AppNavigationTransition(state: state, effect: .none)
+    case (.onboardingTrial, _):
       afterDismiss = .reloadSession
-    case .regularRoutine:
+    case (.regularRoutine, .summaryCTA):
+      afterDismiss = .showHome
+    case (.regularRoutine, .summaryRecord(let runID)):
+      afterDismiss = .showRunDetail(runID)
+    case (.regularRoutine, _):
       afterDismiss = .none
     }
 

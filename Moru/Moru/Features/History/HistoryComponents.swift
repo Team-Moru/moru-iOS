@@ -5,6 +5,7 @@
 //  Created by Codex on 7/14/26.
 //
 
+import Foundation
 import SwiftUI
 
 struct HistorySectionHeader: View {
@@ -90,6 +91,263 @@ struct HistoryWeeklySummaryCard: View {
       "\(title), 이번 주 루틴 리포트, \(completedRuns)/\(totalRuns)회 완료, "
         + "완료율 \(Int((completionRate * 100).rounded()))퍼센트"
     )
+  }
+}
+
+struct HistoryWakeMetricsView: View {
+  let metrics: HistoryWakeMetrics
+
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
+      HistorySectionHeader(title: "기상 기록", actionTitle: nil, action: nil)
+
+      Group {
+        if dynamicTypeSize.isAccessibilitySize {
+          VStack(alignment: .leading, spacing: AppSpacing.sm) {
+            metricCards
+          }
+        } else {
+          HStack(alignment: .top, spacing: AppSpacing.sm) {
+            metricCards
+          }
+        }
+      }
+
+      Text(observationText)
+        .font(AppFont.caption1Medium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+    }
+  }
+
+  @ViewBuilder
+  private var metricCards: some View {
+    HistoryMetricCard(
+      title: "평균 기상 시간",
+      value: averageWakeText,
+      detail: nil
+    )
+    .accessibilityElement(children: .combine)
+    .accessibilityIdentifier("history.metrics.averageWake")
+    .accessibilityLabel("평균 기상 시간, \(averageWakeText)")
+
+    HistoryMetricCard(
+      title: "시작 시간 규칙성",
+      value: regularityText,
+      detail: deviationText
+    )
+  }
+
+  private var averageWakeText: String {
+    guard case .calculated(_, let minute, _, _) = metrics else {
+      return metrics == .unavailable ? "기록 없음" : "기록이 더 필요해요"
+    }
+
+    return String(format: "%02d:%02d", minute / 60, minute % 60)
+  }
+
+  private var regularityText: String {
+    guard case .calculated(_, _, _, let regularity) = metrics else {
+      return metrics == .unavailable ? "기록 없음" : "기록이 더 필요해요"
+    }
+
+    switch regularity {
+    case .veryConsistent:
+      return "매우 일정해요"
+    case .consistent:
+      return "규칙적이에요"
+    case .variable:
+      return "조금 들쑥날쑥해요"
+    case .highlyVariable:
+      return "시작 시간이 많이 달라요"
+    }
+  }
+
+  private var deviationText: String? {
+    guard case .calculated(_, _, let minutes, _) = metrics else {
+      return nil
+    }
+
+    return "평균에서 \(minutes)분 차이"
+  }
+
+  private var observationText: String {
+    switch metrics {
+    case .unavailable:
+      return "최근 28일의 완료 기록이 없어요."
+    case .insufficient(let count):
+      return "최근 28일의 하루 첫 시작 \(count)회 · 3회부터 계산해요."
+    case .calculated(let count, _, _, _):
+      return "최근 28일의 하루 첫 루틴 시작 \(count)회 기준"
+    }
+  }
+}
+
+private struct HistoryMetricCard: View {
+  let title: String
+  let value: String
+  let detail: String?
+
+  var body: some View {
+    MoruCard(backgroundColor: AppColor.grayWhite) {
+      Text(title)
+        .font(AppFont.label1NormalSemiBold)
+        .foregroundStyle(AppColor.moruTextPrimary)
+
+      Text(value)
+        .font(AppFont.heading3SemiBold)
+        .foregroundStyle(AppColor.orange500)
+        .lineLimit(2)
+        .minimumScaleFactor(0.8)
+
+      if let detail {
+        Text(detail)
+          .font(AppFont.caption1Medium)
+          .foregroundStyle(AppColor.moruTextSecondary)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+struct HistoryHeatmapCellPresentation: Equatable {
+  let accessibilityLabel: String?
+  let isAccessibilityHidden: Bool
+
+  init(day: HistoryHeatmapDay, calendar: Calendar) {
+    guard let date = day.date else {
+      accessibilityLabel = nil
+      isAccessibilityHidden = true
+      return
+    }
+
+    let components = calendar.dateComponents([.year, .month, .day], from: date)
+    let dateText: String
+
+    if let year = components.year, let month = components.month, let day = components.day {
+      dateText = "\(year)년 \(month)월 \(day)일"
+    } else {
+      dateText = "날짜"
+    }
+
+    if let completionRate = day.completionRate {
+      accessibilityLabel = "\(dateText), 완료율 "
+        + "\(Int((completionRate * 100).rounded()))퍼센트"
+    } else {
+      accessibilityLabel = "\(dateText), 기록 없음"
+    }
+    isAccessibilityHidden = false
+  }
+}
+
+struct HistoryMonthlyHeatmapView: View {
+  let heatmap: HistoryMonthlyHeatmap
+  let calendar: Calendar
+
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  private let columns = Array(
+    repeating: GridItem(.flexible(), spacing: AppSpacing.xxs),
+    count: 7
+  )
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: AppSpacing.md) {
+      HistorySectionHeader(title: monthTitle, actionTitle: nil, action: nil)
+
+      MoruCard(backgroundColor: AppColor.grayWhite) {
+        LazyVGrid(columns: columns, spacing: AppSpacing.xxs) {
+          ForEach(["월", "화", "수", "목", "금", "토", "일"], id: \.self) { weekday in
+            Text(weekday)
+              .font(AppFont.caption1Medium)
+              .foregroundStyle(AppColor.moruTextSecondary)
+              .frame(maxWidth: .infinity)
+              .accessibilityLabel("\(weekday)요일")
+              .accessibilityAddTraits(.isHeader)
+          }
+
+          ForEach(heatmap.days) { day in
+            let presentation = HistoryHeatmapCellPresentation(
+              day: day,
+              calendar: calendar
+            )
+
+            RoundedRectangle(cornerRadius: AppRadius.xs)
+              .fill(fillColor(for: day.bucket))
+              .frame(height: 24)
+              .accessibilityLabel(presentation.accessibilityLabel ?? "")
+              .accessibilityHidden(presentation.isAccessibilityHidden)
+          }
+        }
+
+        LazyVGrid(
+          columns: legendColumns,
+          alignment: .leading,
+          spacing: AppSpacing.xs
+        ) {
+          legendItem("기록 없음", bucket: .noData)
+          legendItem("0%", bucket: .zero)
+          legendItem("1~49%", bucket: .low)
+          legendItem("50~99%", bucket: .high)
+          legendItem("100%", bucket: .complete)
+        }
+      }
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("history.heatmap")
+  }
+
+  private var monthTitle: String {
+    let components = calendar.dateComponents(
+      [.year, .month],
+      from: heatmap.monthStartDate
+    )
+
+    guard let year = components.year, let month = components.month else {
+      return "이번 달 루틴 완료"
+    }
+
+    return "\(year)년 \(month)월 루틴 완료"
+  }
+
+  private var legendColumns: [GridItem] {
+    let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+    return Array(
+      repeating: GridItem(.flexible(), spacing: AppSpacing.sm),
+      count: count
+    )
+  }
+
+  private func legendItem(
+    _ label: String,
+    bucket: HistoryHeatmapBucket
+  ) -> some View {
+    HStack(spacing: AppSpacing.xxs) {
+      RoundedRectangle(cornerRadius: AppRadius.xs)
+        .fill(fillColor(for: bucket))
+        .frame(width: 14, height: 14)
+
+      Text(label)
+        .font(AppFont.caption1Medium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private func fillColor(for bucket: HistoryHeatmapBucket) -> Color {
+    switch bucket {
+    case .noData:
+      return AppColor.gray100
+    case .zero:
+      return AppColor.gray200
+    case .low:
+      return AppColor.babyBlue250
+    case .high:
+      return AppColor.orange200
+    case .complete:
+      return AppColor.orange400
+    }
   }
 }
 

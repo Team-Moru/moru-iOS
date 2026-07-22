@@ -27,12 +27,15 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
   }
 
   func load() throws -> HistoryOverview {
+    let currentDate = now()
     let runs = try routineRunRepository.fetchRuns().filter { $0.completedAt != nil }
 
     return HistoryOverview(
       calendar: calendar,
       recentDays: makeDaySummaries(from: runs),
-      week: makeWeekReport(from: runs, containing: now())
+      week: makeWeekReport(from: runs, containing: currentDate),
+      wakeMetrics: makeWakeMetrics(from: runs, containing: currentDate),
+      monthlyHeatmap: makeMonthlyHeatmap(from: runs, containing: currentDate)
     )
   }
 
@@ -163,6 +166,179 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
     return runs
       .sorted(by: isRunOrderedBefore)
       .reduce(0) { $0 + $1.completionRate } / Double(runs.count)
+  }
+
+  private func makeWakeMetrics(
+    from runs: [RoutineRun],
+    containing date: Date
+  ) -> HistoryWakeMetrics {
+    let today = calendar.startOfDay(for: date)
+    let intervalStart = calendar.date(byAdding: .day, value: -27, to: today)!
+    let intervalEnd = calendar.date(byAdding: .day, value: 1, to: today)!
+    let eligibleRuns = runs.filter { run in
+      guard let completedAt = run.completedAt else {
+        return false
+      }
+
+      return run.startedAt >= intervalStart
+        && run.startedAt < intervalEnd
+        && run.startedAt <= date
+        && completedAt <= date
+    }
+    let dailyFirstRuns = Dictionary(
+      grouping: eligibleRuns,
+      by: { calendar.startOfDay(for: $0.startedAt) }
+    )
+      .values
+      .compactMap { $0.min(by: isRunStartedBefore) }
+      .sorted(by: isRunStartedBefore)
+    let observationCount = dailyFirstRuns.count
+
+    guard observationCount > 0 else {
+      return .unavailable
+    }
+
+    guard observationCount >= 3 else {
+      return .insufficient(observationCount: observationCount)
+    }
+
+    let minutes = dailyFirstRuns.map { minuteOfDay(for: $0.startedAt) }
+    let mean = circularMeanMinute(for: minutes)
+    let averageWakeMinute = normalizedRoundedMinute(mean)
+    let averageDeviation = minutes
+      .map { shortestCircularDeviation(from: Double($0), to: mean) }
+      .reduce(0, +) / Double(minutes.count)
+    let averageDeviationMinutes = Int(averageDeviation.rounded(.toNearestOrAwayFromZero))
+
+    return .calculated(
+      observationCount: observationCount,
+      averageWakeMinute: averageWakeMinute,
+      averageDeviationMinutes: averageDeviationMinutes,
+      regularity: regularity(
+        forAverageDeviationMinutes: averageDeviationMinutes
+      )
+    )
+  }
+
+  private func makeMonthlyHeatmap(
+    from runs: [RoutineRun],
+    containing date: Date
+  ) -> HistoryMonthlyHeatmap {
+    let today = calendar.startOfDay(for: date)
+    var monthComponents = calendar.dateComponents([.year, .month], from: today)
+    monthComponents.day = 1
+
+    let monthStart = calendar.date(from: monthComponents)!
+    let monthEnd = calendar.date(byAdding: .month, value: 1, to: monthStart)!
+    let dayCount = calendar.dateComponents(
+      [.day],
+      from: monthStart,
+      to: monthEnd
+    ).day!
+    let weekday = calendar.component(.weekday, from: monthStart)
+    let leadingFillerCount = (weekday + 5) % 7
+    let eligibleRuns = runs.filter { run in
+      guard let completedAt = run.completedAt else {
+        return false
+      }
+
+      return run.startedAt >= monthStart
+        && run.startedAt < monthEnd
+        && run.startedAt <= date
+        && completedAt <= date
+    }
+    let runsByDay = Dictionary(
+      grouping: eligibleRuns,
+      by: { calendar.startOfDay(for: $0.startedAt) }
+    )
+    let fillers = (0..<leadingFillerCount).map { offset in
+      HistoryHeatmapDay(
+        id: "filler-\(offset)",
+        date: nil,
+        completionRate: nil
+      )
+    }
+    let days = (0..<dayCount).map { offset in
+      let day = calendar.date(byAdding: .day, value: offset, to: monthStart)!
+      let dayRuns = runsByDay[day] ?? []
+
+      return HistoryHeatmapDay(
+        id: dayKey(for: day),
+        date: day,
+        completionRate: dayRuns.isEmpty ? nil : averageCompletionRate(for: dayRuns)
+      )
+    }
+
+    return HistoryMonthlyHeatmap(
+      monthStartDate: monthStart,
+      days: fillers + days
+    )
+  }
+
+  private func minuteOfDay(for date: Date) -> Int {
+    let components = calendar.dateComponents([.hour, .minute], from: date)
+    return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+  }
+
+  private func circularMeanMinute(for minutes: [Int]) -> Double {
+    let radiansPerMinute = 2 * Double.pi / 1_440
+    let sineSum = minutes.reduce(0.0) { partial, minute in
+      partial + sin(Double(minute) * radiansPerMinute)
+    }
+    let cosineSum = minutes.reduce(0.0) { partial, minute in
+      partial + cos(Double(minute) * radiansPerMinute)
+    }
+
+    guard hypot(sineSum, cosineSum) / Double(minutes.count) > 1e-12 else {
+      return Double(minutes.sorted()[0])
+    }
+
+    let meanRadians = atan2(sineSum, cosineSum)
+    let minute = meanRadians / radiansPerMinute
+    return minute >= 0 ? minute : minute + 1_440
+  }
+
+  private func shortestCircularDeviation(from minute: Double, to mean: Double) -> Double {
+    let difference = abs(minute - mean)
+    return min(difference, 1_440 - difference)
+  }
+
+  private func normalizedRoundedMinute(_ minute: Double) -> Int {
+    let rounded = Int(minute.rounded(.toNearestOrAwayFromZero))
+    return ((rounded % 1_440) + 1_440) % 1_440
+  }
+
+  private func regularity(
+    forAverageDeviationMinutes averageDeviationMinutes: Int
+  ) -> HistoryStartTimeRegularity {
+    switch averageDeviationMinutes {
+    case ...10:
+      return .veryConsistent
+    case ...20:
+      return .consistent
+    case ...40:
+      return .variable
+    default:
+      return .highlyVariable
+    }
+  }
+
+  private func dayKey(for date: Date) -> String {
+    let components = calendar.dateComponents([.year, .month, .day], from: date)
+    return String(
+      format: "%04d-%02d-%02d",
+      components.year!,
+      components.month!,
+      components.day!
+    )
+  }
+
+  private func isRunStartedBefore(_ lhs: RoutineRun, _ rhs: RoutineRun) -> Bool {
+    if lhs.startedAt != rhs.startedAt {
+      return lhs.startedAt < rhs.startedAt
+    }
+
+    return lhs.id.uuidString < rhs.id.uuidString
   }
 
   private func isRunOrderedBefore(_ lhs: RoutineRun, _ rhs: RoutineRun) -> Bool {

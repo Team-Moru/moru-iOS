@@ -251,6 +251,11 @@ private func makeHistoryOverview(recentDays: [HistoryDaySummary]) -> HistoryOver
       totalRunCount: 0,
       completionRate: 0,
       dailyCompletionRates: []
+    ),
+    wakeMetrics: .unavailable,
+    monthlyHeatmap: HistoryMonthlyHeatmap(
+      monthStartDate: date,
+      days: []
     )
   )
 }

@@ -52,6 +52,7 @@ enum RoutineTerminalReason: Equatable {
 
 enum RoutinePlayerExit: Equatable {
   case summaryCTA
+  case summaryRecord(persistedRunID: UUID)
   case endedEarly
   case terminalUnavailable
   case userDismissed

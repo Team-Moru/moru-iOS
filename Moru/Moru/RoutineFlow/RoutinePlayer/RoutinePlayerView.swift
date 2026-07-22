@@ -313,7 +313,12 @@ struct RoutinePlayerView: View {
             consecutiveDays: viewModel.consecutiveDays,
             completedStepTitles: viewModel.completedStepTitles,
             onTapTodayRecord: {
-                isShowingTodayRecord = true
+                if summary.persistedRunID == nil {
+                    isShowingTodayRecord = true
+                } else {
+                    speechInputController.cancel()
+                    viewModel.requestSummaryRecord()
+                }
             },
             onTapHome: {
                 speechInputController.cancel()
