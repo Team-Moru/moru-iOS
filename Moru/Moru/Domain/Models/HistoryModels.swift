@@ -41,6 +41,45 @@ enum HistoryStartTimeRegularity: Sendable, Equatable {
   case consistent
   case variable
   case highlyVariable
+
+  init(averageDeviationMinutes: Int) {
+    switch averageDeviationMinutes {
+    case ...10:
+      self = .veryConsistent
+    case ...20:
+      self = .consistent
+    case ...40:
+      self = .variable
+    default:
+      self = .highlyVariable
+    }
+  }
+
+  var score: Int {
+    switch self {
+    case .veryConsistent:
+      return 96
+    case .consistent:
+      return 87
+    case .variable:
+      return 68
+    case .highlyVariable:
+      return 42
+    }
+  }
+
+  var shortText: String {
+    switch self {
+    case .veryConsistent:
+      return "매우 규칙적이에요"
+    case .consistent:
+      return "꽤 규칙적이에요"
+    case .variable:
+      return "조금 불규칙해요"
+    case .highlyVariable:
+      return "많이 불규칙해요"
+    }
+  }
 }
 
 enum HistoryWakeMetrics: Sendable, Equatable {

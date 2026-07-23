@@ -154,34 +154,6 @@ struct HistoryWakeMetricsView: View {
     }
 }
 
-private extension HistoryStartTimeRegularity {
-    var score: Int {
-        switch self {
-        case .veryConsistent:
-            return 96
-        case .consistent:
-            return 87
-        case .variable:
-            return 68
-        case .highlyVariable:
-            return 42
-        }
-    }
-
-    var shortText: String {
-        switch self {
-        case .veryConsistent:
-            return "매우 규칙적이에요"
-        case .consistent:
-            return "꽤 규칙적이에요"
-        case .variable:
-            return "조금 불규칙해요"
-        case .highlyVariable:
-            return "많이 불규칙해요"
-        }
-    }
-}
-
 private struct HistoryMetricBlock: View {
     let title: String
     let value: String
@@ -251,14 +223,18 @@ struct HistoryWeeklyCompletionChart: View {
     }
 
     private var weeklyInsight: String {
-        guard let minCompletion = completions.min(by: { $0.completionRate < $1.completionRate }),
-              let maxCompletion = completions.max(by: { $0.completionRate < $1.completionRate }) else {
+        guard let minCompletion = completions.min(
+            by: { $0.completionRate < $1.completionRate }
+        ), let maxCompletion = completions.max(
+            by: { $0.completionRate < $1.completionRate }
+        ) else {
             return "이번 주 기록을 쌓고 있어요"
         }
 
         let minDay = historyWeekdayText(minCompletion.date, calendar: calendar)
         let maxDay = historyWeekdayText(maxCompletion.date, calendar: calendar)
-        return "\(minDay)요일 완수율이 가장 낮아요 (\(rateText(minCompletion))) · \(maxDay)요일이 가장 꾸준해요"
+        return "\(minDay)요일 완수율이 가장 낮아요 (\(rateText(minCompletion)))"
+            + " · \(maxDay)요일이 가장 꾸준해요"
     }
 
     private func rateText(_ completion: HistoryDailyCompletion) -> String {
@@ -343,7 +319,9 @@ private struct HistoryStepAnalysisRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(item.title), 완료율 \(Int((item.completionRate * 100).rounded()))퍼센트, \(item.completionText)"
+            "\(item.title), 완료율 "
+            + "\(Int((item.completionRate * 100).rounded()))퍼센트, "
+            + item.completionText
         )
     }
 }
@@ -372,7 +350,11 @@ private struct HistoryWeekBar: View {
                     .font(AppFont.pretendardRegular(size: 10))
                     .foregroundStyle(AppColor.gray500)
 
-                Text(completion.completionRate > 0 ? "\(Int((completion.completionRate * 100).rounded()))%" : "-")
+                Text(
+                    completion.completionRate > 0
+                        ? "\(Int((completion.completionRate * 100).rounded()))%"
+                        : "-"
+                )
                     .font(AppFont.pretendardRegular(size: 9))
                     .foregroundStyle(AppColor.gray500)
             }
@@ -385,7 +367,11 @@ private struct HistoryWeekBar: View {
             "\(historyWeekdayText(completion.date, calendar: calendar))요일 완료율 "
             + "\(Int((completion.completionRate * 100).rounded()))퍼센트"
         )
-        .accessibilityHint(completion.completionRate > 0 ? "날짜별 상세 화면으로 이동합니다" : "기록이 없습니다")
+        .accessibilityHint(
+            completion.completionRate > 0
+                ? "날짜별 상세 화면으로 이동합니다"
+                : "기록이 없습니다"
+        )
     }
 }
 
@@ -434,7 +420,10 @@ struct HistoryMonthlyHeatmapView: View {
 
             VStack(spacing: AppSpacing.sm) {
                 LazyVGrid(columns: columns, spacing: AppSpacing.xxs) {
-                    ForEach(["일", "월", "화", "수", "목", "금", "토"], id: \.self) { weekday in
+                    ForEach(
+                        ["일", "월", "화", "수", "목", "금", "토"],
+                        id: \.self
+                    ) { weekday in
                         Text(weekday)
                             .font(AppFont.pretendardRegular(size: 10))
                             .foregroundStyle(AppColor.gray500)
@@ -456,7 +445,11 @@ struct HistoryMonthlyHeatmapView: View {
                             if let date = day.date {
                                 Text("\(calendar.component(.day, from: date))")
                                     .font(AppFont.pretendardRegular(size: 9))
-                                    .foregroundStyle(day.bucket == .noData ? AppColor.gray500 : AppColor.grayWhite)
+                                    .foregroundStyle(
+                                        day.bucket == .noData
+                                            ? AppColor.gray500
+                                            : AppColor.grayWhite
+                                    )
                             }
                         }
                         .frame(height: 24)
