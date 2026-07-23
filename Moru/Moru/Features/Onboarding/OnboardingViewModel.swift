@@ -302,7 +302,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   func resolveWeekdayConflictButtonDidTap() {
-    guard flowMode == .recommendedAddition else {
+    guard flowMode == .recommendedAddition, !isSaving, !didComplete else {
       return
     }
 
@@ -411,6 +411,10 @@ final class OnboardingViewModel: ObservableObject {
   private func saveRecommendedRoutine(
     resolvingWeekdayConflict: Bool
   ) async {
+    guard !isSaving, !didComplete else {
+      return
+    }
+
     guard flowMode == .recommendedAddition,
           let routine = validatedPreviewRoutine,
           let recommendedRoutineCreationUseCase else {

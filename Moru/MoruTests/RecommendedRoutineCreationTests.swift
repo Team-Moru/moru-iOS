@@ -168,6 +168,29 @@ final class RecommendedRoutineCreationTests: XCTestCase {
   }
 
   @MainActor
+  func testConflictResolutionIgnoresDuplicateSaveRequests() async {
+    let useCase = RecommendedRoutineCreationUseCaseSpy()
+    useCase.conflictingWeekdays = [.monday]
+    let viewModel = OnboardingViewModel(
+      flowMode: .recommendedAddition,
+      step: .alarm,
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      recommendedRoutineCreationUseCase: useCase
+    )
+
+    XCTAssertTrue(viewModel.refreshPreview())
+    await viewModel.completeButtonDidTap()
+    XCTAssertNotNil(viewModel.weekdayConflict)
+
+    viewModel.resolveWeekdayConflictButtonDidTap()
+    viewModel.resolveWeekdayConflictButtonDidTap()
+    await Task.yield()
+    await Task.yield()
+
+    XCTAssertEqual(useCase.executeRequests.count, 1)
+  }
+
+  @MainActor
   func testSchedulingFailureKeepsRoutineAndReturnsRepairState() async throws {
     let repository = MockRoutineRepository()
     let alarmMutator = RepairRequiredAlarmMutator()
@@ -284,6 +307,11 @@ final class RecommendedRoutineCreationTests: XCTestCase {
       XCTAssertEqual(
         savedRoutine.steps.map(\.presetItemID),
         expectedRoutine.steps.map(\.presetItemID)
+      )
+      XCTAssertEqual(savedRoutine.goalTags, expectedRoutine.goalTags)
+      XCTAssertEqual(
+        savedRoutine.steps.map(\.isRequired),
+        expectedRoutine.steps.map(\.isRequired)
       )
       XCTAssertEqual(
         savedRoutine.alarmSchedule?.id,

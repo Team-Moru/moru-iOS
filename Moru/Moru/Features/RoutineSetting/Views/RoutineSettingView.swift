@@ -15,7 +15,7 @@ struct RoutineSettingView: View {
 
   @State private var viewModel: RoutineSettingViewModel
   @State private var editorDraft: RoutineDraftState?
-  @State private var isCreationSheetPresented = false
+  @State private var creationDraft: RoutineDraftState?
   @State private var didHandleEntryPoint = false
   @State private var activationConflictRoutineID: UUID?
   @State private var activationConflict: RoutineWeekdayConflictState?
@@ -78,7 +78,9 @@ struct RoutineSettingView: View {
       }
 
       didHandleEntryPoint = true
-      isCreationSheetPresented = entryPoint == .newRoutine
+      if entryPoint == .newRoutine {
+        presentCreationSheet()
+      }
     }
     .overlay {
       if let activationConflict {
@@ -97,12 +99,12 @@ struct RoutineSettingView: View {
       }
     }
     .sheet(
-      isPresented: $isCreationSheetPresented,
+      item: $creationDraft,
       onDismiss: viewModel.load
-    ) {
+    ) { directDraft in
       RoutineCreationSheet(
         dependencies: dependencies,
-        directDraft: viewModel.makeNewDraft()
+        directDraft: directDraft
       ) { savedDraft in
         await viewModel.saveDraft(savedDraft)
       } onResolveWeekdayConflict: { savedDraft in
@@ -153,7 +155,7 @@ struct RoutineSettingView: View {
         .multilineTextAlignment(.center)
 
       MoruButton("새 루틴 만들기", style: .secondary) {
-        isCreationSheetPresented = true
+        presentCreationSheet()
       }
       .accessibilityIdentifier(
         Self.emptyCreateRoutineAccessibilityIdentifier
@@ -199,12 +201,20 @@ struct RoutineSettingView: View {
 
   private var addRoutineButton: some View {
     Button {
-      isCreationSheetPresented = true
+      presentCreationSheet()
     } label: {
       MoruRoutineCard(title: "새 루틴 추가하기", isAddCard: true)
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier(Self.addRoutineAccessibilityIdentifier)
+  }
+
+  private func presentCreationSheet() {
+    guard creationDraft == nil else {
+      return
+    }
+
+    creationDraft = viewModel.makeNewDraft()
   }
 
   private func emptySectionCard(title: String) -> some View {
