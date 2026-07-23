@@ -165,9 +165,14 @@ final class BundledRoutineAudioTests: XCTestCase {
       playbackState: state
     )
 
-    await player.play(itemID: "TEST-01", voiceCode: "Aoede", kind: .intro)
+    let result = await player.play(
+      itemID: "TEST-01",
+      voiceCode: "Aoede",
+      kind: .intro
+    )
 
     XCTAssertFalse(state.isPlaying)
+    XCTAssertEqual(result, .cancelled)
   }
 
   func testRoutinePlayerTransitionsDriveCueLifecycleWithoutDuplicates() async {
@@ -281,6 +286,86 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(runningStep.id, secondStep.id)
   }
 
+  func testSpeechStartBarrierWaitsForIntroCompletion() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let step = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let routine = Routine(name: "음성 루틴", steps: [step])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    let barrierTask = Task { @MainActor in
+      await viewModel.waitUntilIntroFinishes(for: step.id)
+    }
+    await drainTasks()
+
+    XCTAssertFalse(barrierTask.isCancelled)
+    XCTAssertTrue(state.isPlaying)
+
+    player.finishPlayback()
+    let didFinish = await barrierTask.value
+
+    XCTAssertTrue(didFinish)
+  }
+
+  func testInterruptedIntroEndsWaitAndKeepsCurrentStep() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let step = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .input,
+      title: "오늘의 다짐",
+      order: 0
+    )
+    let routine = Routine(name: "음성 루틴", steps: [step])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    let barrierTask = Task { @MainActor in
+      await viewModel.waitUntilIntroFinishes(for: step.id)
+    }
+    await drainTasks()
+    viewModel.runtimeDidInterrupt()
+
+    let didFinish = await barrierTask.value
+    XCTAssertFalse(didFinish)
+    XCTAssertFalse(state.isPlaying)
+    guard case .running(let currentStep) = viewModel.screenState else {
+      XCTFail("An interruption must keep the current step running.")
+      return
+    }
+    XCTAssertEqual(currentStep.id, step.id)
+  }
+
   func testSpeechAudioSessionStopsGuidanceBeforeActivationAttempt() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
@@ -293,16 +378,23 @@ final class BundledRoutineAudioTests: XCTestCase {
     }
     coordinator.deactivateSpeechInput()
     coordinator.deactivateSpeechInput()
-    await player.play(
-      itemID: "ENERGY-02",
-      voiceCode: VoiceProfile.aoede.assetVoiceCode,
-      kind: .done
-    )
+    let playbackTask = Task { @MainActor in
+      await player.play(
+        itemID: "ENERGY-02",
+        voiceCode: VoiceProfile.aoede.assetVoiceCode,
+        kind: .done
+      )
+    }
+    await drainTasks()
 
     XCTAssertEqual(player.stopAndWaitCallCount, 1)
     XCTAssertEqual(player.resumeCallCount, 1)
     XCTAssertEqual(player.cues.count, 1)
     XCTAssertTrue(state.isPlaying)
+
+    player.finishPlayback()
+    let result = await playbackTask.value
+    XCTAssertEqual(result, .completed)
   }
 
   private func drainTasks() async {
@@ -326,6 +418,7 @@ private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
   private(set) var stopAndWaitCallCount = 0
   private(set) var resumeCallCount = 0
   private var isSuspendedForSpeechInput = false
+  private var playbackContinuation: CheckedContinuation<GuidancePlaybackResult, Never>?
 
   init(playbackState: RoutineGuidancePlaybackState) {
     self.playbackState = playbackState
@@ -335,18 +428,28 @@ private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
     itemID: String,
     voiceCode: String,
     kind: RoutineAudioCueKind
-  ) async {
+  ) async -> GuidancePlaybackResult {
     guard !isSuspendedForSpeechInput else {
-      return
+      return .cancelled
     }
 
+    finishPlayback(with: .cancelled)
     cues.append(GuidanceCueCall(itemID: itemID, voiceCode: voiceCode, kind: kind))
     playbackState.update(isPlaying: true)
+    return await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        playbackContinuation = continuation
+      }
+    } onCancel: {
+      Task { @MainActor [weak self] in
+        self?.finishPlayback(with: .cancelled)
+      }
+    }
   }
 
   func stop() {
     stopCallCount += 1
-    playbackState.update(isPlaying: false)
+    finishPlayback(with: .cancelled)
   }
 
   func stopAndWaitUntilIdle() async {
@@ -361,7 +464,14 @@ private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
   }
 
   func finishPlayback() {
+    finishPlayback(with: .completed)
+  }
+
+  private func finishPlayback(with result: GuidancePlaybackResult) {
     playbackState.update(isPlaying: false)
+    let continuation = playbackContinuation
+    playbackContinuation = nil
+    continuation?.resume(returning: result)
   }
 }
 

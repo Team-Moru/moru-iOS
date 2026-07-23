@@ -700,6 +700,118 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
+  func testTimerCompletionDuringDialogAppliesOnceWhenDialogIsCancelled() {
+    let step = RoutineStep(
+      type: .timer,
+      title: "타이머",
+      order: 0,
+      estimatedSeconds: 1
+    )
+    let routine = makeExecutableRoutine(steps: [step])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: RoutineExecutionResolverSpy(resolution: .available(routine)),
+      finalizer: TrialRoutineFinalizerSpy(),
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.requestSkipStep()
+    viewModel.completeCurrentStep()
+    viewModel.completeCurrentStep()
+
+    XCTAssertTrue(viewModel.stepResults.isEmpty)
+    guard case .running = viewModel.screenState else {
+      XCTFail("The timer completion must stay pending while the dialog is visible.")
+      return
+    }
+
+    viewModel.cancelActiveDialog()
+    viewModel.cancelActiveDialog()
+
+    XCTAssertEqual(viewModel.stepResults.count, 1)
+    XCTAssertTrue(viewModel.stepResults[0].isCompleted)
+    guard case .stepCompleted(let completedStep) = viewModel.screenState else {
+      XCTFail("Cancelling the dialog must apply the pending timer completion.")
+      return
+    }
+    XCTAssertEqual(completedStep.id, step.id)
+  }
+
+  @MainActor
+  func testConfirmCompletionDuringDialogPreservesTranscriptOnCancel() {
+    let routine = makeExecutableRoutine()
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: RoutineExecutionResolverSpy(resolution: .available(routine)),
+      finalizer: TrialRoutineFinalizerSpy(),
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.requestCloseRoutine()
+    viewModel.completeCurrentStep(transcript: "완료했어요")
+    viewModel.cancelActiveDialog()
+
+    XCTAssertEqual(viewModel.stepResults.count, 1)
+    XCTAssertEqual(viewModel.stepResults[0].transcript, "완료했어요")
+    XCTAssertTrue(viewModel.stepResults[0].isCompleted)
+  }
+
+  @MainActor
+  func testSpeechCompletionDuringSkipDialogIsDiscardedWhenSkipIsConfirmed() {
+    let step = RoutineStep(
+      type: .input,
+      title: "다짐",
+      order: 0
+    )
+    let routine = makeExecutableRoutine(steps: [step])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: RoutineExecutionResolverSpy(resolution: .available(routine)),
+      finalizer: TrialRoutineFinalizerSpy(),
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.requestSkipStep()
+    viewModel.completeCurrentStep(
+      inputText: "차분하게 시작할게요",
+      transcript: "차분하게 시작할게요"
+    )
+    viewModel.confirmActiveDialog()
+
+    XCTAssertEqual(viewModel.stepResults.count, 1)
+    XCTAssertTrue(viewModel.stepResults[0].skipped)
+    XCTAssertNil(viewModel.stepResults[0].transcript)
+  }
+
+  @MainActor
+  func testSpeechCompletionDuringExitDialogIsDiscardedWhenExitIsConfirmed() {
+    let routine = makeExecutableRoutine()
+    let eventRecorder = RoutinePlayerEventRecorder()
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: RoutineExecutionResolverSpy(resolution: .available(routine)),
+      finalizer: TrialRoutineFinalizerSpy(),
+      presentationToken: UUID()
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    viewModel.resolveRoutine()
+    viewModel.requestEndRoutine()
+    viewModel.completeCurrentStep(transcript: "완료했어요")
+    viewModel.confirmActiveDialog()
+
+    XCTAssertTrue(viewModel.stepResults.isEmpty)
+    XCTAssertEqual(eventRecorder.events, [.exitRequested(.endedEarly)])
+  }
+
+  @MainActor
   func testTrialNaturalCompletionDoesNotPersistARoutineRun() {
     let routine = makeExecutableRoutine()
     let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))

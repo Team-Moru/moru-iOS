@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 
 struct RoutinePlayerView: View {
     @State private var viewModel: RoutinePlayerViewModel
@@ -44,6 +45,14 @@ struct RoutinePlayerView: View {
         .onDisappear {
             speechInputController.cancel()
             viewModel.viewDidDisappear()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIApplication.didEnterBackgroundNotification
+            )
+        ) { _ in
+            speechInputController.cancel()
+            viewModel.runtimeDidInterrupt()
         }
     }
 
@@ -193,7 +202,11 @@ struct RoutinePlayerView: View {
             ConfirmStepContentView(
                 step: step,
                 isGuidancePlaying: viewModel.isGuidancePlaying,
-                speechInputController: speechInputController
+                isAutomaticStartBlocked: viewModel.dialogState != nil,
+                speechInputController: speechInputController,
+                waitUntilGuidanceFinishes: {
+                    await viewModel.waitUntilIntroFinishes(for: step.id)
+                }
             ) { transcript in
                 viewModel.completeCurrentStep(
                     transcript: transcript
@@ -214,7 +227,11 @@ struct RoutinePlayerView: View {
             InputStepContentView(
                 step: step,
                 isGuidancePlaying: viewModel.isGuidancePlaying,
-                speechInputController: speechInputController
+                isAutomaticStartBlocked: viewModel.dialogState != nil,
+                speechInputController: speechInputController,
+                waitUntilGuidanceFinishes: {
+                    await viewModel.waitUntilIntroFinishes(for: step.id)
+                }
             ) { transcript in
                 viewModel.completeCurrentStep(
                     inputText: transcript,

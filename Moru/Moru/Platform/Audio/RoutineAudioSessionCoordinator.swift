@@ -5,6 +5,11 @@
 
 import AVFAudio
 
+enum GuidancePlaybackResult: Equatable {
+  case completed
+  case cancelled
+}
+
 @MainActor
 protocol GuidancePlaybackControlling {
   func stopAndWaitUntilIdle() async
@@ -17,7 +22,7 @@ protocol RoutineGuidancePlaying: GuidancePlaybackControlling {
     itemID: String,
     voiceCode: String,
     kind: RoutineAudioCueKind
-  ) async
+  ) async -> GuidancePlaybackResult
   func stop()
 }
 
@@ -27,7 +32,9 @@ final class NoopRoutineGuidancePlayer: RoutineGuidancePlaying {
     itemID: String,
     voiceCode: String,
     kind: RoutineAudioCueKind
-  ) async {}
+  ) async -> GuidancePlaybackResult {
+    .completed
+  }
 
   func stop() {}
 

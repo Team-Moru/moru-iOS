@@ -223,6 +223,71 @@ final class SpeechInputControllerTests: XCTestCase {
     XCTAssertEqual(controller.phase, .paused)
   }
 
+  func testRouteChangeFinishesCurrentSegmentAndKeepsItPaused() async {
+    let session = SpeechInputSessionSpy(finishTranscript: "차분하게 시작할게요")
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+    session.send(.routeChanged)
+    await drainTasks()
+
+    XCTAssertEqual(session.finishCallCount, 1)
+    XCTAssertEqual(controller.displayTranscript, "차분하게 시작할게요")
+    XCTAssertEqual(controller.phase, .paused)
+  }
+
+  func testThreeSecondSilencePublishesLastTranscriptForAutomaticCompletion() async {
+    let session = SpeechInputSessionSpy()
+    let controller = SpeechInputController(
+      silenceTimeout: 0.03,
+      silencePollInterval: .milliseconds(5)
+    ) {
+      session
+    }
+
+    await controller.start()
+    session.send(.transcript("정리했어", isFinal: false))
+    try? await Task.sleep(for: .milliseconds(80))
+
+    XCTAssertEqual(
+      controller.latestSilenceCompletion?.transcript,
+      "정리했어"
+    )
+    XCTAssertEqual(controller.phase, .idle)
+    XCTAssertEqual(session.cancelCallCount, 1)
+  }
+
+  func testThreeSecondSilenceWithoutTranscriptRemainsRetryableFailure() async {
+    let session = SpeechInputSessionSpy()
+    let controller = SpeechInputController(
+      silenceTimeout: 0.03,
+      silencePollInterval: .milliseconds(5)
+    ) {
+      session
+    }
+
+    await controller.start()
+    try? await Task.sleep(for: .milliseconds(80))
+
+    XCTAssertEqual(controller.phase, .failed(.silence))
+    XCTAssertNil(controller.latestSilenceCompletion)
+  }
+
+  func testMicrophonePermissionDenialRemainsSettingsFailure() async {
+    let session = SpeechInputSessionSpy(
+      startError: AppleSpeechRecognitionSessionError.microphonePermissionDenied
+    )
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+
+    XCTAssertEqual(controller.phase, .failed(.microphonePermissionDenied))
+    XCTAssertEqual(
+      controller.statusText,
+      "마이크 권한이 필요해요. 설정에서 허용해 주세요."
+    )
+  }
+
   func testCancelWhileStartIsPreparingDoesNotResurrectListeningState() async {
     let session = SuspendedStartSpeechInputSessionSpy()
     let controller = SpeechInputController { session }

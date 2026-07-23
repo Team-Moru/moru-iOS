@@ -30,6 +30,11 @@ struct SpeechTranscriptUpdate: Equatable {
   let isFinal: Bool
 }
 
+struct SpeechSilenceCompletion: Equatable {
+  let id: UUID
+  let transcript: String
+}
+
 @MainActor
 protocol SpeechInputSession: AnyObject {
   var eventHandler: ((SpeechInputSessionEvent) -> Void)? { get set }
@@ -52,11 +57,12 @@ final class SpeechInputController {
 
   private enum Metric {
     static let waveformUpdateInterval: TimeInterval = 0.05
-    static let silenceTimeout: TimeInterval = 8
     static let audibleLevelThreshold: Float = 0.12
   }
 
   private let makeSession: @MainActor () -> any SpeechInputSession
+  private let silenceTimeout: TimeInterval
+  private let silencePollInterval: Duration
   private var session: (any SpeechInputSession)?
   private var activeAttemptID: UUID?
   private var levelProcessor = SpeechAudioLevelProcessor()
@@ -74,12 +80,17 @@ final class SpeechInputController {
   private(set) var displayTranscript = ""
   private(set) var latestFinalTranscript = ""
   private(set) var latestTranscriptUpdate: SpeechTranscriptUpdate?
+  private(set) var latestSilenceCompletion: SpeechSilenceCompletion?
 
   init(
+    silenceTimeout: TimeInterval = 3,
+    silencePollInterval: Duration = .milliseconds(100),
     makeSession: @escaping @MainActor () -> any SpeechInputSession = {
       AppleSpeechRecognitionSession()
     }
   ) {
+    self.silenceTimeout = silenceTimeout
+    self.silencePollInterval = silencePollInterval
     self.makeSession = makeSession
   }
 
@@ -122,6 +133,7 @@ final class SpeechInputController {
     let attemptID = UUID()
     activeAttemptID = attemptID
     isPreparing = true
+    latestSilenceCompletion = nil
     resetCurrentSegment()
 
     let newSession = makeSession()
@@ -282,6 +294,7 @@ final class SpeechInputController {
     session?.cancel()
     session = nil
     committedSegments = []
+    latestSilenceCompletion = nil
     resetCurrentSegment()
     levelProcessor.reset()
     waveformLevels = levelProcessor.levels
@@ -353,23 +366,41 @@ final class SpeechInputController {
     silenceTask?.cancel()
     silenceTask = Task { [weak self] in
       while !Task.isCancelled {
-        try? await Task.sleep(for: .seconds(1))
+        guard let silencePollInterval = self?.silencePollInterval else {
+          return
+        }
+
+        do {
+          try await Task.sleep(for: silencePollInterval)
+        } catch {
+          return
+        }
+
         guard let self, self.activeAttemptID == attemptID, self.phase == .listening else {
           return
         }
 
         let now = Date()
         let lastActivity = max(self.lastAudibleAt, self.lastTranscriptAt)
-        guard now.timeIntervalSince(lastActivity) >= Metric.silenceTimeout else {
+        guard now.timeIntervalSince(lastActivity) >= self.silenceTimeout else {
           continue
         }
 
+        let transcript = self.joinedTranscript()
         let silentSession = self.session
         self.session = nil
         self.activeAttemptID = nil
         silentSession?.eventHandler = nil
         silentSession?.cancel()
-        self.phase = .failed(.silence)
+        if transcript.isEmpty {
+          self.phase = .failed(.silence)
+        } else {
+          self.resetAfterFinish()
+          self.latestSilenceCompletion = SpeechSilenceCompletion(
+            id: UUID(),
+            transcript: transcript
+          )
+        }
         return
       }
     }
