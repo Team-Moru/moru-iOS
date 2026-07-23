@@ -15,7 +15,6 @@ struct RoutineEditorView: View {
   @State private var isScheduleSettingPresented = false
   @State private var isDeleteDialogPresented = false
   @State private var weekdayConflict: RoutineWeekdayConflictState?
-  @State private var isEditingSteps = false
   @State private var selectedEditStepIndex: Int? = nil
   @State private var isStepEditSheetPresented = false
   @State private var saveErrorMessage: String?
@@ -217,45 +216,32 @@ struct RoutineEditorView: View {
           .foregroundStyle(AppColor.moruTextSecondary)
 
         Spacer()
-
-        Button {
-          isEditingSteps.toggle()
-        } label: {
-          if isEditingSteps {
-            Text("완료")
-              .font(AppFont.body1NormalSemiBold)
-              .foregroundStyle(AppColor.orange350)
-              .padding(.horizontal, AppSpacing.sm)
-              .padding(.vertical, AppSpacing.six)
-              .background(AppColor.orange150)
-              .clipShape(Capsule())
-          } else {
-            MoruRoutineEditIcon()
-              .frame(width: 42, height: 36)
-          }
-        }
-        .buttonStyle(.plain)
       }
 
       ForEach(Array(draft.steps.indices), id: \.self) { index in
         RoutineStepDraftRow(
           step: $draft.steps[index],
           order: index + 1,
-          isEditing: isEditingSteps,
           onDelete: {
             draft.steps.remove(at: index)
           },
-          onMoveUp: index > 0 ? {
-            draft.steps.swapAt(index, index - 1)
-          } : nil,
-          onMoveDown: index < draft.steps.count - 1 ? {
-            draft.steps.swapAt(index, index + 1)
-          } : nil,
           onTapCard: {
             selectedEditStepIndex = index
             isStepEditSheetPresented = true
           }
         )
+        .draggable(draft.steps[index].id.uuidString)
+        .dropDestination(for: String.self) { items, _ in
+          guard
+            let item = items.first,
+            let draggedStepID = UUID(uuidString: item)
+          else {
+            return false
+          }
+
+          moveStep(draggedStepID, to: draft.steps[index].id)
+          return true
+        }
       }
 
       addStepButton
@@ -422,6 +408,21 @@ struct RoutineEditorView: View {
 
   private var totalMinutes: Int {
     draft.steps.map(\.estimatedMinutes).reduce(0, +)
+  }
+
+  private func moveStep(_ draggedStepID: UUID, to targetStepID: UUID) {
+    guard
+      draggedStepID != targetStepID,
+      let sourceIndex = draft.steps.firstIndex(where: { $0.id == draggedStepID }),
+      let targetIndex = draft.steps.firstIndex(where: { $0.id == targetStepID })
+    else {
+      return
+    }
+
+    withAnimation(.snappy(duration: 0.18)) {
+      let movedStep = draft.steps.remove(at: sourceIndex)
+      draft.steps.insert(movedStep, at: targetIndex)
+    }
   }
 }
 
