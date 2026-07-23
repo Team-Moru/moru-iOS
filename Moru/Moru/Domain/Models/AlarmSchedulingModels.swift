@@ -30,6 +30,11 @@ enum AlarmIngressKind: String, Codable, Hashable, Sendable {
   case snooze
 }
 
+enum AlarmIngressLaunchTarget: String, Codable, Hashable, Sendable {
+  case alarmRing
+  case scheduledRoutine
+}
+
 nonisolated struct AlarmIngressEnvelope: Codable, Hashable, Sendable {
   static let notificationUserInfoKey = "moru.alarm.ingress"
 
@@ -39,6 +44,25 @@ nonisolated struct AlarmIngressEnvelope: Codable, Hashable, Sendable {
   let kind: AlarmIngressKind
   let fireDate: Date
   let nonce: UUID
+  let launchTarget: AlarmIngressLaunchTarget
+
+  nonisolated init(
+    alarmID: UUID,
+    routineID: UUID,
+    scheduleID: UUID,
+    kind: AlarmIngressKind,
+    fireDate: Date,
+    nonce: UUID,
+    launchTarget: AlarmIngressLaunchTarget = .alarmRing
+  ) {
+    self.alarmID = alarmID
+    self.routineID = routineID
+    self.scheduleID = scheduleID
+    self.kind = kind
+    self.fireDate = fireDate
+    self.nonce = nonce
+    self.launchTarget = launchTarget
+  }
 
   nonisolated func refreshingOccurrence(
     fireDate: Date,
@@ -50,7 +74,22 @@ nonisolated struct AlarmIngressEnvelope: Codable, Hashable, Sendable {
       scheduleID: scheduleID,
       kind: kind,
       fireDate: fireDate,
-      nonce: nonce
+      nonce: nonce,
+      launchTarget: launchTarget
+    )
+  }
+
+  nonisolated func routing(
+    to launchTarget: AlarmIngressLaunchTarget
+  ) -> AlarmIngressEnvelope {
+    AlarmIngressEnvelope(
+      alarmID: alarmID,
+      routineID: routineID,
+      scheduleID: scheduleID,
+      kind: kind,
+      fireDate: fireDate,
+      nonce: nonce,
+      launchTarget: launchTarget
     )
   }
 
@@ -67,6 +106,30 @@ nonisolated struct AlarmIngressEnvelope: Codable, Hashable, Sendable {
       throw AlarmIngressEnvelopeCodingError.invalidUTF8
     }
     return try JSONDecoder().decode(AlarmIngressEnvelope.self, from: data)
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case alarmID
+    case routineID
+    case scheduleID
+    case kind
+    case fireDate
+    case nonce
+    case launchTarget
+  }
+
+  nonisolated init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    alarmID = try container.decode(UUID.self, forKey: .alarmID)
+    routineID = try container.decode(UUID.self, forKey: .routineID)
+    scheduleID = try container.decode(UUID.self, forKey: .scheduleID)
+    kind = try container.decode(AlarmIngressKind.self, forKey: .kind)
+    fireDate = try container.decode(Date.self, forKey: .fireDate)
+    nonce = try container.decode(UUID.self, forKey: .nonce)
+    launchTarget = try container.decodeIfPresent(
+      AlarmIngressLaunchTarget.self,
+      forKey: .launchTarget
+    ) ?? .alarmRing
   }
 }
 
@@ -209,6 +272,14 @@ struct AlarmRingContext: Equatable, Hashable {
   let ingress: AlarmIngressEnvelope
   let routineName: String
   let routineMinutes: Int
+
+  func routing(to launchTarget: AlarmIngressLaunchTarget) -> AlarmRingContext {
+    AlarmRingContext(
+      ingress: ingress.routing(to: launchTarget),
+      routineName: routineName,
+      routineMinutes: routineMinutes
+    )
+  }
 }
 
 enum AlarmIngressIgnoredReason: Equatable {

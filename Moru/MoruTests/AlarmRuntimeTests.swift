@@ -62,11 +62,74 @@ final class AlarmRuntimeTests: XCTestCase {
     )
   }
 
+  func testLegacyIngressDefaultsToAlarmRingLaunch() throws {
+    struct LegacyEnvelope: Encodable {
+      let alarmID: UUID
+      let routineID: UUID
+      let scheduleID: UUID
+      let kind: AlarmIngressKind
+      let fireDate: Date
+      let nonce: UUID
+    }
+
+    let envelope = makeEnvelope(
+      fireDate: Date(timeIntervalSince1970: 1_000)
+    )
+    let legacy = LegacyEnvelope(
+      alarmID: envelope.alarmID,
+      routineID: envelope.routineID,
+      scheduleID: envelope.scheduleID,
+      kind: envelope.kind,
+      fireDate: envelope.fireDate,
+      nonce: envelope.nonce
+    )
+    let data = try JSONEncoder().encode(legacy)
+
+    let decoded = try JSONDecoder().decode(
+      AlarmIngressEnvelope.self,
+      from: data
+    )
+
+    XCTAssertEqual(
+      decoded.launchTarget,
+      AlarmIngressLaunchTarget.alarmRing
+    )
+  }
+
+  func testAlarmKitRoutineIntentRequestsDirectScheduledLaunch() throws {
+    let template = makeEnvelope(
+      fireDate: Date(timeIntervalSince1970: 1_000)
+    )
+    let fireDate = Date(timeIntervalSince1970: 3_000)
+    let nonce = UUID()
+
+    let ingress = OpenMoruRoutineIntent.makeIngress(
+      encodedIngress: try template.encodedString(),
+      fireDate: fireDate,
+      nonce: nonce
+    )
+
+    XCTAssertEqual(ingress?.alarmID, template.alarmID)
+    XCTAssertEqual(ingress?.routineID, template.routineID)
+    XCTAssertEqual(ingress?.scheduleID, template.scheduleID)
+    XCTAssertEqual(ingress?.kind, template.kind)
+    XCTAssertEqual(ingress?.fireDate, fireDate)
+    XCTAssertEqual(ingress?.nonce, nonce)
+    XCTAssertEqual(ingress?.launchTarget, .scheduledRoutine)
+    XCTAssertEqual(
+      try ingress.map { try AlarmIngressEnvelope.decode($0.encodedString()) },
+      ingress
+    )
+  }
+
   func testFallbackNotificationTapRefreshesOccurrenceForSharedIngress() throws {
     let scheduledAt = Date(timeIntervalSince1970: 500)
     let tappedAt = Date(timeIntervalSince1970: 1_000)
     let nonce = UUID()
-    let template = makeEnvelope(fireDate: scheduledAt)
+    let template = makeEnvelope(
+      fireDate: scheduledAt,
+      launchTarget: .scheduledRoutine
+    )
     let userInfo: [AnyHashable: Any] = [
       AlarmIngressEnvelope.notificationUserInfoKey:
         try template.encodedString(),
@@ -84,6 +147,110 @@ final class AlarmRuntimeTests: XCTestCase {
     XCTAssertEqual(ingress?.kind, template.kind)
     XCTAssertEqual(ingress?.fireDate, tappedAt)
     XCTAssertEqual(ingress?.nonce, nonce)
+    XCTAssertEqual(ingress?.launchTarget, .alarmRing)
+  }
+
+  @MainActor
+  func testDirectScheduledLaunchTransitionsOnlyAfterStopCompletes() {
+    let routineID = UUID()
+    let context = makeContext(
+      routineID: routineID,
+      launchTarget: .scheduledRoutine
+    )
+    let admission = AppNavigationReducer.admitPresentation(
+      .startingScheduledRoutine(context: context),
+      from: .idle
+    )
+
+    guard case .presented(let token) = admission.attempt else {
+      XCTFail("The direct launch should reserve a noninteractive presentation.")
+      return
+    }
+    guard case .startingScheduledRoutine(
+      let startingContext,
+      let startingToken
+    ) = admission.state.visiblePresentation else {
+      XCTFail("The routine must not open before the alarm stop completes.")
+      return
+    }
+    XCTAssertEqual(startingContext, context)
+    XCTAssertEqual(startingToken, token)
+
+    let completion = AppNavigationReducer.reduce(
+      state: admission.state,
+      action: .completeScheduledRoutineStart(
+        routineID: routineID,
+        startingPresentationToken: token
+      )
+    )
+
+    guard case .regularRoutine(
+      let presentedRoutineID,
+      let source,
+      _
+    ) = completion.state.visiblePresentation else {
+      XCTFail("A successful stop should open the scheduled RoutinePlayer.")
+      return
+    }
+    XCTAssertEqual(presentedRoutineID, routineID)
+    XCTAssertEqual(source, .scheduled)
+  }
+
+  @MainActor
+  func testDirectScheduledLaunchFailureBecomesRetryableAlarmRing() {
+    let context = makeContext(
+      routineID: UUID(),
+      launchTarget: .scheduledRoutine
+    )
+    let admission = AppNavigationReducer.admitPresentation(
+      .startingScheduledRoutine(context: context),
+      from: .idle
+    )
+
+    guard case .presented(let token) = admission.attempt else {
+      XCTFail("The direct launch should be admitted.")
+      return
+    }
+
+    let failure = AppNavigationReducer.reduce(
+      state: admission.state,
+      action: .failScheduledRoutineStart(
+        startingPresentationToken: token
+      )
+    )
+
+    guard case .alarmRing(
+      let retryContext,
+      let retryToken
+    ) = failure.state.visiblePresentation else {
+      XCTFail("A failed stop should leave the manual AlarmRing retry path.")
+      return
+    }
+    XCTAssertEqual(retryToken, token)
+    XCTAssertEqual(retryContext.ingress.launchTarget, .alarmRing)
+    XCTAssertEqual(retryContext.ingress.alarmID, context.ingress.alarmID)
+  }
+
+  @MainActor
+  func testDirectScheduledLaunchRejectsStaleCompletionToken() {
+    let context = makeContext(
+      routineID: UUID(),
+      launchTarget: .scheduledRoutine
+    )
+    let admission = AppNavigationReducer.admitPresentation(
+      .startingScheduledRoutine(context: context),
+      from: .idle
+    )
+
+    let staleCompletion = AppNavigationReducer.reduce(
+      state: admission.state,
+      action: .completeScheduledRoutineStart(
+        routineID: context.ingress.routineID,
+        startingPresentationToken: UUID()
+      )
+    )
+
+    XCTAssertEqual(staleCompletion.state, admission.state)
   }
 
   @MainActor
@@ -341,9 +508,11 @@ final class AlarmRuntimeTests: XCTestCase {
       return
     }
 
-    coordinator.startScheduledRoutine(
-      routineID: routineID,
-      alarmPresentationToken: alarmToken
+    XCTAssertTrue(
+      coordinator.startScheduledRoutine(
+        routineID: routineID,
+        alarmPresentationToken: alarmToken
+      )
     )
 
     guard case .regularRoutine(
@@ -609,7 +778,8 @@ private func makeEnvelope(
   routineID: UUID = UUID(),
   scheduleID: UUID = UUID(),
   kind: AlarmIngressKind = .recurring,
-  fireDate: Date
+  fireDate: Date,
+  launchTarget: AlarmIngressLaunchTarget = .alarmRing
 ) -> AlarmIngressEnvelope {
   AlarmIngressEnvelope(
     alarmID: alarmID ?? scheduleID,
@@ -617,13 +787,21 @@ private func makeEnvelope(
     scheduleID: scheduleID,
     kind: kind,
     fireDate: fireDate,
-    nonce: UUID()
+    nonce: UUID(),
+    launchTarget: launchTarget
   )
 }
 
-private func makeContext(routineID: UUID) -> AlarmRingContext {
+private func makeContext(
+  routineID: UUID,
+  launchTarget: AlarmIngressLaunchTarget = .alarmRing
+) -> AlarmRingContext {
   AlarmRingContext(
-    ingress: makeEnvelope(routineID: routineID, fireDate: Date()),
+    ingress: makeEnvelope(
+      routineID: routineID,
+      fireDate: Date(),
+      launchTarget: launchTarget
+    ),
     routineName: "활력 루틴",
     routineMinutes: 10
   )

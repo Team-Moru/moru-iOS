@@ -43,5 +43,6 @@ final class AlarmNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
   ) -> AlarmIngressEnvelope? {
     UserNotificationAlarmSchedulingAdapter.ingress(from: userInfo)?
       .refreshingOccurrence(fireDate: fireDate, nonce: nonce)
+      .routing(to: .alarmRing)
   }
 }

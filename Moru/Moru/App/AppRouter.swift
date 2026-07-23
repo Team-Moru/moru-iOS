@@ -196,6 +196,10 @@ struct AppRouter: View {
         presentationToken: token,
         onEvent: handleRoutinePlayerEvent
       )
+    case .startingScheduledRoutine(let context, _):
+      return AnyView(
+        AlarmStartingView(routineName: context.routineName)
+      )
     case .alarmRing(let context, let token):
       return AnyView(
         AlarmRingView(
@@ -395,11 +399,42 @@ struct AppRouter: View {
 
     switch await alarmRuntimeHandler.resolve(envelope) {
     case .route(let context):
-      _ = coordinator.presentAlarmRing(context: context)
+      await presentResolvedAlarm(context)
     case .ignored:
       break
     case .temporarilyUnavailable:
       MoruAlarmRouteStore.restorePendingEnvelope(envelope)
+    }
+  }
+
+  @MainActor
+  private func presentResolvedAlarm(_ context: AlarmRingContext) async {
+    guard context.ingress.launchTarget == .scheduledRoutine else {
+      _ = coordinator.presentAlarmRing(context: context)
+      return
+    }
+
+    let attempt = coordinator.presentScheduledRoutineStart(context: context)
+    guard let presentationToken = attempt.presentationToken else {
+      return
+    }
+
+    do {
+      guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+        throw AlarmRuntimeError.routeNoLongerAvailable
+      }
+
+      try await alarmRuntimeHandler.startRoutine(from: context)
+      guard coordinator.completeScheduledRoutineStart(
+        routineID: context.ingress.routineID,
+        startingPresentationToken: presentationToken
+      ) else {
+        throw AlarmRuntimeError.routeNoLongerAvailable
+      }
+    } catch {
+      coordinator.failScheduledRoutineStart(
+        startingPresentationToken: presentationToken
+      )
     }
   }
 
@@ -413,10 +448,12 @@ struct AppRouter: View {
     }
 
     try await alarmRuntimeHandler.startRoutine(from: context)
-    coordinator.startScheduledRoutine(
+    guard coordinator.startScheduledRoutine(
       routineID: context.ingress.routineID,
       alarmPresentationToken: presentationToken
-    )
+    ) else {
+      throw AlarmRuntimeError.routeNoLongerAvailable
+    }
   }
 
   @MainActor
@@ -448,6 +485,48 @@ struct AppRouter: View {
 
     Task {
       await handleAlarmIngress(context.ingress)
+    }
+  }
+}
+
+private struct AlarmStartingView: View {
+  let routineName: String
+
+  var body: some View {
+    ZStack {
+      LinearGradient(
+        colors: [
+          AppColor.babyBlue100,
+          AppColor.babyBlue150,
+          AppColor.babyBlue250,
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+      .ignoresSafeArea()
+
+      VStack(spacing: 16) {
+        ProgressView()
+          .tint(.white)
+          .controlSize(.large)
+
+        Text("\(routineName) 시작 중")
+          .font(AppFont.body1NormalBold)
+          .foregroundStyle(Color.white)
+      }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel("\(routineName) 루틴 시작 중")
+    }
+  }
+}
+
+private extension PresentationAttempt {
+  var presentationToken: UUID? {
+    switch self {
+    case .presented(let token), .alreadyPresented(let token):
+      token
+    case .deferredBusy:
+      nil
     }
   }
 }

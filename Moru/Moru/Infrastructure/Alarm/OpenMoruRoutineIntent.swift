@@ -82,7 +82,7 @@ public struct OpenMoruRoutineIntent: LiveActivityIntent {
   public static let title: LocalizedStringResource = "MORU 루틴 시작"
 
   public static let description = IntentDescription(
-    "MORU 앱을 열고 기상 루틴 화면으로 이동합니다."
+    "MORU 앱을 열고 예약된 기상 루틴을 바로 시작합니다."
   )
 
   public static let openAppWhenRun = true
@@ -99,13 +99,24 @@ public struct OpenMoruRoutineIntent: LiveActivityIntent {
   }
 
   public func perform() async throws -> some IntentResult {
-    guard let template = try? AlarmIngressEnvelope.decode(encodedIngress) else {
+    guard let ingress = Self.makeIngress(
+      encodedIngress: encodedIngress,
+      fireDate: Date()
+    ) else {
       return .result()
     }
 
-    MoruAlarmRouteStore.savePendingEnvelope(
-      template.refreshingOccurrence(fireDate: Date())
-    )
+    MoruAlarmRouteStore.savePendingEnvelope(ingress)
     return .result()
+  }
+
+  nonisolated static func makeIngress(
+    encodedIngress: String,
+    fireDate: Date,
+    nonce: UUID = UUID()
+  ) -> AlarmIngressEnvelope? {
+    try? AlarmIngressEnvelope.decode(encodedIngress)
+      .refreshingOccurrence(fireDate: fireDate, nonce: nonce)
+      .routing(to: .scheduledRoutine)
   }
 }
