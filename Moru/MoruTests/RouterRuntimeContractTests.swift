@@ -835,6 +835,7 @@ final class RouterRuntimeContractTests: XCTestCase {
     }
 
     XCTAssertNil(summary.persistedRunID)
+    XCTAssertNil(summary.streak)
     XCTAssertFalse(summary.endedEarly)
     XCTAssertEqual(finalizer.finalizeCallCount, 1)
     XCTAssertEqual(finalizer.finalizedRoutineIDs, [routine.id])

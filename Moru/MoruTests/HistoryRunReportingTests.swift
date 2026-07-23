@@ -127,6 +127,8 @@ final class HistoryRunReportingTests: XCTestCase {
     XCTAssertEqual(overview.week.totalRunCount, 0)
     XCTAssertEqual(overview.week.completedRunCount, 0)
     XCTAssertEqual(overview.week.completionRate, 0)
+    XCTAssertNil(overview.week.completionRateChangePercentagePoints)
+    XCTAssertEqual(overview.streak, .empty)
     XCTAssertEqual(overview.week.dailyCompletionRates.count, 7)
     XCTAssertTrue(overview.week.dailyCompletionRates.allSatisfy { $0.completionRate == 0 })
     XCTAssertEqual(overview.wakeMetrics, .unavailable)
@@ -143,6 +145,95 @@ final class HistoryRunReportingTests: XCTestCase {
       overview.monthlyHeatmap.days[2].date,
       makeDate(2026, 7, 1, 0, 0, calendar: calendar)
     )
+  }
+
+  @MainActor
+  func testHistoryUsesSharedStreakRuleAndStopsAtMissingCalendarDate() throws {
+    let calendar = makeCalendar()
+    let completedDates = [
+      makeDate(2026, 7, 10, 7, 0, calendar: calendar),
+      makeDate(2026, 7, 13, 7, 0, calendar: calendar),
+      makeDate(2026, 7, 14, 7, 0, calendar: calendar),
+    ]
+    let completedRuns = completedDates.map { date in
+      let step = makeSnapshot()
+      return makeRun(
+        startedAt: date,
+        plannedSteps: [step],
+        results: [makeCompletedResult(for: step)]
+      )
+    }
+    let partialSteps = [
+      makeSnapshot(order: 0),
+      makeSnapshot(order: 1),
+    ]
+    let partialRun = makeRun(
+      startedAt: makeDate(2026, 7, 12, 7, 0, calendar: calendar),
+      plannedSteps: partialSteps,
+      results: [makeCompletedResult(for: partialSteps[0])]
+    )
+    let now = makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    let overview = try makeUseCase(
+      runs: completedRuns + [partialRun],
+      calendar: calendar,
+      now: now
+    ).load()
+    let expected = RoutineStreakCalculator(calendar: calendar).calculate(
+      from: completedRuns + [partialRun],
+      asOf: now
+    )
+
+    XCTAssertEqual(overview.streak, expected)
+    XCTAssertEqual(overview.streak.currentDays, 2)
+    XCTAssertEqual(overview.streak.bestDays, 2)
+  }
+
+  @MainActor
+  func testWeekReportsPercentagePointChangeFromComparablePreviousWeek() throws {
+    let calendar = makeCalendar()
+    let previousSteps = [
+      makeSnapshot(order: 0),
+      makeSnapshot(order: 1),
+    ]
+    let currentSteps = (0..<4).map { makeSnapshot(order: $0) }
+    let previousRun = makeRun(
+      startedAt: makeDate(2026, 7, 6, 7, 0, calendar: calendar),
+      plannedSteps: previousSteps,
+      results: [makeCompletedResult(for: previousSteps[0])]
+    )
+    let currentRun = makeRun(
+      startedAt: makeDate(2026, 7, 13, 7, 0, calendar: calendar),
+      plannedSteps: currentSteps,
+      results: currentSteps.prefix(3).map { makeCompletedResult(for: $0) }
+    )
+
+    let week = try makeUseCase(
+      runs: [previousRun, currentRun],
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load().week
+
+    XCTAssertEqual(week.completionRate, 0.75)
+    XCTAssertEqual(week.completionRateChangePercentagePoints, 25)
+  }
+
+  @MainActor
+  func testWeekReportsUnavailableComparisonWithoutPreviousWeekData() throws {
+    let calendar = makeCalendar()
+    let step = makeSnapshot()
+    let currentRun = makeRun(
+      startedAt: makeDate(2026, 7, 13, 7, 0, calendar: calendar),
+      plannedSteps: [step],
+      results: [makeCompletedResult(for: step)]
+    )
+
+    let week = try makeUseCase(
+      runs: [currentRun],
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load().week
+
+    XCTAssertNil(week.completionRateChangePercentagePoints)
   }
 
   @MainActor

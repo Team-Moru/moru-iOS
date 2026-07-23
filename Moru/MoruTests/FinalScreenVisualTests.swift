@@ -108,6 +108,40 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
+  func testHistoryAndCompletionStreakSurfacesRenderAtReferenceAccessibilitySizes() throws {
+    for variant in [VisualVariant.lightMedium, .lightAccessibility3] {
+      try render(
+        mainScreen(historyView(), selection: .record),
+        filename: "moru-pr52-history-streak-\(variant.filenameSuffix).png",
+        variant: variant,
+        matchesApprovedBaseline: false
+      )
+      try render(
+        weeklyComparisonCard(),
+        filename: "moru-pr52-weekly-comparison-\(variant.filenameSuffix).png",
+        variant: variant,
+        matchesApprovedBaseline: false
+      )
+      try render(
+        routineFinishedView(streak: RoutineStreak(
+          currentDays: 3,
+          bestDays: 7,
+          completedWeekdays: [.sunday, .monday, .tuesday]
+        )),
+        filename: "moru-pr52-regular-completion-\(variant.filenameSuffix).png",
+        variant: variant,
+        matchesApprovedBaseline: false
+      )
+      try render(
+        routineFinishedView(streak: nil),
+        filename: "moru-pr52-trial-completion-\(variant.filenameSuffix).png",
+        variant: variant,
+        matchesApprovedBaseline: false
+      )
+    }
+  }
+
+  @MainActor
   func testMainScreenAccessibilityIdentifierContractsAreUnique() throws {
     let rootIdentifiers = [
       HomeView.rootAccessibilityIdentifier,
@@ -228,6 +262,31 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
+  private func weeklyComparisonCard() -> some View {
+    HistoryWeeklySummaryCard(
+      title: "7월 13일 ~ 7월 19일",
+      completedRuns: 4,
+      totalRuns: 5,
+      completionRate: 0.8,
+      completionRateChangePercentagePoints: 20,
+      action: {}
+    )
+    .padding(AppSpacing.screenHorizontal)
+    .background(AppColor.grayWhite)
+  }
+
+  @MainActor
+  private func routineFinishedView(streak: RoutineStreak?) -> some View {
+    RoutineFinishedView(
+      completionRate: 1,
+      streak: streak,
+      completedStepTitles: ["물 마시기", "스트레칭", "오늘 계획 확인"],
+      onTapTodayRecord: {},
+      onTapHome: {}
+    )
+  }
+
+  @MainActor
   private func activeRoutineSection() -> some View {
     var inProgressRoutine = HomeRoutineState.placeholder
     inProgressRoutine.id = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
@@ -280,7 +339,8 @@ final class FinalScreenVisualTests: XCTestCase {
   private func render<Content: View>(
     _ content: Content,
     filename: String,
-    variant: VisualVariant
+    variant: VisualVariant,
+    matchesApprovedBaseline: Bool = true
   ) throws {
     let renderedContent = content
       .environment(\.dynamicTypeSize, variant.dynamicTypeSize)
@@ -312,7 +372,11 @@ final class FinalScreenVisualTests: XCTestCase {
     let url = URL(fileURLWithPath: "/private/tmp/\(filename)")
     try data.write(to: url, options: .atomic)
 
-    try assertMatchesApprovedBaseline(image, filename: filename)
+    if matchesApprovedBaseline {
+      try assertMatchesApprovedBaseline(image, filename: filename)
+    } else {
+      XCTAssertGreaterThan(data.count, 1_000)
+    }
   }
 
   private func assertMatchesApprovedBaseline(
@@ -618,6 +682,11 @@ private final class VisualHistoryUseCase: LoadHistoryUseCaseProtocol {
       monthlyHeatmap: HistoryMonthlyHeatmap(
         monthStartDate: monthStart,
         days: heatmapDays(monthStart: monthStart, calendar: calendar)
+      ),
+      streak: RoutineStreak(
+        currentDays: 1,
+        bestDays: 1,
+        completedWeekdays: [.saturday]
       )
     )
   }

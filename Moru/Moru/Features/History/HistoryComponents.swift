@@ -37,35 +37,68 @@ struct HistorySectionHeader: View {
 }
 
 struct HistoryWeeklySummaryCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let title: String
     let completedRuns: Int
     let totalRuns: Int
     let completionRate: Double
+    let completionRateChangePercentagePoints: Int?
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text("이번 주 리포트")
-                        .font(AppFont.caption1Medium)
-                        .foregroundStyle(AppColor.gray400)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+                        Text("이번 주 리포트")
+                            .font(AppFont.caption1Medium)
+                            .foregroundStyle(AppColor.gray400)
 
-                    Text("\(Int((completionRate * 100).rounded()))%")
-                        .font(AppFont.pretendardBold(size: 30))
-                        .foregroundStyle(AppColor.grayWhite)
-                }
+                        Text(title)
+                            .font(AppFont.caption1Medium)
+                            .foregroundStyle(AppColor.gray500)
 
-                Spacer()
+                        Text("\(Int((completionRate * 100).rounded()))%")
+                            .font(AppFont.pretendardBold(size: 30))
+                            .foregroundStyle(AppColor.grayWhite)
 
-                VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
-                    Text(title)
-                        .font(AppFont.caption1Medium)
-                        .foregroundStyle(AppColor.gray500)
+                        Text("\(completedRuns)/\(max(totalRuns, 1))회 완료")
+                            .font(AppFont.caption1SemiBold)
+                            .foregroundStyle(AppColor.grayWhite)
 
-                    Text("\(completedRuns)/\(max(totalRuns, 1))회 완료")
-                        .font(AppFont.caption1SemiBold)
-                        .foregroundStyle(AppColor.grayWhite)
+                        Text(comparisonText)
+                            .font(AppFont.pretendardRegular(size: 10))
+                            .foregroundStyle(AppColor.gray500)
+                    }
+                } else {
+                    HStack(alignment: .bottom) {
+                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+                            Text("이번 주 리포트")
+                                .font(AppFont.caption1Medium)
+                                .foregroundStyle(AppColor.gray400)
+
+                            Text("\(Int((completionRate * 100).rounded()))%")
+                                .font(AppFont.pretendardBold(size: 30))
+                                .foregroundStyle(AppColor.grayWhite)
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
+                            Text(title)
+                                .font(AppFont.caption1Medium)
+                                .foregroundStyle(AppColor.gray500)
+
+                            Text("\(completedRuns)/\(max(totalRuns, 1))회 완료")
+                                .font(AppFont.caption1SemiBold)
+                                .foregroundStyle(AppColor.grayWhite)
+
+                            Text(comparisonText)
+                                .font(AppFont.pretendardRegular(size: 10))
+                                .foregroundStyle(AppColor.gray500)
+                        }
+                    }
                 }
             }
             .padding(AppSpacing.md)
@@ -76,8 +109,26 @@ struct HistoryWeeklySummaryCard: View {
         .buttonStyle(.plain)
         .accessibilityLabel(
             "\(title), 이번 주 리포트, \(completedRuns)/\(totalRuns)회 완료, "
-            + "완수율 \(Int((completionRate * 100).rounded()))퍼센트"
+            + "완수율 \(Int((completionRate * 100).rounded()))퍼센트, "
+            + comparisonAccessibilityText
         )
+    }
+
+    private var comparisonText: String {
+        guard let change = completionRateChangePercentagePoints else {
+            return "지난주 대비 —"
+        }
+
+        let prefix = change > 0 ? "+" : ""
+        return "지난주 대비 \(prefix)\(change)%p"
+    }
+
+    private var comparisonAccessibilityText: String {
+        guard let change = completionRateChangePercentagePoints else {
+            return "지난주 비교 데이터 없음"
+        }
+
+        return "지난주 대비 \(change)퍼센트포인트"
     }
 }
 

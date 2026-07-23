@@ -5,11 +5,7 @@
 
 import Foundation
 
-struct HomeRoutineStreak: Equatable {
-  let currentDays: Int
-  let bestDays: Int
-  let completedWeekdays: Set<Weekday>
-}
+typealias HomeRoutineStreak = RoutineStreak
 
 struct HomeRoutineLoadResult: Equatable {
   let profile: LocalProfile?
@@ -31,6 +27,7 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
   private let localProfileRepository: any LocalProfileRepository
   private let calendar: Calendar
   private let now: () -> Date
+  private let streakCalculator: RoutineStreakCalculator
 
   init(
     routineRepository: any RoutineRepository,
@@ -44,6 +41,7 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
     self.localProfileRepository = localProfileRepository
     self.calendar = calendar
     self.now = now
+    self.streakCalculator = RoutineStreakCalculator(calendar: calendar)
   }
 
   func execute() throws -> HomeRoutineLoadResult {
@@ -63,7 +61,7 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
         from: runs,
         currentDate: currentDate
       ),
-      streak: makeStreak(from: runs, currentDate: currentDate)
+      streak: streakCalculator.calculate(from: runs, asOf: currentDate)
     )
   }
 
@@ -143,89 +141,6 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
         result[run.routineID] = run
       }
     }
-  }
-
-  private func makeStreak(from runs: [RoutineRun], currentDate: Date) -> HomeRoutineStreak {
-    let completedDates = Set(
-      runs.compactMap { run -> Date? in
-        guard let completedAt = run.completedAt,
-              !run.endedEarly,
-              run.completionRate == 1 else {
-          return nil
-        }
-
-        return calendar.startOfDay(for: completedAt)
-      }
-    )
-
-    let completedWeekdays = Set(
-      completedDates
-        .filter { calendar.isDate($0, equalTo: currentDate, toGranularity: .weekOfYear) }
-        .map(weekday(from:))
-    )
-
-    return HomeRoutineStreak(
-      currentDays: consecutiveCompletedDays(from: completedDates, currentDate: currentDate),
-      bestDays: bestStreak(from: completedDates),
-      completedWeekdays: completedWeekdays
-    )
-  }
-
-  private func consecutiveCompletedDays(from completedDates: Set<Date>, currentDate: Date) -> Int {
-    let today = calendar.startOfDay(for: currentDate)
-    guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today) else {
-      return 0
-    }
-
-    let startDate: Date
-    if completedDates.contains(today) {
-      startDate = today
-    } else if completedDates.contains(yesterday) {
-      startDate = yesterday
-    } else {
-      return 0
-    }
-
-    var count = 0
-    var date = startDate
-
-    while completedDates.contains(date) {
-      count += 1
-
-      guard let previousDate = calendar.date(byAdding: .day, value: -1, to: date) else {
-        break
-      }
-
-      date = previousDate
-    }
-
-    return count
-  }
-
-  private func bestStreak(from completedDates: Set<Date>) -> Int {
-    guard !completedDates.isEmpty else {
-      return 0
-    }
-
-    let sortedDates = completedDates.sorted()
-    var best = 0
-    var current = 0
-    var previousDate: Date?
-
-    for date in sortedDates {
-      if let previousDate,
-         let nextDate = calendar.date(byAdding: .day, value: 1, to: previousDate),
-         calendar.isDate(date, inSameDayAs: nextDate) {
-        current += 1
-      } else {
-        current = 1
-      }
-
-      best = max(best, current)
-      previousDate = date
-    }
-
-    return best
   }
 
   private func weekday(from date: Date) -> Weekday {

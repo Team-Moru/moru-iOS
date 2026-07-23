@@ -11,8 +11,8 @@ struct RoutineFinishedView: View {
     /// 0.0~1.0 범위
     let completionRate: Double
 
-    /// 연속으로 루틴을 완료한 날짜 수
-    let consecutiveDays: Int
+    /// 저장된 일반 실행에서 다시 계산한 연속 달성 기록. 체험에는 값이 없다.
+    let streak: RoutineStreak?
 
     /// 실제 완료한 루틴 단계 제목
     let completedStepTitles: [String]
@@ -50,24 +50,32 @@ struct RoutineFinishedView: View {
         ZStack {
             backgroundView
 
-            VStack(spacing: 0) {
-                Spacer()
+            GeometryReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
 
-                titleSection
-                    .padding(.bottom, 51)
+                        titleSection
+                            .padding(.bottom, 51)
 
-                completionCard
-                    .padding(.bottom, 12)
+                        completionCard
+                            .padding(.bottom, 12)
 
-                streakCard
-                    .padding(.bottom, 32)
+                        if let streak {
+                            streakCard(streak)
+                                .padding(.bottom, 32)
+                        }
 
-                completedStepsSection
-                    .padding(.bottom, 25)
+                        completedStepsSection
+                            .padding(.bottom, 25)
 
-                bottomButtonSection
+                        bottomButtonSection
+                    }
+                    .frame(minHeight: proxy.size.height)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
+                }
             }
-            .padding(.horizontal, 20)
         }
         .onAppear {
             withAnimation(.easeOut(duration: 0.8)) {
@@ -172,24 +180,59 @@ struct RoutineFinishedView: View {
         .background(cardBackground)
     }
 
-    private var streakCard: some View {
-        VStack(spacing: 4) {
+    private func streakCard(
+        _ streak: RoutineStreak
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text("연속 달성")
                 .font(AppFont.label1NormalMedium)
                 .foregroundStyle(
                     AppColor.gray400
                 )
 
-            Text("\(consecutiveDays)일 연속")
-                .font(AppFont.heading1Bold)
-                .foregroundStyle(
-                    AppColor.gray550
-                )
-                .monospacedDigit()
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    currentStreakText(streak.currentDays)
+
+                    Spacer(minLength: 4)
+
+                    bestStreakText(streak.bestDays)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    currentStreakText(streak.currentDays)
+                    bestStreakText(streak.bestDays)
+                }
+            }
         }
+        .padding(16)
         .frame(maxWidth: .infinity)
-        .frame(height: 86)
+        .frame(minHeight: 86)
         .background(cardBackground)
+        .accessibilityIdentifier("routineFinished.streak")
+    }
+
+    private func currentStreakText(
+        _ days: Int
+    ) -> some View {
+        Text("\(days)일 연속")
+            .font(AppFont.heading1Bold)
+            .foregroundStyle(
+                AppColor.gray550
+            )
+            .monospacedDigit()
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func bestStreakText(
+        _ days: Int
+    ) -> some View {
+        Text("최고 기록 \(days)일")
+            .font(AppFont.caption1Medium)
+            .foregroundStyle(
+                AppColor.gray400
+            )
+            .fixedSize(horizontal: true, vertical: false)
     }
 
     @ViewBuilder
@@ -331,7 +374,11 @@ struct RoutineFinishedView: View {
 #Preview("루틴 완료 화면") {
     RoutineFinishedView(
         completionRate: 1.0,
-        consecutiveDays: 4,
+        streak: RoutineStreak(
+            currentDays: 4,
+            bestDays: 7,
+            completedWeekdays: [.monday, .tuesday]
+        ),
         completedStepTitles: [
             "잠자리 정리하기",
             "가볍게 스트레칭하기",
