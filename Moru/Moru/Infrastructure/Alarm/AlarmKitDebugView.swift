@@ -159,7 +159,7 @@ struct AlarmKitDebugView: View {
     }
 
     private func consumePendingAlarmRoute() {
-        guard MoruAlarmRouteStore.consumePendingRoute() != nil else {
+        guard MoruAlarmRouteStore.consumePendingEnvelope() != nil else {
             return
         }
 

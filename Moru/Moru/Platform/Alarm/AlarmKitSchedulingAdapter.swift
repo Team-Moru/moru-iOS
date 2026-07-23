@@ -23,47 +23,35 @@ final class AlarmKitSchedulingAdapter: AlarmScheduling {
   }
 
   func scheduleRecurring(_ request: AlarmScheduleRequest) async throws -> [String] {
-    let stopButton = AlarmButton(
-      text: "알람 끄기",
-      textColor: .white,
-      systemImageName: "stop.circle.fill"
+    let ingress = AlarmIngressEnvelope(
+      alarmID: request.scheduleID,
+      routineID: request.routineID,
+      scheduleID: request.scheduleID,
+      kind: .recurring,
+      fireDate: Date(),
+      nonce: UUID()
     )
-    let openRoutineButton = AlarmButton(
-      text: "루틴 시작",
-      textColor: .white,
-      systemImageName: "arrow.right.circle.fill"
-    )
-    let presentation = AlarmPresentation.Alert(
-      title: "\(request.routineName) 시작할 시간이에요",
-      stopButton: stopButton,
-      secondaryButton: openRoutineButton,
-      secondaryButtonBehavior: .custom
-    )
-    let metadata = MoruAlarmMetadata(
-      alarmID: request.scheduleID.uuidString,
-      routineID: request.routineID.uuidString,
-      routineName: request.routineName
-    )
-    let attributes = AlarmAttributes<MoruAlarmMetadata>(
-      presentation: AlarmPresentation(alert: presentation),
-      metadata: metadata,
-      tintColor: AppColor.babyBlue350
-    )
-    let intent = OpenMoruRoutineIntent(
-      alarmID: request.scheduleID.uuidString,
-      routineID: request.routineID.uuidString
-    )
-    let configuration = AlarmManager.AlarmConfiguration<MoruAlarmMetadata>.alarm(
-      schedule: Self.makeSchedule(from: request),
-      attributes: attributes,
-      secondaryIntent: intent
-    )
-
-    _ = try await AlarmManager.shared.schedule(
+    try await schedule(
       id: request.scheduleID,
-      configuration: configuration
+      routineName: request.routineName,
+      schedule: Self.makeSchedule(from: request),
+      ingress: ingress
     )
     return [request.scheduleID.uuidString.lowercased()]
+  }
+
+  func scheduleSnooze(_ request: AlarmSnoozeRequest) async throws -> [String] {
+    try await schedule(
+      id: request.alarmID,
+      routineName: request.routineName,
+      schedule: .fixed(request.fireDate),
+      ingress: request.ingressEnvelope
+    )
+    return [request.alarmID.uuidString.lowercased()]
+  }
+
+  func stop(id: UUID) async throws {
+    try AlarmManager.shared.stop(id: id)
   }
 
   func cancel(identifiers: [String]) async throws {
@@ -94,6 +82,50 @@ final class AlarmKitSchedulingAdapter: AlarmScheduling {
     )
     return .relative(
       Alarm.Schedule.Relative(time: time, repeats: recurrence)
+    )
+  }
+
+  private func schedule(
+    id: UUID,
+    routineName: String,
+    schedule: Alarm.Schedule,
+    ingress: AlarmIngressEnvelope
+  ) async throws {
+    let stopButton = AlarmButton(
+      text: "알람 끄기",
+      textColor: .white,
+      systemImageName: "stop.circle.fill"
+    )
+    let openRoutineButton = AlarmButton(
+      text: "루틴 시작",
+      textColor: .white,
+      systemImageName: "arrow.right.circle.fill"
+    )
+    let presentation = AlarmPresentation.Alert(
+      title: "\(routineName) 시작할 시간이에요",
+      stopButton: stopButton,
+      secondaryButton: openRoutineButton,
+      secondaryButtonBehavior: .custom
+    )
+    let metadata = MoruAlarmMetadata(
+      ingress: ingress,
+      routineName: routineName
+    )
+    let attributes = AlarmAttributes<MoruAlarmMetadata>(
+      presentation: AlarmPresentation(alert: presentation),
+      metadata: metadata,
+      tintColor: AppColor.babyBlue350
+    )
+    let intent = OpenMoruRoutineIntent(ingress: ingress)
+    let configuration = AlarmManager.AlarmConfiguration<MoruAlarmMetadata>.alarm(
+      schedule: schedule,
+      attributes: attributes,
+      secondaryIntent: intent
+    )
+
+    _ = try await AlarmManager.shared.schedule(
+      id: id,
+      configuration: configuration
     )
   }
 

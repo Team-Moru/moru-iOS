@@ -8,7 +8,6 @@
 import AlarmKit
 
 struct MoruAlarmMetadata: AlarmMetadata {
-    let alarmID: String
-    let routineID: String
-    let routineName: String
+  let ingress: AlarmIngressEnvelope
+  let routineName: String
 }

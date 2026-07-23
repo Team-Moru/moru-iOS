@@ -317,6 +317,22 @@ final class AlarmSchedulingFoundationTests: XCTestCase {
     XCTAssertEqual(try repository.fetchRecords(), [delivery])
     XCTAssertEqual(try repository.fetchSnoozedAlarms(), [snooze])
 
+    let replacement = SnoozedAlarmRecord(
+      id: UUID(),
+      scheduleID: delivery.scheduleID,
+      routineID: delivery.routineID,
+      fireDate: Date(timeIntervalSince1970: 300),
+      backend: .alarmKit,
+      platformIdentifiers: ["replacement-snooze-id"],
+      createdAt: Date(timeIntervalSince1970: 250)
+    )
+    try repository.replaceSnoozedAlarm(
+      scheduleID: delivery.scheduleID,
+      with: replacement
+    )
+
+    XCTAssertEqual(try repository.fetchSnoozedAlarms(), [replacement])
+
     try SwiftDataLocalDataResetRepository(
       modelContext: container.mainContext
     ).resetToFreshInstallState()
@@ -674,6 +690,14 @@ private final class AlarmSchedulingTestScheduler: AlarmScheduling {
     return scheduledIdentifiers
   }
 
+  func scheduleSnooze(_ request: AlarmSnoozeRequest) async throws -> [String] {
+    let identifiers = [request.alarmID.uuidString.lowercased()]
+    self.identifiers.formUnion(identifiers)
+    return identifiers
+  }
+
+  func stop(id: UUID) async throws {}
+
   func cancel(identifiers: [String]) async throws {
     cancellationBatches.append(identifiers)
     if let cancelError {
@@ -712,6 +736,14 @@ private final class BlockingAlarmSchedulingTestScheduler: AlarmScheduling {
     identifiers.insert(identifier)
     return [identifier]
   }
+
+  func scheduleSnooze(_ request: AlarmSnoozeRequest) async throws -> [String] {
+    let identifier = request.alarmID.uuidString.lowercased()
+    identifiers.insert(identifier)
+    return [identifier]
+  }
+
+  func stop(id: UUID) async throws {}
 
   func cancel(identifiers: [String]) async throws {
     cancellationBatches.append(identifiers)
@@ -769,6 +801,16 @@ private final class AlarmSchedulingTestStateRepository:
   }
 
   func saveSnoozedAlarm(_ record: SnoozedAlarmRecord) throws {
+    snoozedAlarms[record.id] = record
+  }
+
+  func replaceSnoozedAlarm(
+    scheduleID: UUID,
+    with record: SnoozedAlarmRecord
+  ) throws {
+    snoozedAlarms = snoozedAlarms.filter {
+      $0.value.scheduleID != scheduleID
+    }
     snoozedAlarms[record.id] = record
   }
 

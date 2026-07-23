@@ -7,7 +7,7 @@
 
 import Foundation
 
-private actor AlarmMutationGate {
+actor AlarmMutationGate {
   private var isLocked = false
   private var waiters: [CheckedContinuation<Void, Never>] = []
 
@@ -39,20 +39,22 @@ final class DefaultAlarmScheduleMutationCoordinator: AlarmScheduleMutating {
   private let primaryScheduler: any AlarmScheduling
   private let fallbackScheduler: any AlarmScheduling
   private let now: () -> Date
-  private let gate = AlarmMutationGate()
+  private let gate: AlarmMutationGate
 
   init(
     routineRepository: any RoutineRepository,
     stateRepository: any AlarmPlatformStateRepository,
     primaryScheduler: any AlarmScheduling,
     fallbackScheduler: any AlarmScheduling,
-    now: @escaping () -> Date = Date.init
+    now: @escaping () -> Date = Date.init,
+    gate: AlarmMutationGate = AlarmMutationGate()
   ) {
     self.routineRepository = routineRepository
     self.stateRepository = stateRepository
     self.primaryScheduler = primaryScheduler
     self.fallbackScheduler = fallbackScheduler
     self.now = now
+    self.gate = gate
   }
 
   func apply(_ mutation: AlarmScheduleMutation) async throws -> AlarmMutationResult {
@@ -94,6 +96,10 @@ final class DefaultAlarmScheduleMutationCoordinator: AlarmScheduleMutating {
       var records: [AlarmDeliveryRecord] = []
 
       for routine in routines {
+        if let scheduleID = routine.alarmSchedule?.id {
+          try await cancelSnoozes(scheduleID: scheduleID)
+        }
+
         if let request = AlarmScheduleRequest(routine: routine) {
           records.append(try await synchronize(request))
         } else if let scheduleID = routine.alarmSchedule?.id,
@@ -109,6 +115,7 @@ final class DefaultAlarmScheduleMutationCoordinator: AlarmScheduleMutating {
       return AlarmMutationResult(records: records)
 
     case .delete(let scheduleID):
+      try await cancelSnoozes(scheduleID: scheduleID)
       guard let record = try stateRepository.record(scheduleID: scheduleID) else {
         return .empty
       }
@@ -263,6 +270,8 @@ final class DefaultAlarmScheduleMutationCoordinator: AlarmScheduleMutating {
   }
 
   private func cancelAndDelete(_ record: AlarmDeliveryRecord) async throws {
+    try await cancelSnoozes(scheduleID: record.scheduleID)
+
     if !record.platformIdentifiers.isEmpty {
       try await scheduler(for: record.backend).cancel(
         identifiers: record.platformIdentifiers
@@ -344,6 +353,8 @@ final class DefaultAlarmScheduleMutationCoordinator: AlarmScheduleMutating {
     records: [AlarmDeliveryRecord],
     snapshots: [AlarmDeliveryBackend: AlarmPlatformSnapshot]
   ) async {
+    let snoozedAlarms = (try? stateRepository.fetchSnoozedAlarms()) ?? []
+
     for scheduler in [primaryScheduler, fallbackScheduler] {
       guard let snapshot = snapshots[scheduler.backend] else {
         continue
@@ -353,6 +364,9 @@ final class DefaultAlarmScheduleMutationCoordinator: AlarmScheduleMutating {
         records
           .filter { $0.backend == scheduler.backend }
           .flatMap(\.platformIdentifiers)
+          + snoozedAlarms
+            .filter { $0.backend == scheduler.backend }
+            .flatMap(\.platformIdentifiers)
       )
       let orphanIdentifiers = snapshot.identifiers.subtracting(knownIdentifiers)
       if !orphanIdentifiers.isEmpty {
@@ -381,5 +395,17 @@ final class DefaultAlarmScheduleMutationCoordinator: AlarmScheduleMutating {
 
     try stateRepository.deleteAllSnoozedAlarms()
     try stateRepository.deleteAllRecords()
+  }
+
+  private func cancelSnoozes(scheduleID: UUID) async throws {
+    let snoozedAlarms = try stateRepository.fetchSnoozedAlarms()
+      .filter { $0.scheduleID == scheduleID }
+
+    for snoozedAlarm in snoozedAlarms {
+      try await scheduler(for: snoozedAlarm.backend).cancel(
+        identifiers: snoozedAlarm.platformIdentifiers
+      )
+      try stateRepository.deleteSnoozedAlarm(id: snoozedAlarm.id)
+    }
   }
 }

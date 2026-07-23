@@ -128,9 +128,17 @@ final class MoruAlarmService: ObservableObject {
             secondaryButtonBehavior: .custom
         )
 
+        let ingress = AlarmIngressEnvelope(
+            alarmID: alarmID,
+            routineID: routineID,
+            scheduleID: alarmID,
+            kind: .snooze,
+            fireDate: fireDate,
+            nonce: UUID()
+        )
+
         let metadata = MoruAlarmMetadata(
-            alarmID: alarmID.uuidString,
-            routineID: routineID.uuidString,
+            ingress: ingress,
             routineName: routineName
         )
 
@@ -143,8 +151,7 @@ final class MoruAlarmService: ObservableObject {
         )
 
         let openRoutineIntent = OpenMoruRoutineIntent(
-            alarmID: alarmID.uuidString,
-            routineID: routineID.uuidString
+            ingress: ingress
         )
 
         let configuration =
