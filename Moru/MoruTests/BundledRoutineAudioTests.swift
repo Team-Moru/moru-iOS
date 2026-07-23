@@ -224,6 +224,63 @@ final class BundledRoutineAudioTests: XCTestCase {
     }
   }
 
+  func testCompletedScreenWaitsForDoneCueBeforeStartingNextStep() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let firstStep = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let secondStep = RoutineStep(
+      presetItemID: "HEALTH-01",
+      type: .timer,
+      title: "스트레칭",
+      order: 1
+    )
+    let routine = Routine(name: "음성 루틴", steps: [firstStep, secondStep])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+
+    let transitionTask = Task { @MainActor in
+      await viewModel.finishStepCompletedScreenAfterGuidance()
+    }
+    await drainTasks()
+
+    guard case .stepCompleted(let completedStep) = viewModel.screenState else {
+      XCTFail("The completion screen must remain visible during the done cue.")
+      return
+    }
+    XCTAssertEqual(completedStep.id, firstStep.id)
+
+    player.finishPlayback()
+    await transitionTask.value
+    await drainTasks()
+
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("The next step must start after the done cue finishes.")
+      return
+    }
+    XCTAssertEqual(runningStep.id, secondStep.id)
+  }
+
   func testSpeechAudioSessionStopsGuidanceBeforeActivationAttempt() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
@@ -301,6 +358,10 @@ private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
   func resumeAfterSpeechInput() {
     resumeCallCount += 1
     isSuspendedForSpeechInput = false
+  }
+
+  func finishPlayback() {
+    playbackState.update(isPlaying: false)
   }
 }
 

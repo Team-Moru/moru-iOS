@@ -24,6 +24,7 @@ final class RoutineGuidanceCoordinator {
   private let delay: any RoutineGuidanceDelaying
 
   private var generation = 0
+  private var pendingPlaybackGeneration: Int?
   private var playTask: Task<Void, Never>?
   private var reminderTask: Task<Void, Never>?
 
@@ -51,6 +52,7 @@ final class RoutineGuidanceCoordinator {
     }
 
     let activeGeneration = generation
+    pendingPlaybackGeneration = activeGeneration
     playTask = Task { [weak self] in
       guard let self, activeGeneration == generation else {
         return
@@ -61,6 +63,7 @@ final class RoutineGuidanceCoordinator {
         voiceCode: voiceCode,
         kind: .intro
       )
+      finishPendingPlayback(for: activeGeneration)
     }
 
     guard let estimatedSeconds = step.estimatedSeconds, estimatedSeconds > 0 else {
@@ -99,6 +102,7 @@ final class RoutineGuidanceCoordinator {
     }
 
     let activeGeneration = generation
+    pendingPlaybackGeneration = activeGeneration
     playTask = Task { [weak self] in
       guard let self, activeGeneration == generation else {
         return
@@ -109,6 +113,14 @@ final class RoutineGuidanceCoordinator {
         voiceCode: voiceCode,
         kind: .done
       )
+      finishPendingPlayback(for: activeGeneration)
+    }
+  }
+
+  func waitUntilCurrentCueFinishes() async throws {
+    while pendingPlaybackGeneration == generation || playbackState.isPlaying {
+      try Task.checkCancellation()
+      try await Task.sleep(for: .milliseconds(50))
     }
   }
 
@@ -116,8 +128,17 @@ final class RoutineGuidanceCoordinator {
     stopCurrentCue()
   }
 
+  private func finishPendingPlayback(for playbackGeneration: Int) {
+    guard pendingPlaybackGeneration == playbackGeneration else {
+      return
+    }
+
+    pendingPlaybackGeneration = nil
+  }
+
   private func stopCurrentCue() {
     generation += 1
+    pendingPlaybackGeneration = nil
     playTask?.cancel()
     playTask = nil
     reminderTask?.cancel()

@@ -69,7 +69,7 @@ struct RoutinePlayerView: View {
                 stepTitle: step.title,
                 isGuidancePlaying: viewModel.isGuidancePlaying
             ) {
-                viewModel.finishStepCompletedScreen()
+                await viewModel.finishStepCompletedScreenAfterGuidance()
             }
 
         case .summary(let summary):
