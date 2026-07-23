@@ -327,8 +327,7 @@ final class RouterRuntimeContractTests: XCTestCase {
     )
     let coordinator = AppNavigationCoordinator()
     let sessionStore = SessionStore(
-      localProfileRepository: localProfileRepository,
-      routineRepository: routineRepository
+      localProfileRepository: localProfileRepository
     )
 
     return (

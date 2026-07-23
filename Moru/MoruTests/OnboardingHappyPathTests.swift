@@ -55,10 +55,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertNil(savedRoutine.sync?.lastSyncedAt)
     XCTAssertNil(savedRoutine.sync?.remoteRevision)
     XCTAssertTrue(
-      SessionStore.isOnboardingComplete(
-        profile: savedProfile,
-        activeRoutines: activeRoutines
-      )
+      SessionStore.isSessionReady(profile: savedProfile)
     )
   }
 
@@ -358,8 +355,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       let container = try ModelContainer.moruContainer(storeURL: storeURL)
       let dependencies = DependencyContainer.local(modelContext: container.mainContext)
       let sessionStore = SessionStore(
-        localProfileRepository: dependencies.localProfileRepository,
-        routineRepository: dependencies.routineRepository
+        localProfileRepository: dependencies.localProfileRepository
       )
 
       sessionStore.load()

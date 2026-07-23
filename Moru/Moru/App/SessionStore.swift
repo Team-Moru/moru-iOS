@@ -19,7 +19,6 @@ nonisolated final class SessionStore: ObservableObject {
   let objectWillChange = ObservableObjectPublisher()
 
   private let localProfileRepository: any LocalProfileRepository
-  private let routineRepository: any RoutineRepository
 
   private(set) var profile: LocalProfile? {
     willSet {
@@ -35,19 +34,16 @@ nonisolated final class SessionStore: ObservableObject {
 
   @MainActor
   init(
-    localProfileRepository: any LocalProfileRepository,
-    routineRepository: any RoutineRepository
+    localProfileRepository: any LocalProfileRepository
   ) {
     self.localProfileRepository = localProfileRepository
-    self.routineRepository = routineRepository
   }
 
   @MainActor
   func load() {
     do {
       profile = try localProfileRepository.fetchProfile()
-      let activeRoutines = try routineRepository.fetchActiveRoutines()
-      phase = Self.phase(profile: profile, activeRoutines: activeRoutines)
+      phase = Self.phase(profile: profile)
     } catch {
       profile = nil
       phase = .failed(error.localizedDescription)
@@ -59,9 +55,8 @@ nonisolated final class SessionStore: ObservableObject {
   func createDefaultProfile() throws -> LocalProfile {
     do {
       let profile = try localProfileRepository.loadOrCreateDefaultProfile()
-      let activeRoutines = try routineRepository.fetchActiveRoutines()
       self.profile = profile
-      phase = Self.phase(profile: profile, activeRoutines: activeRoutines)
+      phase = Self.phase(profile: profile)
       return profile
     } catch {
       profile = nil
@@ -70,24 +65,12 @@ nonisolated final class SessionStore: ObservableObject {
     }
   }
 
-  static func isOnboardingComplete(
-    profile: LocalProfile?,
-    activeRoutines: [Routine]
-  ) -> Bool {
-    guard profile != nil else {
-      return false
-    }
-
-    return activeRoutines.contains { routine in
-      routine.isActive && routine.alarmSchedule?.isEnabled == true
-    }
+  static func isSessionReady(profile: LocalProfile?) -> Bool {
+    profile != nil
   }
 
-  private static func phase(
-    profile: LocalProfile?,
-    activeRoutines: [Routine]
-  ) -> Phase {
-    isOnboardingComplete(profile: profile, activeRoutines: activeRoutines)
+  private static func phase(profile: LocalProfile?) -> Phase {
+    isSessionReady(profile: profile)
       ? .ready
       : .onboardingRequired
   }

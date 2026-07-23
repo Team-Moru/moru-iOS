@@ -49,15 +49,18 @@ struct HomeRoutineLaunchBoundary {
 
 struct HomeView: View {
   static let rootAccessibilityIdentifier = "home.root"
+  static let emptyCreateRoutineAccessibilityIdentifier =
+    "home.empty.create-routine"
 
   private let routineLaunchBoundary: HomeRoutineLaunchBoundary
   private let refreshToken: Int
   private let routineSettingContent: AnyView
+  private let routineCreationContent: AnyView
   private let clearsRoutineLaunchMessageOnRefresh: Bool
 
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var viewModel: HomeViewModel
-  @State private var isRoutineSettingPresented = false
+  @State private var presentedRoutineSheet: HomeRoutineSheet?
   @State private var routineLaunchMessage: String?
 
   init(
@@ -65,11 +68,13 @@ struct HomeView: View {
     onStartRoutine: @escaping RoutineLaunchHandler,
     refreshToken: Int,
     routineSettingContent: AnyView,
+    routineCreationContent: AnyView? = nil,
     initialRoutineLaunchMessage: String? = nil
   ) {
     self.routineLaunchBoundary = HomeRoutineLaunchBoundary(onStartRoutine: onStartRoutine)
     self.refreshToken = refreshToken
     self.routineSettingContent = routineSettingContent
+    self.routineCreationContent = routineCreationContent ?? routineSettingContent
     self.clearsRoutineLaunchMessageOnRefresh = initialRoutineLaunchMessage == nil
     _viewModel = State(initialValue: viewModel)
     _routineLaunchMessage = State(initialValue: initialRoutineLaunchMessage)
@@ -91,8 +96,8 @@ struct HomeView: View {
           homeContent(content)
         case .empty:
           weatherCard
-          HomeEmptyView(onOpenRoutineSettings: {
-            isRoutineSettingPresented = true
+          HomeEmptyView(onCreateRoutine: {
+            presentedRoutineSheet = .create
           })
         case .failed(let failure, let previousContent):
           if let previousContent {
@@ -116,10 +121,15 @@ struct HomeView: View {
       }
       viewModel.load()
     }
-    .sheet(isPresented: $isRoutineSettingPresented, onDismiss: {
+    .sheet(item: $presentedRoutineSheet, onDismiss: {
       viewModel.load()
-    }) {
-      routineSettingContent
+    }) { sheet in
+      switch sheet {
+      case .settings:
+        routineSettingContent
+      case .create:
+        routineCreationContent
+      }
     }
   }
 
@@ -143,7 +153,7 @@ struct HomeView: View {
     CurrentRoutineCard(
       routine: content.todayRoutine,
       onTap: {
-        isRoutineSettingPresented = true
+        presentedRoutineSheet = .settings
       },
       onStart: {
         guard let routineID = content.todayRoutine?.id else {
@@ -158,7 +168,7 @@ struct HomeView: View {
     HomeActiveRoutineSection(
       routines: content.activeRoutines,
       onOpenSettings: { _ in
-        isRoutineSettingPresented = true
+        presentedRoutineSheet = .settings
       },
       onStartRoutine: startRoutine
     )
@@ -201,6 +211,15 @@ struct HomeView: View {
       startPoint: UnitPoint(x: 0.5, y: 0),
       endPoint: UnitPoint(x: 0.5, y: 1)
     )
+  }
+}
+
+private enum HomeRoutineSheet: String, Identifiable {
+  case settings
+  case create
+
+  var id: String {
+    rawValue
   }
 }
 
@@ -413,7 +432,7 @@ private struct HomeRefreshIndicator: View {
 }
 
 private struct HomeEmptyView: View {
-  let onOpenRoutineSettings: () -> Void
+  let onCreateRoutine: () -> Void
 
   var body: some View {
     VStack(spacing: AppSpacing.md) {
@@ -421,16 +440,19 @@ private struct HomeEmptyView: View {
         .font(AppFont.title1SemiBold)
         .foregroundStyle(AppColor.orange300)
 
-      Text("아직 설정한 루틴이 없어요.")
+      Text("아직 만든 루틴이 없어요.")
         .font(AppFont.heading3SemiBold)
         .foregroundStyle(AppColor.moruTextPrimary)
 
-      Text("루틴 탭에서 아침 루틴을 만들어 보세요.")
+      Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
         .font(AppFont.label1NormalMedium)
         .foregroundStyle(AppColor.moruTextSecondary)
         .multilineTextAlignment(.center)
 
-      MoruButton("루틴 설정하기", style: .secondary, action: onOpenRoutineSettings)
+      MoruButton("새 루틴 만들기", style: .secondary, action: onCreateRoutine)
+        .accessibilityIdentifier(
+          HomeView.emptyCreateRoutineAccessibilityIdentifier
+        )
     }
     .frame(maxWidth: .infinity, minHeight: 320)
     .padding(.horizontal, AppSpacing.screenHorizontal)

@@ -54,6 +54,15 @@ final class RoutineSettingViewModel {
     RoutineDraftState(title: "새 루틴")
   }
 
+  func initialDraft(for entryPoint: RoutineSettingEntryPoint) -> RoutineDraftState? {
+    switch entryPoint {
+    case .list:
+      nil
+    case .newRoutine:
+      makeNewDraft()
+    }
+  }
+
   func makeDraft(for routineID: UUID) -> RoutineDraftState? {
     guard let routine = try? routineRepository.routine(id: routineID) else {
       return nil

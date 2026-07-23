@@ -92,6 +92,22 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
+  func testSessionEmptyStatesRenderAtReferenceAccessibilitySizes() throws {
+    for variant in [VisualVariant.lightMedium, .lightAccessibility3] {
+      try render(
+        mainScreen(emptyHomeView(), selection: .home),
+        filename: "moru-pr50-session-empty-home-\(variant.filenameSuffix).png",
+        variant: variant
+      )
+      try render(
+        mainScreen(emptyRoutineView(), selection: .routine),
+        filename: "moru-pr50-session-empty-routine-\(variant.filenameSuffix).png",
+        variant: variant
+      )
+    }
+  }
+
+  @MainActor
   func testMainScreenAccessibilityIdentifierContractsAreUnique() throws {
     let rootIdentifiers = [
       HomeView.rootAccessibilityIdentifier,
@@ -109,6 +125,18 @@ final class FinalScreenVisualTests: XCTestCase {
     XCTAssertTrue(rootIdentifiers.allSatisfy { !$0.isEmpty })
     XCTAssertTrue(tabIdentifiers.allSatisfy { $0.hasPrefix("app.tab.") })
     XCTAssertEqual(MainTabState.availableTabs.map(\.title), ["홈", "루틴", "이력", "마이"])
+    XCTAssertEqual(
+      HomeView.emptyCreateRoutineAccessibilityIdentifier,
+      "home.empty.create-routine"
+    )
+    XCTAssertEqual(
+      RoutineSettingView.emptyCreateRoutineAccessibilityIdentifier,
+      "routine.empty.create-routine"
+    )
+    XCTAssertEqual(
+      RoutineSettingView.addRoutineAccessibilityIdentifier,
+      "routine.add"
+    )
   }
 
   @MainActor
@@ -127,6 +155,25 @@ final class FinalScreenVisualTests: XCTestCase {
   @MainActor
   private func routineView() -> some View {
     RoutineSettingView(dependencies: .homePreview)
+  }
+
+  @MainActor
+  private func emptyHomeView() -> some View {
+    let viewModel = HomeViewModel(loadHomeRoutinesUseCase: VisualEmptyHomeUseCase())
+    viewModel.load()
+
+    return HomeView(
+      viewModel: viewModel,
+      onStartRoutine: { _ in .started },
+      refreshToken: 0,
+      routineSettingContent: AnyView(EmptyView()),
+      routineCreationContent: AnyView(EmptyView())
+    )
+  }
+
+  @MainActor
+  private func emptyRoutineView() -> some View {
+    RoutineSettingView(dependencies: .mock())
   }
 
   @MainActor
@@ -387,6 +434,14 @@ private enum VisualBaseline {
       "AAAAgIAAwATABIIBxBDUhNAI8KCCQMgQySgnEA8BjwgPCC8IhwAwR1ANEAcwB1ANEAMwD1APYgDJZMBgIAGAAQ==",
     "moru-pr44-bundled-voices-light-AX3.png":
       "AAAAgIAAwATABMgByQb2qfap9rnTFNII0zDUSNUB0gDk5NsIyQDIsARQwoDywAswBxAPAA8KzwjCPMo8IAGAAQ==",
+    "moru-pr50-session-empty-home-light-M.png":
+      "AACAAAADaAMAA0AAAIADAAMwDUg9QDGwBocGgwBGAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEyJsyGTIAAAAAA==",
+    "moru-pr50-session-empty-home-light-AX3.png":
+      "AACAACVPUpNSoyJOBgAGAAaAOyAzODKEOaZ1GX2RO7IRGh7DGsMBH0AAAAAAAQAAAAAAAAAAEiJkyGTIAAAAAA==",
+    "moru-pr50-session-empty-routine-light-M.png":
+      "AAAAACAAwADAACAAAAAAgAMAAwANSDygOZMGgwaHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAESJsyGTIAAAAAA==",
+    "moru-pr50-session-empty-routine-light-AX3.png":
+      "AAAAADgAwADAAPAACkAGgAYABoA7IDM4MKQZpnUZbZE7sgE6HsMawwE+AAAAAAAAAAAAAAAAEiJkyGTIAAAAAA==",
   ]
 }
 
@@ -489,6 +544,23 @@ private final class VisualHomeUseCase: LoadHomeRoutinesUseCaseProtocol {
         currentDays: 4,
         bestDays: 12,
         completedWeekdays: [.monday, .tuesday, .wednesday, .thursday]
+      )
+    )
+  }
+}
+
+@MainActor
+private final class VisualEmptyHomeUseCase: LoadHomeRoutinesUseCaseProtocol {
+  func execute() throws -> HomeRoutineLoadResult {
+    HomeRoutineLoadResult(
+      profile: LocalProfile(displayName: "모루"),
+      todayRoutine: nil,
+      manualRoutines: [],
+      todayRunsByRoutineID: [:],
+      streak: HomeRoutineStreak(
+        currentDays: 0,
+        bestDays: 0,
+        completedWeekdays: []
       )
     )
   }
