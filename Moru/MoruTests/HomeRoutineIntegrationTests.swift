@@ -21,6 +21,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
 
     XCTAssertEqual(viewModel.state.loadState, .content)
     XCTAssertEqual(viewModel.state.todayRoutine?.id, mondayRoutine.id)
+    XCTAssertEqual(viewModel.state.activeRoutines.map(\.id), [tuesdayRoutine.id])
   }
 
   @MainActor
@@ -36,12 +37,21 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       weekdays: [.monday],
       steps: []
     )
-    let viewModel = makeViewModel(routines: [disabledRoutine, emptyRoutine], now: now)
+    let inactiveRoutine = makeRoutine(
+      name: "비활성 루틴",
+      weekdays: [.monday],
+      isActive: false
+    )
+    let viewModel = makeViewModel(
+      routines: [disabledRoutine, emptyRoutine, inactiveRoutine],
+      now: now
+    )
 
     viewModel.load()
 
     XCTAssertNil(viewModel.state.todayRoutine)
-    XCTAssertEqual(viewModel.state.manualRoutines.map(\.id), [disabledRoutine.id])
+    XCTAssertEqual(viewModel.state.activeRoutines.map(\.id), [disabledRoutine.id])
+    XCTAssertEqual(viewModel.state.activeRoutines.first?.scheduleText, "월 07:00 · 알람 꺼짐")
   }
 
   @MainActor
@@ -104,14 +114,121 @@ final class HomeRoutineIntegrationTests: XCTestCase {
   @MainActor
   func testActiveRoutineRemainsAvailableForManualLaunchWhenNotScheduledToday() {
     let now = fixtureDate("2026-07-14T08:00:00Z")
-    let manualRoutine = makeRoutine(name: "월요일 루틴", weekdays: [.monday])
-    let viewModel = makeViewModel(routines: [manualRoutine], now: now)
+    let firstRoutine = makeRoutine(name: "월요일 루틴", weekdays: [.monday])
+    let secondRoutine = makeRoutine(
+      name: "수요일 루틴",
+      weekdays: [.wednesday],
+      createdAt: fixtureDate("2026-07-02T00:00:00Z")
+    )
+    let viewModel = makeViewModel(routines: [secondRoutine, firstRoutine], now: now)
 
     viewModel.load()
 
     XCTAssertEqual(viewModel.state.loadState, .content)
     XCTAssertNil(viewModel.state.todayRoutine)
-    XCTAssertEqual(viewModel.state.manualRoutines.map(\.id), [manualRoutine.id])
+    XCTAssertEqual(
+      viewModel.state.activeRoutines.map(\.id),
+      [firstRoutine.id, secondRoutine.id]
+    )
+  }
+
+  @MainActor
+  func testRepresentativeRoutineIsExcludedFromActiveRoutineList() {
+    let now = fixtureDate("2026-07-13T08:00:00Z")
+    let representative = makeRoutine(
+      name: "대표 루틴",
+      hour: 6,
+      createdAt: fixtureDate("2026-07-01T00:00:00Z")
+    )
+    let firstActive = makeRoutine(
+      name: "두 번째 루틴",
+      hour: 7,
+      createdAt: fixtureDate("2026-07-02T00:00:00Z")
+    )
+    let secondActive = makeRoutine(
+      name: "세 번째 루틴",
+      hour: 8,
+      createdAt: fixtureDate("2026-07-03T00:00:00Z")
+    )
+    let viewModel = makeViewModel(
+      routines: [secondActive, representative, firstActive],
+      now: now
+    )
+
+    viewModel.load()
+
+    XCTAssertEqual(viewModel.state.todayRoutine?.id, representative.id)
+    XCTAssertEqual(
+      viewModel.state.activeRoutines.map(\.id),
+      [firstActive.id, secondActive.id]
+    )
+  }
+
+  @MainActor
+  func testEveryRoutineUsesItsLatestTodayRunForProgress() throws {
+    let now = fixtureDate("2026-07-13T08:00:00Z")
+    let primary = makeRoutine(
+      name: "대표 루틴",
+      hour: 6,
+      steps: [
+        RoutineStep(type: .confirm, title: "첫 단계", order: 0, estimatedSeconds: 60),
+        RoutineStep(type: .timer, title: "둘째 단계", order: 1, estimatedSeconds: 120),
+      ],
+      createdAt: fixtureDate("2026-07-01T00:00:00Z")
+    )
+    let secondary = makeRoutine(
+      name: "활성 루틴",
+      hour: 7,
+      steps: [
+        RoutineStep(type: .confirm, title: "하나", order: 0, estimatedSeconds: 60),
+        RoutineStep(type: .confirm, title: "둘", order: 1, estimatedSeconds: 60),
+        RoutineStep(type: .confirm, title: "셋", order: 2, estimatedSeconds: 60),
+      ],
+      createdAt: fixtureDate("2026-07-02T00:00:00Z")
+    )
+    let primaryRun = RoutineRun(
+      id: fixtureUUID("00000000-0000-0000-0000-000000000011"),
+      routine: primary,
+      startedAt: fixtureDate("2026-07-13T06:05:00Z"),
+      results: Array(completedResults(for: primary).prefix(1))
+    )
+    let olderSecondaryRun = RoutineRun(
+      id: fixtureUUID("00000000-0000-0000-0000-000000000012"),
+      routine: secondary,
+      startedAt: fixtureDate("2026-07-13T07:05:00Z"),
+      completedAt: fixtureDate("2026-07-13T07:10:00Z"),
+      results: completedResults(for: secondary)
+    )
+    let latestSecondaryRun = RoutineRun(
+      id: fixtureUUID("00000000-0000-0000-0000-000000000013"),
+      routine: secondary,
+      startedAt: fixtureDate("2026-07-13T07:30:00Z"),
+      results: Array(completedResults(for: secondary).prefix(2))
+    )
+    let yesterdayRun = RoutineRun(
+      routine: secondary,
+      startedAt: fixtureDate("2026-07-12T07:30:00Z"),
+      completedAt: fixtureDate("2026-07-12T07:35:00Z"),
+      results: completedResults(for: secondary)
+    )
+    let runs = [olderSecondaryRun, yesterdayRun, primaryRun, latestSecondaryRun]
+    let useCase = makeUseCase(routines: [secondary, primary], runs: runs, now: now)
+
+    let result = try useCase.execute()
+
+    XCTAssertEqual(result.todayRunsByRoutineID[primary.id]?.id, primaryRun.id)
+    XCTAssertEqual(result.todayRunsByRoutineID[secondary.id]?.id, latestSecondaryRun.id)
+
+    let viewModel = HomeViewModel(loadHomeRoutinesUseCase: useCase)
+    viewModel.load()
+
+    XCTAssertEqual(viewModel.state.todayRoutine?.progress, 0.5)
+    XCTAssertEqual(viewModel.state.todayRoutine?.completionText, "1/2 완료")
+    XCTAssertEqual(viewModel.state.activeRoutines.first?.id, secondary.id)
+    XCTAssertEqual(viewModel.state.activeRoutines.first?.progress, 2.0 / 3.0)
+    XCTAssertEqual(viewModel.state.activeRoutines.first?.completionText, "2/3 완료")
+    XCTAssertEqual(viewModel.state.activeRoutines.first?.scheduleText, "월 07:00")
+    XCTAssertEqual(viewModel.state.activeRoutines.first?.stepSummaryText, "3개 스텝 · 3분")
   }
 
   @MainActor
@@ -126,7 +243,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
 
     XCTAssertEqual(viewModel.state.loadState, .empty)
     XCTAssertEqual(viewModel.state.userName, "")
-    XCTAssertTrue(viewModel.state.manualRoutines.isEmpty)
+    XCTAssertTrue(viewModel.state.activeRoutines.isEmpty)
   }
 
   @MainActor
@@ -171,7 +288,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       profile: LocalProfile(displayName: "모루"),
       todayRoutine: routine,
       manualRoutines: [routine],
-      todayRun: nil,
+      todayRunsByRoutineID: [:],
       streak: HomeRoutineStreak(
         currentDays: 1,
         bestDays: 1,
@@ -189,7 +306,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
 
     XCTAssertEqual(viewModel.state.loadState, .failed)
     XCTAssertEqual(viewModel.state.todayRoutine?.id, routine.id)
-    XCTAssertEqual(viewModel.state.manualRoutines.map(\.id), [routine.id])
+    XCTAssertTrue(viewModel.state.activeRoutines.isEmpty)
     XCTAssertEqual(
       viewModel.state.failure,
       .localRoutineDataUnavailable(
@@ -490,6 +607,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     hour: Int = 7,
     minute: Int = 0,
     alarmEnabled: Bool = true,
+    isActive: Bool = true,
     steps: [RoutineStep] = [
       RoutineStep(type: .confirm, title: "스텝", order: 0, estimatedSeconds: 60),
     ],
@@ -505,6 +623,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
         weekdays: weekdays,
         isEnabled: alarmEnabled
       ),
+      isActive: isActive,
       createdAt: createdAt,
       updatedAt: createdAt
     )

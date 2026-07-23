@@ -42,6 +42,17 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
+  func testActiveRoutineSectionRendersAtReferenceAccessibilitySizes() throws {
+    for variant in VisualVariant.allCases {
+      try render(
+        activeRoutineSection(),
+        filename: "moru-pr34-home-active-routines-\(variant.filenameSuffix).png",
+        variant: variant
+      )
+    }
+  }
+
+  @MainActor
   func testMainScreenAccessibilityIdentifierContractsAreUnique() throws {
     let rootIdentifiers = [
       HomeView.rootAccessibilityIdentifier,
@@ -108,6 +119,39 @@ final class FinalScreenVisualTests: XCTestCase {
         routine: .placeholder,
         onTap: {},
         onStart: {}
+      )
+      .padding(AppSpacing.screenHorizontal)
+    }
+    .background(AppColor.babyBlue50)
+  }
+
+  @MainActor
+  private func activeRoutineSection() -> some View {
+    var inProgressRoutine = HomeRoutineState.placeholder
+    inProgressRoutine.id = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
+    inProgressRoutine.title = "출근 준비 루틴"
+    inProgressRoutine.scheduleText = "평일 07:30"
+    inProgressRoutine.stepSummaryText = "4개 스텝 · 18분"
+    inProgressRoutine.completionText = "2/4 완료"
+    inProgressRoutine.statusText = "진행 중"
+    inProgressRoutine.progressText = "50%"
+    inProgressRoutine.progress = 0.5
+
+    var readyRoutine = HomeRoutineState.placeholder
+    readyRoutine.id = UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+    readyRoutine.title = "주말 리셋 루틴"
+    readyRoutine.scheduleText = "주말 08:00"
+    readyRoutine.stepSummaryText = "3개 스텝 · 12분"
+    readyRoutine.completionText = "0/3 완료"
+    readyRoutine.statusText = "진행 전"
+    readyRoutine.progressText = "0%"
+    readyRoutine.progress = 0
+
+    return ScrollView {
+      HomeActiveRoutineSection(
+        routines: [inProgressRoutine, readyRoutine],
+        onOpenSettings: { _ in },
+        onStartRoutine: { _ in }
       )
       .padding(AppSpacing.screenHorizontal)
     }
@@ -276,6 +320,10 @@ private enum VisualBaseline {
       "AAAAAAQAwATBBHCYcph5GAYC8ITQBNAM0AzUDNSM6QzwDIIAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr32-final-current-routine-light-AX3.png":
       "AAAAABAQyoLqTMpIdlByQFCAVIB1APUw4GjgcOBoyjAgInSGEIY5CgGabmZ7ZjWaPArVkvmSMlIyKiAieUYZQg==",
+    "moru-pr34-home-active-routines-light-M.png":
+      "AAAAABAAwgCCAlAFZANCB0ANYANgyWDJKwNQB1QHJANBBUADYAlkyGABgAIAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "moru-pr34-home-active-routines-light-AX3.png":
+      "AAAAABaAyADIACYjSYdJh2ADVgNSA1oDCgNgGXIZUANwAWM5YTF0AQAHbYVlh2ADVANWA1IDIAtgDVADUANkAQ==",
   ]
 }
 
@@ -373,7 +421,7 @@ private final class VisualHomeUseCase: LoadHomeRoutinesUseCaseProtocol {
       profile: LocalProfile(displayName: "다인"),
       todayRoutine: routine,
       manualRoutines: [routine],
-      todayRun: run,
+      todayRunsByRoutineID: [routine.id: run],
       streak: HomeRoutineStreak(
         currentDays: 4,
         bestDays: 12,

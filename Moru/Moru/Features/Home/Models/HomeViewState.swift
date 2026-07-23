@@ -96,8 +96,8 @@ enum HomeViewState: Equatable {
     contentState?.todayRoutine
   }
 
-  var manualRoutines: [HomeRoutineState] {
-    contentState?.manualRoutines ?? []
+  var activeRoutines: [HomeRoutineState] {
+    contentState?.activeRoutines ?? []
   }
 
   var todayProgress: HomeProgressState {
@@ -140,7 +140,7 @@ enum HomeViewState: Equatable {
 struct HomeContentState: Equatable {
   var userName: String
   var todayRoutine: HomeRoutineState?
-  var manualRoutines: [HomeRoutineState]
+  var activeRoutines: [HomeRoutineState]
   var todayProgress: HomeProgressState
   var streak: HomeStreakState
   var weather: HomeWeatherState = .notRequested
@@ -214,18 +214,26 @@ struct HomeRoutineState: Equatable, Identifiable {
   var id: UUID
   var title: String
   var statusText: String
+  var scheduleText: String
+  var stepSummaryText: String
+  var completionText: String
   var estimatedDurationText: String
   var progressText: String
   var progress: Double
+  var isActive: Bool
   var steps: [HomeRoutineStepState]
 
   static let placeholder = HomeRoutineState(
     id: UUID(),
     title: "기본 루틴",
     statusText: "진행 완료",
+    scheduleText: "매일 06:15",
+    stepSummaryText: "4개 스텝 · 20분",
+    completionText: "4/4 완료",
     estimatedDurationText: "소요 시간 15분",
     progressText: "100%",
     progress: 1,
+    isActive: true,
     steps: [
       HomeRoutineStepState(title: "물 한 잔 마시기", detail: "1:00", isCompleted: true),
       HomeRoutineStepState(title: "스트레칭 10분", detail: "11:19", isCompleted: true),

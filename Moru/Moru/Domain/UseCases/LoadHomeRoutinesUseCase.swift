@@ -15,7 +15,7 @@ struct HomeRoutineLoadResult: Equatable {
   let profile: LocalProfile?
   let todayRoutine: Routine?
   let manualRoutines: [Routine]
-  let todayRun: RoutineRun?
+  let todayRunsByRoutineID: [UUID: RoutineRun]
   let streak: HomeRoutineStreak
 }
 
@@ -58,7 +58,11 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
       profile: profile,
       todayRoutine: todayRoutine,
       manualRoutines: manualRoutines,
-      todayRun: latestTodayRun(for: todayRoutine, from: runs, currentDate: currentDate),
+      todayRunsByRoutineID: latestTodayRuns(
+        for: manualRoutines,
+        from: runs,
+        currentDate: currentDate
+      ),
       streak: makeStreak(from: runs, currentDate: currentDate)
     )
   }
@@ -109,25 +113,20 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
       .first
   }
 
-  private func latestTodayRun(
-    for routine: Routine?,
+  private func latestTodayRuns(
+    for routines: [Routine],
     from runs: [RoutineRun],
     currentDate: Date
-  ) -> RoutineRun? {
-    guard let routine,
-          let endOfDay = calendar.date(
-            byAdding: .day,
-            value: 1,
-            to: calendar.startOfDay(for: currentDate)
-          ) else {
-      return nil
+  ) -> [UUID: RoutineRun] {
+    let startOfDay = calendar.startOfDay(for: currentDate)
+    guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else {
+      return [:]
     }
 
-    let startOfDay = calendar.startOfDay(for: currentDate)
-
-    return runs
+    let routineIDs = Set(routines.map(\.id))
+    let todayRuns = runs
       .filter { run in
-        run.routineID == routine.id
+        routineIDs.contains(run.routineID)
           && run.startedAt >= startOfDay
           && run.startedAt < endOfDay
       }
@@ -138,7 +137,12 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
 
         return lhs.id.uuidString < rhs.id.uuidString
       }
-      .first
+
+    return todayRuns.reduce(into: [:]) { result, run in
+      if result[run.routineID] == nil {
+        result[run.routineID] = run
+      }
+    }
   }
 
   private func makeStreak(from runs: [RoutineRun], currentDate: Date) -> HomeRoutineStreak {
