@@ -19,7 +19,6 @@ struct DependencyContainer {
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
-  let alarmNotificationDelegate: AlarmNotificationDelegate?
   let voiceAvailabilityProbe: any VoiceAvailabilityProbing
   let profileAlarmService: (any ProfileAlarmServicing)?
   let routineGuidancePlayer: (any RoutineGuidancePlaying)?
@@ -38,7 +37,6 @@ struct DependencyContainer {
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
-    alarmNotificationDelegate: AlarmNotificationDelegate? = nil,
     voiceAvailabilityProbe: any VoiceAvailabilityProbing =
       UnavailableVoiceAvailabilityProbe(),
     profileAlarmService: (any ProfileAlarmServicing)? = nil,
@@ -57,7 +55,6 @@ struct DependencyContainer {
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
-    self.alarmNotificationDelegate = alarmNotificationDelegate
     self.voiceAvailabilityProbe = voiceAvailabilityProbe
     self.profileAlarmService = profileAlarmService
     self.routineGuidancePlayer = routineGuidancePlayer
@@ -87,7 +84,6 @@ struct DependencyContainer {
       modelContext: modelContext
     )
     let alarmKitScheduler = AlarmKitSchedulingAdapter()
-    let notificationDelegate = AlarmNotificationDelegate()
     let notificationScheduler = UserNotificationAlarmSchedulingAdapter()
     let alarmMutationGate = AlarmMutationGate()
     let alarmScheduleMutator = DefaultAlarmScheduleMutationCoordinator(
@@ -125,7 +121,6 @@ struct DependencyContainer {
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
       alarmRuntimeHandler: alarmRuntimeHandler,
-      alarmNotificationDelegate: notificationDelegate,
       voiceAvailabilityProbe: voiceAvailabilityProbe,
       profileAlarmService: profileAlarmService,
       routineGuidancePlayer: guidancePlayer,

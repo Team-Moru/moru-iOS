@@ -33,7 +33,7 @@ final class AlarmNotificationDelegate: NSObject, UNUserNotificationCenterDelegat
       return
     }
 
-    MoruAlarmRouteStore.savePendingEnvelope(envelope)
+    AlarmIngressOccurrenceStore.shared.savePendingEnvelope(envelope)
   }
 
   nonisolated static func makeIngress(
