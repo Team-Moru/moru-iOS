@@ -473,7 +473,7 @@ final class AlarmSchedulingFoundationTests: XCTestCase {
         PersistedLocalProfile(
           id: profileID,
           displayName: "V1 사용자",
-          selectedVoiceID: VoiceProfile.yuna.id,
+          selectedVoiceID: VoiceProfile.aoede.id,
           createdAt: Date(timeIntervalSince1970: 1),
           updatedAt: Date(timeIntervalSince1970: 1)
         )

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct RoutineStepCompletedView: View {
     let stepTitle: String
+    let isGuidancePlaying: Bool
     let onFinish: () -> Void
 
     var body: some View {
@@ -33,6 +34,12 @@ struct RoutineStepCompletedView: View {
                 Text("다음 항목으로 넘어갈게요")
                     .font(AppFont.body1NormalMedium)
                     .foregroundStyle(AppColor.gray350)
+
+                if isGuidancePlaying {
+                    Text("음성 안내 중")
+                        .font(AppFont.caption1SemiBold)
+                        .foregroundStyle(AppColor.gray350)
+                }
             }
 
             Spacer()
@@ -58,6 +65,7 @@ struct RoutineStepCompletedView: View {
 #Preview {
     RoutineStepCompletedView(
         stepTitle: "잠자리 정리하기",
+        isGuidancePlaying: true,
         onFinish: {
             print("다음 루틴 단계로 이동")
         }

@@ -29,8 +29,26 @@ final class RoutinePresetResourceTests: XCTestCase {
 
     XCTAssertEqual(cues.count, 468)
     XCTAssertEqual(Set(cues.map(\.relativePath)).count, 360)
+    XCTAssertEqual(
+      Set(cues.map(\.voiceCode)),
+      Set(VoiceProfile.localVoices.map(\.assetVoiceCode))
+    )
     XCTAssertTrue(cues.allSatisfy { itemIDs.contains($0.itemID) })
     XCTAssertTrue(cues.allSatisfy { loader.resourceURL(for: $0) != nil })
+
+    for itemID in itemIDs {
+      for voice in VoiceProfile.localVoices {
+        for kind in RoutineAudioCueKind.allCases {
+          XCTAssertNotNil(
+            try loader.cue(
+              itemID: itemID,
+              voiceCode: voice.assetVoiceCode,
+              kind: kind
+            )
+          )
+        }
+      }
+    }
   }
 
   func testAudioCueLookupUsesItemVoiceAndKind() throws {

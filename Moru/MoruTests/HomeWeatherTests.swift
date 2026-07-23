@@ -249,7 +249,7 @@ final class HomeWeatherTests: XCTestCase {
       PersistedLocalProfile(
         id: UUID(),
         displayName: "모루",
-        selectedVoiceID: VoiceProfile.yuna.id,
+        selectedVoiceID: VoiceProfile.aoede.id,
         createdAt: now,
         updatedAt: now
       )
@@ -356,7 +356,7 @@ final class HomeWeatherTests: XCTestCase {
       PersistedLocalProfile(
         id: profileID,
         displayName: "기존 사용자",
-        selectedVoiceID: VoiceProfile.yuna.id,
+        selectedVoiceID: VoiceProfile.aoede.id,
         createdAt: now,
         updatedAt: now
       )

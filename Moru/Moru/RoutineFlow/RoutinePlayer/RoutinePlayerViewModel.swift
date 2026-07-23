@@ -47,6 +47,7 @@ final class RoutinePlayerViewModel {
     private let resolver: any ResolveRoutineExecutionUseCaseProtocol
     private let finalizationMode: FinalizationMode
     private let resolutionRequest: ResolveRoutineExecutionRequest
+    private let guidanceCoordinator: RoutineGuidanceCoordinator
     private let presentationToken: UUID
     private let onEvent: RoutinePlayerEventHandler
     private let startedAt: Date
@@ -76,6 +77,7 @@ final class RoutinePlayerViewModel {
         request: TrialRoutineExecutionRequest,
         resolver: any ResolveRoutineExecutionUseCaseProtocol,
         finalizer: any TrialRoutineFinalizing,
+        guidanceCoordinator: RoutineGuidanceCoordinator = RoutineGuidanceCoordinator(),
         presentationToken: UUID,
         onEvent: @escaping RoutinePlayerEventHandler
     ) {
@@ -85,6 +87,7 @@ final class RoutinePlayerViewModel {
             routineID: request.routineID,
             launch: .trial
         )
+        self.guidanceCoordinator = guidanceCoordinator
         self.presentationToken = presentationToken
         self.onEvent = onEvent
         self.startedAt = Date()
@@ -94,6 +97,7 @@ final class RoutinePlayerViewModel {
         request: RegularRoutineExecutionRequest,
         resolver: any ResolveRoutineExecutionUseCaseProtocol,
         finalizer: any RegularRoutineFinalizing,
+        guidanceCoordinator: RoutineGuidanceCoordinator = RoutineGuidanceCoordinator(),
         presentationToken: UUID,
         onEvent: @escaping RoutinePlayerEventHandler
     ) {
@@ -113,6 +117,7 @@ final class RoutinePlayerViewModel {
             routineID: request.routineID,
             launch: launch
         )
+        self.guidanceCoordinator = guidanceCoordinator
         self.presentationToken = presentationToken
         self.onEvent = onEvent
         self.startedAt = Date()
@@ -138,6 +143,10 @@ final class RoutinePlayerViewModel {
         stepResults
             .filter(\.isCompleted)
             .map(\.stepTitle)
+    }
+
+    var isGuidancePlaying: Bool {
+        guidanceCoordinator.isPlaying
     }
     
     func resolveRoutine() {
@@ -165,6 +174,7 @@ final class RoutinePlayerViewModel {
             // 첫 번째 루틴 항목의 시작 시각 저장
             currentStepStartedAt = Date()
             screenState = .running(firstStep)
+            guidanceCoordinator.stepDidStart(firstStep)
             
         case .notFound:
             displayTerminalFailure(.notFound)
@@ -290,6 +300,7 @@ final class RoutinePlayerViewModel {
         currentStepStartedAt = nil
 
         screenState = .stepCompleted(step)
+        guidanceCoordinator.stepDidComplete(step)
     }
     
     /// 현재 항목이 시작된 시각부터 완료 시각까지의 시간을 계산
@@ -336,6 +347,7 @@ final class RoutinePlayerViewModel {
         // 건너뛴 항목의 시작 시각 초기화
         currentStepStartedAt = nil
 
+        guidanceCoordinator.stop()
         moveToNextStep()
     }
     
@@ -364,6 +376,7 @@ final class RoutinePlayerViewModel {
             return
         }
         
+        guidanceCoordinator.stop()
         emitExit(.summaryCTA)
     }
 
@@ -373,7 +386,12 @@ final class RoutinePlayerViewModel {
             return
         }
 
+        guidanceCoordinator.stop()
         emitExit(.summaryRecord(persistedRunID: persistedRunID))
+    }
+
+    func viewDidDisappear() {
+        guidanceCoordinator.stop()
     }
     
     private func requestExitDialog(_ exit: DialogState.Exit) {
@@ -397,6 +415,8 @@ final class RoutinePlayerViewModel {
             return
         }
         
+        guidanceCoordinator.stop()
+
         guard let routine else {
             displayTerminalFailure(.notFound)
             return
@@ -426,9 +446,12 @@ final class RoutinePlayerViewModel {
         currentStepStartedAt = Date()
 
         screenState = .running(steps[nextStepIndex])
+        guidanceCoordinator.stepDidStart(steps[nextStepIndex])
     }
     
     private func finalizeNaturalCompletion() {
+        guidanceCoordinator.stop()
+
         guard let routine else {
             displayTerminalFailure(.notFound)
             return
@@ -542,6 +565,7 @@ final class RoutinePlayerViewModel {
     }
     
     private func displayTerminalFailure(_ reason: RoutineTerminalReason) {
+        guidanceCoordinator.stop()
         screenState = .terminalFailure(reason)
         emit(.terminalFailureDisplayed(reason))
     }
@@ -551,6 +575,7 @@ final class RoutinePlayerViewModel {
             return
         }
         
+        guidanceCoordinator.stop()
         didRequestExit = true
         emit(.exitRequested(exit))
     }

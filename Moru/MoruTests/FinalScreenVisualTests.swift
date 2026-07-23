@@ -81,6 +81,17 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
+  func testBundledVoiceOnboardingRendersAtReferenceAccessibilitySizes() throws {
+    for variant in VisualVariant.allCases {
+      try render(
+        onboardingVoiceView(),
+        filename: "moru-pr44-bundled-voices-\(variant.filenameSuffix).png",
+        variant: variant
+      )
+    }
+  }
+
+  @MainActor
   func testMainScreenAccessibilityIdentifierContractsAreUnique() throws {
     let rootIdentifiers = [
       HomeView.rootAccessibilityIdentifier,
@@ -138,6 +149,22 @@ final class FinalScreenVisualTests: XCTestCase {
     )
     viewModel.loadProfileSettings()
     return ProfileView(viewModel: viewModel)
+  }
+
+  @MainActor
+  private func onboardingVoiceView() -> some View {
+    var draft = OnboardingDraft()
+    draft.previewRoutine = .mockMorningRoutine
+    let viewModel = OnboardingViewModel(
+      draft: draft,
+      step: .voice,
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      completeOnboardingUseCase: VisualCompleteOnboardingUseCase(),
+      voicePreviewPlayer: VisualVoicePreviewPlayer(),
+      onCompleted: { _ in }
+    )
+
+    return OnboardingFlowView(viewModel: viewModel)
   }
 
   @MainActor
@@ -268,7 +295,8 @@ final class FinalScreenVisualTests: XCTestCase {
     XCTAssertLessThanOrEqual(
       distance,
       VisualBaseline.maximumHammingDistance,
-      "Visual regression in \(filename), hash distance: \(distance)",
+      "Visual regression in \(filename), hash distance: \(distance), "
+        + "actual hash: \(actualHash.base64EncodedString())",
       file: file,
       line: line
     )
@@ -355,6 +383,10 @@ private enum VisualBaseline {
       "AAAAAAAAIiEAABAAJVglOAZYALASMAUAAAAAAAAAgEAjAyYTiGbA8ABwBAAAAAAAAADABjAHGvM4B4ACAAAAAA==",
     "moru-pr43-alarm-ring-light-AX3.png":
       "AAAAAAAAQIEEIBM2K4sqGxY2IEhEDAAEAAAAAAAAwCAGky4DKUsBIsBwAHAEAAAAAABAABAHPnM+exAHQAAAAA==",
+    "moru-pr44-bundled-voices-light-M.png":
+      "AAAAgIAAwATABIIBxBDUhNAI8KCCQMgQySgnEA8BjwgPCC8IhwAwR1ANEAcwB1ANEAMwD1APYgDJZMBgIAGAAQ==",
+    "moru-pr44-bundled-voices-light-AX3.png":
+      "AAAAgIAAwATABMgByQb2qfap9rnTFNII0zDUSNUB0gDk5NsIyQDIsARQwoDywAswBxAPAA8KzwjCPMo8IAGAAQ==",
   ]
 }
 
@@ -566,7 +598,7 @@ private final class VisualHistoryUseCase: LoadHistoryUseCaseProtocol {
 
 @MainActor
 private final class VisualProfileUseCase: ProfileSettingsUseCaseProtocol {
-  private var profile = LocalProfile(displayName: "모루 사용자", selectedVoice: .yuna)
+  private var profile = LocalProfile(displayName: "모루 사용자", selectedVoice: .aoede)
 
   func loadProfileSettings() throws -> ProfileSettingsLoadResult {
     ProfileSettingsLoadResult(profile: profile, fallbackNotice: nil)
@@ -594,6 +626,21 @@ private final class VisualVoicePreviewPlayer: VoicePreviewPlaying {
   }
 
   func stopVoicePreview() {}
+}
+
+@MainActor
+private final class VisualCompleteOnboardingUseCase: CompleteOnboardingUseCaseProtocol {
+  func execute(
+    _ request: CompleteOnboardingRequest
+  ) async throws -> CompleteOnboardingResult {
+    let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
+      from: request.suggestionInput
+    )
+    return CompleteOnboardingResult(
+      profile: LocalProfile(selectedVoice: request.selectedVoice),
+      routine: routine
+    )
+  }
 }
 
 @MainActor

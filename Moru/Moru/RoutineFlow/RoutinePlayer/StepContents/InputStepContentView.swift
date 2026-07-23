@@ -7,6 +7,7 @@ import SwiftUI
 
 struct InputStepContentView: View {
   let step: RoutineStep
+  let isGuidancePlaying: Bool
   let speechInputController: SpeechInputController
   let onComplete: (String) -> Void
   @State private var feedbackText: String?
@@ -28,9 +29,11 @@ struct InputStepContentView: View {
         .frame(height: 44)
 
       VStack(spacing: 8) {
-        Text("음성 안내 중")
-          .font(AppFont.caption1SemiBold)
-          .foregroundStyle(AppColor.gray350)
+        if isGuidancePlaying {
+          Text("음성 안내 중")
+            .font(AppFont.caption1SemiBold)
+            .foregroundStyle(AppColor.gray350)
+        }
 
         Text(feedbackText ?? inputGuideText)
           .font(AppFont.body1NormalSemiBold)

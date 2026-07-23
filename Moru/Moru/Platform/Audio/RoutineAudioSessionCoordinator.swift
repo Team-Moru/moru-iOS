@@ -8,11 +8,32 @@ import AVFAudio
 @MainActor
 protocol GuidancePlaybackControlling {
   func stopAndWaitUntilIdle() async
+  func resumeAfterSpeechInput()
 }
 
 @MainActor
-struct NoopGuidancePlaybackController: GuidancePlaybackControlling {
+protocol RoutineGuidancePlaying: GuidancePlaybackControlling {
+  func play(
+    itemID: String,
+    voiceCode: String,
+    kind: RoutineAudioCueKind
+  ) async
+  func stop()
+}
+
+@MainActor
+final class NoopRoutineGuidancePlayer: RoutineGuidancePlaying {
+  func play(
+    itemID: String,
+    voiceCode: String,
+    kind: RoutineAudioCueKind
+  ) async {}
+
+  func stop() {}
+
   func stopAndWaitUntilIdle() async {}
+
+  func resumeAfterSpeechInput() {}
 }
 
 @MainActor
@@ -21,7 +42,7 @@ final class RoutineAudioSessionCoordinator {
   private let audioSession: AVAudioSession
 
   init(
-    guidancePlayback: any GuidancePlaybackControlling = NoopGuidancePlaybackController(),
+    guidancePlayback: any GuidancePlaybackControlling = NoopRoutineGuidancePlayer(),
     audioSession: AVAudioSession = .sharedInstance()
   ) {
     self.guidancePlayback = guidancePlayback
@@ -42,5 +63,6 @@ final class RoutineAudioSessionCoordinator {
 
   func deactivateSpeechInput() {
     try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+    guidancePlayback.resumeAfterSpeechInput()
   }
 }

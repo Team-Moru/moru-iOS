@@ -19,7 +19,7 @@ final class ProfileSettingsTests: XCTestCase {
     let useCase = ProfileSettingsUseCase(
       localProfileRepository: repository,
       voiceAvailabilityProbe: ProfileTestVoiceProbe(
-        availableVoiceIDs: [VoiceProfile.yuna.id]
+        availableVoiceIDs: [VoiceProfile.aoede.id]
       ),
       now: { Date(timeIntervalSince1970: 100) }
     )
@@ -46,25 +46,104 @@ final class ProfileSettingsTests: XCTestCase {
   @MainActor
   func testUnavailableStoredVoiceFallsBackToFirstAvailableLocalVoice() throws {
     let repository = ProfileTestProfileRepository(
-      profile: LocalProfile(selectedVoice: .moru)
+      profile: LocalProfile(
+        selectedVoice: VoiceProfile(
+          id: "legacy-profile-voice",
+          displayName: "이전 목소리",
+          assetVoiceCode: "Legacy"
+        )
+      )
     )
     let useCase = ProfileSettingsUseCase(
       localProfileRepository: repository,
       voiceAvailabilityProbe: ProfileTestVoiceProbe(
-        availableVoiceIDs: [VoiceProfile.sora.id]
+        availableVoiceIDs: [VoiceProfile.charon.id]
       )
     )
 
     let result = try useCase.loadProfileSettings()
 
-    XCTAssertEqual(result.profile.selectedVoice, VoiceProfile.sora)
-    XCTAssertEqual(repository.profile?.selectedVoice, VoiceProfile.sora)
+    XCTAssertEqual(result.profile.selectedVoice, VoiceProfile.charon)
+    XCTAssertEqual(repository.profile?.selectedVoice, VoiceProfile.charon)
     XCTAssertNotNil(result.fallbackNotice)
-    XCTAssertThrowsError(try useCase.selectVoice(VoiceProfile.yuna)) { error in
+    XCTAssertThrowsError(try useCase.selectVoice(VoiceProfile.aoede)) { error in
       XCTAssertEqual(
         error as? ProfileSettingsUseCaseError,
-        .unavailableVoice(VoiceProfile.yuna.id)
+        .unavailableVoice(VoiceProfile.aoede.id)
       )
+    }
+  }
+
+  @MainActor
+  func testEveryBundledVoiceCanBeSelectedAndPersists() throws {
+    let repository = ProfileTestProfileRepository(profile: LocalProfile())
+    let useCase = ProfileSettingsUseCase(
+      localProfileRepository: repository,
+      voiceAvailabilityProbe: ProfileTestVoiceProbe(
+        availableVoiceIDs: Set(VoiceProfile.localVoices.map(\.id))
+      )
+    )
+
+    for voice in VoiceProfile.localVoices {
+      let result = try useCase.selectVoice(voice)
+
+      XCTAssertEqual(result.profile.selectedVoice, voice)
+      XCTAssertEqual(repository.profile?.selectedVoice, voice)
+    }
+  }
+
+  @MainActor
+  func testV3LegacyVoiceIDsReadRepairToBundledAoede() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: directory,
+      withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let legacyIDs = ["Yuna", "Sora", "moru-local", "moru.ko.yuna", "moru.ko.sora"]
+    for (index, legacyID) in legacyIDs.enumerated() {
+      let storeURL = directory.appendingPathComponent("legacy-\(index).store")
+
+      do {
+        let schema = Schema(versionedSchema: MoruSchemaV3.self)
+        let configuration = ModelConfiguration(
+          "Moru",
+          schema: schema,
+          url: storeURL,
+          cloudKitDatabase: .none
+        )
+        let container = try ModelContainer(
+          for: schema,
+          configurations: [configuration]
+        )
+        container.mainContext.insert(
+          PersistedLocalProfile(
+            id: UUID(),
+            displayName: "이전 사용자",
+            selectedVoiceID: legacyID,
+            createdAt: Date(timeIntervalSince1970: 1),
+            updatedAt: Date(timeIntervalSince1970: 1)
+          )
+        )
+        try container.mainContext.save()
+      }
+
+      do {
+        let container = try ModelContainer.moruContainer(storeURL: storeURL)
+        let repository = SwiftDataLocalProfileRepository(
+          modelContext: container.mainContext
+        )
+
+        XCTAssertEqual(try repository.fetchProfile()?.selectedVoice, .aoede)
+        XCTAssertEqual(
+          try container.mainContext.fetch(
+            FetchDescriptor<PersistedLocalProfile>()
+          ).first?.selectedVoiceID,
+          VoiceProfile.aoede.id
+        )
+      }
     }
   }
 
@@ -118,11 +197,11 @@ final class ProfileSettingsTests: XCTestCase {
       alarmService: alarmService
     )
 
-    viewModel.voicePreviewButtonDidTap(.yuna)
+    viewModel.voicePreviewButtonDidTap(.aoede)
     viewModel.voiceSelectionViewDidDisappear()
     await viewModel.alarmAuthorizationButtonDidTap()
 
-    XCTAssertEqual(previewPlayer.previewedVoices, [.yuna])
+    XCTAssertEqual(previewPlayer.previewedVoices, [.aoede])
     XCTAssertEqual(previewPlayer.stopCallCount, 1)
     XCTAssertEqual(alarmService.requestCallCount, 1)
     XCTAssertEqual(viewModel.alarmStatus, .configured)

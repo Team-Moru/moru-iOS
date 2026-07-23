@@ -332,7 +332,7 @@ struct ProfileView: View {
           Text(voice.displayName)
             .font(AppFont.label1NormalSemiBold)
             .foregroundStyle(AppColor.moruTextPrimary)
-          Text(isAvailable ? "사용 가능" : "목소리 설치 필요")
+          Text(isAvailable ? "앱 내장 음성" : "음성 파일 없음")
             .font(AppFont.caption1Medium)
             .foregroundStyle(AppColor.moruTextSecondary)
         }

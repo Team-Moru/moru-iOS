@@ -38,6 +38,7 @@ final class OnboardingViewModel: ObservableObject {
 
   private let routineSuggestionService: any RoutineSuggestionService
   private let completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol
+  private let voicePreviewPlayer: any VoicePreviewPlaying
   private let onCompleted: OnboardingCompletionHandler
   private var didComplete = false
 
@@ -46,12 +47,14 @@ final class OnboardingViewModel: ObservableObject {
     step: OnboardingStep = .experience,
     routineSuggestionService: any RoutineSuggestionService,
     completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol,
+    voicePreviewPlayer: any VoicePreviewPlaying = UnavailableVoicePreviewPlayer(),
     onCompleted: @escaping OnboardingCompletionHandler
   ) {
     self.draft = draft
     self.step = step
     self.routineSuggestionService = routineSuggestionService
     self.completeOnboardingUseCase = completeOnboardingUseCase
+    self.voicePreviewPlayer = voicePreviewPlayer
     self.onCompleted = onCompleted
   }
 
@@ -141,6 +144,11 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     draft.selectedVoice = voice
+    _ = voicePreviewPlayer.previewVoice(voice)
+  }
+
+  func voiceSelectionViewDidDisappear() {
+    voicePreviewPlayer.stopVoicePreview()
   }
 
   func primaryButtonDidTap() {
