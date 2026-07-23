@@ -9,6 +9,11 @@ import SwiftUI
 
 @MainActor
 struct OnboardingFlowView: View {
+  static let recommendedRootAccessibilityIdentifier =
+    "routine.creation.recommended.flow"
+  static let cancelAccessibilityIdentifier =
+    "routine.creation.recommended.cancel"
+
   @StateObject private var viewModel: OnboardingViewModel
 
   init(viewModel: OnboardingViewModel) {
@@ -37,8 +42,18 @@ struct OnboardingFlowView: View {
       }
     }
     .background(OnboardingBackgroundView(step: viewModel.step))
+    .accessibilityIdentifier(
+      viewModel.flowMode == .recommendedAddition
+        ? Self.recommendedRootAccessibilityIdentifier
+        : ""
+    )
     .onAppear {
       _ = viewModel.refreshPreview()
+    }
+    .overlay {
+      if let weekdayConflict = viewModel.weekdayConflict {
+        weekdayConflictDialogOverlay(weekdayConflict)
+      }
     }
   }
 
@@ -67,6 +82,29 @@ struct OnboardingFlowView: View {
       OnboardingCompletionView(viewModel: viewModel)
     }
   }
+
+  private func weekdayConflictDialogOverlay(
+    _ conflict: RoutineWeekdayConflictState
+  ) -> some View {
+    ZStack {
+      AppColor.grayBlack
+        .opacity(0.22)
+        .ignoresSafeArea()
+
+      MoruDialog(
+        title: "다른 루틴에서 사용 중",
+        message: [
+          "\(conflict.weekdayText)은 알림이 설정된",
+          "다른 루틴이 이미 있어요.",
+          "추천 루틴으로 요일을 변경하시겠어요?",
+        ].joined(separator: "\n"),
+        primaryTitle: "괜찮아요",
+        secondaryTitle: "변경하기",
+        primaryAction: viewModel.keepExistingWeekdayScheduleButtonDidTap,
+        secondaryAction: viewModel.resolveWeekdayConflictButtonDidTap
+      )
+    }
+  }
 }
 
 private struct OnboardingHeaderView: View {
@@ -74,7 +112,20 @@ private struct OnboardingHeaderView: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
-      if let progressIndex = viewModel.step.progressIndex {
+      if viewModel.canCancel {
+        HStack {
+          Spacer()
+
+          Button("취소", action: viewModel.cancelButtonDidTap)
+            .font(AppFont.body1NormalMedium)
+            .foregroundStyle(AppColor.moruTextSecondary)
+            .accessibilityIdentifier(
+              OnboardingFlowView.cancelAccessibilityIdentifier
+            )
+        }
+      }
+
+      if let progressIndex = viewModel.progressIndex {
         GeometryReader { proxy in
           ZStack(alignment: .leading) {
             Capsule()
@@ -85,13 +136,13 @@ private struct OnboardingHeaderView: View {
               .frame(
                 width: proxy.size.width
                   * CGFloat(progressIndex)
-                  / CGFloat(OnboardingStep.progressTotal)
+                  / CGFloat(viewModel.progressTotal)
               )
           }
         }
         .frame(height: 6)
 
-        Text("\(progressIndex)/\(OnboardingStep.progressTotal)")
+        Text("\(progressIndex)/\(viewModel.progressTotal)")
           .font(AppFont.body1NormalSemiBold)
           .foregroundStyle(AppColor.moruTextSecondary)
       }
@@ -451,10 +502,18 @@ private struct RoutineReviewView: View {
       titleSpacing: AppSpacing.forty
     ) {
       if let routine = viewModel.validatedPreviewRoutine {
-        RoutineReviewForm(
-          routine: routine,
-          alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
-        )
+        if viewModel.allowsReviewEditing {
+          EditableRoutineReviewForm(
+            viewModel: viewModel,
+            routine: routine,
+            alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
+          )
+        } else {
+          RoutineReviewForm(
+            routine: routine,
+            alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
+          )
+        }
       } else {
         PreviewUnavailableState(errorMessage: viewModel.errorMessage)
       }

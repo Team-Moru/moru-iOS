@@ -15,17 +15,20 @@ struct RoutineSettingView: View {
 
   @State private var viewModel: RoutineSettingViewModel
   @State private var editorDraft: RoutineDraftState?
+  @State private var creationDraft: RoutineDraftState?
   @State private var didHandleEntryPoint = false
   @State private var activationConflictRoutineID: UUID?
   @State private var activationConflict: RoutineWeekdayConflictState?
 
   private let entryPoint: RoutineSettingEntryPoint
+  private let dependencies: DependencyContainer
 
   init(
     dependencies: DependencyContainer,
     entryPoint: RoutineSettingEntryPoint = .list
   ) {
     self.entryPoint = entryPoint
+    self.dependencies = dependencies
     _viewModel = State(initialValue: RoutineSettingViewModel(dependencies: dependencies))
   }
 
@@ -75,7 +78,9 @@ struct RoutineSettingView: View {
       }
 
       didHandleEntryPoint = true
-      editorDraft = viewModel.initialDraft(for: entryPoint)
+      if entryPoint == .newRoutine {
+        presentCreationSheet()
+      }
     }
     .overlay {
       if let activationConflict {
@@ -89,6 +94,21 @@ struct RoutineSettingView: View {
         await viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
       } onDelete: { routineID in
         await viewModel.deleteRoutine(id: routineID)
+      } weekdayConflictState: { draft in
+        viewModel.weekdayConflict(for: draft)
+      }
+    }
+    .sheet(
+      item: $creationDraft,
+      onDismiss: viewModel.load
+    ) { directDraft in
+      RoutineCreationSheet(
+        dependencies: dependencies,
+        directDraft: directDraft
+      ) { savedDraft in
+        await viewModel.saveDraft(savedDraft)
+      } onResolveWeekdayConflict: { savedDraft in
+        await viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
       } weekdayConflictState: { draft in
         viewModel.weekdayConflict(for: draft)
       }
@@ -135,7 +155,7 @@ struct RoutineSettingView: View {
         .multilineTextAlignment(.center)
 
       MoruButton("새 루틴 만들기", style: .secondary) {
-        editorDraft = viewModel.makeNewDraft()
+        presentCreationSheet()
       }
       .accessibilityIdentifier(
         Self.emptyCreateRoutineAccessibilityIdentifier
@@ -181,12 +201,20 @@ struct RoutineSettingView: View {
 
   private var addRoutineButton: some View {
     Button {
-      editorDraft = viewModel.makeNewDraft()
+      presentCreationSheet()
     } label: {
       MoruRoutineCard(title: "새 루틴 추가하기", isAddCard: true)
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier(Self.addRoutineAccessibilityIdentifier)
+  }
+
+  private func presentCreationSheet() {
+    guard creationDraft == nil else {
+      return
+    }
+
+    creationDraft = viewModel.makeNewDraft()
   }
 
   private func emptySectionCard(title: String) -> some View {

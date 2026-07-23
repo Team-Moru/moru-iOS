@@ -11,6 +11,8 @@ struct RoutineSettingMutation {
   var routineID: UUID?
   var name: String
   var summary: String
+  var goalTags: [String] = []
+  var alarmScheduleID: UUID? = nil
   var hour: Int
   var minute: Int
   var selectedWeekdays: Set<Weekday>
@@ -20,9 +22,12 @@ struct RoutineSettingMutation {
 
 struct RoutineStepMutation {
   var id: UUID
+  var presetItemID: String? = nil
   var type: RoutineStepType
   var title: String
+  var instruction: String = ""
   var estimatedMinutes: Int
+  var isRequired: Bool = true
 }
 
 @MainActor
@@ -187,6 +192,7 @@ struct RoutineSettingUseCase {
     var routine = try existingRoutine(for: mutation) ?? Routine(
       id: mutation.routineID ?? UUID(),
       name: mutation.name.trimmingCharacters(in: .whitespacesAndNewlines),
+      goalTags: mutation.goalTags,
       steps: [],
       createdAt: now,
       updatedAt: now
@@ -196,15 +202,20 @@ struct RoutineSettingUseCase {
     let steps = mutation.steps.enumerated().map { index, step in
       var routineStep = existingStepsByID[step.id] ?? RoutineStep(
         id: step.id,
+        presetItemID: step.presetItemID,
         type: step.type,
         title: "",
+        instruction: step.instruction,
         order: index
       )
 
+      routineStep.presetItemID = step.presetItemID
       routineStep.type = step.type
       routineStep.title = step.title.trimmingCharacters(in: .whitespacesAndNewlines)
+      routineStep.instruction = step.instruction
       routineStep.order = index
       routineStep.estimatedSeconds = max(step.estimatedMinutes, 1) * 60
+      routineStep.isRequired = step.isRequired
       return routineStep
     }
 
@@ -217,6 +228,7 @@ struct RoutineSettingUseCase {
       alarmSchedule = schedule
     } else {
       alarmSchedule = AlarmSchedule(
+        id: mutation.alarmScheduleID ?? UUID(),
         hour: mutation.hour,
         minute: mutation.minute,
         weekdays: mutation.selectedWeekdays.sortedByDisplayOrder(),
@@ -226,6 +238,7 @@ struct RoutineSettingUseCase {
 
     routine.name = mutation.name.trimmingCharacters(in: .whitespacesAndNewlines)
     routine.summary = mutation.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+    routine.goalTags = mutation.goalTags
     routine.steps = steps
     routine.alarmSchedule = alarmSchedule
     routine.isActive = mutation.isActive
@@ -248,6 +261,8 @@ struct RoutineSettingUseCase {
       routineID: routine.id,
       name: routine.name,
       summary: routine.summary,
+      goalTags: routine.goalTags,
+      alarmScheduleID: schedule?.id,
       hour: schedule?.hour ?? 7,
       minute: schedule?.minute ?? 0,
       selectedWeekdays: Set(schedule?.weekdays ?? Weekday.weekdays),
@@ -256,9 +271,12 @@ struct RoutineSettingUseCase {
         .map { step in
           RoutineStepMutation(
             id: step.id,
+            presetItemID: step.presetItemID,
             type: step.type,
             title: step.title,
-            estimatedMinutes: max((step.estimatedSeconds ?? 180) / 60, 1)
+            instruction: step.instruction,
+            estimatedMinutes: max((step.estimatedSeconds ?? 180) / 60, 1),
+            isRequired: step.isRequired
           )
         },
       isActive: isActive

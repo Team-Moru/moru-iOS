@@ -11,6 +11,7 @@ import Foundation
 @MainActor
 final class OnboardingViewModel: ObservableObject {
   let objectWillChange = ObservableObjectPublisher()
+  let flowMode: RoutineCreationFlowMode
 
   var draft: OnboardingDraft {
     willSet {
@@ -36,26 +37,85 @@ final class OnboardingViewModel: ObservableObject {
     }
   }
 
+  private(set) var weekdayConflict: RoutineWeekdayConflictState? {
+    willSet {
+      objectWillChange.send()
+    }
+  }
+
   private let routineSuggestionService: any RoutineSuggestionService
-  private let completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol
+  private let completeOnboardingUseCase: (any CompleteOnboardingUseCaseProtocol)?
+  private let recommendedRoutineCreationUseCase:
+    (any RecommendedRoutineCreationUseCaseProtocol)?
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let onCompleted: OnboardingCompletionHandler
+  private let onRecommendedRoutineSaved:
+    @MainActor (RecommendedRoutineCreationResult) -> Void
+  private let onCancelled: @MainActor () -> Void
   private var didComplete = false
 
   init(
+    flowMode: RoutineCreationFlowMode = .onboarding,
     draft: OnboardingDraft = OnboardingDraft(),
     step: OnboardingStep = .experience,
     routineSuggestionService: any RoutineSuggestionService,
-    completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol,
+    completeOnboardingUseCase: (any CompleteOnboardingUseCaseProtocol)? = nil,
+    recommendedRoutineCreationUseCase:
+      (any RecommendedRoutineCreationUseCaseProtocol)? = nil,
     voicePreviewPlayer: any VoicePreviewPlaying = UnavailableVoicePreviewPlayer(),
-    onCompleted: @escaping OnboardingCompletionHandler
+    onCompleted: @escaping OnboardingCompletionHandler = { _ in },
+    onRecommendedRoutineSaved:
+      @escaping @MainActor (RecommendedRoutineCreationResult) -> Void = { _ in },
+    onCancelled: @escaping @MainActor () -> Void = {}
   ) {
+    self.flowMode = flowMode
     self.draft = draft
     self.step = step
     self.routineSuggestionService = routineSuggestionService
     self.completeOnboardingUseCase = completeOnboardingUseCase
+    self.recommendedRoutineCreationUseCase = recommendedRoutineCreationUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
     self.onCompleted = onCompleted
+    self.onRecommendedRoutineSaved = onRecommendedRoutineSaved
+    self.onCancelled = onCancelled
+  }
+
+  var progressTotal: Int {
+    flowMode == .onboarding ? OnboardingStep.progressTotal : 8
+  }
+
+  var progressIndex: Int? {
+    guard step != .completion else {
+      return nil
+    }
+
+    return min(step.rawValue + 1, progressTotal)
+  }
+
+  var canCancel: Bool {
+    flowMode != .onboarding && !isSaving
+  }
+
+  var allowsReviewEditing: Bool {
+    flowMode == .recommendedAddition
+  }
+
+  var previewName: String {
+    get {
+      draft.previewRoutine?.name ?? ""
+    }
+    set {
+      updatePreviewName(newValue)
+    }
+  }
+
+  var previewSummary: String {
+    get {
+      draft.previewRoutine?.summary ?? ""
+    }
+    set {
+      updatePreviewSummary(newValue)
+    }
   }
 
   var primaryButtonTitle: String {
@@ -89,10 +149,12 @@ final class OnboardingViewModel: ObservableObject {
 
   var canAdvance: Bool {
     switch step {
-    case .suggestedRoutine, .duration, .review:
+    case .suggestedRoutine, .duration:
       return hasValidatedPreviewRoutine
+    case .review:
+      return hasValidReview
     case .alarm:
-      return hasValidatedPreviewRoutine && !draft.selectedWeekdays.isEmpty
+      return hasValidReview && !draft.selectedWeekdays.isEmpty && !isSaving
     case .voice:
       return hasValidatedPreviewRoutine
         && VoiceProfile.localVoices.contains(draft.selectedVoice)
@@ -126,7 +188,7 @@ final class OnboardingViewModel: ObservableObject {
   func updateAlarm(hour: Int, minute: Int) {
     draft.alarmHour = min(max(hour, 0), 23)
     draft.alarmMinute = min(max(minute, 0), 59)
-    _ = refreshPreview()
+    updatePreviewAlarm()
   }
 
   func toggleWeekday(_ weekday: Weekday) {
@@ -135,7 +197,40 @@ final class OnboardingViewModel: ObservableObject {
     } else {
       draft.selectedWeekdays.insert(weekday)
     }
-    _ = refreshPreview()
+    updatePreviewAlarm()
+  }
+
+  func updatePreviewName(_ name: String) {
+    guard var routine = draft.previewRoutine else {
+      return
+    }
+
+    routine.name = name
+    draft.previewRoutine = routine
+  }
+
+  func updatePreviewSummary(_ summary: String) {
+    guard var routine = draft.previewRoutine else {
+      return
+    }
+
+    routine.summary = summary
+    draft.previewRoutine = routine
+  }
+
+  func updatePreviewStepTitle(id: UUID, title: String) {
+    guard var routine = draft.previewRoutine,
+          let index = routine.steps.firstIndex(where: { $0.id == id }) else {
+      return
+    }
+
+    routine.steps[index].title = title
+    draft.previewRoutine = routine
+  }
+
+  func previewStepTitle(id: UUID) -> String {
+    draft.previewRoutine?.steps
+      .first(where: { $0.id == id })?.title ?? ""
   }
 
   func selectVoice(_ voice: VoiceProfile) {
@@ -174,6 +269,10 @@ final class OnboardingViewModel: ObservableObject {
       Task {
         await completeButtonDidTap()
       }
+    case .alarm where flowMode == .recommendedAddition:
+      Task {
+        await completeButtonDidTap()
+      }
     default:
       if let next = step.next {
         step = next
@@ -188,6 +287,28 @@ final class OnboardingViewModel: ObservableObject {
 
     errorMessage = nil
     step = previous
+  }
+
+  func cancelButtonDidTap() {
+    guard canCancel else {
+      return
+    }
+
+    onCancelled()
+  }
+
+  func keepExistingWeekdayScheduleButtonDidTap() {
+    weekdayConflict = nil
+  }
+
+  func resolveWeekdayConflictButtonDidTap() {
+    guard flowMode == .recommendedAddition, !isSaving, !didComplete else {
+      return
+    }
+
+    Task {
+      await saveRecommendedRoutine(resolvingWeekdayConflict: true)
+    }
   }
 
   func organizingDidFinish() {
@@ -225,6 +346,16 @@ final class OnboardingViewModel: ObservableObject {
       return
     }
 
+    guard flowMode == .onboarding else {
+      await saveRecommendedRoutine(resolvingWeekdayConflict: false)
+      return
+    }
+
+    guard let completeOnboardingUseCase else {
+      errorMessage = "온보딩 저장 기능을 사용할 수 없어요."
+      return
+    }
+
     isSaving = true
     errorMessage = nil
 
@@ -238,6 +369,94 @@ final class OnboardingViewModel: ObservableObject {
       didComplete = true
       isSaving = false
       onCompleted(result.routine.id)
+    } catch {
+      isSaving = false
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  private var hasValidReview: Bool {
+    guard let routine = validatedPreviewRoutine else {
+      return false
+    }
+
+    return !routine.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      && routine.steps.allSatisfy {
+        !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      }
+  }
+
+  private func updatePreviewAlarm() {
+    guard var routine = draft.previewRoutine else {
+      return
+    }
+
+    if var schedule = routine.alarmSchedule {
+      schedule.hour = draft.alarmHour
+      schedule.minute = draft.alarmMinute
+      schedule.weekdays = draft.orderedWeekdays
+      schedule.isEnabled = true
+      routine.alarmSchedule = schedule
+    } else {
+      routine.alarmSchedule = AlarmSchedule(
+        hour: draft.alarmHour,
+        minute: draft.alarmMinute,
+        weekdays: draft.orderedWeekdays
+      )
+    }
+
+    draft.previewRoutine = routine
+  }
+
+  private func saveRecommendedRoutine(
+    resolvingWeekdayConflict: Bool
+  ) async {
+    guard !isSaving, !didComplete else {
+      return
+    }
+
+    guard flowMode == .recommendedAddition,
+          let routine = validatedPreviewRoutine,
+          let recommendedRoutineCreationUseCase else {
+      errorMessage = "추천 루틴 저장 기능을 사용할 수 없어요."
+      return
+    }
+
+    let request = RecommendedRoutineCreationRequest(
+      routine: routine,
+      alarmHour: draft.alarmHour,
+      alarmMinute: draft.alarmMinute,
+      selectedWeekdays: draft.selectedWeekdays
+    )
+
+    if !resolvingWeekdayConflict {
+      do {
+        let conflictingWeekdays = try recommendedRoutineCreationUseCase
+          .weekdayConflict(for: request)
+        if !conflictingWeekdays.isEmpty {
+          weekdayConflict = RoutineWeekdayConflictState(
+            conflictingWeekdays: conflictingWeekdays
+          )
+          return
+        }
+      } catch {
+        errorMessage = error.localizedDescription
+        return
+      }
+    }
+
+    isSaving = true
+    errorMessage = nil
+    weekdayConflict = nil
+
+    do {
+      let result = try await recommendedRoutineCreationUseCase.execute(
+        request,
+        resolvingWeekdayConflict: resolvingWeekdayConflict
+      )
+      didComplete = true
+      isSaving = false
+      onRecommendedRoutineSaved(result)
     } catch {
       isSaving = false
       errorMessage = error.localizedDescription

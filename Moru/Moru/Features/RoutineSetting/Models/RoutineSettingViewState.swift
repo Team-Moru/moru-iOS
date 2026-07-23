@@ -7,7 +7,39 @@
 
 import Foundation
 
-enum RoutineSettingEntryPoint {
+enum RoutineCreationFlowMode: Hashable, Identifiable {
+  case onboarding
+  case recommendedAddition
+  case directAddition
+
+  var id: Self {
+    self
+  }
+
+  var completionDestination: RoutineCreationCompletionDestination {
+    switch self {
+    case .onboarding:
+      return .routineTrial
+    case .recommendedAddition, .directAddition:
+      return .routineList
+    }
+  }
+
+  var includesVoiceSelection: Bool {
+    self == .onboarding
+  }
+
+  var includesCompletionTrial: Bool {
+    self == .onboarding
+  }
+}
+
+enum RoutineCreationCompletionDestination: Equatable {
+  case routineTrial
+  case routineList
+}
+
+enum RoutineSettingEntryPoint: Equatable {
   case list
   case newRoutine
 }
@@ -75,6 +107,8 @@ struct RoutineDraftState: Equatable, Identifiable {
   var routineID: UUID?
   var title: String
   var summary: String
+  var goalTags: [String]
+  var alarmScheduleID: UUID?
   var hour: Int
   var minute: Int
   var selectedWeekdays: Set<Weekday>
@@ -86,6 +120,8 @@ struct RoutineDraftState: Equatable, Identifiable {
     routineID: UUID? = nil,
     title: String = "",
     summary: String = "",
+    goalTags: [String] = [],
+    alarmScheduleID: UUID? = nil,
     hour: Int = 7,
     minute: Int = 0,
     selectedWeekdays: Set<Weekday> = [.monday, .tuesday, .wednesday, .thursday, .friday],
@@ -96,6 +132,8 @@ struct RoutineDraftState: Equatable, Identifiable {
     self.routineID = routineID
     self.title = title
     self.summary = summary
+    self.goalTags = goalTags
+    self.alarmScheduleID = alarmScheduleID
     self.hour = hour
     self.minute = minute
     self.selectedWeekdays = selectedWeekdays
@@ -113,20 +151,29 @@ struct RoutineDraftState: Equatable, Identifiable {
 
 struct RoutineStepDraftState: Equatable, Identifiable {
   var id: UUID
+  var presetItemID: String?
   var type: RoutineStepType
   var title: String
+  var instruction: String
   var estimatedMinutes: Int
+  var isRequired: Bool
 
   init(
     id: UUID = UUID(),
+    presetItemID: String? = nil,
     type: RoutineStepType = .confirm,
     title: String = "",
-    estimatedMinutes: Int = 3
+    instruction: String = "",
+    estimatedMinutes: Int = 3,
+    isRequired: Bool = true
   ) {
     self.id = id
+    self.presetItemID = presetItemID
     self.type = type
     self.title = title
+    self.instruction = instruction
     self.estimatedMinutes = estimatedMinutes
+    self.isRequired = isRequired
   }
 }
 
