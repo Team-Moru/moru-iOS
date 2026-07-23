@@ -6,9 +6,21 @@
 //
 
 import SwiftUI
+import UIKit
+
+final class MoruApplicationDelegate: NSObject, UIApplicationDelegate {
+  let alarmNotificationDelegate: AlarmNotificationDelegate
+
+  override init() {
+    alarmNotificationDelegate = AlarmNotificationDelegate()
+    super.init()
+  }
+}
 
 @main
 struct MoruApp: App {
+  @UIApplicationDelegateAdaptor(MoruApplicationDelegate.self)
+  private var applicationDelegate
   @StateObject private var bootstrapper = AppBootstrapper()
 
   var body: some Scene {

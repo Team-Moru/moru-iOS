@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UserNotifications
 import XCTest
 @testable import Moru
 
@@ -16,31 +17,129 @@ final class AlarmRuntimeTests: XCTestCase {
     defer {
       defaults.removePersistentDomain(forName: suiteName)
     }
+    let store = AlarmIngressOccurrenceStore(
+      defaults: defaults,
+      notificationCenter: NotificationCenter()
+    )
     let envelope = makeEnvelope(fireDate: Date(timeIntervalSince1970: 1_000))
     let latestEnvelope = makeEnvelope(
       fireDate: Date(timeIntervalSince1970: 2_000)
     )
 
-    MoruAlarmRouteStore.savePendingEnvelope(envelope, defaults: defaults)
-    MoruAlarmRouteStore.savePendingEnvelope(latestEnvelope, defaults: defaults)
+    XCTAssertTrue(store.savePendingEnvelope(envelope))
+    XCTAssertTrue(store.savePendingEnvelope(latestEnvelope))
 
-    XCTAssertEqual(
-      MoruAlarmRouteStore.pendingEnvelope(defaults: defaults),
-      latestEnvelope
+    XCTAssertEqual(store.pendingEnvelope(), latestEnvelope)
+    XCTAssertEqual(store.claimPendingEnvelope(), latestEnvelope)
+    XCTAssertNil(store.claimPendingEnvelope())
+    store.complete(latestEnvelope)
+    XCTAssertNil(store.claimPendingEnvelope())
+
+    let legacyEnvelope = makeEnvelope(
+      fireDate: Date(timeIntervalSince1970: 3_000)
     )
-    XCTAssertEqual(
-      MoruAlarmRouteStore.consumePendingEnvelope(defaults: defaults),
-      latestEnvelope
+    defaults.set(
+      try JSONEncoder().encode(legacyEnvelope),
+      forKey: "moru.pendingAlarmIngressEnvelope"
     )
-    XCTAssertNil(MoruAlarmRouteStore.consumePendingEnvelope(defaults: defaults))
+    XCTAssertEqual(store.claimPendingEnvelope(), legacyEnvelope)
+    store.complete(legacyEnvelope)
 
     defaults.set(
       Data("malformed".utf8),
       forKey: "moru.pendingAlarmIngressEnvelope"
     )
-    XCTAssertNil(MoruAlarmRouteStore.consumePendingEnvelope(defaults: defaults))
+    XCTAssertNil(store.claimPendingEnvelope())
     XCTAssertNil(
       defaults.object(forKey: "moru.pendingAlarmIngressEnvelope")
+    )
+  }
+
+  func testColdStartStoreDeliversPrebootstrapFallbackAfterGraphIsReady() throws {
+    let suiteName = "AlarmRuntimeTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer {
+      defaults.removePersistentDomain(forName: suiteName)
+    }
+    let fallbackEnvelope = makeEnvelope(
+      fireDate: Date(timeIntervalSince1970: 5_000),
+      launchTarget: .alarmRing
+    )
+    let earlyStore = AlarmIngressOccurrenceStore(
+      defaults: defaults,
+      notificationCenter: NotificationCenter()
+    )
+
+    XCTAssertTrue(earlyStore.savePendingEnvelope(fallbackEnvelope))
+
+    let readyStore = AlarmIngressOccurrenceStore(
+      defaults: defaults,
+      notificationCenter: NotificationCenter()
+    )
+    XCTAssertEqual(readyStore.claimPendingEnvelope(), fallbackEnvelope)
+    readyStore.complete(fallbackEnvelope)
+    XCTAssertNil(readyStore.pendingEnvelope())
+  }
+
+  func testClaimRecoversAfterProcessRestartAndConsumedOccurrenceDoesNotReopen()
+    throws {
+    let suiteName = "AlarmRuntimeTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer {
+      defaults.removePersistentDomain(forName: suiteName)
+    }
+    let fireDate = Date(timeIntervalSince1970: 10_000)
+    let envelope = makeEnvelope(fireDate: fireDate)
+    let firstProcess = AlarmIngressOccurrenceStore(
+      defaults: defaults,
+      notificationCenter: NotificationCenter()
+    )
+
+    XCTAssertTrue(firstProcess.savePendingEnvelope(envelope))
+    XCTAssertEqual(firstProcess.claimPendingEnvelope(), envelope)
+    XCTAssertNil(firstProcess.claimPendingEnvelope())
+    XCTAssertFalse(
+      firstProcess.savePendingEnvelope(
+        makeEnvelope(fireDate: fireDate.addingTimeInterval(10))
+      )
+    )
+
+    let relaunchedProcess = AlarmIngressOccurrenceStore(
+      defaults: defaults,
+      notificationCenter: NotificationCenter()
+    )
+    XCTAssertEqual(relaunchedProcess.claimPendingEnvelope(), envelope)
+    relaunchedProcess.complete(envelope)
+
+    let duplicate = makeEnvelope(
+      alarmID: envelope.alarmID,
+      routineID: envelope.routineID,
+      scheduleID: envelope.scheduleID,
+      fireDate: fireDate.addingTimeInterval(60)
+    )
+    XCTAssertFalse(relaunchedProcess.savePendingEnvelope(duplicate))
+    XCTAssertNil(relaunchedProcess.claimPendingEnvelope())
+
+    let nextOccurrence = makeEnvelope(
+      alarmID: envelope.alarmID,
+      routineID: envelope.routineID,
+      scheduleID: envelope.scheduleID,
+      fireDate: fireDate.addingTimeInterval(31 * 60)
+    )
+    XCTAssertTrue(relaunchedProcess.savePendingEnvelope(nextOccurrence))
+    XCTAssertEqual(
+      relaunchedProcess.claimPendingEnvelope(),
+      nextOccurrence
+    )
+  }
+
+  @MainActor
+  func testApplicationDelegateInstallsNotificationDelegateBeforeBootstrap() {
+    let applicationDelegate = MoruApplicationDelegate()
+
+    XCTAssertTrue(
+      UNUserNotificationCenter.current().delegate
+        === applicationDelegate.alarmNotificationDelegate
     )
   }
 
@@ -274,7 +373,7 @@ final class AlarmRuntimeTests: XCTestCase {
   }
 
   @MainActor
-  func testStaleInactiveAndMismatchedRoutesAreIgnored() async {
+  func testStaleDeletedInactiveDisabledAndMismatchedRoutesAreIgnored() async {
     let now = Date(timeIntervalSince1970: 10_000)
     let staleFixture = makeFixture(now: now)
     let staleEnvelope = makeEnvelope(
@@ -286,21 +385,38 @@ final class AlarmRuntimeTests: XCTestCase {
     let staleResolution = await staleFixture.runtime.resolve(staleEnvelope)
     XCTAssertEqual(staleResolution, .ignored(.stale))
 
-    var inactiveRoutine = staleFixture.routine
+    let deletedFixture = makeFixture(now: now)
+    deletedFixture.routineRepository.routines = []
+    let deletedResolution = await deletedFixture.runtime.resolve(
+      deletedFixture.envelope
+    )
+    XCTAssertEqual(deletedResolution, .ignored(.routineUnavailable))
+
+    let inactiveFixture = makeFixture(now: now)
+    var inactiveRoutine = inactiveFixture.routine
     inactiveRoutine.isActive = false
-    staleFixture.routineRepository.routines = [inactiveRoutine]
-    let inactiveResolution = await staleFixture.runtime.resolve(
-      staleFixture.envelope
+    inactiveFixture.routineRepository.routines = [inactiveRoutine]
+    let inactiveResolution = await inactiveFixture.runtime.resolve(
+      inactiveFixture.envelope
     )
     XCTAssertEqual(inactiveResolution, .ignored(.routineInactive))
 
-    staleFixture.routineRepository.routines = [staleFixture.routine]
+    let disabledFixture = makeFixture(now: now)
+    var disabledRoutine = disabledFixture.routine
+    disabledRoutine.alarmSchedule?.isEnabled = false
+    disabledFixture.routineRepository.routines = [disabledRoutine]
+    let disabledResolution = await disabledFixture.runtime.resolve(
+      disabledFixture.envelope
+    )
+    XCTAssertEqual(disabledResolution, .ignored(.alarmDisabled))
+
+    let mismatchFixture = makeFixture(now: now)
     let mismatchedEnvelope = makeEnvelope(
-      routineID: staleFixture.routine.id,
+      routineID: mismatchFixture.routine.id,
       scheduleID: UUID(),
       fireDate: now
     )
-    let mismatchResolution = await staleFixture.runtime.resolve(
+    let mismatchResolution = await mismatchFixture.runtime.resolve(
       mismatchedEnvelope
     )
     XCTAssertEqual(mismatchResolution, .ignored(.scheduleMismatch))
@@ -467,11 +583,14 @@ final class AlarmRuntimeTests: XCTestCase {
   }
 
   @MainActor
-  func testNavigationDefersOnlyLatestAlarmAndStartsScheduledPlayer() {
+  func testNavigationDefersOnlyOneAlarmAndStartsScheduledPlayer() {
     let coordinator = AppNavigationCoordinator()
     let routineID = UUID()
-    let firstContext = makeContext(routineID: routineID)
-    let latestContext = makeContext(routineID: routineID)
+    let firstContext = makeContext(
+      routineID: routineID,
+      launchTarget: .scheduledRoutine
+    )
+    let ignoredContext = makeContext(routineID: routineID)
 
     guard case .presented(let routineToken) = coordinator.presentRegularRoutine(
       routineID: UUID()
@@ -485,10 +604,10 @@ final class AlarmRuntimeTests: XCTestCase {
       .deferredBusy
     )
     XCTAssertEqual(
-      coordinator.presentAlarmRing(context: latestContext),
+      coordinator.presentAlarmRing(context: ignoredContext),
       .deferredBusy
     )
-    XCTAssertNil(coordinator.takeDeferredAlarmRingContext())
+    XCTAssertNil(coordinator.takeDeferredAlarmContext())
 
     XCTAssertEqual(
       coordinator.handle(
@@ -499,10 +618,10 @@ final class AlarmRuntimeTests: XCTestCase {
     )
     coordinator.presentationBindingDidChange(to: nil)
     XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
-    XCTAssertEqual(coordinator.takeDeferredAlarmRingContext(), latestContext)
+    XCTAssertEqual(coordinator.takeDeferredAlarmContext(), firstContext)
 
     guard case .presented(let alarmToken) = coordinator.presentAlarmRing(
-      context: latestContext
+      context: firstContext.routing(to: .alarmRing)
     ) else {
       XCTFail("AlarmRing should be admitted after the busy flow ends.")
       return
@@ -779,6 +898,7 @@ private func makeEnvelope(
   scheduleID: UUID = UUID(),
   kind: AlarmIngressKind = .recurring,
   fireDate: Date,
+  nonce: UUID = UUID(),
   launchTarget: AlarmIngressLaunchTarget = .alarmRing
 ) -> AlarmIngressEnvelope {
   AlarmIngressEnvelope(
@@ -787,7 +907,7 @@ private func makeEnvelope(
     scheduleID: scheduleID,
     kind: kind,
     fireDate: fireDate,
-    nonce: UUID(),
+    nonce: nonce,
     launchTarget: launchTarget
   )
 }

@@ -381,7 +381,7 @@ final class AppNavigationCoordinator: ObservableObject {
   @Published private(set) var navigationState: AppNavigationState
 
   private var hasStartedInitialSessionLoad = false
-  private var deferredAlarmRingContext: AlarmRingContext?
+  private var deferredAlarmContext: AlarmRingContext?
 
   var presentation: AppPresentation? {
     navigationState.visiblePresentation
@@ -435,24 +435,26 @@ final class AppNavigationCoordinator: ObservableObject {
 
     switch attempt {
     case .presented, .alreadyPresented:
-      if deferredAlarmRingContext?.ingress.alarmID == context.ingress.alarmID {
-        deferredAlarmRingContext = nil
+      if deferredAlarmContext?.ingress.alarmID == context.ingress.alarmID {
+        deferredAlarmContext = nil
       }
     case .deferredBusy:
-      deferredAlarmRingContext = context
+      if deferredAlarmContext == nil {
+        deferredAlarmContext = context
+      }
     }
     return attempt
   }
 
-  func takeDeferredAlarmRingContext() -> AlarmRingContext? {
+  func takeDeferredAlarmContext() -> AlarmRingContext? {
     guard navigationState.activePresentation == nil else {
       return nil
     }
 
     defer {
-      deferredAlarmRingContext = nil
+      deferredAlarmContext = nil
     }
-    return deferredAlarmRingContext
+    return deferredAlarmContext
   }
 
   func dismissAlarmRing(presentationToken: UUID) -> AppNavigationEffect {

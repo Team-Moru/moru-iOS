@@ -160,7 +160,7 @@ struct AppRouter: View {
     }
     .onReceive(
       NotificationCenter.default.publisher(
-        for: MoruAlarmRouteStore.didSaveNotification
+        for: AlarmIngressOccurrenceStore.didSaveNotification
       )
     ) { _ in
       Task {
@@ -359,9 +359,8 @@ struct AppRouter: View {
 
     let effect = coordinator.presentationDidDismiss()
     state.refreshHome()
-    retryDeferredOnboardingTrial()
     execute(effect)
-    retryDeferredAlarmRing()
+    retryDeferredAlarmIngressOrOnboarding()
   }
 
   @MainActor
@@ -382,7 +381,8 @@ struct AppRouter: View {
   private func consumePendingAlarmIngress() async {
     guard sessionStore.phase == .ready,
           dependencies.alarmRuntimeHandler != nil,
-          let envelope = MoruAlarmRouteStore.consumePendingEnvelope() else {
+          let envelope = AlarmIngressOccurrenceStore.shared
+            .claimPendingEnvelope() else {
       return
     }
 
@@ -392,6 +392,7 @@ struct AppRouter: View {
   @MainActor
   private func handleAlarmIngress(_ envelope: AlarmIngressEnvelope) async {
     guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+      AlarmIngressOccurrenceStore.shared.release(envelope)
       return
     }
 
@@ -399,40 +400,50 @@ struct AppRouter: View {
     case .route(let context):
       await presentResolvedAlarm(context)
     case .ignored:
-      break
+      AlarmIngressOccurrenceStore.shared.complete(envelope)
     case .temporarilyUnavailable:
-      MoruAlarmRouteStore.restorePendingEnvelope(envelope)
+      AlarmIngressOccurrenceStore.shared.release(envelope)
     }
   }
 
   @MainActor
   private func presentResolvedAlarm(_ context: AlarmRingContext) async {
     guard context.ingress.launchTarget == .scheduledRoutine else {
-      _ = coordinator.presentAlarmRing(context: context)
+      switch coordinator.presentAlarmRing(context: context) {
+      case .presented, .alreadyPresented:
+        AlarmIngressOccurrenceStore.shared.complete(context.ingress)
+      case .deferredBusy:
+        break
+      }
       return
     }
 
     let attempt = coordinator.presentScheduledRoutineStart(context: context)
-    guard let presentationToken = attempt.presentationToken else {
+    switch attempt {
+    case .deferredBusy:
       return
-    }
+    case .alreadyPresented:
+      AlarmIngressOccurrenceStore.shared.complete(context.ingress)
+      return
+    case .presented(let presentationToken):
+      do {
+        guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+          throw AlarmRuntimeError.routeNoLongerAvailable
+        }
 
-    do {
-      guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
-        throw AlarmRuntimeError.routeNoLongerAvailable
+        try await alarmRuntimeHandler.startRoutine(from: context)
+        guard coordinator.completeScheduledRoutineStart(
+          routineID: context.ingress.routineID,
+          startingPresentationToken: presentationToken
+        ) else {
+          throw AlarmRuntimeError.routeNoLongerAvailable
+        }
+      } catch {
+        coordinator.failScheduledRoutineStart(
+          startingPresentationToken: presentationToken
+        )
       }
-
-      try await alarmRuntimeHandler.startRoutine(from: context)
-      guard coordinator.completeScheduledRoutineStart(
-        routineID: context.ingress.routineID,
-        startingPresentationToken: presentationToken
-      ) else {
-        throw AlarmRuntimeError.routeNoLongerAvailable
-      }
-    } catch {
-      coordinator.failScheduledRoutineStart(
-        startingPresentationToken: presentationToken
-      )
+      AlarmIngressOccurrenceStore.shared.complete(context.ingress)
     }
   }
 
@@ -476,13 +487,17 @@ struct AppRouter: View {
   }
 
   @MainActor
-  private func retryDeferredAlarmRing() {
-    guard let context = coordinator.takeDeferredAlarmRingContext() else {
+  private func retryDeferredAlarmIngressOrOnboarding() {
+    guard let context = coordinator.takeDeferredAlarmContext() else {
+      retryDeferredOnboardingTrial()
       return
     }
 
     Task {
       await handleAlarmIngress(context.ingress)
+      if coordinator.presentation == nil {
+        retryDeferredOnboardingTrial()
+      }
     }
   }
 }
@@ -514,17 +529,6 @@ private struct AlarmStartingView: View {
       }
       .accessibilityElement(children: .combine)
       .accessibilityLabel("\(routineName) 루틴 시작 중")
-    }
-  }
-}
-
-private extension PresentationAttempt {
-  var presentationToken: UUID? {
-    switch self {
-    case .presented(let token), .alreadyPresented(let token):
-      token
-    case .deferredBusy:
-      nil
     }
   }
 }

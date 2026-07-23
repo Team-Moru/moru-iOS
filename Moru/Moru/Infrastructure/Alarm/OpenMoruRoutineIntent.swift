@@ -9,72 +9,194 @@ import AlarmKit
 import AppIntents
 import Foundation
 
-nonisolated enum MoruAlarmRouteStore {
+nonisolated final class AlarmIngressOccurrenceStore: @unchecked Sendable {
+  static let shared = AlarmIngressOccurrenceStore()
+
   static let didSaveNotification = Notification.Name(
     "moru.alarm.ingress.didSave"
   )
 
-  private static let pendingEnvelopeKey = "moru.pendingAlarmIngressEnvelope"
-  private static let lock = NSLock()
+  private struct StoredState: Codable {
+    var pendingEnvelope: AlarmIngressEnvelope?
+    var claimedEnvelope: AlarmIngressEnvelope?
+    var consumedEnvelopes: [AlarmIngressEnvelope]
 
-  static func savePendingEnvelope(
-    _ envelope: AlarmIngressEnvelope,
-    defaults: UserDefaults = .standard
-  ) {
-    persist(envelope, defaults: defaults)
-    NotificationCenter.default.post(name: didSaveNotification, object: nil)
+    static let empty = StoredState(
+      pendingEnvelope: nil,
+      claimedEnvelope: nil,
+      consumedEnvelopes: []
+    )
   }
 
-  static func restorePendingEnvelope(
-    _ envelope: AlarmIngressEnvelope,
-    defaults: UserDefaults = .standard
+  private static let stateKey = "moru.pendingAlarmIngressEnvelope"
+  private static let maximumConsumedOccurrenceCount = 64
+  private static let duplicateOccurrenceTolerance: TimeInterval = 30 * 60
+
+  private let defaults: UserDefaults
+  private let notificationCenter: NotificationCenter
+  private let lock = NSLock()
+  private var claimedNonces: Set<UUID> = []
+
+  init(
+    defaults: UserDefaults = .standard,
+    notificationCenter: NotificationCenter = .default
   ) {
-    persist(envelope, defaults: defaults)
+    self.defaults = defaults
+    self.notificationCenter = notificationCenter
   }
 
-  private static func persist(
-    _ envelope: AlarmIngressEnvelope,
-    defaults: UserDefaults
-  ) {
+  @discardableResult
+  func savePendingEnvelope(_ envelope: AlarmIngressEnvelope) -> Bool {
+    let didSave = lock.withLock {
+      var state = loadState()
+      guard !state.consumedEnvelopes.contains(where: {
+        Self.isSameOccurrence($0, envelope)
+      }) else {
+        return false
+      }
+      guard state.claimedEnvelope == nil else {
+        return false
+      }
+      if let pendingEnvelope = state.pendingEnvelope,
+         Self.isSameOccurrence(pendingEnvelope, envelope) {
+        return false
+      }
+
+      state.pendingEnvelope = envelope
+      return persist(state)
+    }
+
+    if didSave {
+      notificationCenter.post(name: Self.didSaveNotification, object: nil)
+    }
+    return didSave
+  }
+
+  func pendingEnvelope() -> AlarmIngressEnvelope? {
     lock.withLock {
-      guard let data = try? JSONEncoder().encode(envelope) else {
+      let state = loadState()
+      return state.claimedEnvelope ?? state.pendingEnvelope
+    }
+  }
+
+  func claimPendingEnvelope() -> AlarmIngressEnvelope? {
+    lock.withLock {
+      var state = loadState()
+
+      if let claimedEnvelope = state.claimedEnvelope {
+        guard claimedNonces.insert(claimedEnvelope.nonce).inserted else {
+          return nil
+        }
+        return claimedEnvelope
+      }
+
+      guard let pendingEnvelope = state.pendingEnvelope else {
+        return nil
+      }
+      state.pendingEnvelope = nil
+      state.claimedEnvelope = pendingEnvelope
+      guard persist(state) else {
+        return nil
+      }
+      claimedNonces.insert(pendingEnvelope.nonce)
+      return pendingEnvelope
+    }
+  }
+
+  func complete(_ envelope: AlarmIngressEnvelope) {
+    lock.withLock {
+      var state = loadState()
+      guard let claimedEnvelope = state.claimedEnvelope,
+            Self.isSameOccurrence(claimedEnvelope, envelope) else {
         return
       }
-      defaults.set(data, forKey: pendingEnvelopeKey)
+
+      state.claimedEnvelope = nil
+      if let pendingEnvelope = state.pendingEnvelope,
+         Self.isSameOccurrence(pendingEnvelope, envelope) {
+        state.pendingEnvelope = nil
+      }
+      state.consumedEnvelopes.removeAll {
+        Self.isSameOccurrence($0, envelope)
+      }
+      state.consumedEnvelopes.append(envelope)
+      if state.consumedEnvelopes.count > Self.maximumConsumedOccurrenceCount {
+        state.consumedEnvelopes.removeFirst(
+          state.consumedEnvelopes.count - Self.maximumConsumedOccurrenceCount
+        )
+      }
+      claimedNonces.remove(claimedEnvelope.nonce)
+      _ = persist(state)
     }
   }
 
-  static func pendingEnvelope(
-    defaults: UserDefaults = .standard
-  ) -> AlarmIngressEnvelope? {
+  func release(_ envelope: AlarmIngressEnvelope) {
     lock.withLock {
-      decodePendingEnvelope(defaults: defaults)
+      var state = loadState()
+      guard let claimedEnvelope = state.claimedEnvelope,
+            Self.isSameOccurrence(claimedEnvelope, envelope) else {
+        return
+      }
+
+      state.claimedEnvelope = nil
+      state.pendingEnvelope = envelope
+      claimedNonces.remove(claimedEnvelope.nonce)
+      _ = persist(state)
     }
   }
 
-  static func consumePendingEnvelope(
-    defaults: UserDefaults = .standard
-  ) -> AlarmIngressEnvelope? {
+  func clear() {
     lock.withLock {
-      let envelope = decodePendingEnvelope(defaults: defaults)
-      defaults.removeObject(forKey: pendingEnvelopeKey)
-      return envelope
+      claimedNonces.removeAll()
+      defaults.removeObject(forKey: Self.stateKey)
     }
   }
 
-  static func clear(defaults: UserDefaults = .standard) {
-    lock.withLock {
-      defaults.removeObject(forKey: pendingEnvelopeKey)
+  private func loadState() -> StoredState {
+    guard let data = defaults.data(forKey: Self.stateKey) else {
+      return .empty
     }
+    if let state = try? JSONDecoder().decode(StoredState.self, from: data) {
+      return state
+    }
+    if let legacyEnvelope = try? JSONDecoder().decode(
+      AlarmIngressEnvelope.self,
+      from: data
+    ) {
+      return StoredState(
+        pendingEnvelope: legacyEnvelope,
+        claimedEnvelope: nil,
+        consumedEnvelopes: []
+      )
+    }
+
+    defaults.removeObject(forKey: Self.stateKey)
+    return .empty
   }
 
-  private static func decodePendingEnvelope(
-    defaults: UserDefaults
-  ) -> AlarmIngressEnvelope? {
-    guard let data = defaults.data(forKey: pendingEnvelopeKey) else {
-      return nil
+  private func persist(_ state: StoredState) -> Bool {
+    guard let data = try? JSONEncoder().encode(state) else {
+      return false
     }
-    return try? JSONDecoder().decode(AlarmIngressEnvelope.self, from: data)
+    defaults.set(data, forKey: Self.stateKey)
+    return true
+  }
+
+  private static func isSameOccurrence(
+    _ lhs: AlarmIngressEnvelope,
+    _ rhs: AlarmIngressEnvelope
+  ) -> Bool {
+    if lhs.nonce == rhs.nonce {
+      return true
+    }
+    guard lhs.alarmID == rhs.alarmID,
+          lhs.routineID == rhs.routineID,
+          lhs.scheduleID == rhs.scheduleID,
+          lhs.kind == rhs.kind else {
+      return false
+    }
+    return abs(lhs.fireDate.timeIntervalSince(rhs.fireDate))
+      <= duplicateOccurrenceTolerance
   }
 }
 
@@ -106,7 +228,7 @@ public struct OpenMoruRoutineIntent: LiveActivityIntent {
       return .result()
     }
 
-    MoruAlarmRouteStore.savePendingEnvelope(ingress)
+    AlarmIngressOccurrenceStore.shared.savePendingEnvelope(ingress)
     return .result()
   }
 

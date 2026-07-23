@@ -159,10 +159,12 @@ struct AlarmKitDebugView: View {
     }
 
     private func consumePendingAlarmRoute() {
-        guard MoruAlarmRouteStore.consumePendingEnvelope() != nil else {
+        guard let envelope = AlarmIngressOccurrenceStore.shared
+            .claimPendingEnvelope() else {
             return
         }
 
+        AlarmIngressOccurrenceStore.shared.complete(envelope)
         phase = .alarmRing
     }
 }
