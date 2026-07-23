@@ -73,6 +73,8 @@ final class RoutineSettingViewModel {
       routineID: routine.id,
       title: routine.name,
       summary: routine.summary,
+      goalTags: routine.goalTags,
+      alarmScheduleID: schedule?.id,
       hour: schedule?.hour ?? 7,
       minute: schedule?.minute ?? 0,
       selectedWeekdays: Set(schedule?.weekdays ?? Weekday.weekdays),
@@ -81,9 +83,12 @@ final class RoutineSettingViewModel {
         .map { step in
           RoutineStepDraftState(
             id: step.id,
+            presetItemID: step.presetItemID,
             type: step.type,
             title: step.title,
-            estimatedMinutes: max((step.estimatedSeconds ?? 180) / 60, 1)
+            instruction: step.instruction,
+            estimatedMinutes: max((step.estimatedSeconds ?? 180) / 60, 1),
+            isRequired: step.isRequired
           )
         },
       isActive: routine.isActive
@@ -243,15 +248,20 @@ final class RoutineSettingViewModel {
       routineID: draft.routineID,
       name: draft.title,
       summary: draft.summary,
+      goalTags: draft.goalTags,
+      alarmScheduleID: draft.alarmScheduleID,
       hour: draft.hour,
       minute: draft.minute,
       selectedWeekdays: draft.selectedWeekdays,
       steps: draft.steps.map { step in
         RoutineStepMutation(
           id: step.id,
+          presetItemID: step.presetItemID,
           type: step.type,
           title: step.title,
-          estimatedMinutes: step.estimatedMinutes
+          instruction: step.instruction,
+          estimatedMinutes: step.estimatedMinutes,
+          isRequired: step.isRequired
         )
       },
       isActive: draft.isActive
