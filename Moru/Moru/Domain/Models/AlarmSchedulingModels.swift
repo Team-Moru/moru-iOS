@@ -25,6 +25,55 @@ enum AlarmDeliveryState: String, Codable, Hashable {
   case repairRequired
 }
 
+enum AlarmIngressKind: String, Codable, Hashable, Sendable {
+  case recurring
+  case snooze
+}
+
+nonisolated struct AlarmIngressEnvelope: Codable, Hashable, Sendable {
+  static let notificationUserInfoKey = "moru.alarm.ingress"
+
+  let alarmID: UUID
+  let routineID: UUID
+  let scheduleID: UUID
+  let kind: AlarmIngressKind
+  let fireDate: Date
+  let nonce: UUID
+
+  nonisolated func refreshingOccurrence(
+    fireDate: Date,
+    nonce: UUID = UUID()
+  ) -> AlarmIngressEnvelope {
+    AlarmIngressEnvelope(
+      alarmID: alarmID,
+      routineID: routineID,
+      scheduleID: scheduleID,
+      kind: kind,
+      fireDate: fireDate,
+      nonce: nonce
+    )
+  }
+
+  nonisolated func encodedString() throws -> String {
+    let data = try JSONEncoder().encode(self)
+    guard let value = String(data: data, encoding: .utf8) else {
+      throw AlarmIngressEnvelopeCodingError.invalidUTF8
+    }
+    return value
+  }
+
+  nonisolated static func decode(_ value: String) throws -> AlarmIngressEnvelope {
+    guard let data = value.data(using: .utf8) else {
+      throw AlarmIngressEnvelopeCodingError.invalidUTF8
+    }
+    return try JSONDecoder().decode(AlarmIngressEnvelope.self, from: data)
+  }
+}
+
+enum AlarmIngressEnvelopeCodingError: Error {
+  case invalidUTF8
+}
+
 struct AlarmScheduleRequest: Codable, Hashable {
   let routineID: UUID
   let scheduleID: UUID
@@ -105,6 +154,25 @@ struct AlarmScheduleRequest: Codable, Hashable {
   }
 }
 
+struct AlarmSnoozeRequest: Codable, Hashable {
+  let alarmID: UUID
+  let scheduleID: UUID
+  let routineID: UUID
+  let routineName: String
+  let fireDate: Date
+
+  var ingressEnvelope: AlarmIngressEnvelope {
+    AlarmIngressEnvelope(
+      alarmID: alarmID,
+      routineID: routineID,
+      scheduleID: scheduleID,
+      kind: .snooze,
+      fireDate: fireDate,
+      nonce: UUID()
+    )
+  }
+}
+
 struct AlarmDeliveryRecord: Codable, Hashable {
   let request: AlarmScheduleRequest
   var backend: AlarmDeliveryBackend?
@@ -135,6 +203,38 @@ struct SnoozedAlarmRecord: Codable, Hashable, Identifiable {
 struct AlarmPlatformSnapshot: Equatable {
   let backend: AlarmDeliveryBackend
   let identifiers: Set<String>
+}
+
+struct AlarmRingContext: Equatable, Hashable {
+  let ingress: AlarmIngressEnvelope
+  let routineName: String
+  let routineMinutes: Int
+}
+
+enum AlarmIngressIgnoredReason: Equatable {
+  case stale
+  case routineUnavailable
+  case routineInactive
+  case alarmDisabled
+  case scheduleMismatch
+  case deliveryUnavailable
+  case snoozeUnavailable
+}
+
+enum AlarmIngressResolution: Equatable {
+  case route(AlarmRingContext)
+  case ignored(AlarmIngressIgnoredReason)
+  case temporarilyUnavailable
+}
+
+enum AlarmRuntimeError: Error, Equatable {
+  case invalidSnoozeMinutes
+  case routeNoLongerAvailable
+  case authorizationRequired
+  case schedulingFailed
+  case persistenceFailed
+  case stopFailed
+  case cancellationFailed
 }
 
 enum AlarmScheduleMutation {

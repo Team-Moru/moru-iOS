@@ -10,95 +10,102 @@ import AppIntents
 import Foundation
 
 nonisolated enum MoruAlarmRouteStore {
-    private static let pendingAlarmIDKey =
-        "moru.pendingAlarmID"
+  static let didSaveNotification = Notification.Name(
+    "moru.alarm.ingress.didSave"
+  )
 
-    private static let pendingRoutineIDKey =
-        "moru.pendingRoutineID"
+  private static let pendingEnvelopeKey = "moru.pendingAlarmIngressEnvelope"
+  private static let lock = NSLock()
 
-    static func savePendingRoute(
-        alarmID: String,
-        routineID: String
-    ) {
-        UserDefaults.standard.set(
-            alarmID,
-            forKey: pendingAlarmIDKey
-        )
+  static func savePendingEnvelope(
+    _ envelope: AlarmIngressEnvelope,
+    defaults: UserDefaults = .standard
+  ) {
+    persist(envelope, defaults: defaults)
+    NotificationCenter.default.post(name: didSaveNotification, object: nil)
+  }
 
-        UserDefaults.standard.set(
-            routineID,
-            forKey: pendingRoutineIDKey
-        )
+  static func restorePendingEnvelope(
+    _ envelope: AlarmIngressEnvelope,
+    defaults: UserDefaults = .standard
+  ) {
+    persist(envelope, defaults: defaults)
+  }
+
+  private static func persist(
+    _ envelope: AlarmIngressEnvelope,
+    defaults: UserDefaults
+  ) {
+    lock.withLock {
+      guard let data = try? JSONEncoder().encode(envelope) else {
+        return
+      }
+      defaults.set(data, forKey: pendingEnvelopeKey)
     }
+  }
 
-    static func consumePendingRoute() -> (
-        alarmID: String,
-        routineID: String
-    )? {
-        guard
-            let alarmID = UserDefaults.standard.string(
-                forKey: pendingAlarmIDKey
-            ),
-            let routineID = UserDefaults.standard.string(
-                forKey: pendingRoutineIDKey
-            )
-        else {
-            return nil
-        }
-
-        UserDefaults.standard.removeObject(
-            forKey: pendingAlarmIDKey
-        )
-
-        UserDefaults.standard.removeObject(
-            forKey: pendingRoutineIDKey
-        )
-
-        return (
-            alarmID: alarmID,
-            routineID: routineID
-        )
+  static func pendingEnvelope(
+    defaults: UserDefaults = .standard
+  ) -> AlarmIngressEnvelope? {
+    lock.withLock {
+      decodePendingEnvelope(defaults: defaults)
     }
+  }
+
+  static func consumePendingEnvelope(
+    defaults: UserDefaults = .standard
+  ) -> AlarmIngressEnvelope? {
+    lock.withLock {
+      let envelope = decodePendingEnvelope(defaults: defaults)
+      defaults.removeObject(forKey: pendingEnvelopeKey)
+      return envelope
+    }
+  }
+
+  static func clear(defaults: UserDefaults = .standard) {
+    lock.withLock {
+      defaults.removeObject(forKey: pendingEnvelopeKey)
+    }
+  }
+
+  private static func decodePendingEnvelope(
+    defaults: UserDefaults
+  ) -> AlarmIngressEnvelope? {
+    guard let data = defaults.data(forKey: pendingEnvelopeKey) else {
+      return nil
+    }
+    return try? JSONDecoder().decode(AlarmIngressEnvelope.self, from: data)
+  }
 }
 
-public struct OpenMoruRoutineIntent:
-    LiveActivityIntent {
+public struct OpenMoruRoutineIntent: LiveActivityIntent {
+  public static let title: LocalizedStringResource = "MORU 루틴 시작"
 
-    public static let title: LocalizedStringResource =
-        "MORU 루틴 시작"
+  public static let description = IntentDescription(
+    "MORU 앱을 열고 기상 루틴 화면으로 이동합니다."
+  )
 
-    public static let description =
-        IntentDescription(
-            "MORU 앱을 열고 기상 루틴 화면으로 이동합니다."
-        )
+  public static let openAppWhenRun = true
 
-    public static let openAppWhenRun = true
+  @Parameter(title: "Alarm ingress")
+  public var encodedIngress: String
 
-    @Parameter(title: "Alarm ID")
-    public var alarmID: String
+  init(ingress: AlarmIngressEnvelope) {
+    encodedIngress = (try? ingress.encodedString()) ?? ""
+  }
 
-    @Parameter(title: "Routine ID")
-    public var routineID: String
+  public init() {
+    encodedIngress = ""
+  }
 
-    public init(
-        alarmID: String,
-        routineID: String
-    ) {
-        self.alarmID = alarmID
-        self.routineID = routineID
+  public func perform() async throws -> some IntentResult {
+    guard let template = try? AlarmIngressEnvelope.decode(encodedIngress) else {
+      return .result()
     }
 
-    public init() {
-        alarmID = ""
-        routineID = ""
-    }
-
-    public func perform() async throws -> some IntentResult {
-        MoruAlarmRouteStore.savePendingRoute(
-            alarmID: alarmID,
-            routineID: routineID
-        )
-
-        return .result()
-    }
+    MoruAlarmRouteStore.savePendingEnvelope(
+      template.refreshingOccurrence(fireDate: Date())
+    )
+    return .result()
+  }
 }

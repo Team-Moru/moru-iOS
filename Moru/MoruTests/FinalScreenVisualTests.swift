@@ -53,6 +53,34 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
+  func testAlarmRingRendersAtReferenceAccessibilitySizes() throws {
+    let alarmDate = try XCTUnwrap(
+      Calendar(identifier: .gregorian).date(
+        from: DateComponents(
+          timeZone: TimeZone(identifier: "Asia/Seoul"),
+          year: 2026,
+          month: 7,
+          day: 23,
+          hour: 7,
+          minute: 30
+        )
+      )
+    )
+
+    for variant in VisualVariant.allCases {
+      try render(
+        AlarmRingView(
+          routineName: "활력 루틴",
+          routineMinutes: 15,
+          alarmDate: alarmDate
+        ),
+        filename: "moru-pr43-alarm-ring-\(variant.filenameSuffix).png",
+        variant: variant
+      )
+    }
+  }
+
+  @MainActor
   func testMainScreenAccessibilityIdentifierContractsAreUnique() throws {
     let rootIdentifiers = [
       HomeView.rootAccessibilityIdentifier,
@@ -233,7 +261,6 @@ final class FinalScreenVisualTests: XCTestCase {
       line: line
     )
     let actualHash = try visualHash(for: image)
-
     XCTAssertEqual(actualHash.count, expectedHash.count, file: file, line: line)
     let distance = zip(actualHash, expectedHash).reduce(0) { result, pair in
       result + Int((pair.0 ^ pair.1).nonzeroBitCount)
@@ -324,6 +351,10 @@ private enum VisualBaseline {
       "AAAAABAAwgCCAlAFZANCB0ANYANgyWDJKwNQB1QHJANBBUADYAlkyGABgAIAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr34-home-active-routines-light-AX3.png":
       "AAAAABaAyADIACYjSYdJh2ADVgNSA1oDCgNgGXIZUANwAWM5YTF0AQAHbYVlh2ADVANWA1IDIAtgDVADUANkAQ==",
+    "moru-pr43-alarm-ring-light-M.png":
+      "AAAAAAAAIiEAABAAJVglOAZYALASMAUAAAAAAAAAgEAjAyYTiGbA8ABwBAAAAAAAAADABjAHGvM4B4ACAAAAAA==",
+    "moru-pr43-alarm-ring-light-AX3.png":
+      "AAAAAAAAQIEEIBM2K4sqGxY2IEhEDAAEAAAAAAAAwCAGky4DKUsBIsBwAHAEAAAAAABAABAHPnM+exAHQAAAAA==",
   ]
 }
 

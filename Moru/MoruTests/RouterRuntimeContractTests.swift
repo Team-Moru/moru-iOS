@@ -198,12 +198,17 @@ final class RouterRuntimeContractTests: XCTestCase {
       .started
     )
 
-    guard case .regularRoutine(let activeRoutineID, let token) = coordinator.presentation else {
+    guard case .regularRoutine(
+      let activeRoutineID,
+      let source,
+      let token
+    ) = coordinator.presentation else {
       XCTFail("The installed Home handler should present the requested regular routine.")
       return
     }
 
     XCTAssertEqual(activeRoutineID, routineID)
+    XCTAssertEqual(source, .manual)
     XCTAssertEqual(
       launchRoutine(RoutineLaunchRequest(routineID: routineID)),
       .alreadyRunning
@@ -214,7 +219,11 @@ final class RouterRuntimeContractTests: XCTestCase {
     )
 
     _ = router.routinePlayerView(
-      for: .regularRoutine(routineID: activeRoutineID, token: token)
+      for: .regularRoutine(
+        routineID: activeRoutineID,
+        source: .manual,
+        token: token
+      )
     )
 
     XCTAssertEqual(
@@ -233,7 +242,11 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     XCTAssertEqual(
       coordinator.presentation,
-      .regularRoutine(routineID: routineID, token: token)
+      .regularRoutine(
+        routineID: routineID,
+        source: .manual,
+        token: token
+      )
     )
 
     routinePlayerBuilder.sendRegularEvent(
@@ -277,7 +290,11 @@ final class RouterRuntimeContractTests: XCTestCase {
     }
 
     _ = router.routinePlayerView(
-      for: .regularRoutine(routineID: routineID, token: token)
+      for: .regularRoutine(
+        routineID: routineID,
+        source: .manual,
+        token: token
+      )
     )
     routinePlayerBuilder.sendRegularEvent(
       .exitRequested(.summaryRecord(persistedRunID: runID)),
@@ -340,12 +357,17 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     XCTAssertEqual(firstResult, .started)
 
-    guard case .regularRoutine(let activeRoutineID, let token) = coordinator.presentation else {
+    guard case .regularRoutine(
+      let activeRoutineID,
+      let source,
+      let token
+    ) = coordinator.presentation else {
       XCTFail("A regular launch should present the requested routine.")
       return
     }
 
     XCTAssertEqual(activeRoutineID, routineID)
+    XCTAssertEqual(source, .manual)
     XCTAssertEqual(
       AppRouter.regularRoutineLaunchResult(
         from: coordinator.presentRegularRoutine(routineID: routineID)
@@ -371,6 +393,39 @@ final class RouterRuntimeContractTests: XCTestCase {
       ),
       .busy
     )
+  }
+
+  @MainActor
+  func testRouterPreservesScheduledSourceForAlarmLaunchedRoutine() {
+    let homeBuilder = CapturingHomeFlowBuilder()
+    let routinePlayerBuilder = CapturingRoutinePlayerBuilder()
+    let state = AppRouterState()
+    let (router, _) = makeRouter(
+      homeBuilder: homeBuilder,
+      routinePlayerBuilder: routinePlayerBuilder,
+      state: state
+    )
+    let routineID = UUID()
+    let token = UUID()
+
+    _ = router.routinePlayerView(
+      for: .regularRoutine(
+        routineID: routineID,
+        source: .scheduled,
+        token: token
+      )
+    )
+
+    XCTAssertEqual(
+      routinePlayerBuilder.regularRequests,
+      [
+        RegularRoutineExecutionRequest(
+          routineID: routineID,
+          source: .scheduled
+        ),
+      ]
+    )
+    XCTAssertEqual(routinePlayerBuilder.regularPresentationTokens, [token])
   }
 
   @MainActor
@@ -410,7 +465,11 @@ final class RouterRuntimeContractTests: XCTestCase {
     XCTAssertNotEqual(nextToken, token)
     XCTAssertEqual(
       coordinator.presentation,
-      .regularRoutine(routineID: nextRoutineID, token: nextToken)
+      .regularRoutine(
+        routineID: nextRoutineID,
+        source: .manual,
+        token: nextToken
+      )
     )
   }
 

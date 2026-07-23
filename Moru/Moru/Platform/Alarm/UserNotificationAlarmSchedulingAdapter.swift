@@ -31,6 +31,14 @@ final class UserNotificationAlarmSchedulingAdapter: AlarmScheduling {
 
   func scheduleRecurring(_ request: AlarmScheduleRequest) async throws -> [String] {
     var scheduledIdentifiers: [String] = []
+    let ingress = AlarmIngressEnvelope(
+      alarmID: request.scheduleID,
+      routineID: request.routineID,
+      scheduleID: request.scheduleID,
+      kind: .recurring,
+      fireDate: Date(),
+      nonce: UUID()
+    )
 
     do {
       for weekday in request.weekdays {
@@ -40,7 +48,10 @@ final class UserNotificationAlarmSchedulingAdapter: AlarmScheduling {
         )
         let notificationRequest = UNNotificationRequest(
           identifier: identifier,
-          content: makeContent(request),
+          content: makeContent(
+            routineName: request.routineName,
+            ingress: ingress
+          ),
           trigger: UNCalendarNotificationTrigger(
             dateMatching: DateComponents(
               hour: request.hour,
@@ -60,6 +71,43 @@ final class UserNotificationAlarmSchedulingAdapter: AlarmScheduling {
       )
       throw error
     }
+  }
+
+  func scheduleSnooze(_ request: AlarmSnoozeRequest) async throws -> [String] {
+    let identifier = Self.snoozeRequestIdentifier(alarmID: request.alarmID)
+    var dateComponents = Calendar.current.dateComponents(
+      [.year, .month, .day, .hour, .minute, .second],
+      from: request.fireDate
+    )
+    dateComponents.timeZone = .current
+    let notificationRequest = UNNotificationRequest(
+      identifier: identifier,
+      content: makeContent(
+        routineName: request.routineName,
+        ingress: request.ingressEnvelope
+      ),
+      trigger: UNCalendarNotificationTrigger(
+        dateMatching: dateComponents,
+        repeats: false
+      )
+    )
+    try await center.add(notificationRequest)
+    return [identifier]
+  }
+
+  func stop(id: UUID) async throws {
+    let alarmID = id.uuidString.lowercased()
+    let identifiers = await center.deliveredNotifications()
+      .filter { notification in
+        guard let ingress = Self.ingress(
+          from: notification.request.content.userInfo
+        ) else {
+          return false
+        }
+        return ingress.alarmID.uuidString.lowercased() == alarmID
+      }
+      .map { $0.request.identifier }
+    center.removeDeliveredNotifications(withIdentifiers: identifiers)
   }
 
   func cancel(identifiers: [String]) async throws {
@@ -84,16 +132,31 @@ final class UserNotificationAlarmSchedulingAdapter: AlarmScheduling {
     "\(identifierPrefix)\(scheduleID.uuidString.lowercased()).weekday.\(weekday.rawValue)"
   }
 
-  private func makeContent(_ request: AlarmScheduleRequest) -> UNNotificationContent {
+  static func snoozeRequestIdentifier(alarmID: UUID) -> String {
+    "\(identifierPrefix)\(alarmID.uuidString.lowercased()).snooze"
+  }
+
+  nonisolated static func ingress(
+    from userInfo: [AnyHashable: Any]
+  ) -> AlarmIngressEnvelope? {
+    guard let value = userInfo[AlarmIngressEnvelope.notificationUserInfoKey]
+      as? String else {
+      return nil
+    }
+    return try? AlarmIngressEnvelope.decode(value)
+  }
+
+  private func makeContent(
+    routineName: String,
+    ingress: AlarmIngressEnvelope
+  ) -> UNNotificationContent {
     let content = UNMutableNotificationContent()
-    content.title = "\(request.routineName) 시작할 시간이에요"
+    content.title = "\(routineName) 시작할 시간이에요"
     content.body = "MORU를 열어 루틴을 시작해 주세요."
     content.sound = .default
     content.userInfo = [
-      "alarmID": request.scheduleID.uuidString,
-      "routineID": request.routineID.uuidString,
-      "scheduleID": request.scheduleID.uuidString,
-      "kind": "recurring",
+      AlarmIngressEnvelope.notificationUserInfoKey:
+        (try? ingress.encodedString()) ?? "",
     ]
     return content
   }

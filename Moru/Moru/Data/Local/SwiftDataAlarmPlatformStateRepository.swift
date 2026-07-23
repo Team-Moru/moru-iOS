@@ -89,6 +89,31 @@ nonisolated final class SwiftDataAlarmPlatformStateRepository:
   }
 
   @MainActor
+  func replaceSnoozedAlarm(
+    scheduleID: UUID,
+    with record: SnoozedAlarmRecord
+  ) throws {
+    do {
+      let descriptor = FetchDescriptor<PersistedSnoozedAlarm>(
+        predicate: #Predicate { $0.scheduleID == scheduleID }
+      )
+      try modelContext.fetch(descriptor)
+        .filter { $0.id != record.id }
+        .forEach(modelContext.delete)
+
+      if let persisted = try persistedSnoozedAlarm(id: record.id) {
+        update(persisted, with: record)
+      } else {
+        modelContext.insert(makePersistedSnoozedAlarm(record))
+      }
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
+  }
+
+  @MainActor
   func deleteSnoozedAlarm(id: UUID) throws {
     guard let persisted = try persistedSnoozedAlarm(id: id) else {
       return

@@ -129,12 +129,14 @@ struct AppRouter: View {
       onDismiss: completePendingDismissal
     ) { presentation in
       routinePlayerView(for: presentation)
+        .id(presentation.id)
         .interactiveDismissDisabled()
     }
     .task {
       if coordinator.beginInitialSessionLoadIfNeeded() {
         sessionStore.load()
       }
+      await consumePendingAlarmIngress()
       await dependencies.alarmScheduleMutator?.reconcile()
     }
     .onChange(of: scenePhase) { _, newPhase in
@@ -143,7 +145,26 @@ struct AppRouter: View {
       }
 
       Task {
+        await consumePendingAlarmIngress()
         await dependencies.alarmScheduleMutator?.reconcile()
+      }
+    }
+    .onChange(of: sessionStore.phase) { _, newPhase in
+      guard newPhase == .ready else {
+        return
+      }
+
+      Task {
+        await consumePendingAlarmIngress()
+      }
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(
+        for: MoruAlarmRouteStore.didSaveNotification
+      )
+    ) { _ in
+      Task {
+        await consumePendingAlarmIngress()
       }
     }
   }
@@ -166,14 +187,35 @@ struct AppRouter: View {
         presentationToken: token,
         onEvent: handleRoutinePlayerEvent
       )
-    case .regularRoutine(let routineID, let token):
+    case .regularRoutine(let routineID, let source, let token):
       return routinePlayerBuilder.makeRegular(
         request: RegularRoutineExecutionRequest(
           routineID: routineID,
-          source: .manual
+          source: source
         ),
         presentationToken: token,
         onEvent: handleRoutinePlayerEvent
+      )
+    case .alarmRing(let context, let token):
+      return AnyView(
+        AlarmRingView(
+          routineName: context.routineName,
+          routineMinutes: context.routineMinutes,
+          alarmDate: context.ingress.fireDate,
+          onStartRoutine: {
+            try await startScheduledRoutine(
+              from: context,
+              presentationToken: token
+            )
+          },
+          onSnoozeSelected: { minutes in
+            try await snooze(
+              context: context,
+              minutes: minutes,
+              presentationToken: token
+            )
+          }
+        )
       )
     }
   }
@@ -317,6 +359,7 @@ struct AppRouter: View {
     state.refreshHome()
     retryDeferredOnboardingTrial()
     execute(effect)
+    retryDeferredAlarmRing()
   }
 
   @MainActor
@@ -330,6 +373,81 @@ struct AppRouter: View {
       deferredOnboardingTrialRoutineID = nil
     case .deferredBusy:
       break
+    }
+  }
+
+  @MainActor
+  private func consumePendingAlarmIngress() async {
+    guard sessionStore.phase == .ready,
+          dependencies.alarmRuntimeHandler != nil,
+          let envelope = MoruAlarmRouteStore.consumePendingEnvelope() else {
+      return
+    }
+
+    await handleAlarmIngress(envelope)
+  }
+
+  @MainActor
+  private func handleAlarmIngress(_ envelope: AlarmIngressEnvelope) async {
+    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+      return
+    }
+
+    switch await alarmRuntimeHandler.resolve(envelope) {
+    case .route(let context):
+      _ = coordinator.presentAlarmRing(context: context)
+    case .ignored:
+      break
+    case .temporarilyUnavailable:
+      MoruAlarmRouteStore.restorePendingEnvelope(envelope)
+    }
+  }
+
+  @MainActor
+  private func startScheduledRoutine(
+    from context: AlarmRingContext,
+    presentationToken: UUID
+  ) async throws {
+    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+      throw AlarmRuntimeError.routeNoLongerAvailable
+    }
+
+    try await alarmRuntimeHandler.startRoutine(from: context)
+    coordinator.startScheduledRoutine(
+      routineID: context.ingress.routineID,
+      alarmPresentationToken: presentationToken
+    )
+  }
+
+  @MainActor
+  private func snooze(
+    context: AlarmRingContext,
+    minutes: Int,
+    presentationToken: UUID
+  ) async throws {
+    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+      throw AlarmRuntimeError.routeNoLongerAvailable
+    }
+
+    _ = try await alarmRuntimeHandler.snooze(
+      context: context,
+      minutes: minutes
+    )
+    execute(
+      coordinator.dismissAlarmRing(
+        presentationToken: presentationToken
+      )
+    )
+  }
+
+  @MainActor
+  private func retryDeferredAlarmRing() {
+    guard let context = coordinator.takeDeferredAlarmRingContext() else {
+      return
+    }
+
+    Task {
+      await handleAlarmIngress(context.ingress)
     }
   }
 }

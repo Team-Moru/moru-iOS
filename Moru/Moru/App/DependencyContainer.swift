@@ -18,6 +18,8 @@ struct DependencyContainer {
   let localDataResetRepository: (any LocalDataResetRepository)?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
+  let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
+  let alarmNotificationDelegate: AlarmNotificationDelegate?
   let voiceAvailabilityProbe: any VoiceAvailabilityProbing
   let profileAlarmService: (any ProfileAlarmServicing)?
 
@@ -32,6 +34,8 @@ struct DependencyContainer {
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
+    alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
+    alarmNotificationDelegate: AlarmNotificationDelegate? = nil,
     voiceAvailabilityProbe: any VoiceAvailabilityProbing =
       UnavailableVoiceAvailabilityProbe(),
     profileAlarmService: (any ProfileAlarmServicing)? = nil
@@ -46,6 +50,8 @@ struct DependencyContainer {
     self.localDataResetRepository = localDataResetRepository
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
+    self.alarmRuntimeHandler = alarmRuntimeHandler
+    self.alarmNotificationDelegate = alarmNotificationDelegate
     self.voiceAvailabilityProbe = voiceAvailabilityProbe
     self.profileAlarmService = profileAlarmService
   }
@@ -61,18 +67,28 @@ struct DependencyContainer {
       modelContext: modelContext
     )
     let alarmKitScheduler = AlarmKitSchedulingAdapter()
+    let notificationDelegate = AlarmNotificationDelegate()
     let notificationScheduler = UserNotificationAlarmSchedulingAdapter()
+    let alarmMutationGate = AlarmMutationGate()
     let alarmScheduleMutator = DefaultAlarmScheduleMutationCoordinator(
       routineRepository: routineRepository,
       stateRepository: alarmStateRepository,
       primaryScheduler: alarmKitScheduler,
-      fallbackScheduler: notificationScheduler
+      fallbackScheduler: notificationScheduler,
+      gate: alarmMutationGate
     )
     let profileAlarmService = AlarmProfileService(
       primaryScheduler: alarmKitScheduler,
       fallbackScheduler: notificationScheduler,
       stateRepository: alarmStateRepository,
       mutationCoordinator: alarmScheduleMutator
+    )
+    let alarmRuntimeHandler = DefaultAlarmRuntimeCoordinator(
+      routineRepository: routineRepository,
+      stateRepository: alarmStateRepository,
+      primaryScheduler: alarmKitScheduler,
+      fallbackScheduler: notificationScheduler,
+      gate: alarmMutationGate
     )
 
     return DependencyContainer(
@@ -88,6 +104,8 @@ struct DependencyContainer {
       ),
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
+      alarmRuntimeHandler: alarmRuntimeHandler,
+      alarmNotificationDelegate: notificationDelegate,
       voiceAvailabilityProbe: voiceAvailabilityProbe,
       profileAlarmService: profileAlarmService
     )
