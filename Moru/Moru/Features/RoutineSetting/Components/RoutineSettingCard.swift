@@ -11,6 +11,7 @@ struct RoutineSettingCard: View {
   let routine: RoutineSettingItemState
   @Binding var isActive: Bool
   let onTap: () -> Void
+  var onRetryAlarm: (() -> Void)? = nil
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
@@ -67,8 +68,29 @@ struct RoutineSettingCard: View {
         .font(AppFont.caption1Medium)
         .foregroundStyle(isActive ? AppColor.moruTextTertiary : AppColor.gray200)
         .fixedSize(horizontal: false, vertical: true)
+
+      if let alarmDeliveryText = routine.alarmDeliveryText {
+        HStack(spacing: AppSpacing.xs) {
+          Text(alarmDeliveryText)
+            .font(AppFont.caption1Medium)
+            .foregroundStyle(alarmStatusColor)
+            .fixedSize(horizontal: false, vertical: true)
+
+          if routine.needsAlarmAction, let onRetryAlarm {
+            Button("재시도", action: onRetryAlarm)
+              .font(AppFont.caption1Medium)
+              .foregroundStyle(AppColor.orange500)
+              .buttonStyle(.plain)
+              .accessibilityLabel("\(routine.title) 알람 예약 재시도")
+          }
+        }
+      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var alarmStatusColor: Color {
+    routine.needsAlarmAction ? AppColor.orange500 : AppColor.moruTextTertiary
   }
 
   private var editButton: some View {

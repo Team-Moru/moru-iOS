@@ -26,7 +26,7 @@ final class ResetLocalDataUseCase: ResetLocalDataUseCaseProtocol {
   }
 
   func execute() async throws {
-    try alarmService.cancelAllAlarms()
+    try await alarmService.cancelAllAlarms()
     try localDataResetRepository.resetToFreshInstallState()
   }
 }

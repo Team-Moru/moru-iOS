@@ -13,6 +13,8 @@ import Observation
 final class RoutineSettingViewModel {
   private let routineRepository: any RoutineRepository
   private let routineSettingUseCase: RoutineSettingUseCase
+  private let alarmStateRepository: (any AlarmPlatformStateRepository)?
+  private let alarmScheduleMutator: (any AlarmScheduleMutating)?
   private let calendar: Calendar
 
   var state: RoutineSettingViewState = .empty
@@ -22,8 +24,11 @@ final class RoutineSettingViewModel {
     calendar: Calendar = .current
   ) {
     self.routineRepository = dependencies.routineRepository
+    self.alarmStateRepository = dependencies.alarmPlatformStateRepository
+    self.alarmScheduleMutator = dependencies.alarmScheduleMutator
     self.routineSettingUseCase = RoutineSettingUseCase(
-      routineRepository: dependencies.routineRepository
+      routineRepository: dependencies.routineRepository,
+      alarmScheduleMutator: dependencies.alarmScheduleMutator
     )
     self.calendar = calendar
   }
@@ -77,10 +82,13 @@ final class RoutineSettingViewModel {
   }
 
   @discardableResult
-  func saveDraft(_ draft: RoutineDraftState) -> Bool {
+  func saveDraft(_ draft: RoutineDraftState) async -> Bool {
     do {
-      try routineSettingUseCase.saveRoutine(from: makeMutation(from: draft))
+      let result = try await routineSettingUseCase.saveRoutine(
+        from: makeMutation(from: draft)
+      )
       load()
+      reportAlarmRepairIfNeeded(result)
       return true
     } catch {
       state.errorMessage = "루틴을 저장하지 못했어요."
@@ -89,13 +97,14 @@ final class RoutineSettingViewModel {
   }
 
   @discardableResult
-  func saveDraftResolvingWeekdayConflict(_ draft: RoutineDraftState) -> Bool {
+  func saveDraftResolvingWeekdayConflict(_ draft: RoutineDraftState) async -> Bool {
     do {
-      try routineSettingUseCase.saveRoutine(
+      let result = try await routineSettingUseCase.saveRoutine(
         from: makeMutation(from: draft),
         resolvingWeekdayConflict: true
       )
       load()
+      reportAlarmRepairIfNeeded(result)
       return true
     } catch {
       state.errorMessage = "루틴을 저장하지 못했어요."
@@ -122,10 +131,14 @@ final class RoutineSettingViewModel {
   }
 
   @discardableResult
-  func routineActivationDidChange(id: UUID, isActive: Bool) -> Bool {
+  func routineActivationDidChange(id: UUID, isActive: Bool) async -> Bool {
     do {
-      try routineSettingUseCase.updateActivation(routineID: id, isActive: isActive)
+      let result = try await routineSettingUseCase.updateActivation(
+        routineID: id,
+        isActive: isActive
+      )
       load()
+      reportAlarmRepairIfNeeded(result)
       return true
     } catch {
       state.errorMessage = "루틴 상태를 변경하지 못했어요."
@@ -143,14 +156,15 @@ final class RoutineSettingViewModel {
   }
 
   @discardableResult
-  func activateRoutineResolvingWeekdayConflict(id: UUID) -> Bool {
+  func activateRoutineResolvingWeekdayConflict(id: UUID) async -> Bool {
     do {
-      try routineSettingUseCase.updateActivation(
+      let result = try await routineSettingUseCase.updateActivation(
         routineID: id,
         isActive: true,
         resolvingWeekdayConflict: true
       )
       load()
+      reportAlarmRepairIfNeeded(result)
       return true
     } catch {
       state.errorMessage = "루틴 상태를 변경하지 못했어요."
@@ -158,22 +172,60 @@ final class RoutineSettingViewModel {
     }
   }
 
-  func deleteRoutine(id: UUID) {
+  func deleteRoutine(id: UUID) async -> Bool {
     do {
-      try routineRepository.deleteRoutine(id: id)
+      try await routineSettingUseCase.deleteRoutine(id: id)
       load()
+      return true
     } catch {
-      state.errorMessage = "루틴을 삭제하지 못했어요."
+      state.errorMessage = "알람 취소에 실패해 루틴을 삭제하지 않았어요."
+      return false
+    }
+  }
+
+  func retryAlarmScheduling(id: UUID) async {
+    guard let routine = try? routineRepository.routine(id: id),
+          let alarmScheduleMutator else {
+      state.errorMessage = "알람 예약을 다시 시도하지 못했어요."
+      return
+    }
+
+    do {
+      let result = try await alarmScheduleMutator.apply(
+        .synchronize(routines: [routine])
+      )
+      load()
+      reportAlarmRepairIfNeeded(result)
+    } catch {
+      state.errorMessage = "알람 예약을 다시 시도하지 못했어요."
     }
   }
 
   private func makeItemState(from routine: Routine) -> RoutineSettingItemState {
-    RoutineSettingItemState(
+    let record: AlarmDeliveryRecord?
+    if let scheduleID = routine.alarmSchedule?.id,
+       let alarmStateRepository {
+      record = try? alarmStateRepository.record(scheduleID: scheduleID)
+    } else {
+      record = nil
+    }
+    let deliveryState: AlarmDeliveryState?
+    if alarmStateRepository != nil,
+       routine.isActive,
+       routine.alarmSchedule?.isEnabled == true {
+      deliveryState = record?.state ?? .repairRequired
+    } else {
+      deliveryState = nil
+    }
+
+    return RoutineSettingItemState(
       id: routine.id,
       title: routine.name,
       stepCountText: "\(routine.steps.count)개 항목",
       estimatedDurationText: "\(estimatedMinutes(for: routine))분",
-      isActive: routine.isActive
+      isActive: routine.isActive,
+      alarmDeliveryState: deliveryState,
+      alarmDeliveryBackend: record?.backend
     )
   }
 
@@ -229,5 +281,13 @@ final class RoutineSettingViewModel {
     }
 
     return max(Int(ceil(Double(seconds) / 60)), 1)
+  }
+
+  private func reportAlarmRepairIfNeeded(_ result: AlarmMutationResult) {
+    guard result.requiresRepair else {
+      return
+    }
+
+    state.errorMessage = "루틴은 저장됐지만 알람 예약을 확인해 주세요."
   }
 }

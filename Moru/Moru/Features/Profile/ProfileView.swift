@@ -47,7 +47,9 @@ struct ProfileView: View {
         return
       }
 
-      viewModel.refreshAlarmStatus()
+      Task {
+        await viewModel.refreshAlarmStatus()
+      }
     }
     .sheet(isPresented: $isDisplayNameEditorPresented) {
       displayNameEditor
@@ -153,8 +155,11 @@ struct ProfileView: View {
         .accessibilityIdentifier("profile.alarm.status")
 
       switch viewModel.alarmStatus {
-      case .configured, .unavailable:
+      case .configured:
         EmptyView()
+      case .fallbackConfigured:
+        Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
+          .buttonStyle(.bordered)
       case .permissionNotDetermined:
         Button("알람 권한 확인") {
           Task {
@@ -166,6 +171,14 @@ struct ProfileView: View {
       case .permissionOff:
         Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
           .buttonStyle(.bordered)
+      case .repairRequired, .unavailable:
+        Button("예약 다시 시도") {
+          Task {
+            await viewModel.alarmRetryButtonDidTap()
+          }
+        }
+        .buttonStyle(.bordered)
+        .disabled(viewModel.isAlarmRequestInProgress)
       }
     }
   }
@@ -210,10 +223,15 @@ struct ProfileView: View {
     switch viewModel.alarmStatus {
     case .configured:
       "AlarmKit 권한이 허용되어 있어요."
+    case .fallbackConfigured:
+      "일반 알림으로 예약돼요. "
+        + "무음·집중 모드에서는 울리지 않을 수 있어요."
     case .permissionNotDetermined:
       "알람 권한을 아직 확인하지 않았어요."
     case .permissionOff:
       "알람 권한이 꺼져 있어요."
+    case .repairRequired:
+      "일부 루틴의 알람 예약이 필요해요."
     case .unavailable:
       "알람 상태를 확인할 수 없어요."
     }

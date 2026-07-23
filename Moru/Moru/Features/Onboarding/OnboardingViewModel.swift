@@ -163,7 +163,9 @@ final class OnboardingViewModel: ObservableObject {
       }
       step = .organizing
     case .completion:
-      completeButtonDidTap()
+      Task {
+        await completeButtonDidTap()
+      }
     default:
       if let next = step.next {
         step = next
@@ -210,7 +212,7 @@ final class OnboardingViewModel: ObservableObject {
     }
   }
 
-  func completeButtonDidTap() {
+  func completeButtonDidTap() async {
     guard !isSaving, !didComplete else {
       return
     }
@@ -219,7 +221,7 @@ final class OnboardingViewModel: ObservableObject {
     errorMessage = nil
 
     do {
-      let result = try completeOnboardingUseCase.execute(
+      let result = try await completeOnboardingUseCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: draft.suggestionInput,
           selectedVoice: draft.selectedVoice

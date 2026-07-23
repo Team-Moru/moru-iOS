@@ -32,16 +32,16 @@ struct RoutineEditorView: View {
   @State private var dragTouchYOffsetFromCenter: CGFloat = 0
   @State private var stepFrames: [UUID: CGRect] = [:]
 
-  let onSave: (RoutineDraftState) -> Bool
-  let onResolveWeekdayConflict: (RoutineDraftState) -> Bool
-  let onDelete: ((UUID) -> Void)?
+  let onSave: (RoutineDraftState) async -> Bool
+  let onResolveWeekdayConflict: (RoutineDraftState) async -> Bool
+  let onDelete: ((UUID) async -> Bool)?
   let weekdayConflictState: (RoutineDraftState) -> RoutineWeekdayConflictState?
 
   init(
     draft: RoutineDraftState,
-    onSave: @escaping (RoutineDraftState) -> Bool,
-    onResolveWeekdayConflict: @escaping (RoutineDraftState) -> Bool,
-    onDelete: ((UUID) -> Void)? = nil,
+    onSave: @escaping (RoutineDraftState) async -> Bool,
+    onResolveWeekdayConflict: @escaping (RoutineDraftState) async -> Bool,
+    onDelete: ((UUID) async -> Bool)? = nil,
     weekdayConflictState: @escaping (RoutineDraftState) -> RoutineWeekdayConflictState? = { _ in nil }
   ) {
     self._draft = State(initialValue: draft)
@@ -84,7 +84,9 @@ struct RoutineEditorView: View {
               return
             }
 
-            saveAndDismissIfNeeded()
+            Task {
+              await saveAndDismissIfNeeded()
+            }
           } label: {
             Text("저장")
               .font(AppFont.body1NormalSemiBold)
@@ -335,11 +337,20 @@ struct RoutineEditorView: View {
         },
         secondaryAction: {
           if let routineID = draft.routineID {
-            onDelete?(routineID)
+            Task {
+              let didDelete = await onDelete?(routineID) ?? false
+              isDeleteDialogPresented = false
+              if didDelete {
+                dismiss()
+              } else {
+                saveErrorMessage =
+                  "알람 취소에 실패해 루틴을 삭제하지 않았어요."
+              }
+            }
+          } else {
+            isDeleteDialogPresented = false
+            dismiss()
           }
-
-          isDeleteDialogPresented = false
-          dismiss()
         }
       )
     }
@@ -360,26 +371,28 @@ struct RoutineEditorView: View {
           weekdayConflict = nil
         },
         secondaryAction: {
-          resolveWeekdayConflictAndDismissIfNeeded()
+          Task {
+            await resolveWeekdayConflictAndDismissIfNeeded()
+          }
         }
       )
     }
   }
 
-  private func saveAndDismissIfNeeded() {
+  private func saveAndDismissIfNeeded() async {
     saveErrorMessage = nil
 
-    if onSave(draft) {
+    if await onSave(draft) {
       dismiss()
     } else {
       saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
     }
   }
 
-  private func resolveWeekdayConflictAndDismissIfNeeded() {
+  private func resolveWeekdayConflictAndDismissIfNeeded() async {
     saveErrorMessage = nil
 
-    if onResolveWeekdayConflict(draft) {
+    if await onResolveWeekdayConflict(draft) {
       weekdayConflict = nil
       dismiss()
     } else {

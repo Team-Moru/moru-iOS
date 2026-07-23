@@ -281,3 +281,79 @@ final class PersistedHomeWeatherSnapshot {
     self.fetchedUTCOffsetSeconds = fetchedUTCOffsetSeconds
   }
 }
+
+@Model
+final class PersistedAlarmPlatformState {
+  @Attribute(.unique) var scheduleID: UUID
+  var routineID: UUID
+  var routineName: String
+  var hour: Int
+  var minute: Int
+  var weekdaysRawValue: String
+  var soundName: String
+  var fingerprint: String
+  var backendRawValue: String?
+  var deliveryStateRawValue: String
+  var platformIdentifiersRawValue: String
+  var lastErrorMessage: String?
+  var updatedAt: Date
+
+  init(
+    scheduleID: UUID,
+    routineID: UUID,
+    routineName: String,
+    hour: Int,
+    minute: Int,
+    weekdaysRawValue: String,
+    soundName: String,
+    fingerprint: String,
+    backendRawValue: String?,
+    deliveryStateRawValue: String,
+    platformIdentifiersRawValue: String,
+    lastErrorMessage: String?,
+    updatedAt: Date
+  ) {
+    self.scheduleID = scheduleID
+    self.routineID = routineID
+    self.routineName = routineName
+    self.hour = hour
+    self.minute = minute
+    self.weekdaysRawValue = weekdaysRawValue
+    self.soundName = soundName
+    self.fingerprint = fingerprint
+    self.backendRawValue = backendRawValue
+    self.deliveryStateRawValue = deliveryStateRawValue
+    self.platformIdentifiersRawValue = platformIdentifiersRawValue
+    self.lastErrorMessage = lastErrorMessage
+    self.updatedAt = updatedAt
+  }
+}
+
+@Model
+final class PersistedSnoozedAlarm {
+  @Attribute(.unique) var id: UUID
+  var scheduleID: UUID
+  var routineID: UUID
+  var fireDate: Date
+  var backendRawValue: String
+  var platformIdentifiersRawValue: String
+  var createdAt: Date
+
+  init(
+    id: UUID,
+    scheduleID: UUID,
+    routineID: UUID,
+    fireDate: Date,
+    backendRawValue: String,
+    platformIdentifiersRawValue: String,
+    createdAt: Date
+  ) {
+    self.id = id
+    self.scheduleID = scheduleID
+    self.routineID = routineID
+    self.fireDate = fireDate
+    self.backendRawValue = backendRawValue
+    self.platformIdentifiersRawValue = platformIdentifiersRawValue
+    self.createdAt = createdAt
+  }
+}

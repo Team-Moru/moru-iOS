@@ -283,7 +283,7 @@ private final class ProfileTestAlarmService: ProfileAlarmServicing {
     self.requestedStatus = requestedStatus
   }
 
-  func currentStatus() -> ProfileAlarmStatus {
+  func currentStatus() async -> ProfileAlarmStatus {
     status
   }
 
@@ -293,7 +293,11 @@ private final class ProfileTestAlarmService: ProfileAlarmServicing {
     return status
   }
 
-  func cancelAllAlarms() throws {
+  func retryScheduling() async -> ProfileAlarmStatus {
+    status
+  }
+
+  func cancelAllAlarms() async throws {
     recorder?.events.append("cancel alarms")
     if let cancellationError {
       throw cancellationError

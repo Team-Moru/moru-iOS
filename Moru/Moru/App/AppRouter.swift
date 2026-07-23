@@ -44,6 +44,7 @@ final class AppRouterState: ObservableObject {
 }
 
 struct AppRouter: View {
+  @Environment(\.scenePhase) private var scenePhase
   @ObservedObject private var sessionStore: SessionStore
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
@@ -133,6 +134,16 @@ struct AppRouter: View {
     .task {
       if coordinator.beginInitialSessionLoadIfNeeded() {
         sessionStore.load()
+      }
+      await dependencies.alarmScheduleMutator?.reconcile()
+    }
+    .onChange(of: scenePhase) { _, newPhase in
+      guard newPhase == .active else {
+        return
+      }
+
+      Task {
+        await dependencies.alarmScheduleMutator?.reconcile()
       }
     }
   }

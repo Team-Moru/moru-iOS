@@ -518,7 +518,7 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
-  func testOnboardingEmitsExactSavedRoutineIDOnceAndFailureEmitsNone() {
+  func testOnboardingEmitsExactSavedRoutineIDOnceAndFailureEmitsNone() async {
     let savedRoutine = makeExecutableRoutine()
     let successfulUseCase = OnboardingCompletionUseCaseSpy(
       outcome: .success(
@@ -537,8 +537,8 @@ final class RouterRuntimeContractTests: XCTestCase {
       emittedRoutineIDs.append(routineID)
     }
 
-    successfulViewModel.primaryButtonDidTap()
-    successfulViewModel.primaryButtonDidTap()
+    await successfulViewModel.completeButtonDidTap()
+    await successfulViewModel.completeButtonDidTap()
 
     XCTAssertEqual(successfulUseCase.executeCallCount, 1)
     XCTAssertEqual(emittedRoutineIDs, [savedRoutine.id])
@@ -553,7 +553,7 @@ final class RouterRuntimeContractTests: XCTestCase {
       failedEmissionRoutineIDs.append(routineID)
     }
 
-    failingViewModel.primaryButtonDidTap()
+    await failingViewModel.completeButtonDidTap()
 
     XCTAssertEqual(failingUseCase.executeCallCount, 1)
     XCTAssertTrue(failedEmissionRoutineIDs.isEmpty)
@@ -1008,7 +1008,9 @@ private final class OnboardingCompletionUseCaseSpy: CompleteOnboardingUseCasePro
     self.outcome = outcome
   }
 
-  func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult {
+  func execute(
+    _ request: CompleteOnboardingRequest
+  ) async throws -> CompleteOnboardingResult {
     executeCallCount += 1
     return try outcome.get()
   }

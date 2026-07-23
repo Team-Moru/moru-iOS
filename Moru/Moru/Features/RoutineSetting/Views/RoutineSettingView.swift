@@ -61,11 +61,11 @@ struct RoutineSettingView: View {
     }
     .sheet(item: $editorDraft) { draft in
       RoutineEditorView(draft: draft) { savedDraft in
-        viewModel.saveDraft(savedDraft)
+        await viewModel.saveDraft(savedDraft)
       } onResolveWeekdayConflict: { savedDraft in
-        viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
+        await viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
       } onDelete: { routineID in
-        viewModel.deleteRoutine(id: routineID)
+        await viewModel.deleteRoutine(id: routineID)
       } weekdayConflictState: { draft in
         viewModel.weekdayConflict(for: draft)
       }
@@ -117,6 +117,11 @@ struct RoutineSettingView: View {
               isActive: activationBinding(for: routine),
               onTap: {
                 editorDraft = viewModel.makeDraft(for: routine.id)
+              },
+              onRetryAlarm: {
+                Task {
+                  await viewModel.retryAlarmScheduling(id: routine.id)
+                }
               }
             )
           }
@@ -162,7 +167,9 @@ struct RoutineSettingView: View {
 
   private func routineActivationDidChange(routineID: UUID, isActive: Bool) {
     guard isActive else {
-      viewModel.routineActivationDidChange(id: routineID, isActive: false)
+      Task {
+        await viewModel.routineActivationDidChange(id: routineID, isActive: false)
+      }
       return
     }
 
@@ -170,7 +177,9 @@ struct RoutineSettingView: View {
       activationConflictRoutineID = routineID
       activationConflict = conflict
     } else {
-      viewModel.routineActivationDidChange(id: routineID, isActive: true)
+      Task {
+        await viewModel.routineActivationDidChange(id: routineID, isActive: true)
+      }
     }
   }
 
@@ -197,7 +206,11 @@ struct RoutineSettingView: View {
         },
         secondaryAction: {
           if let activationConflictRoutineID {
-            viewModel.activateRoutineResolvingWeekdayConflict(id: activationConflictRoutineID)
+            Task {
+              await viewModel.activateRoutineResolvingWeekdayConflict(
+                id: activationConflictRoutineID
+              )
+            }
           }
 
           activationConflict = nil

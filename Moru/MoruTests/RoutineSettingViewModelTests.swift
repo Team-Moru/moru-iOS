@@ -36,14 +36,16 @@ final class RoutineSettingViewModelTests: XCTestCase {
   }
 
   @MainActor
-  func testActivationChangePersistsAndReloadsRoutineState() throws {
+  func testActivationChangePersistsAndReloadsRoutineState() async throws {
     let viewModel = RoutineSettingViewModel(dependencies: .homePreview)
     viewModel.load()
     let routineID = try XCTUnwrap(viewModel.state.routines.first?.id)
 
-    XCTAssertTrue(
-      viewModel.routineActivationDidChange(id: routineID, isActive: false)
+    let didUpdate = await viewModel.routineActivationDidChange(
+      id: routineID,
+      isActive: false
     )
+    XCTAssertTrue(didUpdate)
 
     XCTAssertFalse(
       try XCTUnwrap(viewModel.state.routines.first { $0.id == routineID }).isActive

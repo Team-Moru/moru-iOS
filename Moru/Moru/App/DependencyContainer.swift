@@ -16,6 +16,8 @@ struct DependencyContainer {
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
+  let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
+  let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let voiceAvailabilityProbe: any VoiceAvailabilityProbing
   let profileAlarmService: (any ProfileAlarmServicing)?
 
@@ -28,6 +30,8 @@ struct DependencyContainer {
     homeWeatherRepository: (any HomeWeatherRepository)? = nil,
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
+    alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
+    alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     voiceAvailabilityProbe: any VoiceAvailabilityProbing =
       UnavailableVoiceAvailabilityProbe(),
     profileAlarmService: (any ProfileAlarmServicing)? = nil
@@ -40,6 +44,8 @@ struct DependencyContainer {
     self.homeWeatherRepository = homeWeatherRepository
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
+    self.alarmPlatformStateRepository = alarmPlatformStateRepository
+    self.alarmScheduleMutator = alarmScheduleMutator
     self.voiceAvailabilityProbe = voiceAvailabilityProbe
     self.profileAlarmService = profileAlarmService
   }
@@ -47,12 +53,30 @@ struct DependencyContainer {
   @MainActor
   static func local(modelContext: ModelContext) -> DependencyContainer {
     let voiceAvailabilityProbe = AVSpeechVoiceAvailabilityProbe()
+    let routineRepository = SwiftDataRoutineRepository(modelContext: modelContext)
     let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
       modelContext: modelContext
     )
+    let alarmStateRepository = SwiftDataAlarmPlatformStateRepository(
+      modelContext: modelContext
+    )
+    let alarmKitScheduler = AlarmKitSchedulingAdapter()
+    let notificationScheduler = UserNotificationAlarmSchedulingAdapter()
+    let alarmScheduleMutator = DefaultAlarmScheduleMutationCoordinator(
+      routineRepository: routineRepository,
+      stateRepository: alarmStateRepository,
+      primaryScheduler: alarmKitScheduler,
+      fallbackScheduler: notificationScheduler
+    )
+    let profileAlarmService = AlarmProfileService(
+      primaryScheduler: alarmKitScheduler,
+      fallbackScheduler: notificationScheduler,
+      stateRepository: alarmStateRepository,
+      mutationCoordinator: alarmScheduleMutator
+    )
 
     return DependencyContainer(
-      routineRepository: SwiftDataRoutineRepository(modelContext: modelContext),
+      routineRepository: routineRepository,
       routineRunRepository: swiftDataRoutineRunRepository,
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
@@ -62,8 +86,10 @@ struct DependencyContainer {
       localDataResetRepository: SwiftDataLocalDataResetRepository(
         modelContext: modelContext
       ),
+      alarmPlatformStateRepository: alarmStateRepository,
+      alarmScheduleMutator: alarmScheduleMutator,
       voiceAvailabilityProbe: voiceAvailabilityProbe,
-      profileAlarmService: AlarmKitProfileService()
+      profileAlarmService: profileAlarmService
     )
   }
 
@@ -79,7 +105,8 @@ struct DependencyContainer {
   func makeOnboardingBuilder() -> any OnboardingFlowBuilding {
     let completeOnboardingUseCase = CompleteOnboardingUseCase(
       onboardingRepository: onboardingRepository,
-      routineSuggestionService: routineSuggestionService
+      routineSuggestionService: routineSuggestionService,
+      alarmScheduleMutator: alarmScheduleMutator
     )
 
     return DefaultOnboardingFlowBuilder(
