@@ -167,6 +167,7 @@ struct DependencyContainer {
     return DefaultRoutinePlayerBuilder(
       resolver: resolver,
       saveRoutineRunUseCase: saveRoutineRunUseCase,
+      routineRunRepository: routineRunRepository,
       localProfileRepository: localProfileRepository,
       guidancePlayer: guidancePlayer,
       guidancePlaybackState: playbackState,

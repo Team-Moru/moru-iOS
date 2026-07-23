@@ -74,8 +74,6 @@ final class RoutinePlayerViewModel {
     private(set) var dialogState: DialogState?
     private(set) var isSavingRun = false
     private(set) var errorMessage: String?
-    private(set) var consecutiveDays: Int = 0
-    
     var isStepInteractionDisabled: Bool {
         dialogState != nil || pendingSave != nil || isSavingRun || didRequestExit
     }

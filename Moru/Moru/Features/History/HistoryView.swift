@@ -151,8 +151,8 @@ struct HistoryView: View {
           .padding(.top, AppSpacing.sm)
 
         HistoryStreakCard(
-          currentStreak: overview.currentCompletionStreak,
-          bestStreak: overview.bestCompletionStreak
+          currentStreak: overview.streak.currentDays,
+          bestStreak: overview.streak.bestDays
         )
 
         HistoryWakeMetricsView(metrics: overview.wakeMetrics)
@@ -302,30 +302,6 @@ private func historyFormattedDate(
 }
 
 private extension HistoryOverview {
-  var currentCompletionStreak: Int {
-    recentDays
-      .sorted { $0.date > $1.date }
-      .prefix { $0.completionRate > 0 }
-      .count
-  }
-
-  var bestCompletionStreak: Int {
-    let sortedDays = recentDays.sorted { $0.date < $1.date }
-    var current = 0
-    var best = 0
-
-    for day in sortedDays {
-      if day.completionRate > 0 {
-        current += 1
-        best = max(best, current)
-      } else {
-        current = 0
-      }
-    }
-
-    return best
-  }
-
   var lowestCompletionDay: HistoryDailyCompletion? {
     week.dailyCompletionRates
       .filter { $0.completionRate > 0 }
@@ -765,6 +741,8 @@ private struct HistoryWeeklyReportView: View {
           completedRuns: report.completedRunCount,
           totalRuns: report.totalRunCount,
           completionRate: report.completionRate,
+          completionRateChangePercentagePoints:
+            report.completionRateChangePercentagePoints,
           action: {}
         )
 

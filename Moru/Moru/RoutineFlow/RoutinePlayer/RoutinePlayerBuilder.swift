@@ -24,6 +24,7 @@ protocol RoutinePlayerBuilding: AnyObject {
 final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   private let resolver: any ResolveRoutineExecutionUseCaseProtocol
   private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
+  private let routineRunRepository: any RoutineRunRepository
   private let localProfileRepository: any LocalProfileRepository
   private let guidancePlayer: any RoutineGuidancePlaying
   private let guidancePlaybackState: RoutineGuidancePlaybackState
@@ -32,6 +33,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   init(
     resolver: any ResolveRoutineExecutionUseCaseProtocol,
     saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol,
+    routineRunRepository: any RoutineRunRepository,
     localProfileRepository: any LocalProfileRepository,
     guidancePlayer: any RoutineGuidancePlaying,
     guidancePlaybackState: RoutineGuidancePlaybackState,
@@ -39,6 +41,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   ) {
     self.resolver = resolver
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
+    self.routineRunRepository = routineRunRepository
     self.localProfileRepository = localProfileRepository
     self.guidancePlayer = guidancePlayer
     self.guidancePlaybackState = guidancePlaybackState
@@ -76,7 +79,8 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
       request: request,
       resolver: resolver,
       finalizer: DefaultRegularRoutineFinalizer(
-        saveRoutineRunUseCase: saveRoutineRunUseCase
+        saveRoutineRunUseCase: saveRoutineRunUseCase,
+        routineRunRepository: routineRunRepository
       ),
       guidanceCoordinator: makeGuidanceCoordinator(),
       presentationToken: presentationToken,
@@ -131,11 +135,19 @@ private final class DefaultTrialRoutineFinalizer: TrialRoutineFinalizing {
 }
 
 @MainActor
-private final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
+final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
   private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
+  private let routineRunRepository: any RoutineRunRepository
+  private let streakCalculator: RoutineStreakCalculator
 
-  init(saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol) {
+  init(
+    saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol,
+    routineRunRepository: any RoutineRunRepository,
+    calendar: Calendar = .current
+  ) {
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
+    self.routineRunRepository = routineRunRepository
+    self.streakCalculator = RoutineStreakCalculator(calendar: calendar)
   }
 
   func finalize(
@@ -147,6 +159,10 @@ private final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
     ).get()
 
     let savedRun = try saveRoutineRunUseCase.execute(request)
+    let streak = streakCalculator.calculate(
+      from: try routineRunRepository.fetchRuns(),
+      asOf: request.completedAt
+    )
 
     return try makeRoutineCompletionSummary(
       routine: request.routine,
@@ -154,7 +170,8 @@ private final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
       startedAt: request.startedAt,
       completedAt: request.completedAt,
       results: request.results,
-      endedEarly: request.endedEarly
+      endedEarly: request.endedEarly,
+      streak: streak
     ).get()
   }
 }

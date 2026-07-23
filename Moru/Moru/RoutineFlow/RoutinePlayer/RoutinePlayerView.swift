@@ -332,7 +332,7 @@ struct RoutinePlayerView: View {
     ) -> some View {
         RoutineFinishedView(
             completionRate: summary.completionRate,
-            consecutiveDays: viewModel.consecutiveDays,
+            streak: summary.streak,
             completedStepTitles: viewModel.completedStepTitles,
             onTapTodayRecord: {
                 if summary.persistedRunID == nil {

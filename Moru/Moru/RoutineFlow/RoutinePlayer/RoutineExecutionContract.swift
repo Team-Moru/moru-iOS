@@ -29,6 +29,7 @@ struct RoutineCompletionSummary: Equatable {
   let skippedStepCount: Int
   let endedEarly: Bool
   let completionRate: Double
+  let streak: RoutineStreak?
 }
 enum RoutineCompletionSummaryValidationError: Error, Equatable {
   case completedBeforeStarted
@@ -94,7 +95,8 @@ func makeRoutineCompletionSummary(
   startedAt: Date,
   completedAt: Date,
   results: [RoutineStepResult],
-  endedEarly: Bool
+  endedEarly: Bool,
+  streak: RoutineStreak? = nil
 ) -> Result<RoutineCompletionSummary, RoutineCompletionSummaryValidationError> {
   switch validateRoutineCompletionTimestamps(
     startedAt: startedAt,
@@ -147,6 +149,7 @@ func makeRoutineCompletionSummary(
     completedStepCount: completedStepCount,
     skippedStepCount: skippedStepCount,
     endedEarly: endedEarly,
-    completionRate: completionRate
+    completionRate: completionRate,
+    streak: streak
   ))
 }

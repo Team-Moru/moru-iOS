@@ -15,6 +15,7 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
   private let routineRunRepository: any RoutineRunRepository
   private let calendar: Calendar
   private let now: () -> Date
+  private let streakCalculator: RoutineStreakCalculator
 
   init(
     routineRunRepository: any RoutineRunRepository,
@@ -24,6 +25,7 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
     self.routineRunRepository = routineRunRepository
     self.calendar = calendar
     self.now = now
+    self.streakCalculator = RoutineStreakCalculator(calendar: calendar)
   }
 
   func load() throws -> HistoryOverview {
@@ -35,7 +37,8 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
       recentDays: makeDaySummaries(from: runs),
       week: makeWeekReport(from: runs, containing: currentDate),
       wakeMetrics: makeWakeMetrics(from: runs, containing: currentDate),
-      monthlyHeatmap: makeMonthlyHeatmap(from: runs, containing: currentDate)
+      monthlyHeatmap: makeMonthlyHeatmap(from: runs, containing: currentDate),
+      streak: streakCalculator.calculate(from: runs, asOf: currentDate)
     )
   }
 
@@ -57,6 +60,14 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
     let weekRuns = runs.filter {
       $0.startedAt >= weekStartDate && $0.startedAt < weekEndDate
     }
+    let previousWeekStartDate = calendar.date(
+      byAdding: .day,
+      value: -7,
+      to: weekStartDate
+    )!
+    let previousWeekRuns = runs.filter {
+      $0.startedAt >= previousWeekStartDate && $0.startedAt < weekStartDate
+    }
     let dailyCompletionRates = (0..<7).map { offset in
       let dayStart = calendar.date(byAdding: .day, value: offset, to: weekStartDate)!
       let dayRuns = runsDuringDay(startingAt: dayStart, from: weekRuns)
@@ -73,8 +84,28 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
       completedRunCount: completedRunCount(in: weekRuns),
       totalRunCount: weekRuns.count,
       completionRate: averageCompletionRate(for: weekRuns),
-      dailyCompletionRates: dailyCompletionRates
+      dailyCompletionRates: dailyCompletionRates,
+      completionRateChangePercentagePoints: completionRateChange(
+        currentRuns: weekRuns,
+        previousRuns: previousWeekRuns
+      )
     )
+  }
+
+  private func completionRateChange(
+    currentRuns: [RoutineRun],
+    previousRuns: [RoutineRun]
+  ) -> Int? {
+    guard !previousRuns.isEmpty else {
+      return nil
+    }
+
+    let difference = (
+      averageCompletionRate(for: currentRuns)
+        - averageCompletionRate(for: previousRuns)
+    ) * 100
+
+    return Int(difference.rounded(.toNearestOrAwayFromZero))
   }
 
   private func makeDaySummary(

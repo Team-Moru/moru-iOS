@@ -30,6 +30,23 @@ struct HistoryOverview: Sendable, Equatable {
   let week: HistoryWeekReport
   let wakeMetrics: HistoryWakeMetrics
   let monthlyHeatmap: HistoryMonthlyHeatmap
+  let streak: RoutineStreak
+
+  nonisolated init(
+    calendar: Calendar,
+    recentDays: [HistoryDaySummary],
+    week: HistoryWeekReport,
+    wakeMetrics: HistoryWakeMetrics,
+    monthlyHeatmap: HistoryMonthlyHeatmap,
+    streak: RoutineStreak = .empty
+  ) {
+    self.calendar = calendar
+    self.recentDays = recentDays
+    self.week = week
+    self.wakeMetrics = wakeMetrics
+    self.monthlyHeatmap = monthlyHeatmap
+    self.streak = streak
+  }
 }
 
 enum HistoryDestination: Hashable, Sendable {
@@ -183,6 +200,25 @@ struct HistoryWeekReport: Sendable, Equatable {
   let totalRunCount: Int
   let completionRate: Double
   let dailyCompletionRates: [HistoryDailyCompletion]
+  let completionRateChangePercentagePoints: Int?
+
+  nonisolated init(
+    weekStartDate: Date,
+    weekEndDate: Date,
+    completedRunCount: Int,
+    totalRunCount: Int,
+    completionRate: Double,
+    dailyCompletionRates: [HistoryDailyCompletion],
+    completionRateChangePercentagePoints: Int? = nil
+  ) {
+    self.weekStartDate = weekStartDate
+    self.weekEndDate = weekEndDate
+    self.completedRunCount = completedRunCount
+    self.totalRunCount = totalRunCount
+    self.completionRate = completionRate
+    self.dailyCompletionRates = dailyCompletionRates
+    self.completionRateChangePercentagePoints = completionRateChangePercentagePoints
+  }
 }
 
 struct HistoryDailyCompletion: Sendable, Equatable {
