@@ -424,7 +424,7 @@ private final class StaticHomeWeatherRoutinesUseCase: LoadHomeRoutinesUseCasePro
         steps: [RoutineStep(type: .confirm, title: "테스트 스텝", order: 0)]
       ),
     ],
-    todayRun: nil,
+    todayRunsByRoutineID: [:],
     streak: HomeRoutineStreak(currentDays: 0, bestDays: 0, completedWeekdays: [])
   )
 

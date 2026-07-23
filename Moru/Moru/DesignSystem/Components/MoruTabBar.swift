@@ -85,8 +85,8 @@ struct MoruTabBar: View {
               Text(item.title)
                 .font(
                   selection == item
-                    ? AppFont.pretendardMedium(size: 12)
-                    : AppFont.pretendardRegular(size: 12)
+                    ? AppFont.pretendardMedium(size: 10)
+                    : AppFont.pretendardRegular(size: 10)
                 )
                 .foregroundStyle(
                   selection == item ? AppColor.orange350 : AppColor.moruTextBody
@@ -105,7 +105,7 @@ struct MoruTabBar: View {
     .padding(.horizontal, AppSpacing.screenHorizontal)
     .frame(
       maxWidth: .infinity,
-      minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 95
+      minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 65
     )
     .background(AppColor.grayWhite)
     .accessibilityElement(children: .contain)

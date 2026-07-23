@@ -150,9 +150,17 @@ struct HomeView: View {
           return
         }
 
-        let result = routineLaunchBoundary.start(routineID: routineID)
-        routineLaunchMessage = HomeRoutineLaunchBoundary.message(for: result)
+        startRoutine(routineID)
       }
+    )
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+
+    HomeActiveRoutineSection(
+      routines: content.activeRoutines,
+      onOpenSettings: { _ in
+        isRoutineSettingPresented = true
+      },
+      onStartRoutine: startRoutine
     )
     .padding(.horizontal, AppSpacing.screenHorizontal)
 
@@ -162,6 +170,11 @@ struct HomeView: View {
         .foregroundStyle(AppColor.orange500)
         .padding(.horizontal, AppSpacing.screenHorizontal)
     }
+  }
+
+  private func startRoutine(_ routineID: UUID) {
+    let result = routineLaunchBoundary.start(routineID: routineID)
+    routineLaunchMessage = HomeRoutineLaunchBoundary.message(for: result)
   }
 
   @ViewBuilder
@@ -502,11 +515,19 @@ private final class HomePreviewLoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseP
         weekdays: Weekday.allCases
       )
     )
+    let additionalRoutine = Routine(
+      name: "출근 준비 루틴",
+      steps: [
+        RoutineStep(type: .confirm, title: "침구 정리", order: 0, estimatedSeconds: 60),
+        RoutineStep(type: .timer, title: "아침 식사", order: 1, estimatedSeconds: 600),
+      ],
+      alarmSchedule: AlarmSchedule(hour: 7, minute: 30, weekdays: Weekday.weekdays)
+    )
     return HomeRoutineLoadResult(
       profile: LocalProfile(displayName: "다인"),
       todayRoutine: routine,
-      manualRoutines: [routine],
-      todayRun: nil,
+      manualRoutines: [routine, additionalRoutine],
+      todayRunsByRoutineID: [:],
       streak: HomeRoutineStreak(
         currentDays: 3,
         bestDays: 7,

@@ -171,9 +171,8 @@ final class RoutineSettingViewModel {
     RoutineSettingItemState(
       id: routine.id,
       title: routine.name,
-      
       stepCountText: "\(routine.steps.count)개 항목",
-      estimatedDurationText: "소요 시간 \(estimatedMinutes(for: routine))분",
+      estimatedDurationText: "\(estimatedMinutes(for: routine))분",
       isActive: routine.isActive
     )
   }

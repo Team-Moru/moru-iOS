@@ -331,19 +331,29 @@ final class HomeViewModel {
 
   private func makeViewState(from result: HomeRoutineLoadResult) -> HomeViewState {
     let todayRoutineState = result.todayRoutine.map { routine in
-      makeRoutineState(routine: routine, todayRun: result.todayRun)
+      makeRoutineState(
+        routine: routine,
+        todayRun: result.todayRunsByRoutineID[routine.id]
+      )
     }
-    let manualRoutines = result.manualRoutines.map { routine in
-      let todayRun = routine.id == result.todayRoutine?.id ? result.todayRun : nil
-      return makeRoutineState(routine: routine, todayRun: todayRun)
+    let activeRoutines = result.manualRoutines
+      .filter { $0.id != result.todayRoutine?.id }
+      .map { routine in
+        makeRoutineState(
+          routine: routine,
+          todayRun: result.todayRunsByRoutineID[routine.id]
+        )
+      }
+    let todayRun = result.todayRoutine.flatMap {
+      result.todayRunsByRoutineID[$0.id]
     }
     let content = HomeContentState(
       userName: result.profile?.displayName ?? "",
       todayRoutine: todayRoutineState,
-      manualRoutines: manualRoutines,
+      activeRoutines: activeRoutines,
       todayProgress: makeProgressState(
         routine: result.todayRoutine,
-        todayRun: result.todayRun
+        todayRun: todayRun
       ),
       streak: HomeStreakState(
         currentDays: result.streak.currentDays,
@@ -355,7 +365,7 @@ final class HomeViewModel {
       weather: weatherState
     )
 
-    return manualRoutines.isEmpty ? .empty(content) : .content(content)
+    return result.manualRoutines.isEmpty ? .empty(content) : .content(content)
   }
 
   private func makeWeekdayStates(completedWeekdays: Set<Weekday>) -> [HomeWeekdayState] {
@@ -413,10 +423,14 @@ final class HomeViewModel {
     return HomeRoutineState(
       id: routine.id,
       title: routine.name,
-      statusText: progress >= 1 ? "진행 완료" : "진행 전",
+      statusText: statusText(completed: completed, total: steps.count),
+      scheduleText: scheduleText(for: routine),
+      stepSummaryText: "\(steps.count)개 스텝 · \(estimatedMinutes(for: steps))분",
+      completionText: "\(completed)/\(steps.count) 완료",
       estimatedDurationText: "소요 시간 \(estimatedMinutes(for: steps))분",
       progressText: "\(Int((progress * 100).rounded()))%",
       progress: progress,
+      isActive: routine.isActive,
       steps: steps.map { step in
         HomeRoutineStepState(
           id: step.stepID,
@@ -426,6 +440,51 @@ final class HomeViewModel {
         )
       }
     )
+  }
+
+  private func statusText(completed: Int, total: Int) -> String {
+    if total > 0 && completed == total {
+      return "진행 완료"
+    }
+
+    return completed > 0 ? "진행 중" : "진행 전"
+  }
+
+  private func scheduleText(for routine: Routine) -> String {
+    guard let schedule = routine.alarmSchedule else {
+      return "수동 실행"
+    }
+
+    let timeText = String(format: "%02d:%02d", schedule.hour, schedule.minute)
+    guard schedule.isEnabled else {
+      return "\(weekdayText(schedule.weekdays)) \(timeText) · 알람 꺼짐"
+    }
+
+    return "\(weekdayText(schedule.weekdays)) \(timeText)"
+  }
+
+  private func weekdayText(_ weekdays: [Weekday]) -> String {
+    let weekdaySet = Set(weekdays)
+    if weekdaySet == Set(Weekday.allCases) {
+      return "매일"
+    }
+
+    if weekdaySet == Set(Weekday.weekdays) {
+      return "평일"
+    }
+
+    if weekdaySet == Set([Weekday.saturday, .sunday]) {
+      return "주말"
+    }
+
+    if weekdaySet.isEmpty {
+      return "요일 미설정"
+    }
+
+    return weekdays
+      .sortedByDisplayOrder()
+      .map(\.shortTitle)
+      .joined(separator: "·")
   }
 
   private func plannedSteps(for routine: Routine, todayRun: RoutineRun?) -> [RoutineStepSnapshot] {
