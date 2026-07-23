@@ -53,6 +53,7 @@ final class SpeechInputControllerTests: XCTestCase {
 
     XCTAssertEqual(controller.phase, .failed(.recognition))
     XCTAssertNil(transcript)
+    XCTAssertEqual(session.cancelCallCount, 1)
   }
 
   func testCancelIsIdempotentAndStopsTheActiveSessionOnce() async {
@@ -207,6 +208,43 @@ final class SpeechInputControllerTests: XCTestCase {
       "마이크를 시작할 수 없어요. 다시 시도해 주세요."
     )
   }
+
+  func testInterruptionFinishesCurrentSegmentAndMovesToPaused() async {
+    let session = SpeechInputSessionSpy(finishTranscript: "물을 마셨어요")
+    let controller = SpeechInputController { session }
+
+    await controller.start()
+    session.send(.interrupted)
+    await drainTasks()
+    session.send(.transcript("늦은 결과", isFinal: true))
+
+    XCTAssertEqual(session.finishCallCount, 1)
+    XCTAssertEqual(controller.displayTranscript, "물을 마셨어요")
+    XCTAssertEqual(controller.phase, .paused)
+  }
+
+  func testCancelWhileStartIsPreparingDoesNotResurrectListeningState() async {
+    let session = SuspendedStartSpeechInputSessionSpy()
+    let controller = SpeechInputController { session }
+    let startTask = Task {
+      await controller.start()
+    }
+
+    await session.waitUntilStartWasCalled()
+    controller.cancel()
+    session.completeStart()
+    await startTask.value
+
+    XCTAssertEqual(session.cancelCallCount, 1)
+    XCTAssertEqual(controller.phase, .idle)
+    XCTAssertFalse(controller.isPreparing)
+  }
+
+  private func drainTasks() async {
+    for _ in 0..<10 {
+      await Task.yield()
+    }
+  }
 }
 
 @MainActor
@@ -257,5 +295,46 @@ private final class SpeechInputSessionSpy: SpeechInputSession {
 
   func send(_ event: SpeechInputSessionEvent) {
     eventHandler?(event)
+  }
+}
+
+@MainActor
+private final class SuspendedStartSpeechInputSessionSpy: SpeechInputSession {
+  var eventHandler: ((SpeechInputSessionEvent) -> Void)?
+  private(set) var cancelCallCount = 0
+  private var startContinuation: CheckedContinuation<Void, Never>?
+  private var startWaiters: [CheckedContinuation<Void, Never>] = []
+
+  func start() async throws {
+    let waiters = startWaiters
+    startWaiters = []
+    waiters.forEach { $0.resume() }
+
+    await withCheckedContinuation { continuation in
+      startContinuation = continuation
+    }
+  }
+
+  func finish() async throws -> String {
+    ""
+  }
+
+  func cancel() {
+    cancelCallCount += 1
+  }
+
+  func waitUntilStartWasCalled() async {
+    if startContinuation != nil {
+      return
+    }
+
+    await withCheckedContinuation { continuation in
+      startWaiters.append(continuation)
+    }
+  }
+
+  func completeStart() {
+    startContinuation?.resume()
+    startContinuation = nil
   }
 }

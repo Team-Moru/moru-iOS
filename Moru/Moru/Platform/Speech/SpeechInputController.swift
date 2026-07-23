@@ -146,14 +146,21 @@ final class SpeechInputController {
         return
       }
 
+      newSession.eventHandler = nil
+      newSession.cancel()
       isPreparing = false
       session = nil
+      activeAttemptID = nil
       phase = .failed(failure(from: error))
     }
   }
 
   func pause() async {
-    guard phase == .listening, let session else {
+    guard
+      phase == .listening,
+      let session,
+      let attemptID = activeAttemptID
+    else {
       return
     }
 
@@ -163,11 +170,23 @@ final class SpeechInputController {
 
     do {
       let transcript = try await session.finish()
+      guard activeAttemptID == attemptID else {
+        return
+      }
+
       appendCommittedSegment(transcript)
+      session.eventHandler = nil
       self.session = nil
       phase = .paused
     } catch {
+      guard activeAttemptID == attemptID else {
+        return
+      }
+
+      session.eventHandler = nil
+      session.cancel()
       self.session = nil
+      activeAttemptID = nil
       phase = .failed(failure(from: error))
     }
   }
@@ -195,7 +214,7 @@ final class SpeechInputController {
       return nil
     }
 
-    guard let session else {
+    guard let session, let attemptID = activeAttemptID else {
       return nil
     }
 
@@ -205,13 +224,25 @@ final class SpeechInputController {
 
     do {
       let transcript = try await session.finish()
+      guard activeAttemptID == attemptID else {
+        return nil
+      }
+
       appendCommittedSegment(transcript)
+      session.eventHandler = nil
       self.session = nil
       let finalTranscript = joinedTranscript()
       resetAfterFinish()
       return finalTranscript.isEmpty ? nil : finalTranscript
     } catch {
+      guard activeAttemptID == attemptID else {
+        return nil
+      }
+
+      session.eventHandler = nil
+      session.cancel()
       self.session = nil
+      activeAttemptID = nil
       phase = .failed(failure(from: error))
       return nil
     }
@@ -247,6 +278,7 @@ final class SpeechInputController {
     activeAttemptID = nil
     silenceTask?.cancel()
     silenceTask = nil
+    session?.eventHandler = nil
     session?.cancel()
     session = nil
     committedSegments = []
@@ -306,9 +338,13 @@ final class SpeechInputController {
         return
       }
 
+      let failedSession = session
       session = nil
+      activeAttemptID = nil
       silenceTask?.cancel()
       silenceTask = nil
+      failedSession?.eventHandler = nil
+      failedSession?.cancel()
       phase = .failed(failure)
     }
   }
@@ -328,8 +364,11 @@ final class SpeechInputController {
           continue
         }
 
-        self.session?.cancel()
+        let silentSession = self.session
         self.session = nil
+        self.activeAttemptID = nil
+        silentSession?.eventHandler = nil
+        silentSession?.cancel()
         self.phase = .failed(.silence)
         return
       }

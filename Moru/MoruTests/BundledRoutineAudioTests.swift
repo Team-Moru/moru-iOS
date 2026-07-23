@@ -235,6 +235,7 @@ final class BundledRoutineAudioTests: XCTestCase {
       // A simulator without an input route can reject audio-session activation.
     }
     coordinator.deactivateSpeechInput()
+    coordinator.deactivateSpeechInput()
     await player.play(
       itemID: "ENERGY-02",
       voiceCode: VoiceProfile.aoede.assetVoiceCode,

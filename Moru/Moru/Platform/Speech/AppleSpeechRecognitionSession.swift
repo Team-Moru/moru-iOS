@@ -166,8 +166,10 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
   private var resultTask: Task<Void, Never>?
   private var isTapInstalled = false
   private var isStopping = false
-  private var finalTranscript = ""
-  private var volatileTranscript = ""
+  private var isCancellationRequested = false
+  private var didCleanUp = false
+  private var ownsSpeechAudioSession = false
+  private var transcriptAccumulator = SpeechTranscriptAccumulator()
   private var interruptionObserver: NSObjectProtocol?
   private var routeChangeObserver: NSObjectProtocol?
 
@@ -178,11 +180,14 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
   }
 
   func start() async throws {
+    try ensureStartWasNotCancelled()
     guard await AVAudioApplication.requestRecordPermission() else {
       throw AppleSpeechRecognitionSessionError.microphonePermissionDenied
     }
+    try ensureStartWasNotCancelled()
 
     await logDeviceSupport()
+    try ensureStartWasNotCancelled()
     guard SpeechTranscriber.isAvailable else {
       log("SpeechTranscriber is unavailable on this device")
       throw AppleSpeechRecognitionSessionError.transcriberUnavailable
@@ -194,6 +199,7 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
       log("Requested locale is not supported: \(locale.identifier(.bcp47))")
       throw AppleSpeechRecognitionSessionError.localeUnavailable
     }
+    try ensureStartWasNotCancelled()
 
     let transcriber = SpeechTranscriber(
       locale: supportedLocale,
@@ -202,12 +208,20 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     let modules: [any SpeechModule] = [transcriber]
 
     try await installAssetsIfNeeded(for: modules)
+    try ensureStartWasNotCancelled()
 
     do {
       try await audioSessionCoordinator.activateForSpeechInput()
+      ownsSpeechAudioSession = true
     } catch {
       cleanup()
       throw AppleSpeechRecognitionSessionError.audioSession
+    }
+    do {
+      try ensureStartWasNotCancelled()
+    } catch {
+      cleanup()
+      throw error
     }
 
     let inputNode = audioEngine.inputNode
@@ -232,10 +246,20 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
       cleanup()
       throw AppleSpeechRecognitionSessionError.recognition
     }
+    do {
+      try ensureStartWasNotCancelled()
+    } catch {
+      cleanup()
+      throw error
+    }
 
     let analyzer = SpeechAnalyzer(modules: modules)
     do {
       try await analyzer.prepareToAnalyze(in: analysisFormat)
+      try ensureStartWasNotCancelled()
+    } catch is CancellationError {
+      cleanup()
+      throw CancellationError()
     } catch {
       cleanup()
       throw AppleSpeechRecognitionSessionError.recognition
@@ -289,8 +313,13 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
 
     do {
       try await analyzer.start(inputSequence: inputStream)
+      try ensureStartWasNotCancelled()
       audioEngine.prepare()
       try audioEngine.start()
+      try ensureStartWasNotCancelled()
+    } catch is CancellationError {
+      cleanup()
+      throw CancellationError()
     } catch {
       cleanup()
       throw AppleSpeechRecognitionSessionError.audioSession
@@ -321,6 +350,11 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
   }
 
   func cancel() {
+    isCancellationRequested = true
+    guard !didCleanUp else {
+      return
+    }
+
     isStopping = true
     removeInputTap()
     audioEngine.stop()
@@ -433,15 +467,12 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
 
   private func handle(_ result: SpeechTranscriber.Result) {
     let transcript = String(result.text.characters)
+    let accumulatedTranscript = transcriptAccumulator.append(
+      transcript,
+      isFinal: result.isFinal
+    )
 
-    if result.isFinal {
-      finalTranscript = transcript
-      volatileTranscript = ""
-    } else {
-      volatileTranscript = transcript
-    }
-
-    eventHandler?(.transcript(transcript, isFinal: result.isFinal))
+    eventHandler?(.transcript(accumulatedTranscript, isFinal: result.isFinal))
   }
 
   private func observeAudioSessionChanges() {
@@ -467,11 +498,20 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
   }
 
   private func preferredTranscript() -> String {
-    let transcript = finalTranscript.isEmpty ? volatileTranscript : finalTranscript
-    return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    transcriptAccumulator.transcript
   }
 
   private func cleanup() {
+    if ownsSpeechAudioSession {
+      ownsSpeechAudioSession = false
+      audioSessionCoordinator.deactivateSpeechInput()
+    }
+
+    guard !didCleanUp else {
+      return
+    }
+
+    didCleanUp = true
     removeInputTap()
     audioEngine.stop()
     inputContinuation?.finish()
@@ -481,12 +521,21 @@ final class AppleSpeechRecognitionSession: SpeechInputSession {
     analyzer = nil
     transcriber = nil
     inputSink = nil
-    audioSessionCoordinator.deactivateSpeechInput()
 
-    NotificationCenter.default.removeObserver(interruptionObserver as Any)
-    NotificationCenter.default.removeObserver(routeChangeObserver as Any)
+    if let interruptionObserver {
+      NotificationCenter.default.removeObserver(interruptionObserver)
+    }
+    if let routeChangeObserver {
+      NotificationCenter.default.removeObserver(routeChangeObserver)
+    }
     interruptionObserver = nil
     routeChangeObserver = nil
+  }
+
+  private func ensureStartWasNotCancelled() throws {
+    guard !isCancellationRequested else {
+      throw CancellationError()
+    }
   }
 
   private func logDeviceSupport() async {
