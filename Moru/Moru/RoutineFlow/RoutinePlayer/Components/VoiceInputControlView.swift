@@ -8,6 +8,7 @@ import UIKit
 
 struct VoiceInputControlView: View {
   let speechInputController: SpeechInputController
+  let automaticCompletionIntent: SpeechAutomaticCompletionIntent?
   let autoFinishMatch: ((String) -> RoutineStepCompletionMatch)?
   let onFinished: (String) -> Void
   @Environment(\.openURL) private var openURL
@@ -17,10 +18,12 @@ struct VoiceInputControlView: View {
 
   init(
     speechInputController: SpeechInputController,
+    automaticCompletionIntent: SpeechAutomaticCompletionIntent? = nil,
     autoFinishMatch: ((String) -> RoutineStepCompletionMatch)? = nil,
     onFinished: @escaping (String) -> Void
   ) {
     self.speechInputController = speechInputController
+    self.automaticCompletionIntent = automaticCompletionIntent
     self.autoFinishMatch = autoFinishMatch
     self.onFinished = onFinished
   }
@@ -68,7 +71,7 @@ struct VoiceInputControlView: View {
   private func scheduleAutomaticFinishIfNeeded(for update: SpeechTranscriptUpdate?) {
     guard
       let update,
-      let autoFinishMatch,
+      let automaticCompletionIntent,
       !isAutomaticallyFinishing,
       speechInputController.phase == .listening
     else {
@@ -76,8 +79,12 @@ struct VoiceInputControlView: View {
       return
     }
 
-    let match = autoFinishMatch(update.text)
-    switch SpeechAutomaticCompletionPolicy.disposition(for: update, match: match) {
+    let match = autoFinishMatch?(update.text) ?? .none
+    switch SpeechAutomaticCompletionPolicy.disposition(
+      for: update,
+      intent: automaticCompletionIntent,
+      match: match
+    ) {
     case .none:
       cancelPendingAutomaticFinish()
 
@@ -108,14 +115,15 @@ struct VoiceInputControlView: View {
         !isAutomaticallyFinishing,
         speechInputController.phase == .listening,
         speechInputController.latestTranscriptUpdate == update,
-        let autoFinishMatch
+        let automaticCompletionIntent
       else {
         return
       }
 
-      let match = autoFinishMatch(update.text)
+      let match = autoFinishMatch?(update.text) ?? .none
       guard case .afterDelay = SpeechAutomaticCompletionPolicy.disposition(
         for: update,
+        intent: automaticCompletionIntent,
         match: match
       ) else {
         return

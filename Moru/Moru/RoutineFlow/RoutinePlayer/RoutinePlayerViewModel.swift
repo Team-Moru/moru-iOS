@@ -362,6 +362,28 @@ final class RoutinePlayerViewModel {
         
         moveToNextStep()
     }
+
+    func finishStepCompletedScreenAfterGuidance() async {
+        guard !isStepInteractionDisabled else {
+            return
+        }
+
+        guard case .stepCompleted = screenState else {
+            return
+        }
+
+        do {
+            try await guidanceCoordinator.waitUntilCurrentCueFinishes()
+        } catch {
+            return
+        }
+
+        guard !Task.isCancelled else {
+            return
+        }
+
+        finishStepCompletedScreen()
+    }
     
     func retrySavingRun() {
         guard pendingSave != nil else {

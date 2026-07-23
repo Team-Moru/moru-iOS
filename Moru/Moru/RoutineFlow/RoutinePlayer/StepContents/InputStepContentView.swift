@@ -47,9 +47,7 @@ struct InputStepContentView: View {
 
       VoiceInputControlView(
         speechInputController: speechInputController,
-        autoFinishMatch: { transcript in
-          RoutineStepCompletionMatcher.match(transcript, for: step)
-        }
+        automaticCompletionIntent: .dictatedInput
       ) { transcript in
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
           feedbackText = "음성이 들리지 않았어요. 다시 말해 주세요."

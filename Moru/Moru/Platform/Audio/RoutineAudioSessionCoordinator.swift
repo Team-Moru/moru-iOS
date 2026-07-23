@@ -40,6 +40,7 @@ final class NoopRoutineGuidancePlayer: RoutineGuidancePlaying {
 final class RoutineAudioSessionCoordinator {
   private let guidancePlayback: any GuidancePlaybackControlling
   private let audioSession: AVAudioSession
+  private var isSpeechInputActive = false
 
   init(
     guidancePlayback: any GuidancePlaybackControlling = NoopRoutineGuidancePlayer(),
@@ -52,16 +53,28 @@ final class RoutineAudioSessionCoordinator {
   func activateForSpeechInput() async throws {
     await guidancePlayback.stopAndWaitUntilIdle()
 
-    try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
-    try audioSession.setCategory(
-      .playAndRecord,
-      mode: .spokenAudio,
-      options: [.allowBluetoothHFP, .defaultToSpeaker]
-    )
-    try audioSession.setActive(true)
+    do {
+      try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+      try audioSession.setCategory(
+        .playAndRecord,
+        mode: .spokenAudio,
+        options: [.allowBluetoothHFP, .defaultToSpeaker]
+      )
+      try audioSession.setActive(true)
+      isSpeechInputActive = true
+    } catch {
+      try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+      guidancePlayback.resumeAfterSpeechInput()
+      throw error
+    }
   }
 
   func deactivateSpeechInput() {
+    guard isSpeechInputActive else {
+      return
+    }
+
+    isSpeechInputActive = false
     try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
     guidancePlayback.resumeAfterSpeechInput()
   }

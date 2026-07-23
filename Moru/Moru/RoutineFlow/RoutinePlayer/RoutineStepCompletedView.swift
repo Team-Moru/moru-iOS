@@ -10,7 +10,7 @@ import SwiftUI
 struct RoutineStepCompletedView: View {
     let stepTitle: String
     let isGuidancePlaying: Bool
-    let onFinish: () -> Void
+    let onFinish: () async -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -53,7 +53,7 @@ struct RoutineStepCompletedView: View {
 
                 guard !Task.isCancelled else { return }
 
-                onFinish()
+                await onFinish()
             } catch {
                 // 화면이 사라져 Task가 취소된 경우에는
                 // 다음 단계로 이동하지 않습니다.
