@@ -39,6 +39,7 @@ enum AppRadius {
   static let xs: CGFloat = 8
   static let sm: CGFloat = 16
   static let md: CGFloat = 16
+  static let routineCard: CGFloat = 20
   static let lg: CGFloat = 24
   static let xl: CGFloat = 24
   static let pill: CGFloat = 100

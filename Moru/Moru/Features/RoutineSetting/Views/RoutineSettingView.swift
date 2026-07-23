@@ -22,16 +22,23 @@ struct RoutineSettingView: View {
   var body: some View {
     NavigationStack {
       ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: AppSpacing.xl) {
+        VStack(alignment: .leading, spacing: 0) {
           header
+
           activeRoutineSection
+            .padding(.top, AppSpacing.xxl)
+
           inactiveRoutineSection
+            .padding(.top, AppSpacing.forty)
+
           addRoutineButton
+            .padding(.top, AppSpacing.sm)
 
           if let errorMessage = viewModel.state.errorMessage {
             Text(errorMessage)
               .font(AppFont.caption1Medium)
               .foregroundStyle(AppColor.orange500)
+              .padding(.top, AppSpacing.sm)
           }
         }
         .padding(.horizontal, AppSpacing.screenHorizontal)
@@ -70,8 +77,6 @@ struct RoutineSettingView: View {
       Text("루틴")
         .font(AppFont.pretendardSemiBold(size: 24))
         .foregroundStyle(AppColor.moruTextPrimary)
-
-
     }
   }
 
@@ -96,23 +101,27 @@ struct RoutineSettingView: View {
     routines: [RoutineSettingItemState],
     emptyTitle: String
   ) -> some View {
-    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+    VStack(alignment: .leading, spacing: 0) {
       Text(title)
         .font(AppFont.pretendardSemiBold(size: 16))
         .foregroundStyle(AppColor.moruTextPrimary)
 
       if routines.isEmpty {
         emptySectionCard(title: emptyTitle)
+          .padding(.top, AppSpacing.md)
       } else {
-        ForEach(routines) { routine in
-          RoutineSettingCard(
-            routine: routine,
-            isActive: activationBinding(for: routine),
-            onTap: {
-              editorDraft = viewModel.makeDraft(for: routine.id)
-            }
-          )
+        VStack(spacing: AppSpacing.sm) {
+          ForEach(routines) { routine in
+            RoutineSettingCard(
+              routine: routine,
+              isActive: activationBinding(for: routine),
+              onTap: {
+                editorDraft = viewModel.makeDraft(for: routine.id)
+              }
+            )
+          }
         }
+        .padding(.top, AppSpacing.md)
       }
     }
   }
@@ -197,7 +206,6 @@ struct RoutineSettingView: View {
       )
     }
   }
-
 }
 
 #if DEBUG

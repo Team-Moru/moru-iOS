@@ -29,45 +29,47 @@ struct MoruRoutineCard: View {
   }
 
   var body: some View {
-    HStack(spacing: isAddCard ? AppSpacing.iconTextGap : AppSpacing.md) {
+    Group {
       if isAddCard {
-        Image(systemName: "plus")
-          .resizable()
-          .scaledToFit()
-          .foregroundStyle(AppColor.moruDisabled)
-          .frame(width: 22, height: 22)
+        HStack(spacing: AppSpacing.iconTextGap) {
+          Spacer(minLength: 0)
 
-        Text(title)
-          .font(AppFont.pretendardSemiBold(size: 16))
-          .foregroundStyle(AppColor.moruDisabled)
-          .fixedSize(horizontal: false, vertical: true)
+          addIcon
 
-        Spacer()
-      } else {
-        MoruRoutineNoteIcon(isActive: isActive)
-
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
           Text(title)
-            .font(AppFont.pretendardSemiBold(size: 18))
-            .foregroundStyle(AppColor.moruTextPrimary)
+            .font(AppFont.label1NormalSemiBold)
+            .foregroundStyle(AppColor.moruDisabled)
+            .fixedSize(horizontal: false, vertical: true)
 
-          Text(description)
-            .font(AppFont.pretendardMedium(size: 14))
-            .foregroundStyle(isActive ? AppColor.moruTextTertiary : AppColor.gray200)
+          Spacer(minLength: 0)
         }
+      } else {
+        HStack(spacing: AppSpacing.md) {
+          MoruRoutineNoteIcon(isActive: isActive)
 
-        Spacer()
+          VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+            Text(title)
+              .font(AppFont.pretendardSemiBold(size: 18))
+              .foregroundStyle(AppColor.moruTextPrimary)
 
-        MoruToggle(isOn: $isActive)
-        MoruChevron(color: AppColor.moruTextSecondary)
+            Text(description)
+              .font(AppFont.pretendardMedium(size: 14))
+              .foregroundStyle(isActive ? AppColor.moruTextTertiary : AppColor.gray200)
+          }
+
+          Spacer()
+
+          MoruToggle(isOn: $isActive)
+          MoruChevron(color: AppColor.moruTextSecondary)
+        }
       }
     }
-    .padding(.horizontal, AppSpacing.xl)
+    .padding(.horizontal, isAddCard ? AppSpacing.lg : AppSpacing.xl)
     .padding(.vertical, AppSpacing.md)
     .frame(maxWidth: .infinity)
     .frame(minHeight: minimumHeight)
     .background {
-      RoundedRectangle(cornerRadius: AppRadius.lg)
+      RoundedRectangle(cornerRadius: cornerRadius)
         .fill(backgroundColor)
         .shadow(
           color: shadowColor,
@@ -76,6 +78,18 @@ struct MoruRoutineCard: View {
           y: 0
         )
     }
+  }
+
+  private var addIcon: some View {
+    Image(systemName: "plus")
+      .resizable()
+      .scaledToFit()
+      .foregroundStyle(AppColor.moruDisabled)
+      .frame(width: 18, height: 18)
+  }
+
+  private var cornerRadius: CGFloat {
+    isAddCard ? AppRadius.routineCard : AppRadius.lg
   }
 
   private var backgroundColor: Color {
@@ -96,7 +110,7 @@ struct MoruRoutineCard: View {
 
   private var minimumHeight: CGFloat {
     if isAddCard {
-      return dynamicTypeSize.isAccessibilitySize ? 104 : 60
+      return dynamicTypeSize.isAccessibilitySize ? 104 : 64
     }
 
     return dynamicTypeSize.isAccessibilitySize ? 176 : 100
