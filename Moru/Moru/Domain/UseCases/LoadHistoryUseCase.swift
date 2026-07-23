@@ -214,8 +214,8 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
       observationCount: observationCount,
       averageWakeMinute: averageWakeMinute,
       averageDeviationMinutes: averageDeviationMinutes,
-      regularity: regularity(
-        forAverageDeviationMinutes: averageDeviationMinutes
+      regularity: HistoryStartTimeRegularity(
+        averageDeviationMinutes: averageDeviationMinutes
       )
     )
   }
@@ -306,21 +306,6 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
   private func normalizedRoundedMinute(_ minute: Double) -> Int {
     let rounded = Int(minute.rounded(.toNearestOrAwayFromZero))
     return ((rounded % 1_440) + 1_440) % 1_440
-  }
-
-  private func regularity(
-    forAverageDeviationMinutes averageDeviationMinutes: Int
-  ) -> HistoryStartTimeRegularity {
-    switch averageDeviationMinutes {
-    case ...10:
-      return .veryConsistent
-    case ...20:
-      return .consistent
-    case ...40:
-      return .variable
-    default:
-      return .highlyVariable
-    }
   }
 
   private func dayKey(for date: Date) -> String {

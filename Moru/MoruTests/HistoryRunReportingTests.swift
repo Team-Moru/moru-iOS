@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import SwiftData
 import SwiftUI
 import UIKit
 import XCTest
@@ -217,7 +218,31 @@ final class HistoryRunReportingTests: XCTestCase {
   }
 
   @MainActor
-  func testWakeMetricsClassifyAverageStartTimeDeviationWithoutMakingAScore() throws {
+  func testStartTimeRegularityOwnsBoundaryScoresAndCopy() {
+    let expectations: [
+      (deviation: Int, regularity: HistoryStartTimeRegularity, score: Int, copy: String)
+    ] = [
+      (10, .veryConsistent, 96, "매우 규칙적이에요"),
+      (11, .consistent, 87, "꽤 규칙적이에요"),
+      (20, .consistent, 87, "꽤 규칙적이에요"),
+      (21, .variable, 68, "조금 불규칙해요"),
+      (40, .variable, 68, "조금 불규칙해요"),
+      (41, .highlyVariable, 42, "많이 불규칙해요"),
+    ]
+
+    for expectation in expectations {
+      let regularity = HistoryStartTimeRegularity(
+        averageDeviationMinutes: expectation.deviation
+      )
+
+      XCTAssertEqual(regularity, expectation.regularity)
+      XCTAssertEqual(regularity.score, expectation.score)
+      XCTAssertEqual(regularity.shortText, expectation.copy)
+    }
+  }
+
+  @MainActor
+  func testWakeMetricsClassifyAverageStartTimeDeviation() throws {
     let calendar = makeCalendar()
     let runs = [7, 8, 9].map { hour in
       makeRun(
@@ -688,6 +713,45 @@ final class HistoryRunReportingTests: XCTestCase {
     XCTAssertThrowsError(try useCase.load()) { error in
       XCTAssertEqual(error as? HistoryRepositoryTestError, .unavailable)
     }
+  }
+
+  @MainActor
+  func testLocalDependencyUsesStoredRunsAndStaysEmptyAfterReset() throws {
+    let calendar = makeCalendar()
+    let now = makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let dependencies = DependencyContainer.local(modelContext: container.mainContext)
+    let step = makeSnapshot()
+    let run = makeRun(
+      startedAt: makeDate(2026, 7, 14, 7, 0, calendar: calendar),
+      plannedSteps: [step],
+      results: [makeCompletedResult(for: step)]
+    )
+    let useCase = LoadHistoryUseCase(
+      routineRunRepository: dependencies.routineRunRepository,
+      calendar: calendar,
+      now: { now }
+    )
+
+    XCTAssertTrue(
+      dependencies.routineRunRepository is SwiftDataRoutineRunRepository
+    )
+
+    try dependencies.routineRunRepository.saveRun(run)
+    XCTAssertEqual(try useCase.load().recentDays.flatMap(\.runs).map(\.id), [run.id])
+
+    let resetRepository = try XCTUnwrap(dependencies.localDataResetRepository)
+    try resetRepository.resetToFreshInstallState()
+
+    let resetOverview = try useCase.load()
+    XCTAssertTrue(resetOverview.recentDays.isEmpty)
+    XCTAssertEqual(resetOverview.week.totalRunCount, 0)
+    XCTAssertEqual(resetOverview.wakeMetrics, .unavailable)
+    XCTAssertTrue(
+      resetOverview.monthlyHeatmap.days.allSatisfy {
+        $0.completionRate == nil
+      }
+    )
   }
 
   @MainActor
