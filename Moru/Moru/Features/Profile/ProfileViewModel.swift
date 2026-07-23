@@ -27,7 +27,7 @@ final class ProfileViewModel {
   private let onResetSucceeded: @MainActor () -> Void
 
   private(set) var state: ProfileViewState = .loading
-  private(set) var alarmStatus: ProfileAlarmStatus
+  private(set) var alarmStatus: ProfileAlarmStatus = .unavailable
   private(set) var displayNameErrorMessage: String?
   private(set) var voiceErrorMessage: String?
   private(set) var resetErrorMessage: String?
@@ -65,7 +65,6 @@ final class ProfileViewModel {
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
     self.onResetSucceeded = onResetSucceeded
-    alarmStatus = alarmService.currentStatus()
   }
 
   func loadProfileSettings() {
@@ -75,6 +74,10 @@ final class ProfileViewModel {
       state = .content(try profileSettingsUseCase.loadProfileSettings())
     } catch {
       state = .failed(message: "프로필 설정을 불러오지 못했어요.")
+    }
+
+    Task {
+      await refreshAlarmStatus()
     }
   }
 
@@ -127,8 +130,8 @@ final class ProfileViewModel {
     profileSettingsUseCase.isVoiceAvailable(voice)
   }
 
-  func refreshAlarmStatus() {
-    alarmStatus = alarmService.currentStatus()
+  func refreshAlarmStatus() async {
+    alarmStatus = await alarmService.currentStatus()
   }
 
   func alarmAuthorizationButtonDidTap() async {
@@ -138,6 +141,16 @@ final class ProfileViewModel {
 
     isAlarmRequestInProgress = true
     alarmStatus = await alarmService.requestAuthorization()
+    isAlarmRequestInProgress = false
+  }
+
+  func alarmRetryButtonDidTap() async {
+    guard !isAlarmRequestInProgress else {
+      return
+    }
+
+    isAlarmRequestInProgress = true
+    alarmStatus = await alarmService.retryScheduling()
     isAlarmRequestInProgress = false
   }
 

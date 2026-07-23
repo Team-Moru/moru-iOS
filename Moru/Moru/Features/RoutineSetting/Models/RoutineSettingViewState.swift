@@ -22,10 +22,31 @@ struct RoutineSettingViewState: Equatable {
 struct RoutineSettingItemState: Equatable, Identifiable {
   var id: UUID
   var title: String
-  
   var stepCountText: String
   var estimatedDurationText: String
   var isActive: Bool
+  var alarmDeliveryState: AlarmDeliveryState? = nil
+  var alarmDeliveryBackend: AlarmDeliveryBackend? = nil
+
+  var alarmDeliveryText: String? {
+    switch alarmDeliveryState {
+    case .scheduled where alarmDeliveryBackend == .alarmKit:
+      "AlarmKit 예약됨"
+    case .scheduled:
+      "일반 알림으로 예약됨"
+    case .authorizationRequired:
+      "알람 권한 설정 필요"
+    case .repairRequired:
+      "예약 필요"
+    case nil:
+      nil
+    }
+  }
+
+  var needsAlarmAction: Bool {
+    alarmDeliveryState == .authorizationRequired
+      || alarmDeliveryState == .repairRequired
+  }
 }
 
 struct RoutineWeekdayConflictState: Equatable {

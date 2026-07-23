@@ -5,6 +5,8 @@
 //  Created by 김승겸 on 7/12/26.
 //
 
+#if DEBUG
+
 import AlarmKit
 import Combine
 import SwiftUI
@@ -222,3 +224,5 @@ final class MoruAlarmService: ObservableObject {
         }
     }
 }
+
+#endif

@@ -1186,7 +1186,9 @@ private extension RoutineStep {
 }
 
 private final class PreviewCompleteOnboardingUseCase: CompleteOnboardingUseCaseProtocol {
-  func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult {
+  func execute(
+    _ request: CompleteOnboardingRequest
+  ) async throws -> CompleteOnboardingResult {
     CompleteOnboardingResult(
       profile: LocalProfile(selectedVoice: request.selectedVoice),
       routine: try LocalTemplateSuggestionService.shared.makeRoutine(from: request.suggestionInput)

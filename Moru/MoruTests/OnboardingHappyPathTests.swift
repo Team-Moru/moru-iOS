@@ -12,7 +12,8 @@ import XCTest
 
 final class OnboardingHappyPathTests: XCTestCase {
   @MainActor
-  func testCompleteOnboardingUseCaseSavesProfileActiveRoutineAndEnabledAlarm() throws {
+  func testCompleteOnboardingUseCaseSavesProfileActiveRoutineAndEnabledAlarm()
+    async throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let dependencies = DependencyContainer.local(modelContext: container.mainContext)
     let useCase = CompleteOnboardingUseCase(
@@ -20,7 +21,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       routineSuggestionService: dependencies.routineSuggestionService
     )
 
-    let result = try useCase.execute(
+    let result = try await useCase.execute(
       CompleteOnboardingRequest(
         suggestionInput: RoutineSuggestionInput(
           experience: .wantsRecommendation,
@@ -62,7 +63,8 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testCompleteOnboardingUseCaseRejectsInvalidAlarmAndUnavailableVoiceBeforeSaving() throws {
+  func testCompleteOnboardingUseCaseRejectsInvalidAlarmAndUnavailableVoiceBeforeSaving()
+    async throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let dependencies = DependencyContainer.local(modelContext: container.mainContext)
     let useCase = CompleteOnboardingUseCase(
@@ -70,8 +72,8 @@ final class OnboardingHappyPathTests: XCTestCase {
       routineSuggestionService: dependencies.routineSuggestionService
     )
 
-    XCTAssertThrowsError(
-      try useCase.execute(
+    await assertCompleteOnboardingError(.invalidAlarmTime(hour: 24, minute: 0)) {
+      _ = try await useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(
             wakeUpHour: 24,
@@ -81,26 +83,17 @@ final class OnboardingHappyPathTests: XCTestCase {
           selectedVoice: .yuna
         )
       )
-    ) {
-      XCTAssertEqual(
-        $0 as? CompleteOnboardingError,
-        .invalidAlarmTime(hour: 24, minute: 0)
-      )
     }
-
-    XCTAssertThrowsError(
-      try useCase.execute(
+    await assertCompleteOnboardingError(.emptyWeekdays) {
+      _ = try await useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(weekdays: []),
           selectedVoice: .yuna
         )
       )
-    ) {
-      XCTAssertEqual($0 as? CompleteOnboardingError, .emptyWeekdays)
     }
-
-    XCTAssertThrowsError(
-      try useCase.execute(
+    await assertCompleteOnboardingError(.unavailableVoice("remote-pro-voice")) {
+      _ = try await useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(),
           selectedVoice: VoiceProfile(
@@ -109,11 +102,6 @@ final class OnboardingHappyPathTests: XCTestCase {
             localeIdentifier: "ko-KR"
           )
         )
-      )
-    ) {
-      XCTAssertEqual(
-        $0 as? CompleteOnboardingError,
-        .unavailableVoice("remote-pro-voice")
       )
     }
 
@@ -155,7 +143,7 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testOnboardingViewModelMovesThroughStepsAndSavesExactlyOnce() throws {
+  func testOnboardingViewModelMovesThroughStepsAndSavesExactlyOnce() async throws {
     let useCase = SpyCompleteOnboardingUseCase()
     var completionCount = 0
     var completedRoutineID: UUID?
@@ -209,8 +197,8 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .completion)
 
-    viewModel.primaryButtonDidTap()
-    viewModel.primaryButtonDidTap()
+    await viewModel.completeButtonDidTap()
+    await viewModel.completeButtonDidTap()
 
     XCTAssertEqual(useCase.executeCallCount, 1)
     XCTAssertEqual(completionCount, 1)
@@ -322,7 +310,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(OnboardingDuration.totalMinutes(for: routine), 3)
   }
   @MainActor
-  func testSwiftDataRelaunchPersistenceAfterOnboardingCompletion() throws {
+  func testSwiftDataRelaunchPersistenceAfterOnboardingCompletion() async throws {
     let temporaryDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -344,7 +332,7 @@ final class OnboardingHappyPathTests: XCTestCase {
         routineSuggestionService: dependencies.routineSuggestionService
       )
 
-      let result = try useCase.execute(
+      let result = try await useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(
             goalTags: ["habit"],
@@ -383,6 +371,19 @@ final class OnboardingHappyPathTests: XCTestCase {
       XCTAssertEqual(activeRoutine.steps.count, 10)
     }
   }
+
+  @MainActor
+  private func assertCompleteOnboardingError(
+    _ expected: CompleteOnboardingError,
+    operation: () async throws -> Void
+  ) async {
+    do {
+      try await operation()
+      XCTFail("Expected onboarding completion to fail.")
+    } catch {
+      XCTAssertEqual(error as? CompleteOnboardingError, expected)
+    }
+  }
 }
 
 @MainActor
@@ -391,7 +392,9 @@ private final class SpyCompleteOnboardingUseCase: CompleteOnboardingUseCaseProto
   private(set) var requests: [CompleteOnboardingRequest] = []
   private(set) var resultRoutineIDs: [UUID] = []
 
-  func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult {
+  func execute(
+    _ request: CompleteOnboardingRequest
+  ) async throws -> CompleteOnboardingResult {
     executeCallCount += 1
     requests.append(request)
 

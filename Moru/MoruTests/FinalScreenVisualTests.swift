@@ -567,7 +567,7 @@ private final class VisualVoicePreviewPlayer: VoicePreviewPlaying {
 
 @MainActor
 private final class VisualAlarmService: ProfileAlarmServicing {
-  func currentStatus() -> ProfileAlarmStatus {
+  func currentStatus() async -> ProfileAlarmStatus {
     .configured
   }
 
@@ -575,7 +575,11 @@ private final class VisualAlarmService: ProfileAlarmServicing {
     .configured
   }
 
-  func cancelAllAlarms() throws {}
+  func retryScheduling() async -> ProfileAlarmStatus {
+    .configured
+  }
+
+  func cancelAllAlarms() async throws {}
 }
 
 @MainActor

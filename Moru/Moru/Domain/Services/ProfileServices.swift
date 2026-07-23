@@ -9,8 +9,10 @@ import Foundation
 
 enum ProfileAlarmStatus: Equatable {
   case configured
+  case fallbackConfigured
   case permissionNotDetermined
   case permissionOff
+  case repairRequired
   case unavailable
 }
 
@@ -26,14 +28,15 @@ struct UnavailableVoiceAvailabilityProbe: VoiceAvailabilityProbing {
 
 @MainActor
 protocol ProfileAlarmServicing: AnyObject {
-  func currentStatus() -> ProfileAlarmStatus
+  func currentStatus() async -> ProfileAlarmStatus
   func requestAuthorization() async -> ProfileAlarmStatus
-  func cancelAllAlarms() throws
+  func retryScheduling() async -> ProfileAlarmStatus
+  func cancelAllAlarms() async throws
 }
 
 @MainActor
 final class UnavailableProfileAlarmService: ProfileAlarmServicing {
-  func currentStatus() -> ProfileAlarmStatus {
+  func currentStatus() async -> ProfileAlarmStatus {
     .unavailable
   }
 
@@ -41,5 +44,9 @@ final class UnavailableProfileAlarmService: ProfileAlarmServicing {
     .unavailable
   }
 
-  func cancelAllAlarms() throws {}
+  func retryScheduling() async -> ProfileAlarmStatus {
+    .unavailable
+  }
+
+  func cancelAllAlarms() async throws {}
 }
