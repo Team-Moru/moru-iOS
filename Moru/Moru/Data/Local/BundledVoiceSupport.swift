@@ -70,7 +70,7 @@ final class BundledVoicePreviewPlayer: VoicePreviewPlaying {
         return
       }
 
-      await guidancePlayer.play(
+      _ = await guidancePlayer.play(
         itemID: BundledVoiceAvailabilityProbe.previewItemID,
         voiceCode: voice.assetVoiceCode,
         kind: .intro

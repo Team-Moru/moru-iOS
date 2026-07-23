@@ -8,7 +8,9 @@ import SwiftUI
 struct ConfirmStepContentView: View {
   let step: RoutineStep
   let isGuidancePlaying: Bool
+  let isAutomaticStartBlocked: Bool
   let speechInputController: SpeechInputController
+  let waitUntilGuidanceFinishes: () async -> Bool
   let onComplete: (String) -> Void
   @State private var feedbackText: String?
 
@@ -50,7 +52,9 @@ struct ConfirmStepContentView: View {
         automaticCompletionIntent: .stepCompletion,
         autoFinishMatch: { transcript in
           RoutineStepCompletionMatcher.match(transcript, for: step)
-        }
+        },
+        isAutomaticStartBlocked: isAutomaticStartBlocked,
+        waitUntilGuidanceFinishes: waitUntilGuidanceFinishes
       ) { transcript in
         guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
           feedbackText = "완료했다고 들리지 않아요. 다시 말해 주세요."

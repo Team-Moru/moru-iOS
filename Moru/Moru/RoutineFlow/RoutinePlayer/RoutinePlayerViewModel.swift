@@ -43,6 +43,12 @@ final class RoutinePlayerViewModel {
         let terminalIntent: PendingTerminalIntent
         let finalizer: any RegularRoutineFinalizing
     }
+
+    private struct PendingStepCompletion {
+        let stepID: UUID
+        let inputText: String?
+        let transcript: String?
+    }
     
     private let resolver: any ResolveRoutineExecutionUseCaseProtocol
     private let finalizationMode: FinalizationMode
@@ -57,6 +63,7 @@ final class RoutinePlayerViewModel {
     
     private var routine: Routine?
     private var steps: [RoutineStep] = []
+    private var pendingStepCompletion: PendingStepCompletion?
     private var pendingSave: PendingSave?
     private var didEmitRunnableContent = false
     private var didRequestExit = false
@@ -240,6 +247,7 @@ final class RoutinePlayerViewModel {
     
     func cancelActiveDialog() {
         dialogState = nil
+        applyPendingStepCompletion()
     }
     
     func confirmActiveDialog() {
@@ -248,6 +256,7 @@ final class RoutinePlayerViewModel {
         }
         
         self.dialogState = nil
+        pendingStepCompletion = nil
         
         switch dialogState {
         case .skipStep:
@@ -262,11 +271,22 @@ final class RoutinePlayerViewModel {
         inputText: String? = nil,
         transcript: String? = nil
     ) {
-        guard !isStepInteractionDisabled else {
+        guard case .running(let step) = screenState else {
             return
         }
 
-        guard case .running(let step) = screenState else {
+        if dialogState != nil {
+            if pendingStepCompletion == nil {
+                pendingStepCompletion = PendingStepCompletion(
+                    stepID: step.id,
+                    inputText: inputText,
+                    transcript: transcript
+                )
+            }
+            return
+        }
+
+        guard pendingSave == nil, !isSavingRun, !didRequestExit else {
             return
         }
 
@@ -372,9 +392,8 @@ final class RoutinePlayerViewModel {
             return
         }
 
-        do {
-            try await guidanceCoordinator.waitUntilCurrentCueFinishes()
-        } catch {
+        let result = await guidanceCoordinator.waitUntilCurrentCueFinishes()
+        guard result == .completed else {
             return
         }
 
@@ -383,6 +402,21 @@ final class RoutinePlayerViewModel {
         }
 
         finishStepCompletedScreen()
+    }
+
+    func waitUntilIntroFinishes(for stepID: UUID) async -> Bool {
+        guard case .running(let step) = screenState, step.id == stepID else {
+            return false
+        }
+
+        let result = await guidanceCoordinator.waitUntilCurrentCueFinishes()
+        guard result == .completed,
+              case .running(let currentStep) = screenState,
+              currentStep.id == stepID else {
+            return false
+        }
+
+        return true
     }
     
     func retrySavingRun() {
@@ -415,6 +449,10 @@ final class RoutinePlayerViewModel {
     func viewDidDisappear() {
         guidanceCoordinator.stop()
     }
+
+    func runtimeDidInterrupt() {
+        guidanceCoordinator.stop()
+    }
     
     private func requestExitDialog(_ exit: DialogState.Exit) {
         guard !isStepInteractionDisabled else {
@@ -426,6 +464,23 @@ final class RoutinePlayerViewModel {
         }
         
         dialogState = .exit(exit)
+    }
+
+    private func applyPendingStepCompletion() {
+        guard let pendingStepCompletion else {
+            return
+        }
+
+        self.pendingStepCompletion = nil
+        guard case .running(let step) = screenState,
+              step.id == pendingStepCompletion.stepID else {
+            return
+        }
+
+        completeCurrentStep(
+            inputText: pendingStepCompletion.inputText,
+            transcript: pendingStepCompletion.transcript
+        )
     }
     
     private func confirmExit(_ exit: DialogState.Exit) {

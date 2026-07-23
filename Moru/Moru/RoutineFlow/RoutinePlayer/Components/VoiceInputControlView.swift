@@ -7,24 +7,37 @@ import SwiftUI
 import UIKit
 
 struct VoiceInputControlView: View {
+  private enum AutomaticStartState {
+    case waitingForGuidance
+    case ready
+    case started
+    case manualOnly
+  }
+
   let speechInputController: SpeechInputController
   let automaticCompletionIntent: SpeechAutomaticCompletionIntent?
   let autoFinishMatch: ((String) -> RoutineStepCompletionMatch)?
+  let isAutomaticStartBlocked: Bool
+  let waitUntilGuidanceFinishes: () async -> Bool
   let onFinished: (String) -> Void
   @Environment(\.openURL) private var openURL
   @State private var isAutomaticallyFinishing = false
-  @State private var hasStartedAutomatically = false
+  @State private var automaticStartState: AutomaticStartState = .waitingForGuidance
   @State private var pendingAutomaticFinishTask: Task<Void, Never>?
 
   init(
     speechInputController: SpeechInputController,
     automaticCompletionIntent: SpeechAutomaticCompletionIntent? = nil,
     autoFinishMatch: ((String) -> RoutineStepCompletionMatch)? = nil,
+    isAutomaticStartBlocked: Bool = false,
+    waitUntilGuidanceFinishes: @escaping () async -> Bool = { true },
     onFinished: @escaping (String) -> Void
   ) {
     self.speechInputController = speechInputController
     self.automaticCompletionIntent = automaticCompletionIntent
     self.autoFinishMatch = autoFinishMatch
+    self.isAutomaticStartBlocked = isAutomaticStartBlocked
+    self.waitUntilGuidanceFinishes = waitUntilGuidanceFinishes
     self.onFinished = onFinished
   }
 
@@ -36,6 +49,8 @@ struct VoiceInputControlView: View {
         recognitionControlView
       } else if case .failed = speechInputController.phase {
         failureView
+      } else if automaticStartState == .waitingForGuidance {
+        guidanceWaitingView
       } else {
         VoiceMicButton {
           Task {
@@ -49,12 +64,17 @@ struct VoiceInputControlView: View {
       speechInputController.cancel()
     }
     .task {
-      guard !hasStartedAutomatically else {
+      guard automaticStartState == .waitingForGuidance else {
         return
       }
 
-      hasStartedAutomatically = true
-      await speechInputController.start()
+      let guidanceDidFinish = await waitUntilGuidanceFinishes()
+      guard !Task.isCancelled else {
+        return
+      }
+
+      automaticStartState = guidanceDidFinish ? .ready : .manualOnly
+      await startAutomaticallyIfPossible()
     }
     .onChange(of: speechInputController.latestTranscriptUpdate) { _, update in
       scheduleAutomaticFinishIfNeeded(for: update)
@@ -66,6 +86,29 @@ struct VoiceInputControlView: View {
 
       cancelPendingAutomaticFinish()
     }
+    .onChange(of: speechInputController.latestSilenceCompletion) { _, completion in
+      finishAfterSilenceIfNeeded(completion)
+    }
+    .onChange(of: isAutomaticStartBlocked) { _, isBlocked in
+      guard !isBlocked else {
+        return
+      }
+
+      Task {
+        await startAutomaticallyIfPossible()
+      }
+    }
+  }
+
+  private func startAutomaticallyIfPossible() async {
+    guard automaticStartState == .ready,
+          !isAutomaticStartBlocked,
+          speechInputController.phase == .idle else {
+      return
+    }
+
+    automaticStartState = .started
+    await speechInputController.start()
   }
 
   private func scheduleAutomaticFinishIfNeeded(for update: SpeechTranscriptUpdate?) {
@@ -149,6 +192,31 @@ struct VoiceInputControlView: View {
     onFinished(finalTranscript)
   }
 
+  private func finishAfterSilenceIfNeeded(_ completion: SpeechSilenceCompletion?) {
+    guard let completion,
+          let automaticCompletionIntent,
+          !isAutomaticallyFinishing else {
+      return
+    }
+
+    let update = SpeechTranscriptUpdate(
+      text: completion.transcript,
+      isFinal: true
+    )
+    let match = autoFinishMatch?(completion.transcript) ?? .none
+    guard SpeechAutomaticCompletionPolicy.disposition(
+      for: update,
+      intent: automaticCompletionIntent,
+      match: match
+    ) != .none else {
+      return
+    }
+
+    isAutomaticallyFinishing = true
+    cancelPendingAutomaticFinish()
+    onFinished(completion.transcript)
+  }
+
   private func cancelPendingAutomaticFinish() {
     pendingAutomaticFinishTask?.cancel()
     pendingAutomaticFinishTask = nil
@@ -160,6 +228,18 @@ struct VoiceInputControlView: View {
         .tint(AppColor.orange250)
 
       Text(speechInputController.statusText)
+        .font(AppFont.caption1SemiBold)
+        .foregroundStyle(AppColor.gray350)
+    }
+    .frame(height: 76)
+  }
+
+  private var guidanceWaitingView: some View {
+    VStack(spacing: 12) {
+      ProgressView()
+        .tint(AppColor.orange250)
+
+      Text("음성 안내가 끝난 뒤 인식을 시작해요.")
         .font(AppFont.caption1SemiBold)
         .foregroundStyle(AppColor.gray350)
     }
