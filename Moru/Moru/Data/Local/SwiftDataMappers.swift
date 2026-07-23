@@ -207,6 +207,7 @@ enum SwiftDataMapper {
   ) -> PersistedRoutineStep {
     PersistedRoutineStep(
       id: step.id,
+      presetItemID: step.presetItemID,
       typeRawValue: step.type.rawValue,
       title: step.title,
       instruction: step.instruction,
@@ -226,6 +227,7 @@ enum SwiftDataMapper {
 
     return RoutineStep(
       id: persisted.id,
+      presetItemID: persisted.presetItemID,
       type: stepType,
       title: persisted.title,
       instruction: persisted.instruction,

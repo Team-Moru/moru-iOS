@@ -27,11 +27,6 @@ struct SnoozeSheetView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-//            Capsule()
-//                .fill(AppColor.gray200)
-//                .frame(width: 48, height: 4)
-//                .padding(.vertical, 16)
-
             Text("다시 알림")
                 .font(AppFont.pretendardSemiBold(size: 18))
                 .foregroundStyle(AppColor.gray550)
@@ -59,20 +54,15 @@ struct SnoozeSheetView: View {
 
                             Spacer()
                         }
-                        .frame(height: 70)
+                        .padding(.vertical, 20)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("\(minutes)분 후 다시 알림")
-                    .accessibilityValue(
-                        selectedMinutes == minutes
-                            ? "선택됨"
-                            : "선택 안 됨"
-                    )
                 }
             }
+            .padding(.horizontal, 20)
 
-            Spacer(minLength: 20)
+            Spacer(minLength: 0)
 
             Button {
                 onConfirm(selectedMinutes)
@@ -83,7 +73,7 @@ struct SnoozeSheetView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
                     .background(AppColor.orange350)
-                    .cornerRadius(100)
+                    .clipShape(Capsule())
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 22)
@@ -96,17 +86,22 @@ struct SnoozeSheetView: View {
                     .foregroundStyle(AppColor.gray600)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(
-                        RoundedRectangle(cornerRadius: 100)
-                            .stroke(AppColor.gray150, lineWidth: 1)
-                    )
                     .background(AppColor.grayWhite)
+                    .overlay {
+                        Capsule()
+                            .stroke(AppColor.gray150, lineWidth: 1)
+                    }
+                    .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 20)
             .padding(.top, 10)
             .padding(.bottom, 21)
         }
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity
+        )
         .background(AppColor.grayWhite)
     }
 }

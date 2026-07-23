@@ -5,13 +5,17 @@
 //  Created by Codex on 7/6/26.
 //
 
+import Combine
 import Foundation
 import SwiftData
 
-struct AppRuntime {
+struct BootstrappedApp {
   let modelContainer: ModelContainer
   let dependencies: DependencyContainer
   let sessionStore: SessionStore
+  let navigationCoordinator: AppNavigationCoordinator
+  let onboardingBuilder: any OnboardingFlowBuilding
+  let routinePlayerBuilder: any RoutinePlayerBuilding
 }
 
 struct AppBootstrapFailure: Equatable {
@@ -19,36 +23,67 @@ struct AppBootstrapFailure: Equatable {
 }
 
 enum AppBootstrapState {
-  case ready(AppRuntime)
+  case idle
+  case loading
+  case ready(BootstrappedApp)
   case failed(AppBootstrapFailure)
 }
 
-enum AppBootstrapper {
-  @MainActor
-  static func make(
-    modelContainerFactory: () throws -> ModelContainer = {
+@MainActor
+final class AppBootstrapper: ObservableObject {
+  @Published private(set) var state: AppBootstrapState = .idle
+
+  private let modelContainerFactory: () throws -> ModelContainer
+
+  init(
+    modelContainerFactory: @escaping () throws -> ModelContainer = {
       try ModelContainer.moruContainer()
     }
-  ) -> AppBootstrapState {
+  ) {
+    self.modelContainerFactory = modelContainerFactory
+  }
+
+  func start() {
+    guard case .idle = state else {
+      return
+    }
+
+    constructReadyGraph()
+  }
+
+  func retry() {
+    guard case .failed = state else {
+      return
+    }
+
+    constructReadyGraph()
+  }
+
+  private func constructReadyGraph() {
+    state = .loading
+
     do {
       let modelContainer = try modelContainerFactory()
       let dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
-      let sessionStore = SessionStore(
-        localProfileRepository: dependencies.localProfileRepository,
-        routineRepository: dependencies.routineRepository
-      )
-      return .ready(
-        AppRuntime(
+      let sessionStore = dependencies.makeSessionStore()
+      let navigationCoordinator = AppNavigationCoordinator()
+      let onboardingBuilder = dependencies.makeOnboardingBuilder()
+      let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
+
+      state = .ready(
+        BootstrappedApp(
           modelContainer: modelContainer,
           dependencies: dependencies,
-          sessionStore: sessionStore
+          sessionStore: sessionStore,
+          navigationCoordinator: navigationCoordinator,
+          onboardingBuilder: onboardingBuilder,
+          routinePlayerBuilder: routinePlayerBuilder
         )
       )
     } catch {
-      let message = "저장소 초기화에 실패했습니다. 앱을 다시 실행해 주세요."
-      return .failed(
+      state = .failed(
         AppBootstrapFailure(
-          message: "\(message) \(error.localizedDescription)"
+          message: "저장소를 초기화할 수 없어요. 다시 시도해 주세요."
         )
       )
     }

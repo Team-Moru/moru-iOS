@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct RoutineSettingView: View {
+  static let rootAccessibilityIdentifier = "routine.root"
+
   @State private var viewModel: RoutineSettingViewModel
   @State private var editorDraft: RoutineDraftState?
   @State private var activationConflictRoutineID: UUID?
@@ -39,6 +41,9 @@ struct RoutineSettingView: View {
       .background(AppColor.babyBlue50.ignoresSafeArea())
       .navigationBarTitleDisplayMode(.inline)
     }
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
+    .accessibilityLabel("루틴")
     .task {
       viewModel.load()
     }
@@ -128,7 +133,8 @@ struct RoutineSettingView: View {
         .foregroundStyle(AppColor.moruTextSecondary)
     }
     .frame(maxWidth: .infinity)
-    .frame(height: 76)
+    .frame(minHeight: 76)
+    .padding(.vertical, AppSpacing.sm)
     .background(AppColor.grayWhite.opacity(0.35))
     .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
     .shadow(color: AppColor.babyBlue150, radius: 7.5, x: 0, y: 0)
@@ -159,7 +165,9 @@ struct RoutineSettingView: View {
     }
   }
 
-  private func activationConflictDialogOverlay(_ conflict: RoutineWeekdayConflictState) -> some View {
+  private func activationConflictDialogOverlay(
+    _ conflict: RoutineWeekdayConflictState
+  ) -> some View {
     ZStack {
       AppColor.grayBlack
         .opacity(0.22)
@@ -167,7 +175,11 @@ struct RoutineSettingView: View {
 
       MoruDialog(
         title: "다른 루틴에서 사용 중",
-        message: "\(conflict.weekdayText)은 알림이 설정된\n다른 루틴이 이미 있어요.\n해당 루틴으로 요일을 변경하시겠어요?",
+        message: [
+          "\(conflict.weekdayText)은 알림이 설정된",
+          "다른 루틴이 이미 있어요.",
+          "해당 루틴으로 요일을 변경하시겠어요?",
+        ].joined(separator: "\n"),
         primaryTitle: "괜찮아요",
         secondaryTitle: "변경하기",
         primaryAction: {

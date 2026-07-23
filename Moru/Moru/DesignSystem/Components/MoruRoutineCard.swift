@@ -12,6 +12,7 @@ struct MoruRoutineCard: View {
   let description: String
   let isAddCard: Bool
   @Binding private var isActive: Bool
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   init(title: String, description: String = "", isActive: Bool = false, isAddCard: Bool = false) {
     self.title = title
@@ -39,6 +40,7 @@ struct MoruRoutineCard: View {
         Text(title)
           .font(AppFont.pretendardSemiBold(size: 16))
           .foregroundStyle(AppColor.moruDisabled)
+          .fixedSize(horizontal: false, vertical: true)
 
         Spacer()
       } else {
@@ -62,7 +64,8 @@ struct MoruRoutineCard: View {
     }
     .padding(.horizontal, AppSpacing.xl)
     .padding(.vertical, AppSpacing.md)
-    .frame(width: 353, height: isAddCard ? 60 : 100)
+    .frame(maxWidth: .infinity)
+    .frame(minHeight: minimumHeight)
     .background {
       RoundedRectangle(cornerRadius: AppRadius.lg)
         .fill(backgroundColor)
@@ -89,5 +92,13 @@ struct MoruRoutineCard: View {
 
   private var shadowRadius: CGFloat {
     isActive && !isAddCard ? 0 : 7.5
+  }
+
+  private var minimumHeight: CGFloat {
+    if isAddCard {
+      return dynamicTypeSize.isAccessibilitySize ? 104 : 60
+    }
+
+    return dynamicTypeSize.isAccessibilitySize ? 176 : 100
   }
 }

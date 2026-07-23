@@ -1,0 +1,469 @@
+﻿항목ID,항목명,목표,유형,멘트종류,보이스,파일경로,보이스코드
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,intro,민서,audio/item_0001/item_0001_Aoede_intro.mp3,Aoede
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,done,민서,audio/item_0001/item_0001_Aoede_done.mp3,Aoede
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,remind,민서,audio/item_0001/item_0001_Aoede_remind.mp3,Aoede
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,intro,현우,audio/item_0001/item_0001_Charon_intro.mp3,Charon
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,done,현우,audio/item_0001/item_0001_Charon_done.mp3,Charon
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,remind,현우,audio/item_0001/item_0001_Charon_remind.mp3,Charon
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,intro,지유,audio/item_0001/item_0001_Kore_intro.mp3,Kore
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,done,지유,audio/item_0001/item_0001_Kore_done.mp3,Kore
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,remind,지유,audio/item_0001/item_0001_Kore_remind.mp3,Kore
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,intro,은우,audio/item_0001/item_0001_Orus_intro.mp3,Orus
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,done,은우,audio/item_0001/item_0001_Orus_done.mp3,Orus
+HABIT-08,5분 독서 몰입하기,습관 형성,타이머형,remind,은우,audio/item_0001/item_0001_Orus_remind.mp3,Orus
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,intro,민서,audio/item_0002/item_0002_Aoede_intro.mp3,Aoede
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,done,민서,audio/item_0002/item_0002_Aoede_done.mp3,Aoede
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,remind,민서,audio/item_0002/item_0002_Aoede_remind.mp3,Aoede
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,intro,현우,audio/item_0002/item_0002_Charon_intro.mp3,Charon
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,done,현우,audio/item_0002/item_0002_Charon_done.mp3,Charon
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,remind,현우,audio/item_0002/item_0002_Charon_remind.mp3,Charon
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,intro,지유,audio/item_0002/item_0002_Kore_intro.mp3,Kore
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,done,지유,audio/item_0002/item_0002_Kore_done.mp3,Kore
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,remind,지유,audio/item_0002/item_0002_Kore_remind.mp3,Kore
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,intro,은우,audio/item_0002/item_0002_Orus_intro.mp3,Orus
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,done,은우,audio/item_0002/item_0002_Orus_done.mp3,Orus
+CALM-13,가벼운 스트레칭으로 긴장 풀기,마음 안정,타이머형,remind,은우,audio/item_0002/item_0002_Orus_remind.mp3,Orus
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,intro,민서,audio/item_0003/item_0003_Aoede_intro.mp3,Aoede
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,done,민서,audio/item_0003/item_0003_Aoede_done.mp3,Aoede
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,remind,민서,audio/item_0003/item_0003_Aoede_remind.mp3,Aoede
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,intro,현우,audio/item_0003/item_0003_Charon_intro.mp3,Charon
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,done,현우,audio/item_0003/item_0003_Charon_done.mp3,Charon
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,remind,현우,audio/item_0003/item_0003_Charon_remind.mp3,Charon
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,intro,지유,audio/item_0003/item_0003_Kore_intro.mp3,Kore
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,done,지유,audio/item_0003/item_0003_Kore_done.mp3,Kore
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,remind,지유,audio/item_0003/item_0003_Kore_remind.mp3,Kore
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,intro,은우,audio/item_0003/item_0003_Orus_intro.mp3,Orus
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,done,은우,audio/item_0003/item_0003_Orus_done.mp3,Orus
+ENERGY-10,가볍게 스트레칭하기,활력,타이머형,remind,은우,audio/item_0003/item_0003_Orus_remind.mp3,Orus
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,intro,민서,audio/item_0003/item_0003_Aoede_intro.mp3,Aoede
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,done,민서,audio/item_0003/item_0003_Aoede_done.mp3,Aoede
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,remind,민서,audio/item_0003/item_0003_Aoede_remind.mp3,Aoede
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,intro,현우,audio/item_0003/item_0003_Charon_intro.mp3,Charon
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,done,현우,audio/item_0003/item_0003_Charon_done.mp3,Charon
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,remind,현우,audio/item_0003/item_0003_Charon_remind.mp3,Charon
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,intro,지유,audio/item_0003/item_0003_Kore_intro.mp3,Kore
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,done,지유,audio/item_0003/item_0003_Kore_done.mp3,Kore
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,remind,지유,audio/item_0003/item_0003_Kore_remind.mp3,Kore
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,intro,은우,audio/item_0003/item_0003_Orus_intro.mp3,Orus
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,done,은우,audio/item_0003/item_0003_Orus_done.mp3,Orus
+HEALTH-08,가볍게 스트레칭하기,건강,타이머형,remind,은우,audio/item_0003/item_0003_Orus_remind.mp3,Orus
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,intro,민서,audio/item_0003/item_0003_Aoede_intro.mp3,Aoede
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,done,민서,audio/item_0003/item_0003_Aoede_done.mp3,Aoede
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,remind,민서,audio/item_0003/item_0003_Aoede_remind.mp3,Aoede
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,intro,현우,audio/item_0003/item_0003_Charon_intro.mp3,Charon
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,done,현우,audio/item_0003/item_0003_Charon_done.mp3,Charon
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,remind,현우,audio/item_0003/item_0003_Charon_remind.mp3,Charon
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,intro,지유,audio/item_0003/item_0003_Kore_intro.mp3,Kore
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,done,지유,audio/item_0003/item_0003_Kore_done.mp3,Kore
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,remind,지유,audio/item_0003/item_0003_Kore_remind.mp3,Kore
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,intro,은우,audio/item_0003/item_0003_Orus_intro.mp3,Orus
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,done,은우,audio/item_0003/item_0003_Orus_done.mp3,Orus
+HABIT-07,가볍게 스트레칭하기,습관 형성,타이머형,remind,은우,audio/item_0003/item_0003_Orus_remind.mp3,Orus
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,intro,민서,audio/item_0004/item_0004_Aoede_intro.mp3,Aoede
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,done,민서,audio/item_0004/item_0004_Aoede_done.mp3,Aoede
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,remind,민서,audio/item_0004/item_0004_Aoede_remind.mp3,Aoede
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,intro,현우,audio/item_0004/item_0004_Charon_intro.mp3,Charon
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,done,현우,audio/item_0004/item_0004_Charon_done.mp3,Charon
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,remind,현우,audio/item_0004/item_0004_Charon_remind.mp3,Charon
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,intro,지유,audio/item_0004/item_0004_Kore_intro.mp3,Kore
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,done,지유,audio/item_0004/item_0004_Kore_done.mp3,Kore
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,remind,지유,audio/item_0004/item_0004_Kore_remind.mp3,Kore
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,intro,은우,audio/item_0004/item_0004_Orus_intro.mp3,Orus
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,done,은우,audio/item_0004/item_0004_Orus_done.mp3,Orus
+CALM-14,감사한 일 3가지 말하기,마음 안정,입력형,remind,은우,audio/item_0004/item_0004_Orus_remind.mp3,Orus
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,intro,민서,audio/item_0005/item_0005_Aoede_intro.mp3,Aoede
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,done,민서,audio/item_0005/item_0005_Aoede_done.mp3,Aoede
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,remind,민서,audio/item_0005/item_0005_Aoede_remind.mp3,Aoede
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,intro,현우,audio/item_0005/item_0005_Charon_intro.mp3,Charon
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,done,현우,audio/item_0005/item_0005_Charon_done.mp3,Charon
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,remind,현우,audio/item_0005/item_0005_Charon_remind.mp3,Charon
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,intro,지유,audio/item_0005/item_0005_Kore_intro.mp3,Kore
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,done,지유,audio/item_0005/item_0005_Kore_done.mp3,Kore
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,remind,지유,audio/item_0005/item_0005_Kore_remind.mp3,Kore
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,intro,은우,audio/item_0005/item_0005_Orus_intro.mp3,Orus
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,done,은우,audio/item_0005/item_0005_Orus_done.mp3,Orus
+ENERGY-15,기지개·전신 늘이기,활력,타이머형,remind,은우,audio/item_0005/item_0005_Orus_remind.mp3,Orus
+HEALTH-13,맨몸 근력 운동,건강,타이머형,intro,민서,audio/item_0006/item_0006_Aoede_intro.mp3,Aoede
+HEALTH-13,맨몸 근력 운동,건강,타이머형,done,민서,audio/item_0006/item_0006_Aoede_done.mp3,Aoede
+HEALTH-13,맨몸 근력 운동,건강,타이머형,remind,민서,audio/item_0006/item_0006_Aoede_remind.mp3,Aoede
+HEALTH-13,맨몸 근력 운동,건강,타이머형,intro,현우,audio/item_0006/item_0006_Charon_intro.mp3,Charon
+HEALTH-13,맨몸 근력 운동,건강,타이머형,done,현우,audio/item_0006/item_0006_Charon_done.mp3,Charon
+HEALTH-13,맨몸 근력 운동,건강,타이머형,remind,현우,audio/item_0006/item_0006_Charon_remind.mp3,Charon
+HEALTH-13,맨몸 근력 운동,건강,타이머형,intro,지유,audio/item_0006/item_0006_Kore_intro.mp3,Kore
+HEALTH-13,맨몸 근력 운동,건강,타이머형,done,지유,audio/item_0006/item_0006_Kore_done.mp3,Kore
+HEALTH-13,맨몸 근력 운동,건강,타이머형,remind,지유,audio/item_0006/item_0006_Kore_remind.mp3,Kore
+HEALTH-13,맨몸 근력 운동,건강,타이머형,intro,은우,audio/item_0006/item_0006_Orus_intro.mp3,Orus
+HEALTH-13,맨몸 근력 운동,건강,타이머형,done,은우,audio/item_0006/item_0006_Orus_done.mp3,Orus
+HEALTH-13,맨몸 근력 운동,건강,타이머형,remind,은우,audio/item_0006/item_0006_Orus_remind.mp3,Orus
+CALM-11,명상하기,마음 안정,타이머형,intro,민서,audio/item_0007/item_0007_Aoede_intro.mp3,Aoede
+CALM-11,명상하기,마음 안정,타이머형,done,민서,audio/item_0007/item_0007_Aoede_done.mp3,Aoede
+CALM-11,명상하기,마음 안정,타이머형,remind,민서,audio/item_0007/item_0007_Aoede_remind.mp3,Aoede
+CALM-11,명상하기,마음 안정,타이머형,intro,현우,audio/item_0007/item_0007_Charon_intro.mp3,Charon
+CALM-11,명상하기,마음 안정,타이머형,done,현우,audio/item_0007/item_0007_Charon_done.mp3,Charon
+CALM-11,명상하기,마음 안정,타이머형,remind,현우,audio/item_0007/item_0007_Charon_remind.mp3,Charon
+CALM-11,명상하기,마음 안정,타이머형,intro,지유,audio/item_0007/item_0007_Kore_intro.mp3,Kore
+CALM-11,명상하기,마음 안정,타이머형,done,지유,audio/item_0007/item_0007_Kore_done.mp3,Kore
+CALM-11,명상하기,마음 안정,타이머형,remind,지유,audio/item_0007/item_0007_Kore_remind.mp3,Kore
+CALM-11,명상하기,마음 안정,타이머형,intro,은우,audio/item_0007/item_0007_Orus_intro.mp3,Orus
+CALM-11,명상하기,마음 안정,타이머형,done,은우,audio/item_0007/item_0007_Orus_done.mp3,Orus
+CALM-11,명상하기,마음 안정,타이머형,remind,은우,audio/item_0007/item_0007_Orus_remind.mp3,Orus
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,intro,민서,audio/item_0008/item_0008_Aoede_intro.mp3,Aoede
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,done,민서,audio/item_0008/item_0008_Aoede_done.mp3,Aoede
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,remind,민서,audio/item_0008/item_0008_Aoede_remind.mp3,Aoede
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,intro,현우,audio/item_0008/item_0008_Charon_intro.mp3,Charon
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,done,현우,audio/item_0008/item_0008_Charon_done.mp3,Charon
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,remind,현우,audio/item_0008/item_0008_Charon_remind.mp3,Charon
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,intro,지유,audio/item_0008/item_0008_Kore_intro.mp3,Kore
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,done,지유,audio/item_0008/item_0008_Kore_done.mp3,Kore
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,remind,지유,audio/item_0008/item_0008_Kore_remind.mp3,Kore
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,intro,은우,audio/item_0008/item_0008_Orus_intro.mp3,Orus
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,done,은우,audio/item_0008/item_0008_Orus_done.mp3,Orus
+HEALTH-10,목·어깨 스트레칭,건강,타이머형,remind,은우,audio/item_0008/item_0008_Orus_remind.mp3,Orus
+ENERGY-02,물 한 잔 마시기,활력,확인형,intro,민서,audio/item_0009/item_0009_Aoede_intro.mp3,Aoede
+ENERGY-02,물 한 잔 마시기,활력,확인형,done,민서,audio/item_0009/item_0009_Aoede_done.mp3,Aoede
+ENERGY-02,물 한 잔 마시기,활력,확인형,remind,민서,audio/item_0009/item_0009_Aoede_remind.mp3,Aoede
+ENERGY-02,물 한 잔 마시기,활력,확인형,intro,현우,audio/item_0009/item_0009_Charon_intro.mp3,Charon
+ENERGY-02,물 한 잔 마시기,활력,확인형,done,현우,audio/item_0009/item_0009_Charon_done.mp3,Charon
+ENERGY-02,물 한 잔 마시기,활력,확인형,remind,현우,audio/item_0009/item_0009_Charon_remind.mp3,Charon
+ENERGY-02,물 한 잔 마시기,활력,확인형,intro,지유,audio/item_0009/item_0009_Kore_intro.mp3,Kore
+ENERGY-02,물 한 잔 마시기,활력,확인형,done,지유,audio/item_0009/item_0009_Kore_done.mp3,Kore
+ENERGY-02,물 한 잔 마시기,활력,확인형,remind,지유,audio/item_0009/item_0009_Kore_remind.mp3,Kore
+ENERGY-02,물 한 잔 마시기,활력,확인형,intro,은우,audio/item_0009/item_0009_Orus_intro.mp3,Orus
+ENERGY-02,물 한 잔 마시기,활력,확인형,done,은우,audio/item_0009/item_0009_Orus_done.mp3,Orus
+ENERGY-02,물 한 잔 마시기,활력,확인형,remind,은우,audio/item_0009/item_0009_Orus_remind.mp3,Orus
+HEALTH-01,물 한 잔 마시기,건강,확인형,intro,민서,audio/item_0009/item_0009_Aoede_intro.mp3,Aoede
+HEALTH-01,물 한 잔 마시기,건강,확인형,done,민서,audio/item_0009/item_0009_Aoede_done.mp3,Aoede
+HEALTH-01,물 한 잔 마시기,건강,확인형,remind,민서,audio/item_0009/item_0009_Aoede_remind.mp3,Aoede
+HEALTH-01,물 한 잔 마시기,건강,확인형,intro,현우,audio/item_0009/item_0009_Charon_intro.mp3,Charon
+HEALTH-01,물 한 잔 마시기,건강,확인형,done,현우,audio/item_0009/item_0009_Charon_done.mp3,Charon
+HEALTH-01,물 한 잔 마시기,건강,확인형,remind,현우,audio/item_0009/item_0009_Charon_remind.mp3,Charon
+HEALTH-01,물 한 잔 마시기,건강,확인형,intro,지유,audio/item_0009/item_0009_Kore_intro.mp3,Kore
+HEALTH-01,물 한 잔 마시기,건강,확인형,done,지유,audio/item_0009/item_0009_Kore_done.mp3,Kore
+HEALTH-01,물 한 잔 마시기,건강,확인형,remind,지유,audio/item_0009/item_0009_Kore_remind.mp3,Kore
+HEALTH-01,물 한 잔 마시기,건강,확인형,intro,은우,audio/item_0009/item_0009_Orus_intro.mp3,Orus
+HEALTH-01,물 한 잔 마시기,건강,확인형,done,은우,audio/item_0009/item_0009_Orus_done.mp3,Orus
+HEALTH-01,물 한 잔 마시기,건강,확인형,remind,은우,audio/item_0009/item_0009_Orus_remind.mp3,Orus
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,intro,민서,audio/item_0009/item_0009_Aoede_intro.mp3,Aoede
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,done,민서,audio/item_0009/item_0009_Aoede_done.mp3,Aoede
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,remind,민서,audio/item_0009/item_0009_Aoede_remind.mp3,Aoede
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,intro,현우,audio/item_0009/item_0009_Charon_intro.mp3,Charon
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,done,현우,audio/item_0009/item_0009_Charon_done.mp3,Charon
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,remind,현우,audio/item_0009/item_0009_Charon_remind.mp3,Charon
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,intro,지유,audio/item_0009/item_0009_Kore_intro.mp3,Kore
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,done,지유,audio/item_0009/item_0009_Kore_done.mp3,Kore
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,remind,지유,audio/item_0009/item_0009_Kore_remind.mp3,Kore
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,intro,은우,audio/item_0009/item_0009_Orus_intro.mp3,Orus
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,done,은우,audio/item_0009/item_0009_Orus_done.mp3,Orus
+HABIT-02,물 한 잔 마시기,습관 형성,확인형,remind,은우,audio/item_0009/item_0009_Orus_remind.mp3,Orus
+HABIT-05,방 청소하기,습관 형성,확인형,intro,민서,audio/item_0010/item_0010_Aoede_intro.mp3,Aoede
+HABIT-05,방 청소하기,습관 형성,확인형,done,민서,audio/item_0010/item_0010_Aoede_done.mp3,Aoede
+HABIT-05,방 청소하기,습관 형성,확인형,remind,민서,audio/item_0010/item_0010_Aoede_remind.mp3,Aoede
+HABIT-05,방 청소하기,습관 형성,확인형,intro,현우,audio/item_0010/item_0010_Charon_intro.mp3,Charon
+HABIT-05,방 청소하기,습관 형성,확인형,done,현우,audio/item_0010/item_0010_Charon_done.mp3,Charon
+HABIT-05,방 청소하기,습관 형성,확인형,remind,현우,audio/item_0010/item_0010_Charon_remind.mp3,Charon
+HABIT-05,방 청소하기,습관 형성,확인형,intro,지유,audio/item_0010/item_0010_Kore_intro.mp3,Kore
+HABIT-05,방 청소하기,습관 형성,확인형,done,지유,audio/item_0010/item_0010_Kore_done.mp3,Kore
+HABIT-05,방 청소하기,습관 형성,확인형,remind,지유,audio/item_0010/item_0010_Kore_remind.mp3,Kore
+HABIT-05,방 청소하기,습관 형성,확인형,intro,은우,audio/item_0010/item_0010_Orus_intro.mp3,Orus
+HABIT-05,방 청소하기,습관 형성,확인형,done,은우,audio/item_0010/item_0010_Orus_done.mp3,Orus
+HABIT-05,방 청소하기,습관 형성,확인형,remind,은우,audio/item_0010/item_0010_Orus_remind.mp3,Orus
+ENERGY-04,세수하고 양치하기,활력,확인형,intro,민서,audio/item_0011/item_0011_Aoede_intro.mp3,Aoede
+ENERGY-04,세수하고 양치하기,활력,확인형,done,민서,audio/item_0011/item_0011_Aoede_done.mp3,Aoede
+ENERGY-04,세수하고 양치하기,활력,확인형,remind,민서,audio/item_0011/item_0011_Aoede_remind.mp3,Aoede
+ENERGY-04,세수하고 양치하기,활력,확인형,intro,현우,audio/item_0011/item_0011_Charon_intro.mp3,Charon
+ENERGY-04,세수하고 양치하기,활력,확인형,done,현우,audio/item_0011/item_0011_Charon_done.mp3,Charon
+ENERGY-04,세수하고 양치하기,활력,확인형,remind,현우,audio/item_0011/item_0011_Charon_remind.mp3,Charon
+ENERGY-04,세수하고 양치하기,활력,확인형,intro,지유,audio/item_0011/item_0011_Kore_intro.mp3,Kore
+ENERGY-04,세수하고 양치하기,활력,확인형,done,지유,audio/item_0011/item_0011_Kore_done.mp3,Kore
+ENERGY-04,세수하고 양치하기,활력,확인형,remind,지유,audio/item_0011/item_0011_Kore_remind.mp3,Kore
+ENERGY-04,세수하고 양치하기,활력,확인형,intro,은우,audio/item_0011/item_0011_Orus_intro.mp3,Orus
+ENERGY-04,세수하고 양치하기,활력,확인형,done,은우,audio/item_0011/item_0011_Orus_done.mp3,Orus
+ENERGY-04,세수하고 양치하기,활력,확인형,remind,은우,audio/item_0011/item_0011_Orus_remind.mp3,Orus
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,intro,민서,audio/item_0012/item_0012_Aoede_intro.mp3,Aoede
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,done,민서,audio/item_0012/item_0012_Aoede_done.mp3,Aoede
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,remind,민서,audio/item_0012/item_0012_Aoede_remind.mp3,Aoede
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,intro,현우,audio/item_0012/item_0012_Charon_intro.mp3,Charon
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,done,현우,audio/item_0012/item_0012_Charon_done.mp3,Charon
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,remind,현우,audio/item_0012/item_0012_Charon_remind.mp3,Charon
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,intro,지유,audio/item_0012/item_0012_Kore_intro.mp3,Kore
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,done,지유,audio/item_0012/item_0012_Kore_done.mp3,Kore
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,remind,지유,audio/item_0012/item_0012_Kore_remind.mp3,Kore
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,intro,은우,audio/item_0012/item_0012_Orus_intro.mp3,Orus
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,done,은우,audio/item_0012/item_0012_Orus_done.mp3,Orus
+CALM-07,심호흡하며 명상하기,마음 안정,타이머형,remind,은우,audio/item_0012/item_0012_Orus_remind.mp3,Orus
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,intro,민서,audio/item_0013/item_0013_Aoede_intro.mp3,Aoede
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,done,민서,audio/item_0013/item_0013_Aoede_done.mp3,Aoede
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,remind,민서,audio/item_0013/item_0013_Aoede_remind.mp3,Aoede
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,intro,현우,audio/item_0013/item_0013_Charon_intro.mp3,Charon
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,done,현우,audio/item_0013/item_0013_Charon_done.mp3,Charon
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,remind,현우,audio/item_0013/item_0013_Charon_remind.mp3,Charon
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,intro,지유,audio/item_0013/item_0013_Kore_intro.mp3,Kore
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,done,지유,audio/item_0013/item_0013_Kore_done.mp3,Kore
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,remind,지유,audio/item_0013/item_0013_Kore_remind.mp3,Kore
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,intro,은우,audio/item_0013/item_0013_Orus_intro.mp3,Orus
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,done,은우,audio/item_0013/item_0013_Orus_done.mp3,Orus
+HEALTH-17,아침 컨디션 기록하기,건강,입력형,remind,은우,audio/item_0013/item_0013_Orus_remind.mp3,Orus
+HEALTH-07,양치하기,건강,확인형,intro,민서,audio/item_0014/item_0014_Aoede_intro.mp3,Aoede
+HEALTH-07,양치하기,건강,확인형,done,민서,audio/item_0014/item_0014_Aoede_done.mp3,Aoede
+HEALTH-07,양치하기,건강,확인형,remind,민서,audio/item_0014/item_0014_Aoede_remind.mp3,Aoede
+HEALTH-07,양치하기,건강,확인형,intro,현우,audio/item_0014/item_0014_Charon_intro.mp3,Charon
+HEALTH-07,양치하기,건강,확인형,done,현우,audio/item_0014/item_0014_Charon_done.mp3,Charon
+HEALTH-07,양치하기,건강,확인형,remind,현우,audio/item_0014/item_0014_Charon_remind.mp3,Charon
+HEALTH-07,양치하기,건강,확인형,intro,지유,audio/item_0014/item_0014_Kore_intro.mp3,Kore
+HEALTH-07,양치하기,건강,확인형,done,지유,audio/item_0014/item_0014_Kore_done.mp3,Kore
+HEALTH-07,양치하기,건강,확인형,remind,지유,audio/item_0014/item_0014_Kore_remind.mp3,Kore
+HEALTH-07,양치하기,건강,확인형,intro,은우,audio/item_0014/item_0014_Orus_intro.mp3,Orus
+HEALTH-07,양치하기,건강,확인형,done,은우,audio/item_0014/item_0014_Orus_done.mp3,Orus
+HEALTH-07,양치하기,건강,확인형,remind,은우,audio/item_0014/item_0014_Orus_remind.mp3,Orus
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,intro,민서,audio/item_0015/item_0015_Aoede_intro.mp3,Aoede
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,done,민서,audio/item_0015/item_0015_Aoede_done.mp3,Aoede
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,remind,민서,audio/item_0015/item_0015_Aoede_remind.mp3,Aoede
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,intro,현우,audio/item_0015/item_0015_Charon_intro.mp3,Charon
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,done,현우,audio/item_0015/item_0015_Charon_done.mp3,Charon
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,remind,현우,audio/item_0015/item_0015_Charon_remind.mp3,Charon
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,intro,지유,audio/item_0015/item_0015_Kore_intro.mp3,Kore
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,done,지유,audio/item_0015/item_0015_Kore_done.mp3,Kore
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,remind,지유,audio/item_0015/item_0015_Kore_remind.mp3,Kore
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,intro,은우,audio/item_0015/item_0015_Orus_intro.mp3,Orus
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,done,은우,audio/item_0015/item_0015_Orus_done.mp3,Orus
+HEALTH-04,영양제 챙겨 먹기,건강,확인형,remind,은우,audio/item_0015/item_0015_Orus_remind.mp3,Orus
+CALM-18,오늘 목표 정하기,마음 안정,입력형,intro,민서,audio/item_0016/item_0016_Aoede_intro.mp3,Aoede
+CALM-18,오늘 목표 정하기,마음 안정,입력형,done,민서,audio/item_0016/item_0016_Aoede_done.mp3,Aoede
+CALM-18,오늘 목표 정하기,마음 안정,입력형,remind,민서,audio/item_0016/item_0016_Aoede_remind.mp3,Aoede
+CALM-18,오늘 목표 정하기,마음 안정,입력형,intro,현우,audio/item_0016/item_0016_Charon_intro.mp3,Charon
+CALM-18,오늘 목표 정하기,마음 안정,입력형,done,현우,audio/item_0016/item_0016_Charon_done.mp3,Charon
+CALM-18,오늘 목표 정하기,마음 안정,입력형,remind,현우,audio/item_0016/item_0016_Charon_remind.mp3,Charon
+CALM-18,오늘 목표 정하기,마음 안정,입력형,intro,지유,audio/item_0016/item_0016_Kore_intro.mp3,Kore
+CALM-18,오늘 목표 정하기,마음 안정,입력형,done,지유,audio/item_0016/item_0016_Kore_done.mp3,Kore
+CALM-18,오늘 목표 정하기,마음 안정,입력형,remind,지유,audio/item_0016/item_0016_Kore_remind.mp3,Kore
+CALM-18,오늘 목표 정하기,마음 안정,입력형,intro,은우,audio/item_0016/item_0016_Orus_intro.mp3,Orus
+CALM-18,오늘 목표 정하기,마음 안정,입력형,done,은우,audio/item_0016/item_0016_Orus_done.mp3,Orus
+CALM-18,오늘 목표 정하기,마음 안정,입력형,remind,은우,audio/item_0016/item_0016_Orus_remind.mp3,Orus
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,intro,민서,audio/item_0017/item_0017_Aoede_intro.mp3,Aoede
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,done,민서,audio/item_0017/item_0017_Aoede_done.mp3,Aoede
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,remind,민서,audio/item_0017/item_0017_Aoede_remind.mp3,Aoede
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,intro,현우,audio/item_0017/item_0017_Charon_intro.mp3,Charon
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,done,현우,audio/item_0017/item_0017_Charon_done.mp3,Charon
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,remind,현우,audio/item_0017/item_0017_Charon_remind.mp3,Charon
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,intro,지유,audio/item_0017/item_0017_Kore_intro.mp3,Kore
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,done,지유,audio/item_0017/item_0017_Kore_done.mp3,Kore
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,remind,지유,audio/item_0017/item_0017_Kore_remind.mp3,Kore
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,intro,은우,audio/item_0017/item_0017_Orus_intro.mp3,Orus
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,done,은우,audio/item_0017/item_0017_Orus_done.mp3,Orus
+HEALTH-18,오늘 운동 계획 말하기,건강,입력형,remind,은우,audio/item_0017/item_0017_Orus_remind.mp3,Orus
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,intro,민서,audio/item_0018/item_0018_Aoede_intro.mp3,Aoede
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,done,민서,audio/item_0018/item_0018_Aoede_done.mp3,Aoede
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,remind,민서,audio/item_0018/item_0018_Aoede_remind.mp3,Aoede
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,intro,현우,audio/item_0018/item_0018_Charon_intro.mp3,Charon
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,done,현우,audio/item_0018/item_0018_Charon_done.mp3,Charon
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,remind,현우,audio/item_0018/item_0018_Charon_remind.mp3,Charon
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,intro,지유,audio/item_0018/item_0018_Kore_intro.mp3,Kore
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,done,지유,audio/item_0018/item_0018_Kore_done.mp3,Kore
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,remind,지유,audio/item_0018/item_0018_Kore_remind.mp3,Kore
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,intro,은우,audio/item_0018/item_0018_Orus_intro.mp3,Orus
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,done,은우,audio/item_0018/item_0018_Orus_done.mp3,Orus
+HABIT-17,오늘 하루 목표 정하기,습관 형성,입력형,remind,은우,audio/item_0018/item_0018_Orus_remind.mp3,Orus
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,intro,민서,audio/item_0019/item_0019_Aoede_intro.mp3,Aoede
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,done,민서,audio/item_0019/item_0019_Aoede_done.mp3,Aoede
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,remind,민서,audio/item_0019/item_0019_Aoede_remind.mp3,Aoede
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,intro,현우,audio/item_0019/item_0019_Charon_intro.mp3,Charon
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,done,현우,audio/item_0019/item_0019_Charon_done.mp3,Charon
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,remind,현우,audio/item_0019/item_0019_Charon_remind.mp3,Charon
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,intro,지유,audio/item_0019/item_0019_Kore_intro.mp3,Kore
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,done,지유,audio/item_0019/item_0019_Kore_done.mp3,Kore
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,remind,지유,audio/item_0019/item_0019_Kore_remind.mp3,Kore
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,intro,은우,audio/item_0019/item_0019_Orus_intro.mp3,Orus
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,done,은우,audio/item_0019/item_0019_Orus_done.mp3,Orus
+HABIT-12,오늘 할 일 3가지 정하기,습관 형성,입력형,remind,은우,audio/item_0019/item_0019_Orus_remind.mp3,Orus
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,intro,민서,audio/item_0020/item_0020_Aoede_intro.mp3,Aoede
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,done,민서,audio/item_0020/item_0020_Aoede_done.mp3,Aoede
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,remind,민서,audio/item_0020/item_0020_Aoede_remind.mp3,Aoede
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,intro,현우,audio/item_0020/item_0020_Charon_intro.mp3,Charon
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,done,현우,audio/item_0020/item_0020_Charon_done.mp3,Charon
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,remind,현우,audio/item_0020/item_0020_Charon_remind.mp3,Charon
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,intro,지유,audio/item_0020/item_0020_Kore_intro.mp3,Kore
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,done,지유,audio/item_0020/item_0020_Kore_done.mp3,Kore
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,remind,지유,audio/item_0020/item_0020_Kore_remind.mp3,Kore
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,intro,은우,audio/item_0020/item_0020_Orus_intro.mp3,Orus
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,done,은우,audio/item_0020/item_0020_Orus_done.mp3,Orus
+ENERGY-17,오늘 할 일 떠올리기,활력,입력형,remind,은우,audio/item_0020/item_0020_Orus_remind.mp3,Orus
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,intro,민서,audio/item_0021/item_0021_Aoede_intro.mp3,Aoede
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,done,민서,audio/item_0021/item_0021_Aoede_done.mp3,Aoede
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,remind,민서,audio/item_0021/item_0021_Aoede_remind.mp3,Aoede
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,intro,현우,audio/item_0021/item_0021_Charon_intro.mp3,Charon
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,done,현우,audio/item_0021/item_0021_Charon_done.mp3,Charon
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,remind,현우,audio/item_0021/item_0021_Charon_remind.mp3,Charon
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,intro,지유,audio/item_0021/item_0021_Kore_intro.mp3,Kore
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,done,지유,audio/item_0021/item_0021_Kore_done.mp3,Kore
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,remind,지유,audio/item_0021/item_0021_Kore_remind.mp3,Kore
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,intro,은우,audio/item_0021/item_0021_Orus_intro.mp3,Orus
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,done,은우,audio/item_0021/item_0021_Orus_done.mp3,Orus
+ENERGY-16,오늘의 다짐 말하기,활력,입력형,remind,은우,audio/item_0021/item_0021_Orus_remind.mp3,Orus
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,intro,민서,audio/item_0021/item_0021_Aoede_intro.mp3,Aoede
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,done,민서,audio/item_0021/item_0021_Aoede_done.mp3,Aoede
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,remind,민서,audio/item_0021/item_0021_Aoede_remind.mp3,Aoede
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,intro,현우,audio/item_0021/item_0021_Charon_intro.mp3,Charon
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,done,현우,audio/item_0021/item_0021_Charon_done.mp3,Charon
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,remind,현우,audio/item_0021/item_0021_Charon_remind.mp3,Charon
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,intro,지유,audio/item_0021/item_0021_Kore_intro.mp3,Kore
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,done,지유,audio/item_0021/item_0021_Kore_done.mp3,Kore
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,remind,지유,audio/item_0021/item_0021_Kore_remind.mp3,Kore
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,intro,은우,audio/item_0021/item_0021_Orus_intro.mp3,Orus
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,done,은우,audio/item_0021/item_0021_Orus_done.mp3,Orus
+CALM-16,오늘의 다짐 말하기,마음 안정,입력형,remind,은우,audio/item_0021/item_0021_Orus_remind.mp3,Orus
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,intro,민서,audio/item_0021/item_0021_Aoede_intro.mp3,Aoede
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,done,민서,audio/item_0021/item_0021_Aoede_done.mp3,Aoede
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,remind,민서,audio/item_0021/item_0021_Aoede_remind.mp3,Aoede
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,intro,현우,audio/item_0021/item_0021_Charon_intro.mp3,Charon
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,done,현우,audio/item_0021/item_0021_Charon_done.mp3,Charon
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,remind,현우,audio/item_0021/item_0021_Charon_remind.mp3,Charon
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,intro,지유,audio/item_0021/item_0021_Kore_intro.mp3,Kore
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,done,지유,audio/item_0021/item_0021_Kore_done.mp3,Kore
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,remind,지유,audio/item_0021/item_0021_Kore_remind.mp3,Kore
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,intro,은우,audio/item_0021/item_0021_Orus_intro.mp3,Orus
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,done,은우,audio/item_0021/item_0021_Orus_done.mp3,Orus
+HABIT-15,오늘의 다짐 말하기,습관 형성,입력형,remind,은우,audio/item_0021/item_0021_Orus_remind.mp3,Orus
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,intro,민서,audio/item_0022/item_0022_Aoede_intro.mp3,Aoede
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,done,민서,audio/item_0022/item_0022_Aoede_done.mp3,Aoede
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,remind,민서,audio/item_0022/item_0022_Aoede_remind.mp3,Aoede
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,intro,현우,audio/item_0022/item_0022_Charon_intro.mp3,Charon
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,done,현우,audio/item_0022/item_0022_Charon_done.mp3,Charon
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,remind,현우,audio/item_0022/item_0022_Charon_remind.mp3,Charon
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,intro,지유,audio/item_0022/item_0022_Kore_intro.mp3,Kore
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,done,지유,audio/item_0022/item_0022_Kore_done.mp3,Kore
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,remind,지유,audio/item_0022/item_0022_Kore_remind.mp3,Kore
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,intro,은우,audio/item_0022/item_0022_Orus_intro.mp3,Orus
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,done,은우,audio/item_0022/item_0022_Orus_done.mp3,Orus
+HABIT-10,외국어 단어 외우기,습관 형성,타이머형,remind,은우,audio/item_0022/item_0022_Orus_remind.mp3,Orus
+ENERGY-01,잠자리 정리하기,활력,확인형,intro,민서,audio/item_0023/item_0023_Aoede_intro.mp3,Aoede
+ENERGY-01,잠자리 정리하기,활력,확인형,done,민서,audio/item_0023/item_0023_Aoede_done.mp3,Aoede
+ENERGY-01,잠자리 정리하기,활력,확인형,remind,민서,audio/item_0023/item_0023_Aoede_remind.mp3,Aoede
+ENERGY-01,잠자리 정리하기,활력,확인형,intro,현우,audio/item_0023/item_0023_Charon_intro.mp3,Charon
+ENERGY-01,잠자리 정리하기,활력,확인형,done,현우,audio/item_0023/item_0023_Charon_done.mp3,Charon
+ENERGY-01,잠자리 정리하기,활력,확인형,remind,현우,audio/item_0023/item_0023_Charon_remind.mp3,Charon
+ENERGY-01,잠자리 정리하기,활력,확인형,intro,지유,audio/item_0023/item_0023_Kore_intro.mp3,Kore
+ENERGY-01,잠자리 정리하기,활력,확인형,done,지유,audio/item_0023/item_0023_Kore_done.mp3,Kore
+ENERGY-01,잠자리 정리하기,활력,확인형,remind,지유,audio/item_0023/item_0023_Kore_remind.mp3,Kore
+ENERGY-01,잠자리 정리하기,활력,확인형,intro,은우,audio/item_0023/item_0023_Orus_intro.mp3,Orus
+ENERGY-01,잠자리 정리하기,활력,확인형,done,은우,audio/item_0023/item_0023_Orus_done.mp3,Orus
+ENERGY-01,잠자리 정리하기,활력,확인형,remind,은우,audio/item_0023/item_0023_Orus_remind.mp3,Orus
+HEALTH-02,잠자리 정리하기,건강,확인형,intro,민서,audio/item_0023/item_0023_Aoede_intro.mp3,Aoede
+HEALTH-02,잠자리 정리하기,건강,확인형,done,민서,audio/item_0023/item_0023_Aoede_done.mp3,Aoede
+HEALTH-02,잠자리 정리하기,건강,확인형,remind,민서,audio/item_0023/item_0023_Aoede_remind.mp3,Aoede
+HEALTH-02,잠자리 정리하기,건강,확인형,intro,현우,audio/item_0023/item_0023_Charon_intro.mp3,Charon
+HEALTH-02,잠자리 정리하기,건강,확인형,done,현우,audio/item_0023/item_0023_Charon_done.mp3,Charon
+HEALTH-02,잠자리 정리하기,건강,확인형,remind,현우,audio/item_0023/item_0023_Charon_remind.mp3,Charon
+HEALTH-02,잠자리 정리하기,건강,확인형,intro,지유,audio/item_0023/item_0023_Kore_intro.mp3,Kore
+HEALTH-02,잠자리 정리하기,건강,확인형,done,지유,audio/item_0023/item_0023_Kore_done.mp3,Kore
+HEALTH-02,잠자리 정리하기,건강,확인형,remind,지유,audio/item_0023/item_0023_Kore_remind.mp3,Kore
+HEALTH-02,잠자리 정리하기,건강,확인형,intro,은우,audio/item_0023/item_0023_Orus_intro.mp3,Orus
+HEALTH-02,잠자리 정리하기,건강,확인형,done,은우,audio/item_0023/item_0023_Orus_done.mp3,Orus
+HEALTH-02,잠자리 정리하기,건강,확인형,remind,은우,audio/item_0023/item_0023_Orus_remind.mp3,Orus
+CALM-01,잠자리 정리하기,마음 안정,확인형,intro,민서,audio/item_0023/item_0023_Aoede_intro.mp3,Aoede
+CALM-01,잠자리 정리하기,마음 안정,확인형,done,민서,audio/item_0023/item_0023_Aoede_done.mp3,Aoede
+CALM-01,잠자리 정리하기,마음 안정,확인형,remind,민서,audio/item_0023/item_0023_Aoede_remind.mp3,Aoede
+CALM-01,잠자리 정리하기,마음 안정,확인형,intro,현우,audio/item_0023/item_0023_Charon_intro.mp3,Charon
+CALM-01,잠자리 정리하기,마음 안정,확인형,done,현우,audio/item_0023/item_0023_Charon_done.mp3,Charon
+CALM-01,잠자리 정리하기,마음 안정,확인형,remind,현우,audio/item_0023/item_0023_Charon_remind.mp3,Charon
+CALM-01,잠자리 정리하기,마음 안정,확인형,intro,지유,audio/item_0023/item_0023_Kore_intro.mp3,Kore
+CALM-01,잠자리 정리하기,마음 안정,확인형,done,지유,audio/item_0023/item_0023_Kore_done.mp3,Kore
+CALM-01,잠자리 정리하기,마음 안정,확인형,remind,지유,audio/item_0023/item_0023_Kore_remind.mp3,Kore
+CALM-01,잠자리 정리하기,마음 안정,확인형,intro,은우,audio/item_0023/item_0023_Orus_intro.mp3,Orus
+CALM-01,잠자리 정리하기,마음 안정,확인형,done,은우,audio/item_0023/item_0023_Orus_done.mp3,Orus
+CALM-01,잠자리 정리하기,마음 안정,확인형,remind,은우,audio/item_0023/item_0023_Orus_remind.mp3,Orus
+HABIT-01,잠자리 정리하기,습관 형성,확인형,intro,민서,audio/item_0023/item_0023_Aoede_intro.mp3,Aoede
+HABIT-01,잠자리 정리하기,습관 형성,확인형,done,민서,audio/item_0023/item_0023_Aoede_done.mp3,Aoede
+HABIT-01,잠자리 정리하기,습관 형성,확인형,remind,민서,audio/item_0023/item_0023_Aoede_remind.mp3,Aoede
+HABIT-01,잠자리 정리하기,습관 형성,확인형,intro,현우,audio/item_0023/item_0023_Charon_intro.mp3,Charon
+HABIT-01,잠자리 정리하기,습관 형성,확인형,done,현우,audio/item_0023/item_0023_Charon_done.mp3,Charon
+HABIT-01,잠자리 정리하기,습관 형성,확인형,remind,현우,audio/item_0023/item_0023_Charon_remind.mp3,Charon
+HABIT-01,잠자리 정리하기,습관 형성,확인형,intro,지유,audio/item_0023/item_0023_Kore_intro.mp3,Kore
+HABIT-01,잠자리 정리하기,습관 형성,확인형,done,지유,audio/item_0023/item_0023_Kore_done.mp3,Kore
+HABIT-01,잠자리 정리하기,습관 형성,확인형,remind,지유,audio/item_0023/item_0023_Kore_remind.mp3,Kore
+HABIT-01,잠자리 정리하기,습관 형성,확인형,intro,은우,audio/item_0023/item_0023_Orus_intro.mp3,Orus
+HABIT-01,잠자리 정리하기,습관 형성,확인형,done,은우,audio/item_0023/item_0023_Orus_done.mp3,Orus
+HABIT-01,잠자리 정리하기,습관 형성,확인형,remind,은우,audio/item_0023/item_0023_Orus_remind.mp3,Orus
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,intro,민서,audio/item_0024/item_0024_Aoede_intro.mp3,Aoede
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,done,민서,audio/item_0024/item_0024_Aoede_done.mp3,Aoede
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,remind,민서,audio/item_0024/item_0024_Aoede_remind.mp3,Aoede
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,intro,현우,audio/item_0024/item_0024_Charon_intro.mp3,Charon
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,done,현우,audio/item_0024/item_0024_Charon_done.mp3,Charon
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,remind,현우,audio/item_0024/item_0024_Charon_remind.mp3,Charon
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,intro,지유,audio/item_0024/item_0024_Kore_intro.mp3,Kore
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,done,지유,audio/item_0024/item_0024_Kore_done.mp3,Kore
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,remind,지유,audio/item_0024/item_0024_Kore_remind.mp3,Kore
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,intro,은우,audio/item_0024/item_0024_Orus_intro.mp3,Orus
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,done,은우,audio/item_0024/item_0024_Orus_done.mp3,Orus
+CALM-04,좋아하는 인센스 켜기,마음 안정,확인형,remind,은우,audio/item_0024/item_0024_Orus_remind.mp3,Orus
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,intro,민서,audio/item_0025/item_0025_Aoede_intro.mp3,Aoede
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,done,민서,audio/item_0025/item_0025_Aoede_done.mp3,Aoede
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,remind,민서,audio/item_0025/item_0025_Aoede_remind.mp3,Aoede
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,intro,현우,audio/item_0025/item_0025_Charon_intro.mp3,Charon
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,done,현우,audio/item_0025/item_0025_Charon_done.mp3,Charon
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,remind,현우,audio/item_0025/item_0025_Charon_remind.mp3,Charon
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,intro,지유,audio/item_0025/item_0025_Kore_intro.mp3,Kore
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,done,지유,audio/item_0025/item_0025_Kore_done.mp3,Kore
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,remind,지유,audio/item_0025/item_0025_Kore_remind.mp3,Kore
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,intro,은우,audio/item_0025/item_0025_Orus_intro.mp3,Orus
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,done,은우,audio/item_0025/item_0025_Orus_done.mp3,Orus
+HABIT-09,짧은 글쓰기·블로깅,습관 형성,타이머형,remind,은우,audio/item_0025/item_0025_Orus_remind.mp3,Orus
+ENERGY-06,찬물로 세안하기,활력,확인형,intro,민서,audio/item_0026/item_0026_Aoede_intro.mp3,Aoede
+ENERGY-06,찬물로 세안하기,활력,확인형,done,민서,audio/item_0026/item_0026_Aoede_done.mp3,Aoede
+ENERGY-06,찬물로 세안하기,활력,확인형,remind,민서,audio/item_0026/item_0026_Aoede_remind.mp3,Aoede
+ENERGY-06,찬물로 세안하기,활력,확인형,intro,현우,audio/item_0026/item_0026_Charon_intro.mp3,Charon
+ENERGY-06,찬물로 세안하기,활력,확인형,done,현우,audio/item_0026/item_0026_Charon_done.mp3,Charon
+ENERGY-06,찬물로 세안하기,활력,확인형,remind,현우,audio/item_0026/item_0026_Charon_remind.mp3,Charon
+ENERGY-06,찬물로 세안하기,활력,확인형,intro,지유,audio/item_0026/item_0026_Kore_intro.mp3,Kore
+ENERGY-06,찬물로 세안하기,활력,확인형,done,지유,audio/item_0026/item_0026_Kore_done.mp3,Kore
+ENERGY-06,찬물로 세안하기,활력,확인형,remind,지유,audio/item_0026/item_0026_Kore_remind.mp3,Kore
+ENERGY-06,찬물로 세안하기,활력,확인형,intro,은우,audio/item_0026/item_0026_Orus_intro.mp3,Orus
+ENERGY-06,찬물로 세안하기,활력,확인형,done,은우,audio/item_0026/item_0026_Orus_done.mp3,Orus
+ENERGY-06,찬물로 세안하기,활력,확인형,remind,은우,audio/item_0026/item_0026_Orus_remind.mp3,Orus
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,intro,민서,audio/item_0027/item_0027_Aoede_intro.mp3,Aoede
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,done,민서,audio/item_0027/item_0027_Aoede_done.mp3,Aoede
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,remind,민서,audio/item_0027/item_0027_Aoede_remind.mp3,Aoede
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,intro,현우,audio/item_0027/item_0027_Charon_intro.mp3,Charon
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,done,현우,audio/item_0027/item_0027_Charon_done.mp3,Charon
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,remind,현우,audio/item_0027/item_0027_Charon_remind.mp3,Charon
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,intro,지유,audio/item_0027/item_0027_Kore_intro.mp3,Kore
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,done,지유,audio/item_0027/item_0027_Kore_done.mp3,Kore
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,remind,지유,audio/item_0027/item_0027_Kore_remind.mp3,Kore
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,intro,은우,audio/item_0027/item_0027_Orus_intro.mp3,Orus
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,done,은우,audio/item_0027/item_0027_Orus_done.mp3,Orus
+ENERGY-03,창문 열고 햇빛 쐬기,활력,확인형,remind,은우,audio/item_0027/item_0027_Orus_remind.mp3,Orus
+CALM-02,창문 열고 환기하기,마음 안정,확인형,intro,민서,audio/item_0028/item_0028_Aoede_intro.mp3,Aoede
+CALM-02,창문 열고 환기하기,마음 안정,확인형,done,민서,audio/item_0028/item_0028_Aoede_done.mp3,Aoede
+CALM-02,창문 열고 환기하기,마음 안정,확인형,remind,민서,audio/item_0028/item_0028_Aoede_remind.mp3,Aoede
+CALM-02,창문 열고 환기하기,마음 안정,확인형,intro,현우,audio/item_0028/item_0028_Charon_intro.mp3,Charon
+CALM-02,창문 열고 환기하기,마음 안정,확인형,done,현우,audio/item_0028/item_0028_Charon_done.mp3,Charon
+CALM-02,창문 열고 환기하기,마음 안정,확인형,remind,현우,audio/item_0028/item_0028_Charon_remind.mp3,Charon
+CALM-02,창문 열고 환기하기,마음 안정,확인형,intro,지유,audio/item_0028/item_0028_Kore_intro.mp3,Kore
+CALM-02,창문 열고 환기하기,마음 안정,확인형,done,지유,audio/item_0028/item_0028_Kore_done.mp3,Kore
+CALM-02,창문 열고 환기하기,마음 안정,확인형,remind,지유,audio/item_0028/item_0028_Kore_remind.mp3,Kore
+CALM-02,창문 열고 환기하기,마음 안정,확인형,intro,은우,audio/item_0028/item_0028_Orus_intro.mp3,Orus
+CALM-02,창문 열고 환기하기,마음 안정,확인형,done,은우,audio/item_0028/item_0028_Orus_done.mp3,Orus
+CALM-02,창문 열고 환기하기,마음 안정,확인형,remind,은우,audio/item_0028/item_0028_Orus_remind.mp3,Orus
+HEALTH-06,체중 재기,건강,확인형,intro,민서,audio/item_0029/item_0029_Aoede_intro.mp3,Aoede
+HEALTH-06,체중 재기,건강,확인형,done,민서,audio/item_0029/item_0029_Aoede_done.mp3,Aoede
+HEALTH-06,체중 재기,건강,확인형,remind,민서,audio/item_0029/item_0029_Aoede_remind.mp3,Aoede
+HEALTH-06,체중 재기,건강,확인형,intro,현우,audio/item_0029/item_0029_Charon_intro.mp3,Charon
+HEALTH-06,체중 재기,건강,확인형,done,현우,audio/item_0029/item_0029_Charon_done.mp3,Charon
+HEALTH-06,체중 재기,건강,확인형,remind,현우,audio/item_0029/item_0029_Charon_remind.mp3,Charon
+HEALTH-06,체중 재기,건강,확인형,intro,지유,audio/item_0029/item_0029_Kore_intro.mp3,Kore
+HEALTH-06,체중 재기,건강,확인형,done,지유,audio/item_0029/item_0029_Kore_done.mp3,Kore
+HEALTH-06,체중 재기,건강,확인형,remind,지유,audio/item_0029/item_0029_Kore_remind.mp3,Kore
+HEALTH-06,체중 재기,건강,확인형,intro,은우,audio/item_0029/item_0029_Orus_intro.mp3,Orus
+HEALTH-06,체중 재기,건강,확인형,done,은우,audio/item_0029/item_0029_Orus_done.mp3,Orus
+HEALTH-06,체중 재기,건강,확인형,remind,은우,audio/item_0029/item_0029_Orus_remind.mp3,Orus
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,intro,민서,audio/item_0030/item_0030_Aoede_intro.mp3,Aoede
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,done,민서,audio/item_0030/item_0030_Aoede_done.mp3,Aoede
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,remind,민서,audio/item_0030/item_0030_Aoede_remind.mp3,Aoede
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,intro,현우,audio/item_0030/item_0030_Charon_intro.mp3,Charon
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,done,현우,audio/item_0030/item_0030_Charon_done.mp3,Charon
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,remind,현우,audio/item_0030/item_0030_Charon_remind.mp3,Charon
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,intro,지유,audio/item_0030/item_0030_Kore_intro.mp3,Kore
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,done,지유,audio/item_0030/item_0030_Kore_done.mp3,Kore
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,remind,지유,audio/item_0030/item_0030_Kore_remind.mp3,Kore
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,intro,은우,audio/item_0030/item_0030_Orus_intro.mp3,Orus
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,done,은우,audio/item_0030/item_0030_Orus_done.mp3,Orus
+ENERGY-05,커튼 걷고 방 밝히기,활력,확인형,remind,은우,audio/item_0030/item_0030_Orus_remind.mp3,Orus

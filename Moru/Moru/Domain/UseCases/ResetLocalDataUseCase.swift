@@ -2,20 +2,31 @@
 //  ResetLocalDataUseCase.swift
 //  Moru
 //
-//  Created by Codex on 7/13/26.
+//  Created by Codex on 7/22/26.
 //
 
 import Foundation
 
 @MainActor
-struct ResetLocalDataUseCase {
-  private let localDataResetRepository: any LocalDataResetRepository
+protocol ResetLocalDataUseCaseProtocol: AnyObject {
+  func execute() async throws
+}
 
-  init(localDataResetRepository: any LocalDataResetRepository) {
+@MainActor
+final class ResetLocalDataUseCase: ResetLocalDataUseCaseProtocol {
+  private let localDataResetRepository: any LocalDataResetRepository
+  private let alarmService: any ProfileAlarmServicing
+
+  init(
+    localDataResetRepository: any LocalDataResetRepository,
+    alarmService: any ProfileAlarmServicing
+  ) {
     self.localDataResetRepository = localDataResetRepository
+    self.alarmService = alarmService
   }
 
-  func reset() throws {
+  func execute() async throws {
+    try alarmService.cancelAllAlarms()
     try localDataResetRepository.resetToFreshInstallState()
   }
 }

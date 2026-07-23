@@ -75,12 +75,12 @@ extension DependencyContainer {
       routineRepository: routineRepository,
       routineRunRepository: routineRunRepository,
       localProfileRepository: localProfileRepository,
-      localDataResetRepository: localDataResetRepository,
       onboardingRepository: MockOnboardingRepository(
         localProfileRepository: localProfileRepository,
         routineRepository: routineRepository
       ),
-      routineSuggestionService: LocalTemplateSuggestionService.shared
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      localDataResetRepository: localDataResetRepository
     )
   }
 }

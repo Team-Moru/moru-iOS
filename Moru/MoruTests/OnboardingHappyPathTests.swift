@@ -31,7 +31,7 @@ final class OnboardingHappyPathTests: XCTestCase {
           wakeUpMinute: 30,
           weekdays: [.monday, .wednesday]
         ),
-        selectedVoice: .moru
+        selectedVoice: .yuna
       )
     )
 
@@ -39,8 +39,8 @@ final class OnboardingHappyPathTests: XCTestCase {
     let activeRoutines = try dependencies.routineRepository.fetchActiveRoutines()
     let savedRoutine = try XCTUnwrap(activeRoutines.first)
 
-    XCTAssertEqual(result.profile.selectedVoice, .moru)
-    XCTAssertEqual(savedProfile.selectedVoice, .moru)
+    XCTAssertEqual(result.profile.selectedVoice, .yuna)
+    XCTAssertEqual(savedProfile.selectedVoice, .yuna)
     XCTAssertEqual(activeRoutines.count, 1)
     XCTAssertEqual(savedRoutine.id, result.routine.id)
     XCTAssertTrue(savedRoutine.isActive)
@@ -78,7 +78,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 0,
             weekdays: [.monday]
           ),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
     ) {
@@ -92,7 +92,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       try useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(weekdays: []),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
     ) {
@@ -158,60 +158,169 @@ final class OnboardingHappyPathTests: XCTestCase {
   func testOnboardingViewModelMovesThroughStepsAndSavesExactlyOnce() throws {
     let useCase = SpyCompleteOnboardingUseCase()
     var completionCount = 0
+    var completedRoutineID: UUID?
     let viewModel = OnboardingViewModel(
       routineSuggestionService: LocalTemplateSuggestionService.shared,
       completeOnboardingUseCase: useCase
-    ) {
+    ) { routineID in
       completionCount += 1
+      completedRoutineID = routineID
     }
 
     XCTAssertEqual(viewModel.step, .experience)
 
     viewModel.selectExperience(.wantsRecommendation)
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .goals)
+    viewModel.backButtonDidTap()
+    XCTAssertEqual(viewModel.step, .experience)
+
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .goals)
 
     viewModel.toggleGoal(tag: "mind")
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .suggestedRoutine)
     XCTAssertNotNil(viewModel.draft.previewRoutine)
 
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .duration)
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .freeform)
 
     viewModel.draft.freeformText = "명상하고 일기를 쓰고 싶어요"
     viewModel.toggleKeyword("명상")
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertFalse(
       viewModel.draft.previewRoutine?.summary.localizedCaseInsensitiveContains("AI") ?? true
     )
 
-    viewModel.advance()
+    viewModel.organizingDidFinish()
     XCTAssertEqual(viewModel.step, .review)
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .alarm)
 
     viewModel.updateAlarm(hour: 6, minute: 40)
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .voice)
 
-    viewModel.selectVoice(.moru)
-    viewModel.advance()
+    viewModel.selectVoice(.yuna)
+    viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .completion)
 
-    viewModel.advance()
-    viewModel.advance()
+    viewModel.primaryButtonDidTap()
+    viewModel.primaryButtonDidTap()
 
     XCTAssertEqual(useCase.executeCallCount, 1)
     XCTAssertEqual(completionCount, 1)
+    XCTAssertEqual(completedRoutineID, useCase.resultRoutineIDs.first)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpHour, 6)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpMinute, 40)
-    XCTAssertEqual(useCase.requests.first?.selectedVoice, .moru)
+    XCTAssertEqual(useCase.requests.first?.selectedVoice, .yuna)
   }
 
+  @MainActor
+  func testOnboardingViewModelRetriesPreviewBeforeAdvancing() {
+    let suggestionService = RetriableSuggestionService()
+    let viewModel = OnboardingViewModel(
+      routineSuggestionService: suggestionService,
+      completeOnboardingUseCase: SpyCompleteOnboardingUseCase(),
+      onCompleted: { _ in }
+    )
+
+    viewModel.selectExperience(.wantsRecommendation)
+    viewModel.primaryButtonDidTap()
+    viewModel.toggleGoal(tag: "mind")
+    viewModel.primaryButtonDidTap()
+
+    XCTAssertEqual(viewModel.step, .goals)
+    XCTAssertNil(viewModel.draft.previewRoutine)
+    XCTAssertEqual(viewModel.errorMessage, RetriableSuggestionError.unavailable.errorDescription)
+
+    suggestionService.shouldFail = false
+    viewModel.primaryButtonDidTap()
+
+    XCTAssertEqual(viewModel.step, .suggestedRoutine)
+    XCTAssertNotNil(viewModel.draft.previewRoutine)
+    XCTAssertNil(viewModel.errorMessage)
+
+    viewModel.primaryButtonDidTap()
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .freeform)
+
+    suggestionService.shouldFail = true
+    viewModel.primaryButtonDidTap()
+
+    XCTAssertEqual(viewModel.step, .freeform)
+    XCTAssertNil(viewModel.draft.previewRoutine)
+    XCTAssertEqual(viewModel.errorMessage, RetriableSuggestionError.unavailable.errorDescription)
+
+    suggestionService.shouldFail = false
+    viewModel.primaryButtonDidTap()
+
+    XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertNotNil(viewModel.draft.previewRoutine)
+    XCTAssertNil(viewModel.errorMessage)
+  }
+
+  @MainActor
+  func testOnboardingViewModelRejectsEmptyPreviewRoutine() {
+    let suggestionService = EmptyPreviewSuggestionService()
+    let completionUseCase = SpyCompleteOnboardingUseCase()
+    let viewModel = OnboardingViewModel(
+      routineSuggestionService: suggestionService,
+      completeOnboardingUseCase: completionUseCase,
+      onCompleted: { _ in }
+    )
+
+    viewModel.selectExperience(.wantsRecommendation)
+    viewModel.primaryButtonDidTap()
+    viewModel.toggleGoal(tag: "mind")
+    viewModel.primaryButtonDidTap()
+
+    XCTAssertEqual(viewModel.step, .goals)
+    XCTAssertNil(viewModel.draft.previewRoutine)
+    XCTAssertNil(viewModel.validatedPreviewRoutine)
+    XCTAssertEqual(viewModel.errorMessage, "루틴 항목을 불러올 수 없어요.")
+
+    let emptyRoutine = Routine(name: "빈 루틴", steps: [])
+    for step in [
+      OnboardingStep.suggestedRoutine,
+      .duration,
+      .review,
+      .alarm,
+      .voice
+    ] {
+      var draft = OnboardingDraft()
+      draft.previewRoutine = emptyRoutine
+      let invalidPreviewViewModel = OnboardingViewModel(
+        draft: draft,
+        step: step,
+        routineSuggestionService: suggestionService,
+        completeOnboardingUseCase: completionUseCase,
+        onCompleted: { _ in }
+      )
+
+      XCTAssertNil(invalidPreviewViewModel.validatedPreviewRoutine)
+      XCTAssertFalse(invalidPreviewViewModel.canAdvance)
+    }
+  }
+
+  @MainActor
+  func testOnboardingDurationRoundsStepAndTotalMinutesConsistently() {
+    let routine = Routine(
+      name: "검증 루틴",
+      steps: [
+        RoutineStep(type: .timer, title: "첫 번째", order: 0, estimatedSeconds: 61),
+        RoutineStep(type: .timer, title: "두 번째", order: 1, estimatedSeconds: 1)
+      ]
+    )
+
+    XCTAssertEqual(OnboardingDuration.roundedMinutes(for: routine.steps[0].estimatedSeconds), 2)
+    XCTAssertEqual(OnboardingDuration.roundedMinutes(for: routine.steps[1].estimatedSeconds), 1)
+    XCTAssertEqual(OnboardingDuration.totalMinutes(for: routine), 3)
+  }
   @MainActor
   func testSwiftDataRelaunchPersistenceAfterOnboardingCompletion() throws {
     let temporaryDirectory = FileManager.default.temporaryDirectory
@@ -245,7 +354,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 10,
             weekdays: [.monday, .tuesday, .wednesday, .thursday, .friday]
           ),
-          selectedVoice: .moru
+          selectedVoice: .yuna
         )
       )
       routineID = result.routine.id
@@ -262,14 +371,16 @@ final class OnboardingHappyPathTests: XCTestCase {
       sessionStore.load()
 
       let profile = try XCTUnwrap(sessionStore.profile)
-      let activeRoutine = try XCTUnwrap(try dependencies.routineRepository.fetchActiveRoutines().first)
+      let activeRoutine = try XCTUnwrap(
+        try dependencies.routineRepository.fetchActiveRoutines().first
+      )
 
       XCTAssertEqual(sessionStore.phase, .ready)
-      XCTAssertEqual(profile.selectedVoice, .moru)
+      XCTAssertEqual(profile.selectedVoice, .yuna)
       XCTAssertEqual(activeRoutine.id, routineID)
       XCTAssertTrue(activeRoutine.isActive)
       XCTAssertEqual(activeRoutine.alarmSchedule?.isEnabled, true)
-      XCTAssertEqual(activeRoutine.steps.count, 3)
+      XCTAssertEqual(activeRoutine.steps.count, 10)
     }
   }
 }
@@ -278,14 +389,46 @@ final class OnboardingHappyPathTests: XCTestCase {
 private final class SpyCompleteOnboardingUseCase: CompleteOnboardingUseCaseProtocol {
   private(set) var executeCallCount = 0
   private(set) var requests: [CompleteOnboardingRequest] = []
+  private(set) var resultRoutineIDs: [UUID] = []
 
   func execute(_ request: CompleteOnboardingRequest) throws -> CompleteOnboardingResult {
     executeCallCount += 1
     requests.append(request)
 
+    let routine = try LocalTemplateSuggestionService.shared.makeRoutine(
+      from: request.suggestionInput
+    )
+    resultRoutineIDs.append(routine.id)
+
     return CompleteOnboardingResult(
       profile: LocalProfile(selectedVoice: request.selectedVoice),
-      routine: try LocalTemplateSuggestionService.shared.makeRoutine(from: request.suggestionInput)
+      routine: routine
     )
+  }
+}
+private enum RetriableSuggestionError: LocalizedError {
+  case unavailable
+
+  var errorDescription: String? {
+    "루틴 미리보기를 생성할 수 없어요."
+  }
+}
+
+@MainActor
+private final class RetriableSuggestionService: RoutineSuggestionService {
+  var shouldFail = true
+
+  func makeRoutine(from input: RoutineSuggestionInput) throws -> Routine {
+    guard !shouldFail else {
+      throw RetriableSuggestionError.unavailable
+    }
+
+    return try LocalTemplateSuggestionService.shared.makeRoutine(from: input)
+  }
+}
+@MainActor
+private final class EmptyPreviewSuggestionService: RoutineSuggestionService {
+  func makeRoutine(from input: RoutineSuggestionInput) throws -> Routine {
+    Routine(name: "빈 루틴", steps: [])
   }
 }

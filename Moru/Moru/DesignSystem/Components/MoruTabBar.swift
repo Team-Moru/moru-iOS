@@ -43,11 +43,27 @@ enum MoruTabItem: String, CaseIterable, Identifiable {
 }
 
 struct MoruTabBar: View {
+  static let accessibilityIdentifier = "app.tabBar"
+
+  static func accessibilityIdentifier(for item: MoruTabItem) -> String {
+    "app.tab.\(item.rawValue)"
+  }
+
   @Binding var selection: MoruTabItem
+  let items: [MoruTabItem]
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  init(
+    selection: Binding<MoruTabItem>,
+    items: [MoruTabItem] = MoruTabItem.allCases
+  ) {
+    _selection = selection
+    self.items = items
+  }
 
   var body: some View {
     HStack(spacing: 0) {
-      ForEach(MoruTabItem.allCases) { item in
+      ForEach(items) { item in
         Button {
           selection = item
         } label: {
@@ -59,26 +75,40 @@ struct MoruTabBar: View {
               .foregroundStyle(
                 selection == item ? AppColor.orange350 : AppColor.moruTextBody
               )
-              .frame(width: 60, height: 24)
+              .frame(
+                width: dynamicTypeSize.isAccessibilitySize ? 40 : 60,
+                height: dynamicTypeSize.isAccessibilitySize ? 32 : 24
+              )
+              .accessibilityHidden(true)
 
-            Text(item.title)
-              .font(
-                selection == item
-                  ? AppFont.pretendardMedium(size: 12)
-                  : AppFont.pretendardRegular(size: 12)
-              )
-              .foregroundStyle(
-                selection == item ? AppColor.orange350 : AppColor.moruTextBody
-              )
+            if !dynamicTypeSize.isAccessibilitySize {
+              Text(item.title)
+                .font(
+                  selection == item
+                    ? AppFont.pretendardMedium(size: 12)
+                    : AppFont.pretendardRegular(size: 12)
+                )
+                .foregroundStyle(
+                  selection == item ? AppColor.orange350 : AppColor.moruTextBody
+                )
+            }
           }
-          .frame(width: 60, height: 45)
+          .frame(maxWidth: .infinity, minHeight: dynamicTypeSize.isAccessibilitySize ? 52 : 45)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(item.title)
+        .accessibilityAddTraits(selection == item ? .isSelected : [])
+        .accessibilityIdentifier(Self.accessibilityIdentifier(for: item))
       }
     }
-    .frame(width: 346, height: 45)
-    .padding(.horizontal, 23.5)
-    .frame(width: 393, height: 95)
+    .frame(maxWidth: .infinity, minHeight: 45)
+    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .frame(
+      maxWidth: .infinity,
+      minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 95
+    )
     .background(AppColor.grayWhite)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier(Self.accessibilityIdentifier)
   }
 }

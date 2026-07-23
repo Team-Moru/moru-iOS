@@ -8,7 +8,8 @@
 import Combine
 import Foundation
 
-nonisolated final class OnboardingViewModel: ObservableObject {
+@MainActor
+final class OnboardingViewModel: ObservableObject {
   let objectWillChange = ObservableObjectPublisher()
 
   var draft: OnboardingDraft {
@@ -37,16 +38,15 @@ nonisolated final class OnboardingViewModel: ObservableObject {
 
   private let routineSuggestionService: any RoutineSuggestionService
   private let completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol
-  private let onCompleted: () -> Void
+  private let onCompleted: OnboardingCompletionHandler
   private var didComplete = false
 
-  @MainActor
   init(
     draft: OnboardingDraft = OnboardingDraft(),
     step: OnboardingStep = .experience,
     routineSuggestionService: any RoutineSuggestionService,
     completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol,
-    onCompleted: @escaping () -> Void
+    onCompleted: @escaping OnboardingCompletionHandler
   ) {
     self.draft = draft
     self.step = step
@@ -55,7 +55,6 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     self.onCompleted = onCompleted
   }
 
-  @MainActor
   var primaryButtonTitle: String {
     switch step {
     case .experience, .goals, .duration, .organizing:
@@ -73,26 +72,38 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     }
   }
 
-  @MainActor
+  var validatedPreviewRoutine: Routine? {
+    guard let previewRoutine = draft.previewRoutine, !previewRoutine.steps.isEmpty else {
+      return nil
+    }
+
+    return previewRoutine
+  }
+
+  var hasValidatedPreviewRoutine: Bool {
+    validatedPreviewRoutine != nil
+  }
+
   var canAdvance: Bool {
     switch step {
+    case .suggestedRoutine, .duration, .review:
+      return hasValidatedPreviewRoutine
     case .alarm:
-      return !draft.selectedWeekdays.isEmpty
+      return hasValidatedPreviewRoutine && !draft.selectedWeekdays.isEmpty
     case .voice:
-      return VoiceProfile.localVoices.contains(draft.selectedVoice)
+      return hasValidatedPreviewRoutine
+        && VoiceProfile.localVoices.contains(draft.selectedVoice)
     case .completion:
       return !isSaving && !didComplete
-    default:
+    case .experience, .goals, .freeform, .organizing:
       return true
     }
   }
 
-  @MainActor
   func selectExperience(_ experience: RoutineExperience) {
     draft.experience = experience
   }
 
-  @MainActor
   func toggleGoal(tag: String) {
     if draft.selectedGoalTags.contains(tag) {
       draft.selectedGoalTags.remove(tag)
@@ -101,7 +112,6 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     }
   }
 
-  @MainActor
   func toggleKeyword(_ keyword: String) {
     if draft.selectedKeywords.contains(keyword) {
       draft.selectedKeywords.remove(keyword)
@@ -110,24 +120,21 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     }
   }
 
-  @MainActor
   func updateAlarm(hour: Int, minute: Int) {
     draft.alarmHour = min(max(hour, 0), 23)
     draft.alarmMinute = min(max(minute, 0), 59)
-    refreshPreview()
+    _ = refreshPreview()
   }
 
-  @MainActor
   func toggleWeekday(_ weekday: Weekday) {
     if draft.selectedWeekdays.contains(weekday) {
       draft.selectedWeekdays.remove(weekday)
     } else {
       draft.selectedWeekdays.insert(weekday)
     }
-    refreshPreview()
+    _ = refreshPreview()
   }
 
-  @MainActor
   func selectVoice(_ voice: VoiceProfile) {
     guard VoiceProfile.localVoices.contains(voice) else {
       return
@@ -136,8 +143,7 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     draft.selectedVoice = voice
   }
 
-  @MainActor
-  func advance() {
+  func primaryButtonDidTap() {
     guard canAdvance else {
       errorMessage = "필수 항목을 확인해 주세요."
       return
@@ -147,11 +153,15 @@ nonisolated final class OnboardingViewModel: ObservableObject {
 
     switch step {
     case .goals:
-      refreshPreview()
+      guard refreshPreview() else {
+        return
+      }
       step = .suggestedRoutine
     case .freeform:
+      guard refreshPreview() else {
+        return
+      }
       step = .organizing
-      refreshPreview()
     case .completion:
       completeButtonDidTap()
     default:
@@ -161,8 +171,7 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     }
   }
 
-  @MainActor
-  func goBack() {
+  func backButtonDidTap() {
     guard !isSaving, let previous = step.previous else {
       return
     }
@@ -171,18 +180,36 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     step = previous
   }
 
-  @MainActor
-  func refreshPreview() {
+  func organizingDidFinish() {
+    guard step == .organizing else {
+      return
+    }
+
+    step = .review
+  }
+
+  @discardableResult
+  func refreshPreview() -> Bool {
+    draft.previewRoutine = nil
+
     do {
       draft.previewRoutine = try routineSuggestionService.makeRoutine(
         from: draft.suggestionInput
       )
+
+      guard hasValidatedPreviewRoutine else {
+        draft.previewRoutine = nil
+        errorMessage = "루틴 항목을 불러올 수 없어요."
+        return false
+      }
+      errorMessage = nil
+      return true
     } catch {
       errorMessage = error.localizedDescription
+      return false
     }
   }
 
-  @MainActor
   func completeButtonDidTap() {
     guard !isSaving, !didComplete else {
       return
@@ -192,7 +219,7 @@ nonisolated final class OnboardingViewModel: ObservableObject {
     errorMessage = nil
 
     do {
-      _ = try completeOnboardingUseCase.execute(
+      let result = try completeOnboardingUseCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: draft.suggestionInput,
           selectedVoice: draft.selectedVoice
@@ -200,7 +227,7 @@ nonisolated final class OnboardingViewModel: ObservableObject {
       )
       didComplete = true
       isSaving = false
-      onCompleted()
+      onCompleted(result.routine.id)
     } catch {
       isSaving = false
       errorMessage = error.localizedDescription

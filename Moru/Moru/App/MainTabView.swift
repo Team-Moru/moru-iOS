@@ -2,70 +2,106 @@
 //  MainTabView.swift
 //  Moru
 //
-//  Created by Codex on 7/13/26.
+//  Created by Codex on 7/14/26.
 //
 
+import Foundation
 import SwiftUI
 
+struct MainTabState: Equatable {
+  static let availableTabs: [MoruTabItem] = [.home, .routine, .record, .my]
+
+  private(set) var selection: MoruTabItem
+  private(set) var historyReloadToken: Int
+  private(set) var historyDestination: HistoryDestination?
+
+  init(
+    selection: MoruTabItem = .home,
+    historyReloadToken: Int = 0,
+    historyDestination: HistoryDestination? = nil
+  ) {
+    self.selection = selection
+    self.historyReloadToken = historyReloadToken
+    self.historyDestination = historyDestination
+  }
+
+  mutating func select(_ tab: MoruTabItem) {
+    guard Self.availableTabs.contains(tab) else {
+      return
+    }
+
+    selection = tab
+    historyDestination = nil
+
+    guard tab == .record else {
+      return
+    }
+
+    historyReloadToken += 1
+  }
+
+  mutating func showHome() {
+    selection = .home
+    historyDestination = nil
+  }
+
+  mutating func showRunDetail(_ runID: UUID) {
+    selection = .record
+    historyDestination = .runDetail(runID)
+    historyReloadToken += 1
+  }
+
+  mutating func setHistoryDestination(_ destination: HistoryDestination?) {
+    historyDestination = destination
+  }
+}
+
 struct MainTabView: View {
-  let dependencies: DependencyContainer
-  let onSessionReloadNeeded: () -> Void
+  private let home: AnyView
+  private let routineSetting: RoutineSettingView
+  private let history: AnyView
+  private let profile: AnyView
+  @Binding private var selection: MoruTabItem
+  private let historyReloadToken: Int
 
-  @State private var selectedTab: MoruTabItem = .home
-
-  var body: some View {
-    ZStack(alignment: .bottom) {
-      Group {
-        switch selectedTab {
-        case .home:
-          HomeView(dependencies: dependencies)
-        case .routine:
-          RoutineSettingView(dependencies: dependencies)
-        case .record:
-          RecordPlaceholderView()
-        case .my:
-          MyPageView(
-            dependencies: dependencies,
-            onLocalDataReset: onSessionReloadNeeded
-          )
-        }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-      MoruTabBar(selection: $selectedTab)
-    }
-    .ignoresSafeArea(.keyboard, edges: .bottom)
+  init(
+    home: AnyView,
+    routineSetting: RoutineSettingView,
+    history: AnyView,
+    profile: AnyView = AnyView(EmptyView()),
+    selection: Binding<MoruTabItem>,
+    historyReloadToken: Int
+  ) {
+    self.home = home
+    self.routineSetting = routineSetting
+    self.history = history
+    self.profile = profile
+    _selection = selection
+    self.historyReloadToken = historyReloadToken
   }
-}
 
-private struct RecordPlaceholderView: View {
   var body: some View {
-    VStack(spacing: AppSpacing.sm) {
-      Text("이력")
-        .font(AppFont.heading2Bold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+    VStack(spacing: 0) {
+      selectedContent
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-      Text("루틴 기록 화면은 다음 작업에서 연결됩니다.")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(
-      LinearGradient(
-        stops: [
-          Gradient.Stop(color: AppColor.babyBlue100, location: 0),
-          Gradient.Stop(color: AppColor.babyBlue50, location: 1),
-        ],
-        startPoint: UnitPoint(x: 0.5, y: 0),
-        endPoint: UnitPoint(x: 0.5, y: 1)
+      MoruTabBar(
+        selection: $selection,
+        items: MainTabState.availableTabs
       )
-      .ignoresSafeArea()
-    )
+    }
+  }
+
+  @ViewBuilder
+  private var selectedContent: some View {
+    if selection == .home {
+      home
+    } else if selection == .routine {
+      routineSetting
+    } else if selection == .record {
+      history.id(historyReloadToken)
+    } else {
+      profile
+    }
   }
 }
-
-#if DEBUG
-#Preview {
-  MainTabView(dependencies: .homePreview) {}
-}
-#endif

@@ -2,7 +2,7 @@
 //  SwiftDataLocalDataResetRepository.swift
 //  Moru
 //
-//  Created by Codex on 7/21/26.
+//  Created by Codex on 7/22/26.
 //
 
 import Foundation
@@ -18,6 +18,7 @@ nonisolated final class SwiftDataLocalDataResetRepository: LocalDataResetReposit
   @MainActor
   func resetToFreshInstallState() throws {
     do {
+      try deleteAll(PersistedHomeWeatherSnapshot.self)
       try deleteAll(PersistedRoutineRun.self)
       try deleteAll(PersistedRoutine.self)
       try deleteAll(PersistedLocalProfile.self)
@@ -29,8 +30,8 @@ nonisolated final class SwiftDataLocalDataResetRepository: LocalDataResetReposit
   }
 
   @MainActor
-  private func deleteAll<T: PersistentModel>(_ modelType: T.Type) throws {
-    let descriptor = FetchDescriptor<T>()
-    try modelContext.fetch(descriptor).forEach { modelContext.delete($0) }
+  private func deleteAll<Model: PersistentModel>(_ modelType: Model.Type) throws {
+    let descriptor = FetchDescriptor<Model>()
+    try modelContext.fetch(descriptor).forEach(modelContext.delete)
   }
 }
