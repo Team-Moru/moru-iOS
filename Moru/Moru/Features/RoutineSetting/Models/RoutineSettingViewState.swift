@@ -7,6 +7,11 @@
 
 import Foundation
 
+enum RoutineSettingEntryPoint {
+  case list
+  case newRoutine
+}
+
 struct RoutineSettingViewState: Equatable {
   var routines: [RoutineSettingItemState]
   var isLoading: Bool

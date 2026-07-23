@@ -357,7 +357,8 @@ Moru
 - `RoutineRun`은 실행 당시 step snapshot을 포함해야 하며, snapshot 없는 run 저장은 repository에서 거부합니다.
 - soft delete를 뜻하는 `deletedAt`, `includeDeleted`, `pendingDelete` 계약은 v1에서 사용하지 않습니다.
 - v1 sync 컬럼은 `localOnly`/`nil`만 유효합니다. persisted read-path에서도 remote metadata가 보이면 mapper error로 다룹니다.
-- Session ready 조건은 `LocalProfile + 활성 Routine + enabled alarm`입니다. 프로필만 생성된 상태는 온보딩 완료가 아닙니다.
+- Session ready 조건은 `LocalProfile` 존재입니다. 루틴이나 활성 알람이 없어도 Main empty
+  state로 진입하며, 프로필까지 삭제하는 전체 초기화에서만 온보딩으로 돌아갑니다.
 - Feature View/ViewModel은 `SwiftData`, `@Query`, `ModelContext`를 직접 사용하지 않습니다.
 - 화면 계층은 `DependencyContainer`가 제공하는 Repository/Service 계약만 사용합니다.
 - SwiftData 접근은 `Data/Persistence`, `Data/Local`, App bootstrap, 테스트로 제한합니다.

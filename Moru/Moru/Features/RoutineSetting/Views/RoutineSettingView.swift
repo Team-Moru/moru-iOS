@@ -9,13 +9,23 @@ import SwiftUI
 
 struct RoutineSettingView: View {
   static let rootAccessibilityIdentifier = "routine.root"
+  static let emptyCreateRoutineAccessibilityIdentifier =
+    "routine.empty.create-routine"
+  static let addRoutineAccessibilityIdentifier = "routine.add"
 
   @State private var viewModel: RoutineSettingViewModel
   @State private var editorDraft: RoutineDraftState?
+  @State private var didHandleEntryPoint = false
   @State private var activationConflictRoutineID: UUID?
   @State private var activationConflict: RoutineWeekdayConflictState?
 
-  init(dependencies: DependencyContainer) {
+  private let entryPoint: RoutineSettingEntryPoint
+
+  init(
+    dependencies: DependencyContainer,
+    entryPoint: RoutineSettingEntryPoint = .list
+  ) {
+    self.entryPoint = entryPoint
     _viewModel = State(initialValue: RoutineSettingViewModel(dependencies: dependencies))
   }
 
@@ -25,14 +35,19 @@ struct RoutineSettingView: View {
         VStack(alignment: .leading, spacing: 0) {
           header
 
-          activeRoutineSection
-            .padding(.top, AppSpacing.xxl)
+          if viewModel.state.routines.isEmpty {
+            emptyRoutineState
+              .padding(.top, AppSpacing.xxl)
+          } else {
+            activeRoutineSection
+              .padding(.top, AppSpacing.xxl)
 
-          inactiveRoutineSection
-            .padding(.top, AppSpacing.forty)
+            inactiveRoutineSection
+              .padding(.top, AppSpacing.forty)
 
-          addRoutineButton
-            .padding(.top, AppSpacing.sm)
+            addRoutineButton
+              .padding(.top, AppSpacing.sm)
+          }
 
           if let errorMessage = viewModel.state.errorMessage {
             Text(errorMessage)
@@ -45,6 +60,7 @@ struct RoutineSettingView: View {
         .padding(.top, AppSpacing.lg)
         .padding(.bottom, AppSpacing.thirtySix)
       }
+      .defaultScrollAnchor(.top)
       .background(AppColor.babyBlue50.ignoresSafeArea())
       .navigationBarTitleDisplayMode(.inline)
     }
@@ -53,6 +69,13 @@ struct RoutineSettingView: View {
     .accessibilityLabel("루틴")
     .task {
       viewModel.load()
+
+      guard !didHandleEntryPoint else {
+        return
+      }
+
+      didHandleEntryPoint = true
+      editorDraft = viewModel.initialDraft(for: entryPoint)
     }
     .overlay {
       if let activationConflict {
@@ -94,6 +117,31 @@ struct RoutineSettingView: View {
       routines: viewModel.state.routines.filter { !$0.isActive },
       emptyTitle: "꺼져 있는 루틴이 없어요."
     )
+  }
+
+  private var emptyRoutineState: some View {
+    VStack(spacing: AppSpacing.md) {
+      Image(systemName: "checklist")
+        .font(AppFont.title1SemiBold)
+        .foregroundStyle(AppColor.orange300)
+
+      Text("아직 만든 루틴이 없어요.")
+        .font(AppFont.heading3SemiBold)
+        .foregroundStyle(AppColor.moruTextPrimary)
+
+      Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
+        .font(AppFont.label1NormalMedium)
+        .foregroundStyle(AppColor.moruTextSecondary)
+        .multilineTextAlignment(.center)
+
+      MoruButton("새 루틴 만들기", style: .secondary) {
+        editorDraft = viewModel.makeNewDraft()
+      }
+      .accessibilityIdentifier(
+        Self.emptyCreateRoutineAccessibilityIdentifier
+      )
+    }
+    .frame(maxWidth: .infinity, minHeight: 320)
   }
 
   private func routineSection(
@@ -138,6 +186,7 @@ struct RoutineSettingView: View {
       MoruRoutineCard(title: "새 루틴 추가하기", isAddCard: true)
     }
     .buttonStyle(.plain)
+    .accessibilityIdentifier(Self.addRoutineAccessibilityIdentifier)
   }
 
   private func emptySectionCard(title: String) -> some View {

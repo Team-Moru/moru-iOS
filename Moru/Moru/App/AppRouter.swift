@@ -85,6 +85,14 @@ struct AppRouter: View {
         weatherService: dependencies.homeWeatherService,
         routineSettingContentFactory: {
           AnyView(RoutineSettingView(dependencies: dependencies))
+        },
+        routineCreationContentFactory: {
+          AnyView(
+            RoutineSettingView(
+              dependencies: dependencies,
+              entryPoint: .newRoutine
+            )
+          )
         }
       )
     }

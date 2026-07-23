@@ -132,8 +132,7 @@ struct DependencyContainer {
   @MainActor
   func makeSessionStore() -> SessionStore {
     SessionStore(
-      localProfileRepository: localProfileRepository,
-      routineRepository: routineRepository
+      localProfileRepository: localProfileRepository
     )
   }
 

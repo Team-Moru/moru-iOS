@@ -69,4 +69,14 @@ final class RoutineSettingViewModelTests: XCTestCase {
     XCTAssertEqual(newDraft.title, "새 루틴")
     XCTAssertNil(newDraft.routineID)
   }
+
+  @MainActor
+  func testNewRoutineEntryPointBuildsCreationDraft() throws {
+    let viewModel = RoutineSettingViewModel(dependencies: .homePreview)
+
+    XCTAssertNil(viewModel.initialDraft(for: .list))
+    let draft = try XCTUnwrap(viewModel.initialDraft(for: .newRoutine))
+    XCTAssertEqual(draft.title, "새 루틴")
+    XCTAssertNil(draft.routineID)
+  }
 }

@@ -21,17 +21,21 @@ final class DefaultHomeFlowBuilder: HomeFlowBuilding {
   private let weatherRepository: (any HomeWeatherRepository)?
   private let weatherService: (any HomeWeatherService)?
   private let routineSettingContentFactory: @MainActor () -> AnyView
+  private let routineCreationContentFactory: @MainActor () -> AnyView
 
   init(
     loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol,
     weatherRepository: (any HomeWeatherRepository)? = nil,
     weatherService: (any HomeWeatherService)? = nil,
-    routineSettingContentFactory: @escaping @MainActor () -> AnyView
+    routineSettingContentFactory: @escaping @MainActor () -> AnyView,
+    routineCreationContentFactory: (@MainActor () -> AnyView)? = nil
   ) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
     self.weatherRepository = weatherRepository
     self.weatherService = weatherService
     self.routineSettingContentFactory = routineSettingContentFactory
+    self.routineCreationContentFactory =
+      routineCreationContentFactory ?? routineSettingContentFactory
   }
 
   func make(
@@ -47,7 +51,8 @@ final class DefaultHomeFlowBuilder: HomeFlowBuilding {
         ),
         onStartRoutine: onStartRoutine,
         refreshToken: refreshToken,
-        routineSettingContent: routineSettingContentFactory()
+        routineSettingContent: routineSettingContentFactory(),
+        routineCreationContent: routineCreationContentFactory()
       )
     )
   }

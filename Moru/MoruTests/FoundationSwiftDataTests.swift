@@ -112,63 +112,14 @@ final class FoundationSwiftDataTests: XCTestCase {
   }
 
   @MainActor
-  func testSessionStoreRequiresProfileActiveRoutineAndEnabledAlarmBeforeReady() throws {
+  func testSessionStoreRequiresOnlyProfileBeforeReady() throws {
     let profile = LocalProfile()
-    let noAlarmRoutine = makeRoutine(
-      name: "알람 없음",
-      createdAt: Date(timeIntervalSince1970: 1)
-    )
-    let disabledAlarmRoutine = makeRoutine(
-      name: "꺼진 알람",
-      createdAt: Date(timeIntervalSince1970: 2),
-      alarmSchedule: makeAlarm(isEnabled: false)
-    )
-    let readyRoutine = makeRoutine(
-      name: "완료 루틴",
-      createdAt: Date(timeIntervalSince1970: 3),
-      alarmSchedule: makeAlarm(isEnabled: true)
-    )
 
     XCTAssertFalse(
-      SessionStore.isOnboardingComplete(
-        profile: nil,
-        activeRoutines: [readyRoutine]
-      )
-    )
-    XCTAssertFalse(
-      SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: []
-      )
-    )
-    XCTAssertFalse(
-      SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: [noAlarmRoutine]
-      )
-    )
-    XCTAssertFalse(
-      SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: [disabledAlarmRoutine]
-      )
+      SessionStore.isSessionReady(profile: nil)
     )
     XCTAssertTrue(
-      SessionStore.isOnboardingComplete(
-        profile: profile,
-        activeRoutines: [readyRoutine]
-      )
-    )
-
-  }
-
-  @MainActor
-  func testDefaultProfileAloneDoesNotCompleteOnboarding() throws {
-    XCTAssertFalse(
-      SessionStore.isOnboardingComplete(
-        profile: LocalProfile(),
-        activeRoutines: []
-      )
+      SessionStore.isSessionReady(profile: profile)
     )
   }
 
