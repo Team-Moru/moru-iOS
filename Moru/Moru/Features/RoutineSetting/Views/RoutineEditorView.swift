@@ -7,6 +7,14 @@
 
 import SwiftUI
 
+private struct RoutineStepFramePreferenceKey: PreferenceKey {
+  static var defaultValue: [UUID: CGRect] = [:]
+
+  static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+    value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+  }
+}
+
 struct RoutineEditorView: View {
   @Environment(\.dismiss) private var dismiss
 
@@ -18,6 +26,11 @@ struct RoutineEditorView: View {
   @State private var selectedEditStepIndex: Int? = nil
   @State private var isStepEditSheetPresented = false
   @State private var saveErrorMessage: String?
+  @State private var draggingStepID: UUID?
+  @State private var dragStartFrame: CGRect?
+  @State private var dragTranslation: CGFloat = 0
+  @State private var dragTouchYOffsetFromCenter: CGFloat = 0
+  @State private var stepFrames: [UUID: CGRect] = [:]
 
   let onSave: (RoutineDraftState) -> Bool
   let onResolveWeekdayConflict: (RoutineDraftState) -> Bool
@@ -218,30 +231,64 @@ struct RoutineEditorView: View {
         Spacer()
       }
 
-      ForEach(Array(draft.steps.indices), id: \.self) { index in
-        RoutineStepDraftRow(
-          step: $draft.steps[index],
-          order: index + 1,
-          onDelete: {
-            draft.steps.remove(at: index)
-          },
-          onTapCard: {
-            selectedEditStepIndex = index
-            isStepEditSheetPresented = true
-          }
-        )
-        .draggable(draft.steps[index].id.uuidString)
-        .dropDestination(for: String.self) { items, _ in
-          guard
-            let item = items.first,
-            let draggedStepID = UUID(uuidString: item)
-          else {
-            return false
-          }
+      ZStack {
+        VStack(spacing: AppSpacing.md) {
+          ForEach($draft.steps) { $step in
+            let stepID = step.id
+            let order = stepOrder(for: stepID)
 
-          moveStep(draggedStepID, to: draft.steps[index].id)
-          return true
+            RoutineStepDraftRow(
+              step: $step,
+              order: order,
+              onDelete: {
+                resetStepDragState()
+                removeStep(stepID)
+              },
+              onTapCard: {
+                guard draggingStepID == nil else {
+                  return
+                }
+
+                if let index = draft.steps.firstIndex(where: { $0.id == stepID }) {
+                  selectedEditStepIndex = index
+                  isStepEditSheetPresented = true
+                }
+              }
+            )
+            .opacity(draggingStepID == stepID ? 0 : 1)
+            .background(
+              GeometryReader { proxy in
+                Color.clear.preference(
+                  key: RoutineStepFramePreferenceKey.self,
+                  value: [stepID: proxy.frame(in: .named("routineStepList"))]
+                )
+              }
+            )
+            .gesture(stepReorderGesture(for: stepID))
+          }
         }
+
+        if let draggingStepID,
+           let dragStartFrame,
+           let index = draft.steps.firstIndex(where: { $0.id == draggingStepID }) {
+          RoutineStepDraftRow(
+            step: $draft.steps[index],
+            order: stepOrder(for: draggingStepID),
+            onDelete: {},
+            onTapCard: {}
+          )
+          .frame(width: dragStartFrame.width, height: dragStartFrame.height)
+          .position(
+            x: dragStartFrame.midX,
+            y: dragStartFrame.midY + dragTranslation
+          )
+          .shadow(color: AppColor.babyBlue150.opacity(0.7), radius: 14, x: 0, y: 4)
+          .allowsHitTesting(false)
+        }
+      }
+      .coordinateSpace(name: "routineStepList")
+      .onPreferenceChange(RoutineStepFramePreferenceKey.self) { frames in
+        stepFrames = frames
       }
 
       addStepButton
@@ -272,7 +319,6 @@ struct RoutineEditorView: View {
     }
     .buttonStyle(.plain)
   }
-
   private var deleteDialogOverlay: some View {
     ZStack {
       AppColor.grayBlack
@@ -410,19 +456,96 @@ struct RoutineEditorView: View {
     draft.steps.map(\.estimatedMinutes).reduce(0, +)
   }
 
-  private func moveStep(_ draggedStepID: UUID, to targetStepID: UUID) {
+  private func stepOrder(for stepID: UUID) -> Int {
+    guard let index = draft.steps.firstIndex(where: { $0.id == stepID }) else {
+      return 1
+    }
+
+    return index + 1
+  }
+
+  private func removeStep(_ stepID: UUID) {
+    guard let index = draft.steps.firstIndex(where: { $0.id == stepID }) else {
+      return
+    }
+
+    draft.steps.remove(at: index)
+  }
+
+  private func stepReorderGesture(for stepID: UUID) -> some Gesture {
+    LongPressGesture(minimumDuration: 0.18)
+      .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named("routineStepList")))
+      .onChanged { value in
+        switch value {
+        case .first:
+          break
+        case .second(true, let drag):
+          guard
+            let drag,
+            let stepFrame = dragStartFrame ?? stepFrames[stepID]
+          else {
+            return
+          }
+
+          if draggingStepID == nil {
+            draggingStepID = stepID
+            dragStartFrame = stepFrame
+            dragTouchYOffsetFromCenter = stepFrame.midY - drag.startLocation.y
+          }
+
+          let floatingCenterY = drag.location.y + dragTouchYOffsetFromCenter
+          dragTranslation = floatingCenterY - stepFrame.midY
+          reorderDraggedStep(stepID, floatingCenterY: floatingCenterY)
+        default:
+          break
+        }
+      }
+      .onEnded { _ in
+        withAnimation(.snappy(duration: 0.18)) {
+          resetStepDragState()
+        }
+      }
+  }
+
+  private func reorderDraggedStep(_ stepID: UUID, floatingCenterY: CGFloat) {
     guard
-      draggedStepID != targetStepID,
-      let sourceIndex = draft.steps.firstIndex(where: { $0.id == draggedStepID }),
-      let targetIndex = draft.steps.firstIndex(where: { $0.id == targetStepID })
+      let sourceIndex = draft.steps.firstIndex(where: { $0.id == stepID })
     else {
       return
     }
 
-    withAnimation(.snappy(duration: 0.18)) {
-      let movedStep = draft.steps.remove(at: sourceIndex)
-      draft.steps.insert(movedStep, at: targetIndex)
+    let movedStep = draft.steps[sourceIndex]
+    var remainingSteps = draft.steps
+    remainingSteps.remove(at: sourceIndex)
+
+    var insertionIndex = remainingSteps.endIndex
+    for (index, step) in remainingSteps.enumerated() {
+      guard let frame = stepFrames[step.id] else {
+        continue
+      }
+
+      if floatingCenterY < frame.midY {
+        insertionIndex = index
+        break
+      }
     }
+
+    remainingSteps.insert(movedStep, at: insertionIndex)
+
+    guard remainingSteps.map(\.id) != draft.steps.map(\.id) else {
+      return
+    }
+
+    withAnimation(.snappy(duration: 0.2)) {
+      draft.steps = remainingSteps
+    }
+  }
+
+  private func resetStepDragState() {
+    draggingStepID = nil
+    dragStartFrame = nil
+    dragTranslation = 0
+    dragTouchYOffsetFromCenter = 0
   }
 }
 
