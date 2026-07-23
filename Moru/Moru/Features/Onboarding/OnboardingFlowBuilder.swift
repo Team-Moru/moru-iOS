@@ -19,13 +19,16 @@ protocol OnboardingFlowBuilding: AnyObject {
 final class DefaultOnboardingFlowBuilder: OnboardingFlowBuilding {
   private let routineSuggestionService: any RoutineSuggestionService
   private let completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol
+  private let voicePreviewPlayer: any VoicePreviewPlaying
 
   init(
     routineSuggestionService: any RoutineSuggestionService,
-    completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol
+    completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol,
+    voicePreviewPlayer: any VoicePreviewPlaying
   ) {
     self.routineSuggestionService = routineSuggestionService
     self.completeOnboardingUseCase = completeOnboardingUseCase
+    self.voicePreviewPlayer = voicePreviewPlayer
   }
 
   func make(
@@ -36,6 +39,7 @@ final class DefaultOnboardingFlowBuilder: OnboardingFlowBuilding {
         viewModel: OnboardingViewModel(
           routineSuggestionService: routineSuggestionService,
           completeOnboardingUseCase: completeOnboardingUseCase,
+          voicePreviewPlayer: voicePreviewPlayer,
           onCompleted: onCompleted
         )
       )

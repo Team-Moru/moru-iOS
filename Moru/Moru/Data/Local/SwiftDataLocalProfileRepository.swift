@@ -21,7 +21,17 @@ nonisolated final class SwiftDataLocalProfileRepository: LocalProfileRepository 
       sortBy: [SortDescriptor(\.createdAt, order: .forward)]
     )
 
-    return try modelContext.fetch(descriptor).first.map(SwiftDataMapper.makeDomainProfile)
+    guard let persisted = try modelContext.fetch(descriptor).first else {
+      return nil
+    }
+
+    let profile = SwiftDataMapper.makeDomainProfile(from: persisted)
+    if persisted.selectedVoiceID != profile.selectedVoice.id {
+      persisted.selectedVoiceID = profile.selectedVoice.id
+      try modelContext.save()
+    }
+
+    return profile
   }
 
   @MainActor

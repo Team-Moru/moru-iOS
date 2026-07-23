@@ -85,50 +85,46 @@ extension Sequence where Element == Weekday {
 struct VoiceProfile: Codable, Hashable, Identifiable {
   var id: String
   var displayName: String
-  var localeIdentifier: String
-  var avSpeechVoiceIdentifier: String?
+  var assetVoiceCode: String
 
   init(
     id: String,
     displayName: String,
-    localeIdentifier: String,
-    avSpeechVoiceIdentifier: String? = nil
+    assetVoiceCode: String
   ) {
     self.id = id
     self.displayName = displayName
-    self.localeIdentifier = localeIdentifier
-    self.avSpeechVoiceIdentifier = avSpeechVoiceIdentifier
+    self.assetVoiceCode = assetVoiceCode
   }
 
-  static let yuna = VoiceProfile(
-    id: "moru.ko.yuna",
-    displayName: "유나",
-    localeIdentifier: "ko-KR",
-    avSpeechVoiceIdentifier: "com.apple.ttsbundle.Yuna-compact"
+  static let aoede = VoiceProfile(
+    id: "moru.bundle.aoede",
+    displayName: "민서",
+    assetVoiceCode: "Aoede"
   )
 
-  static let sora = VoiceProfile(
-    id: "moru.ko.sora",
-    displayName: "소라",
-    localeIdentifier: "ko-KR",
-    avSpeechVoiceIdentifier: "com.apple.ttsbundle.Sora-compact"
+  static let charon = VoiceProfile(
+    id: "moru.bundle.charon",
+    displayName: "현우",
+    assetVoiceCode: "Charon"
   )
 
-  /// Legacy value kept so profiles written before the v1 voice catalogue remain decodable.
-  static let moru = VoiceProfile(
-    id: "moru-local",
-    displayName: "모루 기본 목소리",
-    localeIdentifier: "ko-KR"
+  static let kore = VoiceProfile(
+    id: "moru.bundle.kore",
+    displayName: "지유",
+    assetVoiceCode: "Kore"
   )
 
-  static let localVoices = [VoiceProfile.yuna, .sora]
+  static let orus = VoiceProfile(
+    id: "moru.bundle.orus",
+    displayName: "은우",
+    assetVoiceCode: "Orus"
+  )
+
+  static let localVoices = [VoiceProfile.aoede, .charon, .kore, .orus]
 
   static func fallback(id: String) -> VoiceProfile {
-    if id == moru.id {
-      return .moru
-    }
-
-    return localVoices.first { $0.id == id } ?? .moru
+    localVoices.first { $0.id == id } ?? .aoede
   }
 }
 
@@ -399,7 +395,7 @@ struct LocalProfile: Identifiable, Codable, Hashable {
   init(
     id: UUID = UUID(),
     displayName: String = "모루 사용자",
-    selectedVoice: VoiceProfile = .yuna,
+    selectedVoice: VoiceProfile = .aoede,
     createdAt: Date = Date(),
     updatedAt: Date = Date()
   ) {

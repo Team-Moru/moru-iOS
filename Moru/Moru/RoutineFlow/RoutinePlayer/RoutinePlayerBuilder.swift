@@ -24,13 +24,25 @@ protocol RoutinePlayerBuilding: AnyObject {
 final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   private let resolver: any ResolveRoutineExecutionUseCaseProtocol
   private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
+  private let localProfileRepository: any LocalProfileRepository
+  private let guidancePlayer: any RoutineGuidancePlaying
+  private let guidancePlaybackState: RoutineGuidancePlaybackState
+  private let audioSessionCoordinator: RoutineAudioSessionCoordinator
 
   init(
     resolver: any ResolveRoutineExecutionUseCaseProtocol,
-    saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
+    saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol,
+    localProfileRepository: any LocalProfileRepository,
+    guidancePlayer: any RoutineGuidancePlaying,
+    guidancePlaybackState: RoutineGuidancePlaybackState,
+    audioSessionCoordinator: RoutineAudioSessionCoordinator
   ) {
     self.resolver = resolver
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
+    self.localProfileRepository = localProfileRepository
+    self.guidancePlayer = guidancePlayer
+    self.guidancePlaybackState = guidancePlaybackState
+    self.audioSessionCoordinator = audioSessionCoordinator
   }
 
   func makeTrial(
@@ -42,11 +54,17 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
       request: request,
       resolver: resolver,
       finalizer: DefaultTrialRoutineFinalizer(),
+      guidanceCoordinator: makeGuidanceCoordinator(),
       presentationToken: presentationToken,
       onEvent: onEvent
     )
 
-    return AnyView(RoutinePlayerView(viewModel: viewModel))
+    return AnyView(
+      RoutinePlayerView(
+        viewModel: viewModel,
+        speechInputController: makeSpeechInputController()
+      )
+    )
   }
 
   func makeRegular(
@@ -60,11 +78,36 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
       finalizer: DefaultRegularRoutineFinalizer(
         saveRoutineRunUseCase: saveRoutineRunUseCase
       ),
+      guidanceCoordinator: makeGuidanceCoordinator(),
       presentationToken: presentationToken,
       onEvent: onEvent
     )
 
-    return AnyView(RoutinePlayerView(viewModel: viewModel))
+    return AnyView(
+      RoutinePlayerView(
+        viewModel: viewModel,
+        speechInputController: makeSpeechInputController()
+      )
+    )
+  }
+
+  private func makeGuidanceCoordinator() -> RoutineGuidanceCoordinator {
+    let selectedVoice = (try? localProfileRepository.fetchProfile())?
+      .selectedVoice ?? .aoede
+
+    return RoutineGuidanceCoordinator(
+      player: guidancePlayer,
+      playbackState: guidancePlaybackState,
+      voiceCode: selectedVoice.assetVoiceCode
+    )
+  }
+
+  private func makeSpeechInputController() -> SpeechInputController {
+    SpeechInputController {
+      AppleSpeechRecognitionSession(
+        audioSessionCoordinator: self.audioSessionCoordinator
+      )
+    }
   }
 }
 

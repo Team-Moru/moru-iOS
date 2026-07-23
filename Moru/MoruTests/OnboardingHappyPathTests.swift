@@ -32,7 +32,7 @@ final class OnboardingHappyPathTests: XCTestCase {
           wakeUpMinute: 30,
           weekdays: [.monday, .wednesday]
         ),
-        selectedVoice: .yuna
+        selectedVoice: .aoede
       )
     )
 
@@ -40,8 +40,8 @@ final class OnboardingHappyPathTests: XCTestCase {
     let activeRoutines = try dependencies.routineRepository.fetchActiveRoutines()
     let savedRoutine = try XCTUnwrap(activeRoutines.first)
 
-    XCTAssertEqual(result.profile.selectedVoice, .yuna)
-    XCTAssertEqual(savedProfile.selectedVoice, .yuna)
+    XCTAssertEqual(result.profile.selectedVoice, .aoede)
+    XCTAssertEqual(savedProfile.selectedVoice, .aoede)
     XCTAssertEqual(activeRoutines.count, 1)
     XCTAssertEqual(savedRoutine.id, result.routine.id)
     XCTAssertTrue(savedRoutine.isActive)
@@ -80,7 +80,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 0,
             weekdays: [.monday]
           ),
-          selectedVoice: .yuna
+          selectedVoice: .aoede
         )
       )
     }
@@ -88,7 +88,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       _ = try await useCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: RoutineSuggestionInput(weekdays: []),
-          selectedVoice: .yuna
+          selectedVoice: .aoede
         )
       )
     }
@@ -99,7 +99,7 @@ final class OnboardingHappyPathTests: XCTestCase {
           selectedVoice: VoiceProfile(
             id: "remote-pro-voice",
             displayName: "서버 목소리",
-            localeIdentifier: "ko-KR"
+            assetVoiceCode: "Remote"
           )
         )
       )
@@ -145,11 +145,13 @@ final class OnboardingHappyPathTests: XCTestCase {
   @MainActor
   func testOnboardingViewModelMovesThroughStepsAndSavesExactlyOnce() async throws {
     let useCase = SpyCompleteOnboardingUseCase()
+    let voicePreviewPlayer = OnboardingVoicePreviewPlayerSpy()
     var completionCount = 0
     var completedRoutineID: UUID?
     let viewModel = OnboardingViewModel(
       routineSuggestionService: LocalTemplateSuggestionService.shared,
-      completeOnboardingUseCase: useCase
+      completeOnboardingUseCase: useCase,
+      voicePreviewPlayer: voicePreviewPlayer
     ) { routineID in
       completionCount += 1
       completedRoutineID = routineID
@@ -193,9 +195,13 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .voice)
 
-    viewModel.selectVoice(.yuna)
+    viewModel.selectVoice(.aoede)
+    XCTAssertEqual(voicePreviewPlayer.previewedVoices, [.aoede])
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .completion)
+    XCTAssertEqual(voicePreviewPlayer.stopCallCount, 0)
+    viewModel.voiceSelectionViewDidDisappear()
+    XCTAssertEqual(voicePreviewPlayer.stopCallCount, 1)
 
     await viewModel.completeButtonDidTap()
     await viewModel.completeButtonDidTap()
@@ -205,7 +211,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(completedRoutineID, useCase.resultRoutineIDs.first)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpHour, 6)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpMinute, 40)
-    XCTAssertEqual(useCase.requests.first?.selectedVoice, .yuna)
+    XCTAssertEqual(useCase.requests.first?.selectedVoice, .aoede)
   }
 
   @MainActor
@@ -342,7 +348,7 @@ final class OnboardingHappyPathTests: XCTestCase {
             wakeUpMinute: 10,
             weekdays: [.monday, .tuesday, .wednesday, .thursday, .friday]
           ),
-          selectedVoice: .yuna
+          selectedVoice: .aoede
         )
       )
       routineID = result.routine.id
@@ -364,7 +370,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       )
 
       XCTAssertEqual(sessionStore.phase, .ready)
-      XCTAssertEqual(profile.selectedVoice, .yuna)
+      XCTAssertEqual(profile.selectedVoice, .aoede)
       XCTAssertEqual(activeRoutine.id, routineID)
       XCTAssertTrue(activeRoutine.isActive)
       XCTAssertEqual(activeRoutine.alarmSchedule?.isEnabled, true)
@@ -407,6 +413,21 @@ private final class SpyCompleteOnboardingUseCase: CompleteOnboardingUseCaseProto
       profile: LocalProfile(selectedVoice: request.selectedVoice),
       routine: routine
     )
+  }
+}
+
+@MainActor
+private final class OnboardingVoicePreviewPlayerSpy: VoicePreviewPlaying {
+  private(set) var previewedVoices: [VoiceProfile] = []
+  private(set) var stopCallCount = 0
+
+  func previewVoice(_ voice: VoiceProfile) -> Bool {
+    previewedVoices.append(voice)
+    return true
+  }
+
+  func stopVoicePreview() {
+    stopCallCount += 1
   }
 }
 private enum RetriableSuggestionError: LocalizedError {

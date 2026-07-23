@@ -524,7 +524,7 @@ private struct OnboardingVoiceSelectionView: View {
   var body: some View {
     OnboardingStepLayout(
       title: "어떤 목소리로\n코칭 받을까요?",
-      subtitle: "아침마다 들을 로컬 목소리예요. 들어보고 골라보세요.",
+      subtitle: "아침마다 들을 앱 내장 목소리예요. 들어보고 골라보세요.",
       titleSpacing: AppSpacing.forty
     ) {
       VStack(spacing: AppSpacing.md) {
@@ -536,7 +536,7 @@ private struct OnboardingVoiceSelectionView: View {
             .padding(.vertical, AppSpacing.xs)
             .background(AppColor.orange100)
             .clipShape(Capsule())
-          Text("로컬 음성만 표시")
+          Text("앱 내장 음성")
             .font(AppFont.caption1Medium)
             .foregroundStyle(AppColor.moruTextSecondary)
           Spacer()
@@ -551,7 +551,7 @@ private struct OnboardingVoiceSelectionView: View {
         ForEach(VoiceProfile.localVoices) { voice in
           MoruVoiceCard(
             name: voice.displayName,
-            description: voice.localeIdentifier,
+            description: voice.assetVoiceCode,
             isSelected: Binding {
               viewModel.draft.selectedVoice == voice
             } set: { isSelected in
@@ -563,6 +563,7 @@ private struct OnboardingVoiceSelectionView: View {
         }
       }
     }
+    .onDisappear(perform: viewModel.voiceSelectionViewDidDisappear)
   }
 }
 

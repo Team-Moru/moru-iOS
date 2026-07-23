@@ -15,6 +15,7 @@ import Combine
 
 struct TimerStepContentView: View {
     let step: RoutineStep
+    let isGuidancePlaying: Bool
     let onComplete: () -> Void
 
     @State private var remainingSeconds: Int
@@ -28,11 +29,13 @@ struct TimerStepContentView: View {
 
     init(
         step: RoutineStep,
+        isGuidancePlaying: Bool,
         onComplete: @escaping () -> Void
     ) {
         let seconds = max(step.estimatedSeconds ?? 60, 1)
 
         self.step = step
+        self.isGuidancePlaying = isGuidancePlaying
         self.onComplete = onComplete
         self.totalSeconds = seconds
 
@@ -137,9 +140,11 @@ struct TimerStepContentView: View {
 
     private var guideSection: some View {
         VStack(spacing: 8) {
-            Text("AI 음성 안내 중")
-                .font(AppFont.caption1SemiBold)
-                .foregroundStyle(AppColor.gray350)
+            if isGuidancePlaying {
+                Text("음성 안내 중")
+                    .font(AppFont.caption1SemiBold)
+                    .foregroundStyle(AppColor.gray350)
+            }
 
             Text(guideText)
                 .font(AppFont.body1NormalSemiBold)

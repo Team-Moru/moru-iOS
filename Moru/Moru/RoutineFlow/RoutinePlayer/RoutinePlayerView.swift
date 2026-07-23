@@ -43,6 +43,7 @@ struct RoutinePlayerView: View {
         }
         .onDisappear {
             speechInputController.cancel()
+            viewModel.viewDidDisappear()
         }
     }
 
@@ -65,7 +66,8 @@ struct RoutinePlayerView: View {
 
         case .stepCompleted(let step):
             RoutineStepCompletedView(
-                stepTitle: step.title
+                stepTitle: step.title,
+                isGuidancePlaying: viewModel.isGuidancePlaying
             ) {
                 viewModel.finishStepCompletedScreen()
             }
@@ -190,6 +192,7 @@ struct RoutinePlayerView: View {
         case .confirm:
             ConfirmStepContentView(
                 step: step,
+                isGuidancePlaying: viewModel.isGuidancePlaying,
                 speechInputController: speechInputController
             ) { transcript in
                 viewModel.completeCurrentStep(
@@ -200,7 +203,8 @@ struct RoutinePlayerView: View {
 
         case .timer:
             TimerStepContentView(
-                step: step
+                step: step,
+                isGuidancePlaying: viewModel.isGuidancePlaying
             ) {
                 viewModel.completeCurrentStep()
             }
@@ -209,6 +213,7 @@ struct RoutinePlayerView: View {
         case .input:
             InputStepContentView(
                 step: step,
+                isGuidancePlaying: viewModel.isGuidancePlaying,
                 speechInputController: speechInputController
             ) { transcript in
                 viewModel.completeCurrentStep(

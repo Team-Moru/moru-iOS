@@ -22,6 +22,9 @@ struct DependencyContainer {
   let alarmNotificationDelegate: AlarmNotificationDelegate?
   let voiceAvailabilityProbe: any VoiceAvailabilityProbing
   let profileAlarmService: (any ProfileAlarmServicing)?
+  let routineGuidancePlayer: (any RoutineGuidancePlaying)?
+  let routineGuidancePlaybackState: RoutineGuidancePlaybackState?
+  let routineAudioSessionCoordinator: RoutineAudioSessionCoordinator?
 
   init(
     routineRepository: any RoutineRepository,
@@ -38,7 +41,10 @@ struct DependencyContainer {
     alarmNotificationDelegate: AlarmNotificationDelegate? = nil,
     voiceAvailabilityProbe: any VoiceAvailabilityProbing =
       UnavailableVoiceAvailabilityProbe(),
-    profileAlarmService: (any ProfileAlarmServicing)? = nil
+    profileAlarmService: (any ProfileAlarmServicing)? = nil,
+    routineGuidancePlayer: (any RoutineGuidancePlaying)? = nil,
+    routineGuidancePlaybackState: RoutineGuidancePlaybackState? = nil,
+    routineAudioSessionCoordinator: RoutineAudioSessionCoordinator? = nil
   ) {
     self.routineRepository = routineRepository
     self.routineRunRepository = routineRunRepository
@@ -54,11 +60,25 @@ struct DependencyContainer {
     self.alarmNotificationDelegate = alarmNotificationDelegate
     self.voiceAvailabilityProbe = voiceAvailabilityProbe
     self.profileAlarmService = profileAlarmService
+    self.routineGuidancePlayer = routineGuidancePlayer
+    self.routineGuidancePlaybackState = routineGuidancePlaybackState
+    self.routineAudioSessionCoordinator = routineAudioSessionCoordinator
   }
 
   @MainActor
   static func local(modelContext: ModelContext) -> DependencyContainer {
-    let voiceAvailabilityProbe = AVSpeechVoiceAvailabilityProbe()
+    let audioResourceLoader = RoutineAudioResourceLoader()
+    let guidancePlaybackState = RoutineGuidancePlaybackState()
+    let guidancePlayer = BundledRoutineGuidancePlayer(
+      resourceLoader: audioResourceLoader,
+      playbackState: guidancePlaybackState
+    )
+    let audioSessionCoordinator = RoutineAudioSessionCoordinator(
+      guidancePlayback: guidancePlayer
+    )
+    let voiceAvailabilityProbe = BundledVoiceAvailabilityProbe(
+      resourceLoader: audioResourceLoader
+    )
     let routineRepository = SwiftDataRoutineRepository(modelContext: modelContext)
     let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
       modelContext: modelContext
@@ -107,7 +127,10 @@ struct DependencyContainer {
       alarmRuntimeHandler: alarmRuntimeHandler,
       alarmNotificationDelegate: notificationDelegate,
       voiceAvailabilityProbe: voiceAvailabilityProbe,
-      profileAlarmService: profileAlarmService
+      profileAlarmService: profileAlarmService,
+      routineGuidancePlayer: guidancePlayer,
+      routineGuidancePlaybackState: guidancePlaybackState,
+      routineAudioSessionCoordinator: audioSessionCoordinator
     )
   }
 
@@ -129,7 +152,8 @@ struct DependencyContainer {
 
     return DefaultOnboardingFlowBuilder(
       routineSuggestionService: routineSuggestionService,
-      completeOnboardingUseCase: completeOnboardingUseCase
+      completeOnboardingUseCase: completeOnboardingUseCase,
+      voicePreviewPlayer: makeVoicePreviewPlayer()
     )
   }
 
@@ -141,10 +165,30 @@ struct DependencyContainer {
     let saveRoutineRunUseCase = SaveRoutineRunUseCase(
       routineRunRepository: routineRunRepository
     )
+    let guidancePlayer = routineGuidancePlayer ?? NoopRoutineGuidancePlayer()
+    let playbackState = routineGuidancePlaybackState ?? RoutineGuidancePlaybackState()
+    let audioSessionCoordinator = routineAudioSessionCoordinator
+      ?? RoutineAudioSessionCoordinator(guidancePlayback: guidancePlayer)
 
     return DefaultRoutinePlayerBuilder(
       resolver: resolver,
-      saveRoutineRunUseCase: saveRoutineRunUseCase
+      saveRoutineRunUseCase: saveRoutineRunUseCase,
+      localProfileRepository: localProfileRepository,
+      guidancePlayer: guidancePlayer,
+      guidancePlaybackState: playbackState,
+      audioSessionCoordinator: audioSessionCoordinator
+    )
+  }
+
+  @MainActor
+  func makeVoicePreviewPlayer() -> any VoicePreviewPlaying {
+    guard let routineGuidancePlayer else {
+      return UnavailableVoicePreviewPlayer()
+    }
+
+    return BundledVoicePreviewPlayer(
+      availabilityProbe: voiceAvailabilityProbe,
+      guidancePlayer: routineGuidancePlayer
     )
   }
 

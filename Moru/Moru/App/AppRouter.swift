@@ -277,9 +277,7 @@ struct AppRouter: View {
     }
     let profileBuilder = DefaultProfileFlowBuilder(
       profileSettingsUseCase: profileSettingsUseCase,
-      voicePreviewPlayer: AVSpeechVoicePreviewPlayer(
-        availabilityProbe: dependencies.voiceAvailabilityProbe
-      ),
+      voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
       resetUseCase: resetUseCase,
       resetAvailability: {
