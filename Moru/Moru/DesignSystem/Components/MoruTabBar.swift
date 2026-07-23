@@ -65,50 +65,32 @@ struct MoruTabBar: View {
   }
 
   var body: some View {
-    HStack(spacing: 0) {
-      ForEach(items) { item in
-        Button {
-          selection = item
-        } label: {
-          VStack(spacing: AppSpacing.xxs) {
-            Image(item.iconName)
-              .renderingMode(.template)
-              .resizable()
-              .scaledToFit()
-              .foregroundStyle(
-                selection == item ? selectedColor : unselectedColor
-              )
-              .frame(
-                width: dynamicTypeSize.isAccessibilitySize ? 40 : 60,
-                height: dynamicTypeSize.isAccessibilitySize ? 32 : 24
-              )
-              .accessibilityHidden(true)
-
-            if !dynamicTypeSize.isAccessibilitySize {
-              Text(item.title)
-                .font(
-                  selection == item
-                    ? AppFont.pretendardMedium(size: 10)
-                    : AppFont.pretendardRegular(size: 10)
-                )
-                .foregroundStyle(
-                  selection == item ? selectedColor : unselectedColor
-                )
+    Group {
+      if componentStyle == .figmaPilot {
+        VStack(spacing: 0) {
+          HStack(spacing: MoruPilotSpacing.thirtyTwo) {
+            ForEach(items) { item in
+              tabButton(for: item)
+                .frame(width: 60)
             }
           }
-          .frame(maxWidth: .infinity, minHeight: dynamicTypeSize.isAccessibilitySize ? 52 : 45)
+          .frame(width: 346, alignment: .leading)
+
+          Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(item.title)
-        .accessibilityAddTraits(selection == item ? .isSelected : [])
-        .accessibilityIdentifier(Self.accessibilityIdentifier(for: item))
+        .padding(.top, dynamicTypeSize.isAccessibilitySize ? 12 : 15)
+      } else {
+        HStack(spacing: 0) {
+          ForEach(items) { item in
+            tabButton(for: item)
+              .frame(maxWidth: .infinity)
+          }
+        }
+        .padding(.horizontal, AppSpacing.screenHorizontal)
       }
     }
-    .padding(.horizontal, AppSpacing.screenHorizontal)
-    .frame(
-      maxWidth: .infinity,
-      minHeight: minimumHeight
-    )
+    .frame(maxWidth: .infinity)
+    .frame(height: minimumHeight)
     .background {
       if componentStyle == .figmaPilot {
         AppColor.grayWhite
@@ -140,9 +122,57 @@ struct MoruTabBar: View {
 
   private var minimumHeight: CGFloat {
     if componentStyle == .figmaPilot {
-      return dynamicTypeSize.isAccessibilitySize ? 104 : 95
+      return dynamicTypeSize.isAccessibilitySize ? 70 : 61
     }
 
     return dynamicTypeSize.isAccessibilitySize ? 72 : 65
+  }
+
+  private func tabButton(for item: MoruTabItem) -> some View {
+    Button {
+      selection = item
+    } label: {
+      VStack(spacing: MoruPilotSpacing.four) {
+        Image(item.iconName)
+          .renderingMode(.template)
+          .resizable()
+          .scaledToFit()
+          .foregroundStyle(
+            selection == item ? selectedColor : unselectedColor
+          )
+          .frame(
+            width: dynamicTypeSize.isAccessibilitySize ? 40 : 60,
+            height: dynamicTypeSize.isAccessibilitySize ? 32 : 24
+          )
+          .accessibilityHidden(true)
+
+        if !dynamicTypeSize.isAccessibilitySize {
+          tabTitle(for: item)
+            .foregroundStyle(
+              selection == item ? selectedColor : unselectedColor
+            )
+        }
+      }
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 52 : 45)
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(item.title)
+    .accessibilityAddTraits(selection == item ? .isSelected : [])
+    .accessibilityIdentifier(Self.accessibilityIdentifier(for: item))
+  }
+
+  @ViewBuilder
+  private func tabTitle(for item: MoruTabItem) -> some View {
+    if componentStyle == .figmaPilot {
+      Text(item.title)
+        .moruTextStyle(.c2.weight(.regular))
+    } else {
+      Text(item.title)
+        .font(
+          selection == item
+            ? AppFont.pretendardMedium(size: 10)
+            : AppFont.pretendardRegular(size: 10)
+        )
+    }
   }
 }

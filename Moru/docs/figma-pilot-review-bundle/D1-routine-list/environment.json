@@ -1,0 +1,44 @@
+{
+  "base_sha": "b5ae957f1fef6152ae713842339d6a91d351bebe",
+  "branch": "fix/#60-routine-list-figma-polish",
+  "capture": {
+    "appearance": "Light",
+    "dynamic_type": [
+      "Medium",
+      "AX3"
+    ],
+    "locale": "ko_KR",
+    "pixel_size": "1179x2556",
+    "point_size": "393x852",
+    "scale": 3,
+    "states": [
+      "normal",
+      "empty",
+      "partial-empty",
+      "alarm-warning",
+      "long-korean"
+    ],
+    "time_zone": "Asia/Seoul"
+  },
+  "comparison": {
+    "difference_gain": 4,
+    "masked_bottom_pixels": 102,
+    "masked_top_pixels": 186
+  },
+  "figma": {
+    "file_key": "RNf4Q84fgsZf3V8MtZmGBc",
+    "last_modified": "2026-07-24T07:06:38Z",
+    "nodes": [
+      "2387:2961"
+    ],
+    "version": "2379679754802507594"
+  },
+  "simulator": {
+    "device": "MORU Figma iPhone 16",
+    "os": "iOS 26.5"
+  },
+  "toolchain": {
+    "macos": "26.5.1 (25F80)",
+    "xcode": "26.5 (17F42)"
+  }
+}
