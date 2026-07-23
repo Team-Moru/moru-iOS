@@ -22,7 +22,7 @@
 | 이름 | 역할 및 담당 영역 |
 | :--- | :--- |
 | **초이** | Foundation/SwiftData + 온보딩(첫 루틴 생성 및 알람 설정 후 SwiftData에 저장) 구현 |
-| **개미** | 루틴 실행 및 완료 UI + Local TTS 음성 안내 + Speech Input 구현 |
+| **개미** | 루틴 실행 및 완료 UI + 번들 MP3 음성 안내 + Speech Input 구현 |
 | **찬혁** | Home/Routine 탭에 해당하는 UI 구현  |
 | **레티** | 이력 + 프로필 + 설정 UI 구현 |
 
@@ -31,7 +31,9 @@
 
 ## 📱 소개
 
-> 단순한 알람 해제를 넘어 기상 직후 루틴 수행을 돕는 코칭 중심 서비스. 화면 터치 없이 음성(STT)과 가이드(TTS)를 통해 자연스럽게 아침 루틴을 진행하도록 유도합니다.
+> 단순한 알람 해제를 넘어 기상 직후 루틴 수행을 돕는 코칭 중심 서비스.
+> 번들 MP3 안내와 확인형·입력형 단계의 음성 인식(STT)으로 자연스럽게
+> 아침 루틴을 진행하도록 돕습니다.
 
 <br>
 
@@ -47,6 +49,25 @@ For building and running the application you need:
 iOS 26.0 <br>
 Xcode 26.3+ <br>
 Swift 6.2
+
+<br>
+
+## ✅ v1 기능 계약
+
+- 지원 범위는 **iOS 26+ iPhone 세로 화면, 한국어, Light UI**입니다.
+  iPad, 가로 화면, Dark 디자인은 후속 범위입니다.
+- 정상 AlarmKit의 `루틴 시작`은 AlarmRing을 거치지 않고 해당 루틴의 `.scheduled`
+  RoutinePlayer로 바로 진입합니다. AlarmRing은 현재 alert stop 실패와
+  UserNotifications fallback 탭에만 사용하며, fallback은 AlarmKit과 같은 전달을
+  보장하지 않습니다.
+- 알람음은 선택 UI나 볼륨 조절 없이 시스템 기본음 한 종류만 사용합니다.
+- RoutinePlayer 안내는 네 종류의 번들 MP3만 사용합니다.
+  매핑 없는 cue는 무음으로 진행하며 로컬 TTS fallback은 제공하지 않습니다.
+- STT는 지원되는 루틴 단계의 자동 완료에 사용합니다.
+  3초 침묵 뒤 마지막 transcript를 판정하며, 권한 거부 시에는
+  설정 이동과 건너뛰기만 제공합니다.
+- 자동 검증과 실제 iPhone QA 기준은
+  [`Moru/docs/iPhoneFunctionalGate.md`](Moru/docs/iPhoneFunctionalGate.md)를 따릅니다.
 
 <br>
 
@@ -336,8 +357,9 @@ Moru
 │  └─ RoutinePresets/            // 추천 항목 CSV + 로컬 음성 리소스
 ├─ Platform
 │  ├─ Alarm/                     // AlarmKit + LocalNotification fallback
-│  ├─ TTS/                       // LocalTTSService
-│  └─ Speech/
+│  ├─ Audio/                     // 음성 재생/인식 audio session 조정
+│  ├─ TTS/                       // 네 종류의 번들 MP3 guidance player
+│  └─ Speech/                    // 3초 침묵 종료 STT
 ├─ Debug/                        // DeviceQA 패널/레코더 (ContentView에서 분리, #if DEBUG)
 └─ Features
    ├─ Onboarding

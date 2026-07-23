@@ -9,6 +9,18 @@ on:
       - 'feat/**'
 
 jobs:
+  iphone-functional-gate:
+    name: iPhone portrait functional gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check iPhone functional gate
+        run: bash Scripts/check-iphone-functional-gate.sh
+
   swiftdata-boundary:
     name: SwiftData boundary
     runs-on: ubuntu-latest
