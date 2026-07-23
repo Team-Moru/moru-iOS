@@ -17,28 +17,32 @@ struct MoruButton: View {
   let title: String
   let style: MoruButtonStyle
   let isEnabled: Bool
+  let componentStyle: MoruPilotComponentStyle
   let action: () -> Void
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   init(
     _ title: String,
     style: MoruButtonStyle = .primary,
     isEnabled: Bool = true,
+    componentStyle: MoruPilotComponentStyle = .legacy,
     action: @escaping () -> Void
   ) {
     self.title = title
     self.style = style
     self.isEnabled = isEnabled
+    self.componentStyle = componentStyle
     self.action = action
   }
 
   var body: some View {
     Button(action: action) {
-      Text(title)
-        .font(AppFont.pretendardSemiBold(size: 16))
+      buttonLabel
         .foregroundStyle(foregroundColor)
         .padding(.horizontal, AppSpacing.buttonHorizontal)
-        .padding(.vertical, AppSpacing.buttonVertical)
+        .padding(.vertical, verticalPadding)
         .frame(width: buttonWidth)
+        .frame(minHeight: buttonMinimumHeight)
         .background(backgroundColor)
         .overlay(
           RoundedRectangle(cornerRadius: AppRadius.pill)
@@ -56,12 +60,23 @@ struct MoruButton: View {
     .opacity(isEnabled ? 1 : 0.45)
   }
 
+  @ViewBuilder
+  private var buttonLabel: some View {
+    if componentStyle == .figmaPilot {
+      Text(title)
+        .moruTextStyle(.b4.weight(.semiBold))
+    } else {
+      Text(title)
+        .font(AppFont.pretendardSemiBold(size: 16))
+    }
+  }
+
   private var foregroundColor: Color {
     switch style {
     case .primary:
       AppColor.grayWhite
     case .secondary:
-      AppColor.moruTextPrimary
+      componentStyle == .figmaPilot ? MoruPilotColor.textStrong : AppColor.moruTextPrimary
     case .text:
       AppColor.gray550
     }
@@ -70,7 +85,7 @@ struct MoruButton: View {
   private var backgroundColor: Color {
     switch style {
     case .primary:
-      AppColor.orange350
+      componentStyle == .figmaPilot ? MoruPilotColor.accent : AppColor.orange350
     case .secondary:
       AppColor.grayWhite
     case .text:
@@ -103,14 +118,30 @@ struct MoruButton: View {
   }
 
   private var shadowColor: Color {
-    style == .primary ? AppColor.grayBlack.opacity(0.25) : Color.clear
+    guard componentStyle == .legacy else {
+      return Color.clear
+    }
+
+    return style == .primary ? AppColor.grayBlack.opacity(0.25) : Color.clear
   }
 
   private var shadowRadius: CGFloat {
-    style == .primary ? 4 : 0
+    componentStyle == .legacy && style == .primary ? 4 : 0
   }
 
   private var shadowY: CGFloat {
-    style == .primary ? 4 : 0
+    componentStyle == .legacy && style == .primary ? 4 : 0
+  }
+
+  private var verticalPadding: CGFloat {
+    guard componentStyle == .figmaPilot else {
+      return AppSpacing.buttonVertical
+    }
+
+    return dynamicTypeSize.isAccessibilitySize ? AppSpacing.buttonVertical : 0
+  }
+
+  private var buttonMinimumHeight: CGFloat? {
+    componentStyle == .figmaPilot ? 54 : nil
   }
 }

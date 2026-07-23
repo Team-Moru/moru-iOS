@@ -51,14 +51,17 @@ struct MoruTabBar: View {
 
   @Binding var selection: MoruTabItem
   let items: [MoruTabItem]
+  let componentStyle: MoruPilotComponentStyle
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   init(
     selection: Binding<MoruTabItem>,
-    items: [MoruTabItem] = MoruTabItem.allCases
+    items: [MoruTabItem] = MoruTabItem.allCases,
+    componentStyle: MoruPilotComponentStyle = .legacy
   ) {
     _selection = selection
     self.items = items
+    self.componentStyle = componentStyle
   }
 
   var body: some View {
@@ -73,7 +76,7 @@ struct MoruTabBar: View {
               .resizable()
               .scaledToFit()
               .foregroundStyle(
-                selection == item ? AppColor.orange350 : AppColor.moruTextBody
+                selection == item ? selectedColor : unselectedColor
               )
               .frame(
                 width: dynamicTypeSize.isAccessibilitySize ? 40 : 60,
@@ -89,7 +92,7 @@ struct MoruTabBar: View {
                     : AppFont.pretendardRegular(size: 10)
                 )
                 .foregroundStyle(
-                  selection == item ? AppColor.orange350 : AppColor.moruTextBody
+                  selection == item ? selectedColor : unselectedColor
                 )
             }
           }
@@ -105,10 +108,42 @@ struct MoruTabBar: View {
     .padding(.horizontal, AppSpacing.screenHorizontal)
     .frame(
       maxWidth: .infinity,
-      minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 65
+      minHeight: minimumHeight
     )
-    .background(AppColor.grayWhite)
+    .background {
+      if componentStyle == .figmaPilot {
+        AppColor.grayWhite
+          .opacity(0.7)
+          .background(.ultraThinMaterial)
+      } else {
+        AppColor.grayWhite
+      }
+    }
+    .shadow(
+      color: componentStyle == .figmaPilot
+        ? Color(red: 2 / 255, green: 24 / 255, blue: 100 / 255).opacity(0.05)
+        : .clear,
+      radius: componentStyle == .figmaPilot ? 10 : 0,
+      x: 0,
+      y: componentStyle == .figmaPilot ? -2 : 0
+    )
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.accessibilityIdentifier)
+  }
+
+  private var selectedColor: Color {
+    componentStyle == .figmaPilot ? MoruPilotColor.accent : AppColor.orange350
+  }
+
+  private var unselectedColor: Color {
+    componentStyle == .figmaPilot ? MoruPilotColor.textPrimary : AppColor.moruTextBody
+  }
+
+  private var minimumHeight: CGFloat {
+    if componentStyle == .figmaPilot {
+      return dynamicTypeSize.isAccessibilitySize ? 104 : 95
+    }
+
+    return dynamicTypeSize.isAccessibilitySize ? 72 : 65
   }
 }

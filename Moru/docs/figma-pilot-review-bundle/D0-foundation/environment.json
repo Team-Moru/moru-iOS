@@ -1,0 +1,36 @@
+{
+  "base_sha": "53a2c6d24bc449f816f069dce8a558af40e15006",
+  "branch": "fix/#58-figma-pilot-foundation",
+  "capture": {
+    "appearance": "Light",
+    "dynamic_type": [
+      "Medium",
+      "AX3"
+    ],
+    "locale": "ko_KR",
+    "pixel_size": "1179x2556",
+    "point_size": "393x852",
+    "scale": 3,
+    "time_zone": "Asia/Seoul"
+  },
+  "figma": {
+    "file_key": "RNf4Q84fgsZf3V8MtZmGBc",
+    "last_modified": "2026-07-23T21:56:51Z",
+    "nodes": [
+      "1445:1305",
+      "1452:1970",
+      "1461:2395",
+      "1661:2394",
+      "1671:3971"
+    ],
+    "version": "2379548990233618412"
+  },
+  "simulator": {
+    "device": "MORU Figma iPhone 16",
+    "os": "iOS 26.5"
+  },
+  "toolchain": {
+    "macos": "26.5.1 (25F80)",
+    "xcode": "26.5 (17F42)"
+  }
+}
