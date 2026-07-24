@@ -133,7 +133,7 @@ final class FinalScreenVisualTests: XCTestCase {
         matchesApprovedBaseline: false
       )
       try render(
-        routineFinishedView(streak: nil),
+        routineFinishedView(streak: nil, isTrial: true),
         filename: "moru-pr52-trial-completion-\(variant.filenameSuffix).png",
         variant: variant,
         matchesApprovedBaseline: false
@@ -276,11 +276,15 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
-  private func routineFinishedView(streak: RoutineStreak?) -> some View {
+  private func routineFinishedView(
+    streak: RoutineStreak?,
+    isTrial: Bool = false
+  ) -> some View {
     RoutineFinishedView(
       completionRate: 1,
       streak: streak,
       completedStepTitles: ["물 마시기", "스트레칭", "오늘 계획 확인"],
+      isTrial: isTrial,
       onTapTodayRecord: {},
       onTapHome: {}
     )
