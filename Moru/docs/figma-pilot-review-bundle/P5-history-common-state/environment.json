@@ -1,0 +1,34 @@
+{
+  "phase": "P5-history-common-state",
+  "baseCommit": "2e3351358285c226efda18c64d65c99e34d00ca1",
+  "branch": "fix/#74-history-common-state-figma-polish",
+  "figmaFileKey": "RNf4Q84fgsZf3V8MtZmGBc",
+  "figmaVersion": "2379679754802507594",
+  "figmaLastModified": "2026-07-24T07:06:38Z",
+  "figmaNodes": {
+    "overview": "1851:3687",
+    "loading": "2562:3611",
+    "weeklyReport": "1851:4120",
+    "dailyReport": "2022:2044",
+    "runDetail": "2564:4072"
+  },
+  "device": "iPhone 16",
+  "deviceUDID": "6FB37447-684F-4A13-A9DA-A536D22CBE9A",
+  "canvasPoints": {
+    "width": 393,
+    "height": 852
+  },
+  "scale": 3,
+  "locale": "ko_KR",
+  "timeZone": "Asia/Seoul",
+  "colorScheme": "light",
+  "dynamicTypeVariants": [
+    "Medium",
+    "AX3"
+  ],
+  "xcode": "26.5 (17F42)",
+  "pixelMask": {
+    "top": 186,
+    "bottom": 102
+  }
+}

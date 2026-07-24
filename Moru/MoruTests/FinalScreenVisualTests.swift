@@ -269,7 +269,7 @@ final class FinalScreenVisualTests: XCTestCase {
       totalRuns: 5,
       completionRate: 0.8,
       completionRateChangePercentagePoints: 20,
-      action: {}
+      averageDurationText: "12:30"
     )
     .padding(AppSpacing.screenHorizontal)
     .background(AppColor.grayWhite)
