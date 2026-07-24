@@ -1,0 +1,11 @@
+{
+  "comparedPixelCount" : 2673972,
+  "differingPixelCount" : 2610685,
+  "differingPixelPercentage" : 97.6332212902753,
+  "height" : 2556,
+  "maskedPixelCount" : 339552,
+  "maximumChannelDelta" : 187,
+  "meanAbsoluteChannelDelta" : 5.5686025632779,
+  "rootMeanSquareChannelDelta" : 15.494773317913516,
+  "width" : 1179
+}

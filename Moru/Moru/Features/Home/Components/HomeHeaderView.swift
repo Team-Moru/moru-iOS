@@ -11,33 +11,40 @@ struct HomeHeaderView: View {
   let userName: String
 
   var body: some View {
-    ZStack(alignment: .bottomLeading) {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      Text(greeting)
+        .homeFigmaTextStyle(.h3)
+        .foregroundStyle(MoruPilotColor.textPrimary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Text(HomeCopy.encouragement)
+        .homeFigmaTextStyle(.b4)
+        .foregroundStyle(MoruPilotColor.textTertiary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+    .background(alignment: .bottom) {
       Image(AppImage.moruGradientGlow)
         .resizable()
         .scaledToFit()
         .opacity(0.8)
-        .blur(radius: 12)
-        .scaleEffect(1.2)
-        .frame(width: 380, height: 380)
+        .frame(width: 353, height: 404)
         .frame(maxWidth: .infinity, alignment: .center)
-        .offset(y: -80)
+        .offset(y: 31)
         .allowsHitTesting(false)
-
-      VStack(alignment: .leading, spacing: AppSpacing.sm) {
-        Text("좋은 아침이에요,\n\(userName)님")
-          .font(AppFont.title2Bold)
-          .foregroundStyle(AppColor.moruTextPrimary)
-          .lineSpacing(6)
-
-        Text("오늘도 작은 루틴이 큰 변화를 만들어요.")
-          .font(AppFont.body1NormalMedium)
-          .foregroundStyle(AppColor.moruTextSecondary)
-      }
-      .padding(.horizontal, AppSpacing.md)
-      .padding(.bottom, 15)
+        .accessibilityHidden(true)
     }
-    .frame(maxWidth: .infinity)
-    .frame(height: 400)
+    .frame(height: 296)
+  }
+
+  private var greeting: String {
+    let trimmedName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedName.isEmpty else {
+      return HomeCopy.greetingWithoutName
+    }
+
+    return "\(HomeCopy.greeting)\n\(trimmedName)님"
   }
 }
 

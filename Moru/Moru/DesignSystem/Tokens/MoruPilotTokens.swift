@@ -41,8 +41,10 @@ enum MoruPilotSpacing {
   static let twelve: CGFloat = 12
   static let sixteen: CGFloat = 16
   static let twenty: CGFloat = 20
+  static let twentyEight: CGFloat = 28
   static let thirtyTwo: CGFloat = 32
   static let thirtySix: CGFloat = 36
+  static let thirtyEight: CGFloat = 38
   static let sixtyFour: CGFloat = 64
 }
 

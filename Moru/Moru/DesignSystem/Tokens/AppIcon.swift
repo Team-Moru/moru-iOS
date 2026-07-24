@@ -43,6 +43,7 @@ enum AppIcon {
   static let moruCheckOff = "moruCheckOff"
   static let moruCheckOn = "moruCheckOn"
   static let moruFireIcon = "moruFireIcon"
+  static let moruHomeFireIcon = "moruHomeFireIcon"
   static let moruMicOrb = "moruMicOrb"
   static let moruRoutineMenuOff = "moruRoutineMenuOff"
   static let moruRoutineMenuOn = "moruRoutineMenuOn"

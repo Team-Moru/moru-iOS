@@ -30,6 +30,7 @@ final class HomeViewModel {
     loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol,
     weatherRepository: (any HomeWeatherRepository)? = nil,
     weatherService: (any HomeWeatherService)? = nil,
+    initialWeatherState: HomeWeatherState = .notRequested,
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
@@ -37,7 +38,7 @@ final class HomeViewModel {
     self.weatherService = weatherService
     self.now = now
     self.state = .loading(previousContent: nil)
-    self.weatherState = .notRequested
+    self.weatherState = initialWeatherState
   }
 
   func load() {

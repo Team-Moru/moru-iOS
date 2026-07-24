@@ -307,30 +307,9 @@ struct RoutineSettingView: View {
   }
 }
 
-private struct RoutineListTextStyleModifier: ViewModifier {
-  let style: MoruTextStyle
-
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-  @ViewBuilder
-  func body(content: Content) -> some View {
-    if dynamicTypeSize.isAccessibilitySize {
-      content.font(
-        .custom(
-          style.weight.rawValue,
-          size: style.fontSize,
-          relativeTo: style.relativeTextStyle
-        )
-      )
-    } else {
-      content.moruTextStyle(style)
-    }
-  }
-}
-
 extension View {
   func routineListTextStyle(_ style: MoruTextStyle) -> some View {
-    modifier(RoutineListTextStyleModifier(style: style))
+    moruPilotTextStyle(style)
   }
 }
 
