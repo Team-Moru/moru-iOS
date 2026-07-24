@@ -60,13 +60,16 @@ struct HistoryView: View {
   @State private var selectedDay: HistoryDaySummary?
   @State private var selectedDayCalendar: Calendar?
   @State private var isDestinationMissing = false
+  private let automaticallyLoads: Bool
 
   init(
     viewModel: HistoryViewModel,
-    destination: Binding<HistoryDestination?> = .constant(nil)
+    destination: Binding<HistoryDestination?> = .constant(nil),
+    automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
     _pendingDestination = destination
+    self.automaticallyLoads = automaticallyLoads
   }
 
   var body: some View {
@@ -108,7 +111,7 @@ struct HistoryView: View {
           )
         }
       }
-      .background(AppColor.grayWhite.ignoresSafeArea())
+      .background(MoruPilotColor.canvas.ignoresSafeArea())
       .navigationBarTitleDisplayMode(.inline)
       .navigationDestination(isPresented: $isWeeklyReportPresented) {
         if case .content(let overview) = viewModel.state {
@@ -130,6 +133,10 @@ struct HistoryView: View {
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
     .accessibilityLabel("이력")
     .task {
+      guard automaticallyLoads else {
+        return
+      }
+
       viewModel.load()
       resolveLoadedDestination()
     }
@@ -144,58 +151,50 @@ struct HistoryView: View {
 
   private func overviewContent(_ overview: HistoryOverview) -> some View {
     ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: AppSpacing.md) {
+      VStack(alignment: .leading, spacing: 0) {
         Text("이력")
-          .font(AppFont.pretendardBold(size: 26))
-          .foregroundStyle(AppColor.grayBlack)
-          .padding(.top, AppSpacing.sm)
+          .historyOverviewTextStyle(.h3)
+          .foregroundStyle(AppColor.gray550)
+          .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
 
-        HistoryStreakCard(
-          currentStreak: overview.streak.currentDays,
-          bestStreak: overview.streak.bestDays
-        )
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+          HistoryStreakWeeklyCard(
+            streak: overview.streak,
+            action: { isWeeklyReportPresented = true }
+          )
 
-        HistoryWakeMetricsView(metrics: overview.wakeMetrics)
-        HistoryWeeklyCompletionChart(
-          completions: overview.week.dailyCompletionRates,
-          calendar: overview.calendar,
-          onSelect: { completion in
-            selectDay(for: completion.date, in: overview)
-          }
-        )
-        HistoryMonthlyHeatmapView(
-          heatmap: overview.monthlyHeatmap,
-          calendar: overview.calendar
-        )
+          HistoryWakeMetricsView(metrics: overview.wakeMetrics)
+          HistoryMonthlyHeatmapView(
+            heatmap: overview.monthlyHeatmap,
+            calendar: overview.calendar
+          )
 
-        HistorySectionHeader(
-          title: "주간 리포트",
-          actionTitle: "자세히",
-          action: { isWeeklyReportPresented = true }
-        )
-
-        HistoryWeeklyInsightCard(
-          completionRate: overview.week.completionRate,
-          calendar: overview.calendar,
-          day: overview.lowestCompletionDay
-        )
-
-        HistorySectionHeader(title: "최근 기록", actionTitle: nil, action: nil)
-
-        LazyVStack(spacing: AppSpacing.sm) {
-          ForEach(overview.recentDays, id: \.date) { day in
-            NavigationLink {
-              HistoryDailyDetailView(day: day, calendar: overview.calendar)
-            } label: {
-              HistoryDaySummaryRow(day: day, calendar: overview.calendar)
+          HistoryWeeklyCompletionChart(
+            completions: overview.week.dailyCompletionRates,
+            calendar: overview.calendar,
+            onSelect: { completion in
+              selectDay(for: completion.date, in: overview)
             }
-            .buttonStyle(.plain)
+          )
+
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+            HistorySectionHeader(title: "최근 기록", actionTitle: nil, action: nil)
+
+            LazyVStack(spacing: AppSpacing.sm) {
+              ForEach(overview.recentDays, id: \.date) { day in
+                NavigationLink {
+                  HistoryDailyDetailView(day: day, calendar: overview.calendar)
+                } label: {
+                  HistoryDaySummaryRow(day: day, calendar: overview.calendar)
+                }
+                .buttonStyle(.plain)
+              }
+            }
           }
         }
       }
-      .padding(.horizontal, AppSpacing.screenHorizontal)
-      .padding(.top, AppSpacing.xs)
-      .padding(.bottom, AppSpacing.xxl)
+      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.bottom, MoruPilotSpacing.sixtyFour)
     }
   }
 
@@ -302,12 +301,6 @@ private func historyFormattedDate(
 }
 
 private extension HistoryOverview {
-  var lowestCompletionDay: HistoryDailyCompletion? {
-    week.dailyCompletionRates
-      .filter { $0.completionRate > 0 }
-      .min { $0.completionRate < $1.completionRate }
-  }
-
   func daySummary(for date: Date) -> HistoryDaySummary? {
     recentDays.first { day in
       calendar.isDate(day.date, inSameDayAs: date)
@@ -345,67 +338,176 @@ private extension HistoryOverview {
   }
 }
 
-private struct HistoryStreakCard: View {
-  let currentStreak: Int
-  let bestStreak: Int
+private struct HistoryStreakWeeklyCard: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  let streak: RoutineStreak
+  let action: () -> Void
+
+  private let weekdays: [(weekday: Weekday, label: String)] = [
+    (.monday, "월"),
+    (.tuesday, "화"),
+    (.wednesday, "수"),
+    (.thursday, "목"),
+    (.friday, "금"),
+    (.saturday, "토"),
+    (.sunday, "일"),
+  ]
 
   var body: some View {
-    HStack(alignment: .center, spacing: AppSpacing.md) {
-      Text("\(currentStreak)")
-        .font(AppFont.pretendardBold(size: 38))
-        .foregroundStyle(AppColor.grayWhite)
-        .frame(width: 42, alignment: .center)
+    Button(action: action) {
+      Group {
+        if dynamicTypeSize.isAccessibilitySize {
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.twenty) {
+            streakSummary
+            Divider()
+              .overlay(AppColor.orange150)
+            weeklySummary
+          }
+          .padding(MoruPilotSpacing.twenty)
+        } else {
+          HStack(spacing: MoruPilotSpacing.sixteen) {
+            streakSummary
+              .frame(width: 91)
 
-      VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-        Text("일 연속 달성")
-          .font(AppFont.caption1Medium)
-          .foregroundStyle(AppColor.gray400)
+            Rectangle()
+              .fill(AppColor.orange150)
+              .frame(width: 1, height: 74)
 
-        Text("최고 기록: \(max(bestStreak, currentStreak))일")
-          .font(AppFont.pretendardRegular(size: 11))
-          .foregroundStyle(AppColor.gray500)
+            weeklySummary
+          }
+          .padding(.horizontal, MoruPilotSpacing.twenty)
+          .frame(height: 114)
+        }
       }
-
-      Spacer()
-
-      Text("🔥")
-        .font(.system(size: 22))
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(historyStreakBackground)
+      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
     }
-    .padding(.horizontal, AppSpacing.lg)
-    .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-    .background(AppColor.grayBlack)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
+    .buttonStyle(.plain)
+    .padding(.vertical, MoruPilotSpacing.eight)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(
+      "연속 달성 \(streak.currentDays)일째, "
+      + "최고 기록 \(max(streak.bestDays, streak.currentDays))일, "
+      + "이번 주 \(streak.completedWeekdays.count)일 완료"
+    )
+    .accessibilityHint("주간 리포트를 엽니다")
   }
-}
 
-private struct HistoryWeeklyInsightCard: View {
-  let completionRate: Double
-  let calendar: Calendar
-  let day: HistoryDailyCompletion?
+  private var streakSummary: some View {
+    VStack(spacing: 0) {
+      Text("연속 달성")
+        .historyOverviewTextStyle(.c2)
+        .foregroundStyle(MoruPilotColor.accentSurface)
 
-  var body: some View {
-    VStack(spacing: AppSpacing.sm) {
-      Text(insightText)
-        .font(AppFont.label1NormalMedium)
+      Text("\(streak.currentDays)일째")
+        .historyOverviewTextStyle(.h1.weight(.bold))
         .foregroundStyle(AppColor.grayWhite)
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
+
+      Text("최고 기록 \(max(streak.bestDays, streak.currentDays))일")
+        .font(AppFont.pretendardMedium(size: 10))
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+        .minimumScaleFactor(0.75)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, MoruPilotSpacing.sixteen)
+        .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 6 : 0)
+        .frame(minHeight: MoruPilotSpacing.twenty)
+        .background(MoruPilotColor.accentTint)
+        .clipShape(Capsule())
     }
-    .padding(AppSpacing.lg)
-    .frame(maxWidth: .infinity, minHeight: 90)
-    .background(AppColor.grayBlack)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-    .accessibilityLabel(insightText)
+    .frame(maxWidth: .infinity)
   }
 
-  private var insightText: String {
-    guard let day else {
-      return "이번 주 루틴 기록을 쌓고 있어요"
-    }
+  private var weeklySummary: some View {
+    VStack(spacing: 0) {
+      Text("주간 리포트")
+        .historyOverviewTextStyle(.c2)
+        .foregroundStyle(MoruPilotColor.accentSurface)
 
-    let weekday = historyWeekdayText(day.date, calendar: calendar)
-    let totalRate = Int((completionRate * 100).rounded())
-    return "\(weekday)요일이 가장 완수율이 떨어지고,\n이번 주 평균은 \(totalRate)%예요"
+      Group {
+        if dynamicTypeSize.isAccessibilitySize {
+          LazyVGrid(
+            columns: [
+              GridItem(
+                .adaptive(minimum: 88),
+                spacing: MoruPilotSpacing.twelve
+              ),
+            ],
+            spacing: MoruPilotSpacing.twelve
+          ) {
+            ForEach(weekdays, id: \.weekday) { item in
+              weekdayStatus(
+                weekday: item.weekday,
+                label: item.label,
+                isAccessibilityLayout: true
+              )
+            }
+          }
+        } else {
+          HStack(spacing: MoruPilotSpacing.eight) {
+            ForEach(weekdays, id: \.weekday) { item in
+              weekdayStatus(
+                weekday: item.weekday,
+                label: item.label,
+                isAccessibilityLayout: false
+              )
+            }
+          }
+        }
+      }
+      .padding(.top, MoruPilotSpacing.twelve)
+    }
+    .frame(maxWidth: .infinity)
+  }
+
+  private func weekdayStatus(
+    weekday: Weekday,
+    label: String,
+    isAccessibilityLayout: Bool
+  ) -> some View {
+    let isCompleted = streak.completedWeekdays.contains(weekday)
+
+    return VStack(spacing: MoruPilotSpacing.four) {
+      ZStack {
+        Circle()
+          .fill(
+            isCompleted
+              ? MoruPilotColor.accent
+              : MoruPilotColor.shadow
+          )
+
+        if isCompleted {
+          Image(systemName: "checkmark")
+            .font(.system(
+              size: isAccessibilityLayout ? 14 : 10,
+              weight: .bold
+            ))
+            .foregroundStyle(AppColor.grayWhite)
+        }
+      }
+      .frame(
+        width: isAccessibilityLayout ? 32 : MoruPilotSpacing.twenty,
+        height: isAccessibilityLayout ? 32 : MoruPilotSpacing.twenty
+      )
+
+      Text(label)
+        .historyOverviewTextStyle(.c2.weight(.regular))
+        .foregroundStyle(MoruPilotColor.accentSurface)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .frame(
+      width: isAccessibilityLayout ? nil : MoruPilotSpacing.twenty
+    )
+  }
+
+  private var historyStreakBackground: Color {
+    Color(
+      red: 1,
+      green: 192 / 255,
+      blue: 158 / 255
+    )
   }
 }
 

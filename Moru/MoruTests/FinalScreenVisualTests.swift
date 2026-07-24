@@ -479,9 +479,9 @@ private enum VisualBaseline {
     "moru-pr32-final-routine-light-AX3.png":
       "AAAAADgAxADEAOQQykDKQspg2RTZDNpk2mTAYMBgxBCoAugApMBZAN0QXGBaSERwQHCAylsA2wBkSGTIAAAAAA==",
     "moru-pr32-final-history-light-M.png":
-      "AAAAAAAAwADAAOYE1gDQAOAMwADBwtHA4cjAAsAAAAKAAoACxQDnAMgkwAJdUP8w8zTT0NVc1UJkyGTIAAAAAA==",
+      "AAAAACAAwALAANoUzBjcmMSEQADgAuQIGCBxcXnhOdgCAsAA5CAWAEYBVVFVUX9QdRhxUFVUVUBk2GTIAAAAAA==",
     "moru-pr32-final-history-light-AX3.png":
-      "AAAAAAAA8ADwANAAzgSSwNVA1UTcgNQAwRTI0MH47MjM6NioxKjMENwAAQCAAoACgALyIPMwgAJkyGTIAAAAAA==",
+      "AAAIAOAA5ADUAcgEwWTBNMCkwLTBVMAkwjTDNMjMyMzIjMjQyNDIzMiEyATIBMgEYMDKAsogCYBkyGTIAAAAAA==",
     "moru-pr32-final-profile-light-M.png":
       "AAAAAAAAEADIAMgA4ABAA0AHYAe4AEADQANAA3ADYAOcAEADQoNCAyACRANyg2QDZAODAEAAEyJsyGTIAAAAAA==",
     "moru-pr32-final-profile-light-AX3.png":
