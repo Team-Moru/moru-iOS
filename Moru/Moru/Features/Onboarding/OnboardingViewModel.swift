@@ -85,11 +85,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   var progressIndex: Int? {
-    guard step != .completion else {
-      return nil
-    }
-
-    return min(step.rawValue + 1, progressTotal)
+    step.progressIndex
   }
 
   var canCancel: Bool {
@@ -122,14 +118,14 @@ final class OnboardingViewModel: ObservableObject {
     switch step {
     case .experience, .goals, .duration, .organizing:
       return "다음"
+    case .alarm:
+      return allowsReviewEditing ? "저장" : "다음"
     case .suggestedRoutine, .freeform:
       return "이 루틴으로 시작하기"
     case .review:
       return "알람 설정하기"
-    case .alarm:
-      return "저장"
     case .voice:
-      return "모루로 코칭받기"
+      return OnboardingCopy.voiceCTA(for: draft.selectedVoice)
     case .completion:
       return "루틴 체험하기"
     }

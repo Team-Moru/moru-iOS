@@ -1,4 +1,17 @@
-# Figma Routine Screen Design QA
+# Latest Design QA
+
+- Latest completed pass: P1 Splash·온보딩
+- Detailed report: [`Moru/docs/figma-pilot-review-bundle/P1-splash-onboarding/design-qa.md`](Moru/docs/figma-pilot-review-bundle/P1-splash-onboarding/design-qa.md)
+- Source: Figma version `2379679754802507594`
+- Scope: 13 states × Medium/AX3, 26 Before/After comparisons, 11 canonical
+  Figma/After comparisons
+- Open P0/P1/P2 findings: 0
+
+final result: passed
+
+---
+
+# Historical: Figma Routine Screen Design QA
 
 ## Comparison Target
 

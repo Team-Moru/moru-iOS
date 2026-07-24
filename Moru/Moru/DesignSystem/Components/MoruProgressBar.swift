@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct MoruProgressBar: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
   let current: Int
   let total: Int
   let componentStyle: MoruPilotComponentStyle
@@ -55,7 +57,17 @@ struct MoruProgressBar: View {
       .frame(maxWidth: figmaGaugeWidth, alignment: .leading)
 
     if componentStyle == .figmaPilot {
-      label.moruTextStyle(.c2.weight(.regular))
+      if dynamicTypeSize.isAccessibilitySize {
+        label.font(
+          .custom(
+            MoruTextWeight.regular.rawValue,
+            size: MoruTextStyle.c2.fontSize,
+            relativeTo: MoruTextStyle.c2.relativeTextStyle
+          )
+        )
+      } else {
+        label.moruTextStyle(.c2.weight(.regular))
+      }
     } else {
       label.font(AppFont.pretendardRegular(size: 12))
     }
