@@ -39,6 +39,18 @@
   높았다.
   - 수정: visible 346 pt에 맞도록 detent content height를 313 pt로 조정했다.
 
+### Review follow-up
+
+- P1: 기존 루틴을 유지한 재로딩 오류에는 복구 동작이 없었다.
+  - 수정: 오류 문구 아래 `다시 불러오기` 동작을 추가했다.
+- P2: 선택 유형 label의 흰색이 peach tint에서 읽기 어려웠다.
+  - 수정: Figma의 orange icon/tint 구조를 유지하고 label을 accent로 바꿨다.
+- P2: time wheel drag offset이 container 밖으로 그려질 수 있었다.
+  - 수정: 고정 frame 뒤에 clipping을 적용했다.
+- P2: 생성 선택 raster의 asset scale metadata와 visual regression
+  assertion이 불완전했다.
+  - 수정: 1x/2x/3x asset과 24개 승인 perceptual baseline을 추가했다.
+
 ## 최종 평가
 
 - Typography: Medium은 기존 Moru text style의 exact line-height를 사용하고,
@@ -47,7 +59,8 @@
   bottom sheet가 Figma hierarchy와 rhythm을 따른다.
 - Colors/surfaces: pilot canvas, accent orange, blue-gray text, white card와
   muted selection surface가 승인 token을 사용한다.
-- Imagery/icons: 생성 선택의 orb/calendar는 Figma scale 3 export다.
+- Imagery/icons: 생성 선택의 orb/calendar는 Figma scale 3 export를
+  원본으로 한 1x/2x/3x asset이다.
   기존 semantic routine icon과 chevron은 design system을 사용한다.
 - Copy/content: 고정 copy와 formatter는 `RoutineManagementCopy`로 검증한다.
   동적 루틴·step 값은 model을 우선한다.
@@ -63,12 +76,12 @@
   - routine-list `4.311902542983496`
   - editor-collapsed `7.498121770409962`
   - editor-schedule `9.607928205680539`
-  - step-edit `15.206629064677317`
+  - step-edit `15.21028754227793`
   - delete-dialog `13.97809126896866`
   - weekday-conflict `16.189100209974775`
   - creation-choice `14.536729504522361`
   - create-empty `8.142540884247603`
-  - step-add `15.811579802132059`
+  - step-add `15.81402909230164`
 - sheet/dialog MAE에는 Figma와 구현 backdrop fixture 및 기능 사실 예외가
   함께 포함된다.
 - 24개 Before/After metrics는 `comparedPixelCount == 2673972`,

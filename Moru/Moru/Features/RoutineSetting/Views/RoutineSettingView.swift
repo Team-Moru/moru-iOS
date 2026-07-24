@@ -58,11 +58,8 @@ struct RoutineSettingView: View {
 
           if let errorMessage = viewModel.state.errorMessage,
              !viewModel.state.routines.isEmpty {
-            Text(errorMessage)
-              .routineListTextStyle(.c1)
-              .foregroundStyle(AppColor.orange500)
+            retainedRoutineErrorState(message: errorMessage)
               .padding(.top, AppSpacing.sm)
-              .fixedSize(horizontal: false, vertical: true)
           }
         }
         .padding(.horizontal, MoruPilotSpacing.twenty)
@@ -201,6 +198,23 @@ struct RoutineSettingView: View {
       }
     }
     .frame(maxWidth: .infinity, minHeight: 320)
+  }
+
+  private func retainedRoutineErrorState(message: String) -> some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      Text(message)
+        .routineListTextStyle(.c1)
+        .foregroundStyle(AppColor.orange500)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Button("다시 불러오기") {
+        viewModel.load()
+      }
+      .routineListTextStyle(.c1.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.accent)
+      .buttonStyle(.plain)
+      .accessibilityHint("루틴 목록을 다시 불러옵니다.")
+    }
   }
 
   private func routineSection(

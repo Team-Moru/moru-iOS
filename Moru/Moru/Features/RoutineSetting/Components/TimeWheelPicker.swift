@@ -38,6 +38,7 @@ struct TimeWheelPicker: View {
     .frame(height: itemHeight * 3)
     .offset(y: dragOffset)
     .frame(width: 84, height: itemHeight * 3)
+    .clipped()
     .contentShape(Rectangle())
     .gesture(
       DragGesture(minimumDistance: 4)

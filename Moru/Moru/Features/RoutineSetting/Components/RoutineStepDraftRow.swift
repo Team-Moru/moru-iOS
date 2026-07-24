@@ -24,7 +24,7 @@ struct RoutineStepDraftRow: View {
         .clipShape(Circle())
 
       VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-        TextField("루틴 이름", text: $step.title, axis: .vertical)
+        TextField("예) 물 한 잔 마시기", text: $step.title, axis: .vertical)
           .routineManagementTextStyle(.c1.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)

@@ -6,6 +6,8 @@
   - 12상태 × Medium/AX3 × repeat = 48 PNG
   - 393 × 852 pt, scale 3, Light, `ko_KR`, `Asia/Seoul`
   - repeat PNG byte-identical
+  - 24개 상태/variant 승인 perceptual dHash와 Hamming distance ≤ 24
+    회귀 assertion
 - exact copy/formatter:
   - `새 루틴 추가하기`
   - `새 항목 추가하기`
@@ -25,7 +27,9 @@
 ## 자동 검증
 
 - Full XCTest: **264 passed / 0 failed / 0 skipped**
-  - xcresult: `/private/tmp/moru-figma-p3-full-final-70.xcresult`
+  - xcresult: `/private/tmp/moru-figma-p3-full-review-70.xcresult`
+- Review follow-up targeted visual/copy: **2 passed / 0 failed**
+  - xcresult: `/private/tmp/moru-p3-review-targeted.xcresult`
 - `FinalScreenVisualTests`: **7 passed**
 - iPhone 16 Simulator Debug build: passed
 - generic iOS Simulator Debug build: passed

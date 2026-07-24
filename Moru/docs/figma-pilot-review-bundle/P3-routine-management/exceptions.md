@@ -21,6 +21,12 @@
 - step type, instruction, `presetItemID`, required flag와 ID는 편집 후에도
   보존한다.
 
+## 접근성 우선
+
+- 항목 유형의 선택 card는 Figma처럼 peach tint surface와 orange icon을
+  유지하지만, 낮은 대비의 흰색 label은 사용하지 않고 orange accent
+  label로 표시한다.
+
 ## 비교 환경
 
 - Figma PNG에는 status bar와 home indicator가 있고 deterministic XCTest

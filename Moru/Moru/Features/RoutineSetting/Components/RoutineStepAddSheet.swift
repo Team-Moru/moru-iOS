@@ -218,7 +218,7 @@ struct RoutineStepAddSheet: View {
         Text(type.routineSettingTitle)
           .routineManagementTextStyle(.c1)
           .foregroundStyle(
-            isSelected ? AppColor.grayWhite : MoruPilotColor.textSecondary
+            isSelected ? MoruPilotColor.accent : MoruPilotColor.textSecondary
           )
       }
       .frame(maxWidth: .infinity)

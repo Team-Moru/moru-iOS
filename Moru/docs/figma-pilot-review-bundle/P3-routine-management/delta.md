@@ -7,6 +7,8 @@
   고정했다.
 - 저장소 로드 실패는 빈 상태와 오류 문구를 중첩하지 않고 동일 design
   language의 복구 CTA로 표시한다.
+- 기존 루틴을 유지한 채 재로딩에 실패한 경우에도 오류 문구 아래
+  `다시 불러오기` 복구 동작을 제공한다.
 
 ## 생성·편집
 
@@ -33,10 +35,14 @@
 - 수정 시트에 `항목 삭제`를 제공하고 기존 step ID 및 preset metadata를
   유지한다.
 - 선택된 항목 유형은 orange icon과 tint surface로 구분한다.
+- tint surface 위 선택 label은 Figma의 흰색 대신 accent 색을 사용해
+  선택 상태를 읽을 수 있게 한다.
 
 ## 생성 방식 선택
 
 - 전체 화면 선택기를 313 pt bottom sheet로 바꾸고 Figma에서 export한
   추천 orb와 직접 생성 calendar 이미지를 사용한다.
+- 두 raster export는 원본 3x와 별도 1x/2x variant로 asset catalog에
+  등록해 Retina scale metadata를 완전하게 제공한다.
 - 추천/직접 생성 선택 뒤에는 기존 로컬 추천 onboarding 또는 editor로
   이어지는 flow를 유지한다.

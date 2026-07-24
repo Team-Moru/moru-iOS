@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 import XCTest
 @testable import Moru
 
@@ -36,6 +37,10 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
         XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
         XCTAssertEqual(first.scale, 3)
         XCTAssertEqual(first.pngData(), second.pngData())
+        try assertMatchesApprovedBaseline(
+          first,
+          filename: "\(state.rawValue)-\(variant.rawValue).png"
+        )
       }
     }
   }
@@ -63,6 +68,81 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       ),
       "수요일로 알림이 설정된\n다른 루틴이 이미 있어요.\n해당 루틴으로 요일을 변경하시겠어요?"
     )
+  }
+
+  private func assertMatchesApprovedBaseline(
+    _ image: UIImage,
+    filename: String,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) throws {
+    let actualHash = try visualHash(for: image)
+
+    guard let encodedBaseline = RoutineManagementVisualBaseline.hashes[filename],
+          let expectedHash = Data(base64Encoded: encodedBaseline) else {
+      XCTFail("Missing or invalid visual baseline: \(filename)", file: file, line: line)
+      return
+    }
+
+    XCTAssertEqual(actualHash.count, expectedHash.count, file: file, line: line)
+    let distance = zip(actualHash, expectedHash).reduce(0) { result, pair in
+      result + Int((pair.0 ^ pair.1).nonzeroBitCount)
+    }
+    XCTAssertLessThanOrEqual(
+      distance,
+      RoutineManagementVisualBaseline.maximumHammingDistance,
+      "Visual regression in \(filename), hash distance: \(distance), "
+        + "actual hash: \(actualHash.base64EncodedString())",
+      file: file,
+      line: line
+    )
+  }
+
+  private func visualHash(for image: UIImage) throws -> Data {
+    let width = 17
+    let height = 32
+    var pixels = [UInt8](repeating: 0, count: width * height * 4)
+    let context = try XCTUnwrap(
+      CGContext(
+        data: &pixels,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+      )
+    )
+    let cgImage = try XCTUnwrap(image.cgImage)
+    context.interpolationQuality = .high
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+    var luminance = [Int]()
+    luminance.reserveCapacity(width * height)
+    for offset in stride(from: 0, to: pixels.count, by: 4) {
+      let red = 299 * Int(pixels[offset])
+      let green = 587 * Int(pixels[offset + 1])
+      let blue = 114 * Int(pixels[offset + 2])
+      luminance.append((red + green + blue) / 1_000)
+    }
+
+    var hash = Data(capacity: (width - 1) * height / 8)
+    var byte: UInt8 = 0
+    var bitIndex = 0
+    for row in 0..<height {
+      for column in 0..<(width - 1) {
+        if luminance[row * width + column] > luminance[row * width + column + 1] {
+          byte |= 1 << (7 - bitIndex)
+        }
+        bitIndex += 1
+        if bitIndex == 8 {
+          hash.append(byte)
+          byte = 0
+          bitIndex = 0
+        }
+      }
+    }
+    return hash
   }
 
   private func view(for state: RoutineManagementCaptureState) -> AnyView {
@@ -379,6 +459,60 @@ private struct RoutineManagementBottomSheetCaptureStage<
         )
     }
   }
+}
+
+private enum RoutineManagementVisualBaseline {
+  static let maximumHammingDistance = 24
+  static let hashes: [String: String] = [
+    "create-empty-light-AX3.png":
+      "AAAAACYAyQDZAMlAOYAaoBqgOygTEDMgExAbECTIwWTRZNnkWOJkE2UTZZM1gwJrafNps2mx0WjDZPFgwSFZIA==",
+    "create-empty-light-M.png":
+      "AAAAAEBAlgCXAMgAyAFIAwADYAMwAsgAyACOBCQEyADIADIDDwMAIoAAAAAAAAAAAAAAAAAAYADAwMCEYAAAAA==",
+    "creation-choice-light-AX3.png":
+      "AAAAAAYDyXTZbMl0Bydi2WjI7NQsTAUADYAMwA2ADMANAB2ABYAIgB6ADYAMgAwADgAaAAIADQANgA2AAmAAAA==",
+    "creation-choice-light-M.png":
+      "AAAAAEBBggaTBMgAwAPEAxADYiMwAsgAyACMBCIAyADIAFAFUE0DAwMAGADaAtqGXIAAAFkAygbIxgAAEAFABA==",
+    "delete-dialog-light-AX3.png":
+      "AAAAAAYDyXTZbNl0ZlRo2WrJbNkEDgAHmyea5zSDNmMOhx6nOccYlyDjNOM9L20hbSdmp2Sx83jBdOBgYgEAAA==",
+    "delete-dialog-light-M.png":
+      "AAAAAEBBggaTBMgAwAPEAxADYiMwAsAAyAaAVhyHHoeGhwaHGGcQZlAdwwZYDlANoQJQDVAN5QDAxMDEYAFABA==",
+    "editor-collapsed-light-AX3.png":
+      "AAAAACYTyXTZbNl0ZlRo2WrJ7Nk0Gslk0WTZ5FjkaZNto22jZLMSS2kj6SNtK20nbSdmp2Sx83jBdOBgZIEAAg==",
+    "editor-collapsed-light-M.png":
+      "AAAAAEDBkgaSBsgAxAHEAxEDYiMyAsgAyACOBCIEyADIAFANUA2wAlANUgZ4B1ANogJQDVAH6gDEyMDEcAlABQ==",
+    "editor-long-korean-light-AX3.png":
+      "AAAAACYTyXTZbNl0ZlRo2WrJ7Nk0Gslk0WTZ5FjkJRt9A20jZSNpI+kjbRttJ2knaac4t2JI4XDBdOBgZQFYhQ==",
+    "editor-long-korean-light-M.png":
+      "AAAAAEDBkgaSBsgAwFFUWSID6sMwqsgAyACTBDIEyADIEFENUQ2wAlANUCYvAw8DICJAAAACYQDAxMDMYQEAAg==",
+    "editor-schedule-light-AX3.png":
+      "AAAAACYTyXTZbMl0ZlRo2WrJ7Nk0Gslk0WTZ5FjkaZNto22jZLMSS2kj6SNtK20nbSdmp2Sx83jBdOBgZIEAAg==",
+    "editor-schedule-light-M.png":
+      "AAAAAEDBkgaSBsgAxAHEAxEDYiMyAsgAyACOBIAkBNDEwMTQxNAE0FVQ1UTVRMiqyABwB1AN4QDAxMDMYQFABQ==",
+    "list-empty-light-AX3.png":
+      "AAAAADgAxADEAOUADgAGgAaABoA7IDMoMKQ9olWYXZB7sBJYDTcZAzkjHScbLgCAAAAAAAAAoiDEyETIIiQAAA==",
+    "list-empty-light-M.png":
+      "AAAAACAAwADAACAAAAAAgAMAAxANSB2AGOIGgwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiTMyMzIRMgAAA==",
+    "list-error-light-AX3.png":
+      "AAAAADgAxADEAOSACyAHgAaQAxAZJBmkYsBo2RlGCUAawAhkBkcMgzyLNlMwWgQAAAAAAAAAoiDEyETIIiQAAA==",
+    "list-error-light-M.png":
+      "AAAAACAAwADAACAAAAAAgAMgAwgeZByABMIHAwcDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiTMyMzIRMgAAA==",
+    "routine-list-light-AX3.png":
+      "AAAAADgAxADEAOQQykDKQspg2RTZDNpw2nDAYMBgxBCoAugApEBZA10THCMaYwDxAHEgylsS2RJMyEzIIDEAcQ==",
+    "routine-list-light-M.png":
+      "AAAAACAAwADEAOAA4ATUCNgwyDDQCAAByAACBlg5SDlAEwICWBNYOUg5AAIPAw8DACAAAAAAIiTMyMzIRMgAAA==",
+    "step-add-light-AX3.png":
+      "AAAAAAYDyXTZbMl0JhMTJ2TY5Mhk1GZcACLbANsAywDPABCA4gLiAvJCgCDgAOEYwRjzGPM44xjjmNMYwxAAQg==",
+    "step-add-light-M.png":
+      "AAAAAEBBggaTBMgAwAPEAxADYiMQgMADCQMDAQIAwADCAOgCwADjGOEY4RjAhIAAwyTDBMCAwITAwAAABAFABA==",
+    "step-edit-light-AX3.png":
+      "AAAAAAYDyXTZbMl0JhMTI2RY5Nhk2GZYACLbANsAywDPABAQ6WLpImki4ALgAuAC5SLrIm2S7LDgSOAA0AAAAA==",
+    "step-edit-light-M.png":
+      "AAAAAEBBggaTBMgAwAPEAxACZSMDAwIAAADAAMIA6ALAhOMY4RjhGIAEgADDBMMk4IDEzMDAggCDAgAAEAFABA==",
+    "weekday-conflict-light-AX3.png":
+      "AAAAAAYDyXTZbNl0ZlRo2QqPOys7IzuLj0ePRxE/OzcNhw2HHUckuzSzMacAxyDjRednp2Sx83jBdOBgYgEAAA==",
+    "weekday-conflict-light-M.png":
+      "AAAAAEBBggaTBMgAwAPEAxADYiMwAsgAgA6MRxpHD0ecRxEHEGcZZ1Af0gRYDlANoQJQDVAN5QDAxMDEYAFABA==",
+  ]
 }
 
 private enum RoutineManagementCaptureState: String, CaseIterable {
