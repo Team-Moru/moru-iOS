@@ -7,6 +7,9 @@
 - raw capture 44개, 반복 PNG byte mismatch 0
 - copy contract: 주간/데일리 제목, 요일별 완수율, 항목별 분석,
   오늘의 기록, 항목별 결과
+- weekly Medium: summary 제목→값 순서와 요일 bar의
+  상단 coral→하단 투명 gradient 확인
+- weekly AX3: summary 값→제목 reflow와 긴 한국어 clipping 없음 확인
 
 ## 공통 상태 회귀
 

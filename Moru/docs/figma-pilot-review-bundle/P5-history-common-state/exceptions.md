@@ -11,6 +11,9 @@
 - Figma의 copy/share와 완료 전용 `홈으로` CTA는 연결된 기능이 없어 추가하지
   않는다. 기존 back/navigation을 유지한다.
 - Figma 예시 항목명 대신 저장된 `RoutineRun` step title을 사용한다.
+- Figma 주간 summary의 metric value는 흰색이지만 coral `#FFC09E` 위
+  대비가 부족하다. 값의 위계는 유지하면서 WCAG AA를 충족하도록
+  `#3C3D5E`를 사용했으며 계산 대비는 `6.57:1`이다.
 
 ## 비교 정규화
 

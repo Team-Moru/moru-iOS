@@ -63,6 +63,7 @@ struct HistoryWeeklySummaryCard: View {
 
     var body: some View {
         HistoryReportSummaryCard(
+            compactTextOrder: .weeklyCompact,
             metrics: [
                 HistoryReportMetric(
                     title: HistoryCopy.weeklyCompletionRate,
@@ -114,9 +115,21 @@ struct HistoryReportMetric: Identifiable, Equatable {
     }
 }
 
+enum HistoryReportMetricTextOrder: Equatable {
+    case titleThenValue
+    case valueThenTitle
+
+    static let weeklyCompact: Self = .titleThenValue
+
+    func resolved(for dynamicTypeSize: DynamicTypeSize) -> Self {
+        dynamicTypeSize.isAccessibilitySize ? .valueThenTitle : self
+    }
+}
+
 struct HistoryReportSummaryCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    var compactTextOrder: HistoryReportMetricTextOrder = .valueThenTitle
     let metrics: [HistoryReportMetric]
 
     var body: some View {
@@ -164,21 +177,33 @@ struct HistoryReportSummaryCard: View {
                     .accessibilityHidden(true)
             }
 
-            Text(metric.value)
-                .historyOverviewTextStyle(.h1.weight(.bold))
-                .foregroundStyle(MoruPilotColor.textStrong)
-                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                .minimumScaleFactor(0.62)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text(metric.title)
-                .historyOverviewTextStyle(.c1)
-                .foregroundStyle(MoruPilotColor.textPrimary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            if compactTextOrder.resolved(for: dynamicTypeSize) == .titleThenValue {
+                metricTitle(metric)
+                metricValue(metric)
+            } else {
+                metricValue(metric)
+                metricTitle(metric)
+            }
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
+    }
+
+    private func metricTitle(_ metric: HistoryReportMetric) -> some View {
+        Text(metric.title)
+            .historyOverviewTextStyle(.c1)
+            .foregroundStyle(MoruPilotColor.textPrimary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func metricValue(_ metric: HistoryReportMetric) -> some View {
+        Text(metric.value)
+            .historyOverviewTextStyle(.h1.weight(.bold))
+            .foregroundStyle(MoruPilotColor.textStrong)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .minimumScaleFactor(0.62)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -459,9 +484,14 @@ private struct HistoryWeekBar: View {
 
                 RoundedRectangle(cornerRadius: MoruPilotSpacing.four)
                     .fill(
-                        completion.completionRate > 0
-                            ? MoruPilotColor.accent
-                            : MoruPilotColor.progressTrack
+                        LinearGradient(
+                            colors: [
+                                MoruPilotColor.accent,
+                                MoruPilotColor.accent.opacity(0),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
                     .frame(height: max(4, 78 * completion.completionRate))
 

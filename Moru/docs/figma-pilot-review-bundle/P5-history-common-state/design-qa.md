@@ -20,6 +20,9 @@
   `6.57:1` 대비를 확보했다.
 - 타이포: Medium은 승인 hierarchy를 유지하고 AX3는 세로 reflow와 자연 높이를
   사용한다.
+- 주간 상세: Medium summary의 제목→값 순서와 요일 bar의
+  상단 coral→하단 투명 gradient를 승인 node와 맞췄고, AX3는 값→제목 세로
+  reflow를 유지한다.
 - 상태: loading, empty, error, permission-off, partial-data를 Medium/AX3에서
   확인했다.
 - 긴 한국어: 제목, transcript, 결과 row가 잘림 없이 줄바꿈되고 스크롤로
@@ -45,11 +48,11 @@
 - 공통 상태는 P5 외부 reference 대신 동일 fixture 2회 PNG byte 일치를
   deterministic quality gate로 사용한다.
 - Figma↔After mean absolute channel delta:
-  - weekly: `10.715841327682813` (gate ≤ 11)
+  - weekly: `9.404986788692376` (gate ≤ 11)
   - daily: `10.480339111005401` (gate ≤ 11)
   - run: `14.865340275315772` (gate ≤ 15)
 - Figma↔After differing pixel percentage:
-  - weekly: `55.26321891179114` (gate ≤ 56)
+  - weekly: `55.064076961164886` (gate ≤ 56)
   - daily: `73.07066042576362` (gate ≤ 74)
   - run: `73.17870194601888` (gate ≤ 74)
 - Before↔After differing pixel range:

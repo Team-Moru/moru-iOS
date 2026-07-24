@@ -19,6 +19,16 @@ final class HistoryDetailFigmaVisualTests: XCTestCase {
     XCTAssertEqual(HistoryCopy.itemAnalysis, "항목별 분석")
     XCTAssertEqual(HistoryCopy.todayRecords, "오늘의 기록")
     XCTAssertEqual(HistoryCopy.itemResults, "항목별 결과")
+    XCTAssertEqual(
+      HistoryReportMetricTextOrder.weeklyCompact.resolved(for: .medium),
+      .titleThenValue
+    )
+    XCTAssertEqual(
+      HistoryReportMetricTextOrder.weeklyCompact.resolved(
+        for: .accessibility3
+      ),
+      .valueThenTitle
+    )
   }
 
   func testHistoryDetailStatesRenderDeterministicallyAtReferenceVariants() throws {

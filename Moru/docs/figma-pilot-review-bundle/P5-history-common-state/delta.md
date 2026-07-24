@@ -4,7 +4,10 @@
 
 - 주간 리포트의 검은 summary를 coral 3-metric card로 교체하고 실제 주간
   완수율, 전주 대비 percentage point, 완료 실행 평균 소요 시간을 표시한다.
-- 요일별 완수율을 Figma bar chart와 같은 순서·색상·surface로 보정했다.
+- 주간 summary는 Medium에서 Figma와 같은 제목→값 순서를 사용하고,
+  AX3에서는 값→제목으로 reflow해 큰 글씨에서도 값과 레이블을 안전하게 읽는다.
+- 요일별 완수율을 Figma bar chart와 같은 순서·상단 coral→하단 투명 gradient·
+  surface로 보정했다.
 - 데일리/실행 상세는 `오늘의 기록`을 `항목별 결과`보다 먼저 배치했다.
 - 기록 card는 저장된 transcript만 표시한다. 저장되지 않은 step type·step 소요
   시간·copy/share 액션은 만들어내지 않는다.
