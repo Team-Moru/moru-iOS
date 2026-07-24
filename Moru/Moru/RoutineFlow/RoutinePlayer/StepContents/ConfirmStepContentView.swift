@@ -38,7 +38,7 @@ struct ConfirmStepContentView: View {
         }
 
         Text(feedbackText ?? confirmGuideText)
-          .font(AppFont.body1NormalSemiBold)
+          .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
           .foregroundStyle(AppColor.gray500)
           .multilineTextAlignment(.center)
           .lineSpacing(4)
@@ -70,12 +70,13 @@ struct ConfirmStepContentView: View {
   private var stepTitleSection: some View {
     VStack(spacing: 8) {
       Text(step.title)
-        .font(AppFont.title2Bold)
+        .font(AppFont.pretendardSemiBold(size: 22, relativeTo: .title3))
         .foregroundStyle(AppColor.gray600)
         .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
 
       Text("확인형 · \(estimatedMinuteText)")
-        .font(AppFont.body1NormalMedium)
+        .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
         .foregroundStyle(AppColor.gray400)
     }
   }
@@ -87,10 +88,6 @@ struct ConfirmStepContentView: View {
   }
 
   private var confirmGuideText: String {
-    if !step.instruction.isEmpty {
-      return step.instruction
-    }
-
-    return "완료되었으면 말해주세요."
+    RoutinePlayerCopy.guide(for: step)
   }
 }

@@ -129,25 +129,35 @@ final class RoutinePlayerViewModel {
     }
     
     var currentStepNumberText: String {
-        guard case .running(_) = screenState else {
+        switch screenState {
+        case .running, .stepCompleted:
+            return "\(currentStepIndex + 1)/\(steps.count)"
+        case .resolving, .resolutionRetry, .terminalFailure, .summary:
             return "0/0"
         }
-        
-        return "\(currentStepIndex + 1)/\(steps.count)"
     }
     
     var progressValue: Double {
-        guard case .running(_) = screenState else {
+        switch screenState {
+        case .running, .stepCompleted:
+            return Double(currentStepIndex + 1) / Double(steps.count)
+        case .resolving, .resolutionRetry, .terminalFailure, .summary:
             return 0
         }
-        
-        return Double(currentStepIndex + 1) / Double(steps.count)
     }
     
     var completedStepTitles: [String] {
         stepResults
             .filter(\.isCompleted)
             .map(\.stepTitle)
+    }
+
+    var isTrialExecution: Bool {
+        if case .trial = finalizationMode {
+            return true
+        }
+
+        return false
     }
 
     var isGuidancePlaying: Bool {

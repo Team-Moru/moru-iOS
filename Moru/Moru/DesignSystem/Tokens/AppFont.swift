@@ -64,12 +64,33 @@ enum AppFont {
     Font.custom("Pretendard-Bold", size: size)
   }
 
+  static func pretendardBold(
+    size: CGFloat,
+    relativeTo textStyle: Font.TextStyle
+  ) -> Font {
+    Font.custom("Pretendard-Bold", size: size, relativeTo: textStyle)
+  }
+
   static func pretendardSemiBold(size: CGFloat) -> Font {
     Font.custom("Pretendard-SemiBold", size: size)
   }
 
+  static func pretendardSemiBold(
+    size: CGFloat,
+    relativeTo textStyle: Font.TextStyle
+  ) -> Font {
+    Font.custom("Pretendard-SemiBold", size: size, relativeTo: textStyle)
+  }
+
   static func pretendardMedium(size: CGFloat) -> Font {
     Font.custom("Pretendard-Medium", size: size)
+  }
+
+  static func pretendardMedium(
+    size: CGFloat,
+    relativeTo textStyle: Font.TextStyle
+  ) -> Font {
+    Font.custom("Pretendard-Medium", size: size, relativeTo: textStyle)
   }
 
   static func pretendardRegular(size: CGFloat) -> Font {

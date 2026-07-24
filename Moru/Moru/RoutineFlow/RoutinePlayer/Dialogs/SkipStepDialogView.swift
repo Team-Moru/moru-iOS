@@ -10,6 +10,7 @@ import SwiftUI
 struct SkipStepDialogView: View {
     let onCancel: () -> Void
     let onConfirm: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
@@ -19,48 +20,20 @@ struct SkipStepDialogView: View {
                     onCancel()
                 }
 
-            VStack(spacing: 20) {
-                Text("이 단계를 건너뛸까요?")
-                    .font(AppFont.title2Bold)
-                    .foregroundStyle(AppColor.gray600)
-
-                Text("건너뛴 단계는 완료율에 반영되지 않아요.")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.gray500)
-                    .multilineTextAlignment(.center)
-
-                HStack(spacing: 12) {
-                    Button {
-                        onCancel()
-                    } label: {
-                        Text("취소")
-                            .font(AppFont.body1NormalSemiBold)
-                            .foregroundStyle(AppColor.gray600)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(AppColor.grayWhite)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        onConfirm()
-                    } label: {
-                        Text("건너뛰기")
-                            .font(AppFont.body1NormalSemiBold)
-                            .foregroundStyle(AppColor.grayWhite)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(AppColor.orange350)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(24)
-            .background(AppColor.grayWhite)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .padding(.horizontal, 32)
+            MoruDialog(
+                title: "이 항목을 건너뛸까요?",
+                message: """
+                건너뛰면 현재 루틴은 미완료로 기록돼요.
+                다음 루틴으로 넘어갈게요.
+                """,
+                primaryTitle: "계속하기",
+                secondaryTitle: "건너뛰기",
+                primaryAction: onCancel,
+                secondaryAction: onConfirm,
+                adaptsForAccessibility: true
+            )
+            .offset(y: dynamicTypeSize.isAccessibilitySize ? 0 : -12)
         }
+        .accessibilityAddTraits(.isModal)
     }
 }

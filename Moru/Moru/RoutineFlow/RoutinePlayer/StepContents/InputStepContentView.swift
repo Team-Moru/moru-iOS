@@ -19,37 +19,43 @@ struct InputStepContentView: View {
       stepTitleSection
 
       Spacer()
-        .frame(height: 42)
+        .frame(height: hasTranscript ? 62 : 42)
 
-      RoutinePlayerOrbView(
-        levels: speechInputController.waveformLevels,
-        isListening: speechInputController.phase == .listening,
-        isPaused: speechInputController.isPaused
-      )
-
-      Spacer()
-        .frame(height: 44)
-
-      VStack(spacing: 8) {
-        if isGuidancePlaying {
-          Text("음성 안내 중")
-            .font(AppFont.caption1SemiBold)
-            .foregroundStyle(AppColor.gray350)
-        }
-
-        Text(feedbackText ?? inputGuideText)
-          .font(AppFont.body1NormalSemiBold)
-          .foregroundStyle(AppColor.gray500)
-          .multilineTextAlignment(.center)
-          .lineSpacing(4)
+      if hasTranscript {
+        transcriptCard
+      } else {
+        RoutinePlayerOrbView(
+          levels: speechInputController.waveformLevels,
+          isListening: speechInputController.phase == .listening,
+          isPaused: speechInputController.isPaused
+        )
       }
 
       Spacer()
-        .frame(height: 32)
+        .frame(height: hasTranscript ? 53 : 44)
+
+      if !hasTranscript {
+        VStack(spacing: 8) {
+          if isGuidancePlaying {
+            Text("음성 안내 중")
+              .font(AppFont.caption1SemiBold)
+              .foregroundStyle(AppColor.gray350)
+          }
+
+          Text(feedbackText ?? inputGuideText)
+            .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
+            .foregroundStyle(AppColor.gray500)
+            .multilineTextAlignment(.center)
+        }
+
+        Spacer()
+          .frame(height: 32)
+      }
 
       VoiceInputControlView(
         speechInputController: speechInputController,
         automaticCompletionIntent: .dictatedInput,
+        showsTranscript: false,
         isAutomaticStartBlocked: isAutomaticStartBlocked,
         waitUntilGuidanceFinishes: waitUntilGuidanceFinishes
       ) { transcript in
@@ -67,12 +73,13 @@ struct InputStepContentView: View {
   private var stepTitleSection: some View {
     VStack(spacing: 8) {
       Text(step.title)
-        .font(AppFont.title2Bold)
+        .font(AppFont.pretendardSemiBold(size: 22, relativeTo: .title3))
         .foregroundStyle(AppColor.gray600)
         .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
 
       Text("입력형 · \(estimatedMinuteText)")
-        .font(AppFont.body1NormalMedium)
+        .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
         .foregroundStyle(AppColor.gray400)
     }
   }
@@ -84,13 +91,36 @@ struct InputStepContentView: View {
   }
 
   private var inputGuideText: String {
-    if !step.instruction.isEmpty {
-      return step.instruction
-    }
+    RoutinePlayerCopy.guide(for: step)
+  }
 
-    return """
-    오늘의 다짐을 크게 말해봐요!
-    어떤 하루를 만들고 싶나요?
-    """
+  private var hasTranscript: Bool {
+    !speechInputController.displayTranscript.isEmpty
+  }
+
+  private var transcriptCard: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Text(RoutinePlayerCopy.transcriptTitle(for: step))
+        .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
+        .foregroundStyle(AppColor.gray500)
+
+      Text(speechInputController.displayTranscript)
+        .font(AppFont.pretendardMedium(size: 18, relativeTo: .body))
+        .foregroundStyle(AppColor.gray350)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityLabel(RoutinePlayerCopy.transcriptTitle(for: step))
+        .accessibilityValue(speechInputController.displayTranscript)
+    }
+    .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
+    .padding(24)
+    .background(
+      AppColor.grayWhite.opacity(0.58),
+      in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+    )
+    .shadow(
+      color: AppColor.orange100.opacity(0.14),
+      radius: 24,
+      y: 8
+    )
   }
 }

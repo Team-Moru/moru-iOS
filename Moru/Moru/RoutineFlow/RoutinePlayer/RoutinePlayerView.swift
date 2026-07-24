@@ -10,6 +10,7 @@ import UIKit
 struct RoutinePlayerView: View {
     @State private var viewModel: RoutinePlayerViewModel
     @State private var speechInputController: SpeechInputController
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// 완료 화면과 오늘의 기록 화면 사이의 전환 상태
     @State private var isShowingTodayRecord = false
@@ -74,12 +75,7 @@ struct RoutinePlayerView: View {
             runningView(step: step)
 
         case .stepCompleted(let step):
-            RoutineStepCompletedView(
-                stepTitle: step.title,
-                isGuidancePlaying: viewModel.isGuidancePlaying
-            ) {
-                await viewModel.finishStepCompletedScreenAfterGuidance()
-            }
+            stepCompletedView(step: step)
 
         case .summary(let summary):
             summaryView(summary: summary)
@@ -160,36 +156,83 @@ struct RoutinePlayerView: View {
     private func runningView(
         step: RoutineStep
     ) -> some View {
-        VStack(spacing: 0) {
-            topBar
+        GeometryReader { geometry in
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    if !viewModel.isTrialExecution {
+                        topBar
+                    }
 
-            progressSection
-                .padding(.top, 24)
+                    progressSection
+                        .padding(
+                            .top,
+                            viewModel.isTrialExecution ? 28 : 32
+                        )
 
-            Spacer()
+                    Spacer()
+                        .frame(
+                            height: viewModel.isTrialExecution ? 70 : 20
+                        )
 
-            stepContent(for: step)
+                    stepContent(for: step)
 
-            Spacer()
+                    Spacer(minLength: 16)
 
-            Button {
-                viewModel.requestSkipStep()
-            } label: {
-                Text("건너뛰기")
-                    .font(AppFont.label1NormalMedium)
-                    .foregroundStyle(AppColor.gray300)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .contentShape(Rectangle())
+                    Button {
+                        viewModel.requestSkipStep()
+                    } label: {
+                        Text("건너뛰기")
+                            .font(
+                                AppFont.pretendardMedium(
+                                    size: 14,
+                                    relativeTo: .caption
+                                )
+                            )
+                            .foregroundStyle(AppColor.gray300)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 52)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 20)
+                }
+                .frame(
+                    minHeight: geometry.size.height,
+                    alignment: .top
+                )
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 40)
-            .padding(.bottom, 36)
+            .scrollIndicators(.hidden)
         }
-        .padding(.top, 24)
         .disabled(viewModel.isStepInteractionDisabled)
         .onAppear {
             viewModel.runnableContentDidAppear()
+        }
+    }
+
+    private func stepCompletedView(
+        step: RoutineStep
+    ) -> some View {
+        ZStack(alignment: .top) {
+            RoutineStepCompletedView(
+                stepTitle: step.title,
+                isGuidancePlaying: viewModel.isGuidancePlaying
+            ) {
+                await viewModel.finishStepCompletedScreenAfterGuidance()
+            }
+            .offset(y: 12)
+
+            VStack(spacing: 0) {
+                if !viewModel.isTrialExecution {
+                    topBar
+                }
+
+                progressSection
+                    .padding(
+                        .top,
+                        viewModel.isTrialExecution ? 28 : 32
+                    )
+            }
         }
     }
 
@@ -277,38 +320,68 @@ struct RoutinePlayerView: View {
     // MARK: - Header
 
     private var topBar: some View {
-        HStack {
-            Button {
-                viewModel.requestCloseRoutine()
-            } label: {
-                Text("닫기")
-                    .font(AppFont.body1NormalMedium)
-                    .foregroundStyle(AppColor.gray350)
-                    .frame(width: 56, height: 40)
-                    .contentShape(Rectangle())
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 8) {
+                    topBarTitle
+
+                    HStack {
+                        closeButton
+                        Spacer()
+                        endButton
+                    }
+                }
+                .padding(.vertical, 8)
+            } else {
+                HStack {
+                    closeButton
+
+                    Spacer()
+
+                    topBarTitle
+
+                    Spacer()
+
+                    endButton
+                }
+                .frame(height: 40)
             }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Text("오늘의 루틴")
-                .font(AppFont.body1NormalSemiBold)
-                .foregroundStyle(AppColor.gray600)
-
-            Spacer()
-
-            Button {
-                viewModel.requestEndRoutine()
-            } label: {
-                Text("종료")
-                    .font(AppFont.body1NormalMedium)
-                    .foregroundStyle(AppColor.gray350)
-                    .frame(width: 56, height: 40)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
+    }
+
+    private var closeButton: some View {
+        Button {
+            viewModel.requestCloseRoutine()
+        } label: {
+            Text("닫기")
+                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
+                .foregroundStyle(AppColor.gray350)
+                .frame(minWidth: 56, minHeight: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var topBarTitle: some View {
+        Text("오늘의 루틴")
+            .font(AppFont.pretendardSemiBold(size: 18, relativeTo: .body))
+            .foregroundStyle(AppColor.gray600)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var endButton: some View {
+        Button {
+            viewModel.requestEndRoutine()
+        } label: {
+            Text("종료")
+                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
+                .foregroundStyle(AppColor.gray350)
+                .frame(minWidth: 56, minHeight: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var progressSection: some View {
@@ -319,7 +392,9 @@ struct RoutinePlayerView: View {
             .tint(AppColor.orange250)
 
             Text(viewModel.currentStepNumberText)
-                .font(AppFont.caption1Medium)
+                .font(
+                    AppFont.pretendardMedium(size: 12, relativeTo: .caption2)
+                )
                 .foregroundStyle(AppColor.gray400)
         }
         .padding(.horizontal, 20)
@@ -423,6 +498,7 @@ struct RoutinePlayerView: View {
     private var backgroundView: some View {
         LinearGradient(
             colors: [
+                AppColor.babyBlue100.opacity(0.52),
                 AppColor.babyBlue50,
                 AppColor.grayWhite
             ],

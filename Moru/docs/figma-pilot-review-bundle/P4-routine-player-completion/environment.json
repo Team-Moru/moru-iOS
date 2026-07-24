@@ -1,0 +1,54 @@
+{
+  "base_sha": "dfd510bedf45c8b3156f97f5db99acad23f97d5b",
+  "branch": "fix/#72-routine-player-completion-figma-polish",
+  "capture": {
+    "calendar": "gregorian",
+    "color_scheme": "light",
+    "device": "iPhone 16",
+    "dynamic_type_sizes": [
+      "medium",
+      "accessibility3"
+    ],
+    "locale": "ko_KR",
+    "pixel_height": 2556,
+    "pixel_width": 1179,
+    "point_height": 852,
+    "point_width": 393,
+    "scale": 3,
+    "simulator_id": "6FB37447-684F-4A13-A9DA-A536D22CBE9A",
+    "time_zone": "Asia/Seoul"
+  },
+  "figma": {
+    "file_key": "RNf4Q84fgsZf3V8MtZmGBc",
+    "last_modified": "2026-07-24T07:06:38Z",
+    "node_ids": [
+      "1461:2561",
+      "1464:3248",
+      "1467:3697",
+      "1559:716",
+      "1656:1043",
+      "1656:1101",
+      "1656:891",
+      "1661:2335",
+      "2092:4538",
+      "2092:4605",
+      "2323:3246",
+      "2323:3265",
+      "2564:4193",
+      "2564:4350",
+      "2644:2839",
+      "2753:9706"
+    ],
+    "version": "2379679754802507594"
+  },
+  "issue": 72,
+  "mask": {
+    "bottom_pixels": 102,
+    "top_pixels": 177
+  },
+  "toolchain": {
+    "macos": "26.5.1 (25F80)",
+    "swift": "6.3.2",
+    "xcode": "26.5 (17F42)"
+  }
+}

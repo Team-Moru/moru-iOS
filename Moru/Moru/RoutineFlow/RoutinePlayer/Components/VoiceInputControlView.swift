@@ -17,6 +17,7 @@ struct VoiceInputControlView: View {
   let speechInputController: SpeechInputController
   let automaticCompletionIntent: SpeechAutomaticCompletionIntent?
   let autoFinishMatch: ((String) -> RoutineStepCompletionMatch)?
+  let showsTranscript: Bool
   let isAutomaticStartBlocked: Bool
   let waitUntilGuidanceFinishes: () async -> Bool
   let onFinished: (String) -> Void
@@ -29,6 +30,7 @@ struct VoiceInputControlView: View {
     speechInputController: SpeechInputController,
     automaticCompletionIntent: SpeechAutomaticCompletionIntent? = nil,
     autoFinishMatch: ((String) -> RoutineStepCompletionMatch)? = nil,
+    showsTranscript: Bool = true,
     isAutomaticStartBlocked: Bool = false,
     waitUntilGuidanceFinishes: @escaping () async -> Bool = { true },
     onFinished: @escaping (String) -> Void
@@ -36,6 +38,7 @@ struct VoiceInputControlView: View {
     self.speechInputController = speechInputController
     self.automaticCompletionIntent = automaticCompletionIntent
     self.autoFinishMatch = autoFinishMatch
+    self.showsTranscript = showsTranscript
     self.isAutomaticStartBlocked = isAutomaticStartBlocked
     self.waitUntilGuidanceFinishes = waitUntilGuidanceFinishes
     self.onFinished = onFinished
@@ -248,7 +251,7 @@ struct VoiceInputControlView: View {
 
   private var recognitionControlView: some View {
     VStack(spacing: 12) {
-      if !speechInputController.displayTranscript.isEmpty {
+      if showsTranscript, !speechInputController.displayTranscript.isEmpty {
         Text(speechInputController.displayTranscript)
           .font(AppFont.label1NormalMedium)
           .foregroundStyle(AppColor.gray500)
