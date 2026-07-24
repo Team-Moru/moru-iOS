@@ -138,7 +138,7 @@ struct InputStepContentView: View {
         )
         .foregroundStyle(AppColor.gray350)
         .fixedSize(horizontal: false, vertical: true)
-        .accessibilityLabel("인식된 내용")
+        .accessibilityLabel(RoutinePlayerCopy.transcriptTitle(for: step))
         .accessibilityValue(speechInputController.displayTranscript)
     }
     .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)

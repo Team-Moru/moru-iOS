@@ -9,6 +9,7 @@ enum RoutinePlayerCopy {
   struct TimerSegment: Equatable {
     let title: String
     let duration: String?
+    let durationSeconds: Int?
   }
 
   private static let bedMakingPresetIDs: Set<String> = [
@@ -91,10 +92,26 @@ enum RoutinePlayerCopy {
     }
 
     return [
-      TimerSegment(title: "목 좌우로 천천히 돌리기", duration: nil),
-      TimerSegment(title: "앞뒤로 어깨 돌리기", duration: "30초"),
-      TimerSegment(title: "양팔 위로 쭉 뻗기", duration: "30초"),
-      TimerSegment(title: "제자리 가볍게 걷기", duration: "1분"),
+      TimerSegment(
+        title: "목 좌우로 천천히 돌리기",
+        duration: nil,
+        durationSeconds: nil
+      ),
+      TimerSegment(
+        title: "앞뒤로 어깨 돌리기",
+        duration: "30초",
+        durationSeconds: 30
+      ),
+      TimerSegment(
+        title: "양팔 위로 쭉 뻗기",
+        duration: "30초",
+        durationSeconds: 30
+      ),
+      TimerSegment(
+        title: "제자리 가볍게 걷기",
+        duration: "1분",
+        durationSeconds: 60
+      ),
     ]
   }
 }

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 import XCTest
 @testable import Moru
 
@@ -57,6 +58,12 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
         "제자리 가볍게 걷기",
       ]
     )
+    XCTAssertEqual(
+      RoutinePlayerCopy.timerSegments(for: stretchingStep)?.map {
+        $0.durationSeconds ?? 60
+      },
+      [60, 30, 30, 60]
+    )
   }
 
   func testRoutinePlayerStatesRenderDeterministicallyAtReferenceVariants() async throws {
@@ -86,8 +93,97 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
         XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
         XCTAssertEqual(first.scale, 3)
         XCTAssertEqual(first.pngData(), second.pngData())
+        try assertMatchesApprovedBaseline(
+          first,
+          state: state,
+          variant: variant
+        )
       }
     }
+  }
+
+  private func assertMatchesApprovedBaseline(
+    _ image: UIImage,
+    state: RoutinePlayerCaptureState,
+    variant: MoruVisualCaptureVariant,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) throws {
+    let baselineURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent(
+        "docs/figma-pilot-review-bundle/P4-routine-player-completion/states"
+      )
+      .appendingPathComponent("\(state.rawValue)-\(variant.rawValue)")
+      .appendingPathComponent("after.png")
+    let baseline = try XCTUnwrap(
+      UIImage(contentsOfFile: baselineURL.path),
+      "Missing approved visual baseline: \(baselineURL.path)",
+      file: file,
+      line: line
+    )
+    let actualHash = try visualHash(for: image)
+    let baselineHash = try visualHash(for: baseline)
+    let distance = zip(actualHash, baselineHash).reduce(0) { result, pair in
+      result + Int((pair.0 ^ pair.1).nonzeroBitCount)
+    }
+
+    XCTAssertLessThanOrEqual(
+      distance,
+      24,
+      "Visual regression in \(state.rawValue)-\(variant.rawValue), "
+        + "hash distance: \(distance)",
+      file: file,
+      line: line
+    )
+  }
+
+  private func visualHash(for image: UIImage) throws -> Data {
+    let width = 17
+    let height = 32
+    var pixels = [UInt8](repeating: 0, count: width * height * 4)
+    let context = try XCTUnwrap(
+      CGContext(
+        data: &pixels,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+      )
+    )
+    let cgImage = try XCTUnwrap(image.cgImage)
+    context.interpolationQuality = .high
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+    var luminance = [Int]()
+    luminance.reserveCapacity(width * height)
+    for offset in stride(from: 0, to: pixels.count, by: 4) {
+      let red = 299 * Int(pixels[offset])
+      let green = 587 * Int(pixels[offset + 1])
+      let blue = 114 * Int(pixels[offset + 2])
+      luminance.append((red + green + blue) / 1_000)
+    }
+
+    var hash = Data(capacity: (width - 1) * height / 8)
+    var byte: UInt8 = 0
+    var bitIndex = 0
+    for row in 0..<height {
+      for column in 0..<(width - 1) {
+        if luminance[row * width + column] > luminance[row * width + column + 1] {
+          byte |= 1 << (7 - bitIndex)
+        }
+        bitIndex += 1
+        if bitIndex == 8 {
+          hash.append(byte)
+          byte = 0
+          bitIndex = 0
+        }
+      }
+    }
+    return hash
   }
 
   private func view(

@@ -10,6 +10,7 @@ import SwiftUI
 struct EndRoutineDialogView: View {
     let onCancel: () -> Void
     let onConfirm: () -> Void
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         ZStack {
@@ -31,7 +32,7 @@ struct EndRoutineDialogView: View {
                 secondaryAction: onConfirm,
                 adaptsForAccessibility: true
             )
-            .offset(y: -12)
+            .offset(y: dynamicTypeSize.isAccessibilitySize ? 0 : -12)
         }
         .accessibilityAddTraits(.isModal)
     }

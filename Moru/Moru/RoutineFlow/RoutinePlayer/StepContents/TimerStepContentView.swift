@@ -275,14 +275,7 @@ struct TimerStepContentView: View {
     private var activeTimerSegmentIndex: Int {
         guard let timerSegments else { return 0 }
         let segmentDurations = timerSegments.map { segment -> Int in
-            switch segment.duration {
-            case "30초":
-                return 30
-            case "1분":
-                return 60
-            default:
-                return 60
-            }
+            segment.durationSeconds ?? 60
         }
         let elapsedSeconds = max(totalSeconds - remainingSeconds, 0)
         var cumulativeSeconds = 0

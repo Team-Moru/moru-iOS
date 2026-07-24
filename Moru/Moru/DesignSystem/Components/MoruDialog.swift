@@ -153,7 +153,8 @@ struct MoruDialog: View {
             width: 159.5
           )
         }
-        .frame(width: 320, height: 54)
+        .frame(width: 320)
+        .frame(minHeight: 54)
       }
     }
     .frame(width: 320)
