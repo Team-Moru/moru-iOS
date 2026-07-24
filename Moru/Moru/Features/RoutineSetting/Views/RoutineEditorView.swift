@@ -17,10 +17,11 @@ private struct RoutineStepFramePreferenceKey: PreferenceKey {
 
 struct RoutineEditorView: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   @State private var draft: RoutineDraftState
   @State private var isStepAddSheetPresented = false
-  @State private var isScheduleSettingPresented = false
+  @State private var isScheduleExpanded: Bool
   @State private var isDeleteDialogPresented = false
   @State private var weekdayConflict: RoutineWeekdayConflictState?
   @State private var selectedEditStepIndex: Int? = nil
@@ -39,12 +40,14 @@ struct RoutineEditorView: View {
 
   init(
     draft: RoutineDraftState,
+    initialScheduleExpanded: Bool = false,
     onSave: @escaping (RoutineDraftState) async -> Bool,
     onResolveWeekdayConflict: @escaping (RoutineDraftState) async -> Bool,
     onDelete: ((UUID) async -> Bool)? = nil,
     weekdayConflictState: @escaping (RoutineDraftState) -> RoutineWeekdayConflictState? = { _ in nil }
   ) {
     self._draft = State(initialValue: draft)
+    self._isScheduleExpanded = State(initialValue: initialScheduleExpanded)
     self.onSave = onSave
     self.onResolveWeekdayConflict = onResolveWeekdayConflict
     self.onDelete = onDelete
@@ -54,23 +57,32 @@ struct RoutineEditorView: View {
   var body: some View {
     NavigationStack {
       ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: AppSpacing.thirtySix) {
+        VStack(alignment: .leading, spacing: 0) {
           editorHeader
+
           titleSection
+            .padding(.top, dynamicTypeSize.isAccessibilitySize ? 28 : 20)
+
           alarmSection
+            .padding(.top, MoruPilotSpacing.thirtySix)
+
           stepSection
+            .padding(.top, MoruPilotSpacing.thirtySix)
 
           if let saveErrorMessage {
             Text(saveErrorMessage)
-              .font(AppFont.caption1Medium)
-              .foregroundStyle(AppColor.orange500)
+              .routineManagementTextStyle(.c1)
+              .foregroundStyle(MoruPilotColor.accent)
+              .fixedSize(horizontal: false, vertical: true)
+              .padding(.top, MoruPilotSpacing.sixteen)
           }
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, AppSpacing.forty)
+        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.top, MoruPilotSpacing.eight)
         .padding(.bottom, 112)
       }
-      .background(AppColor.babyBlue50.ignoresSafeArea())
+      .defaultScrollAnchor(.top)
+      .background(MoruPilotColor.canvas.ignoresSafeArea())
       .toolbar(.hidden, for: .navigationBar)
       .safeAreaInset(edge: .bottom) {
         VStack(spacing: AppSpacing.none) {
@@ -88,48 +100,63 @@ struct RoutineEditorView: View {
               await saveAndDismissIfNeeded()
             }
           } label: {
-            Text("저장")
-              .font(AppFont.body1NormalSemiBold)
+            Text(
+              draft.routineID == nil
+                ? RoutineManagementCopy.createCompletion
+                : RoutineManagementCopy.editCompletion
+            )
+              .routineManagementTextStyle(.b4.weight(.semiBold))
               .foregroundStyle(AppColor.grayWhite)
               .frame(maxWidth: .infinity)
-              .frame(height: 66)
-              .background(draft.canSave ? AppColor.orange350 : AppColor.moruDisabled)
-              .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
+              .frame(minHeight: 54)
+              .background(
+                draft.canSave ? MoruPilotColor.accent : AppColor.moruDisabled
+              )
+              .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
           }
           .disabled(!draft.canSave)
           .buttonStyle(.plain)
         }
-        .padding(.horizontal, 26)
-        .padding(.top, AppSpacing.sm)
-        .padding(.bottom, AppSpacing.xs)
-        .background(AppColor.babyBlue50.opacity(0.94))
+        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.bottom, MoruPilotSpacing.eight)
+        .background(MoruPilotColor.canvas.opacity(0.94))
       }
       .sheet(isPresented: $isStepAddSheetPresented) {
         RoutineStepAddSheet { step in
           draft.steps.append(step)
         }
-        .presentationDetents([.height(430)])
+        .presentationDetents(
+          dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(499)]
+        )
         .presentationDragIndicator(.hidden)
         .presentationBackground(AppColor.grayWhite)
         .presentationCornerRadius(AppRadius.lg)
       }
       .sheet(isPresented: $isStepEditSheetPresented) {
         if let index = selectedEditStepIndex, draft.steps.indices.contains(index) {
-          RoutineStepAddSheet(initialStep: draft.steps[index]) { updatedStep in
-            draft.steps[index] = updatedStep
+          let stepID = draft.steps[index].id
+          RoutineStepAddSheet(
+            initialStep: draft.steps[index],
+            onDelete: {
+              removeStep(stepID)
+            }
+          ) { updatedStep in
+            guard let currentIndex = draft.steps.firstIndex(
+              where: { $0.id == updatedStep.id }
+            ) else {
+              return
+            }
+
+            draft.steps[currentIndex] = updatedStep
           }
-          .presentationDetents([.height(430)])
+          .presentationDetents(
+            dynamicTypeSize.isAccessibilitySize ? [.large] : [.height(559)]
+          )
           .presentationDragIndicator(.hidden)
           .presentationBackground(AppColor.grayWhite)
           .presentationCornerRadius(AppRadius.lg)
         }
-      }
-      .fullScreenCover(isPresented: $isScheduleSettingPresented) {
-        RoutineScheduleSettingView(
-          hour: $draft.hour,
-          minute: $draft.minute,
-          selectedWeekdays: $draft.selectedWeekdays
-        )
       }
       .overlay {
         if isDeleteDialogPresented {
@@ -144,97 +171,135 @@ struct RoutineEditorView: View {
   }
 
   private var editorHeader: some View {
-    ZStack {
-      Text(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
-        .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-        .frame(maxWidth: .infinity)
+    Group {
+      if dynamicTypeSize.isAccessibilitySize {
+        VStack(spacing: MoruPilotSpacing.eight) {
+          HStack {
+            backButton
+            Spacer()
+            deleteButton
+          }
 
-      HStack {
-        Button {
-          dismiss()
-        } label: {
-          Text("뒤로")
-            .font(AppFont.body1NormalMedium)
-            .foregroundStyle(AppColor.moruTextSecondary)
+          editorTitle
         }
-        .buttonStyle(.plain)
+      } else {
+        ZStack {
+          editorTitle
 
-        Spacer()
-
-        Button {
-          isDeleteDialogPresented = true
-        } label: {
-          Text("삭제")
-            .font(AppFont.body1NormalMedium)
-            .foregroundStyle(AppColor.moruTextSecondary)
+          HStack {
+            backButton
+            Spacer()
+            deleteButton
+          }
         }
-        .opacity(draft.routineID == nil ? 0 : 1)
-        .disabled(draft.routineID == nil)
-        .buttonStyle(.plain)
       }
     }
-    .frame(height: 44)
+    .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 96 : 44)
+  }
+
+  private var editorTitle: some View {
+    Text(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
+      .routineManagementTextStyle(.b3.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textStrong)
+      .frame(maxWidth: .infinity)
+      .fixedSize(horizontal: false, vertical: true)
+      .accessibilityAddTraits(.isHeader)
+  }
+
+  private var backButton: some View {
+    Button {
+      dismiss()
+    } label: {
+      Text("뒤로")
+        .routineManagementTextStyle(.b4)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var deleteButton: some View {
+    Button {
+      isDeleteDialogPresented = true
+    } label: {
+      Text("삭제")
+        .routineManagementTextStyle(.b4)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+    }
+    .opacity(draft.routineID == nil ? 0 : 1)
+    .disabled(draft.routineID == nil)
+    .buttonStyle(.plain)
+    .accessibilityHidden(draft.routineID == nil)
   }
 
   private var titleSection: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.md) {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       sectionTitle("루틴 이름")
 
-      VStack(spacing: AppSpacing.ten) {
-        editorInputRow(text: $draft.title, placeholder: "활력 루틴")
+      VStack(spacing: MoruPilotSpacing.eight) {
+        editorInputRow(text: $draft.title, placeholder: "루틴 이름")
         editorInputRow(text: $draft.summary, placeholder: "루틴 설명")
       }
     }
   }
 
   private var alarmSection: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.lg) {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       sectionTitle("루틴 알림")
 
       Button {
-        isScheduleSettingPresented = true
-      } label: {
-        HStack(spacing: AppSpacing.md) {
-          VStack(alignment: .leading, spacing: AppSpacing.six) {
-            Text(alarmTitle)
-              .font(AppFont.heading3SemiBold)
-              .foregroundStyle(AppColor.moruTextPrimary)
-
-            Text("\(draft.steps.count)개 항목 · \(totalMinutes)분")
-              .font(AppFont.body1NormalMedium)
-              .foregroundStyle(AppColor.moruTextSecondary)
-          }
-
-          Spacer()
-
-          Image(systemName: "chevron.right")
-            .font(.system(size: 26, weight: .regular))
-            .foregroundStyle(AppColor.moruTextSecondary)
+        withAnimation(.snappy(duration: 0.2)) {
+          isScheduleExpanded.toggle()
         }
-        .padding(.horizontal, AppSpacing.xl)
-        .frame(height: 124)
-        .background(AppColor.orange150)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+      } label: {
+        HStack(spacing: MoruPilotSpacing.sixteen) {
+          Text(alarmTitle)
+            .routineManagementTextStyle(.b4)
+            .foregroundStyle(MoruPilotColor.textSecondary)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+
+          Spacer(minLength: 0)
+
+          MoruChevron(
+            color: MoruPilotColor.textPrimary,
+            direction: .down
+          )
+          .rotationEffect(isScheduleExpanded ? .degrees(180) : .zero)
+          .frame(minWidth: 44, minHeight: 44)
+        }
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("루틴 알림 \(alarmTitle)")
+      .accessibilityValue(isScheduleExpanded ? "펼쳐짐" : "접힘")
+
+      if isScheduleExpanded {
+        RoutineScheduleSettingView(
+          hour: $draft.hour,
+          minute: $draft.minute,
+          selectedWeekdays: $draft.selectedWeekdays
+        )
+        .padding(.top, MoruPilotSpacing.four)
+      }
     }
   }
 
   private var stepSection: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.md) {
-      HStack(alignment: .center, spacing: AppSpacing.sm) {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+      HStack(alignment: .firstTextBaseline, spacing: MoruPilotSpacing.twelve) {
         sectionTitle("루틴 항목")
 
         Text("\(draft.steps.count)개 - 총 \(totalMinutes)분")
-          .font(AppFont.body1NormalMedium)
-          .foregroundStyle(AppColor.moruTextSecondary)
+          .routineManagementTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textTertiary)
+          .fixedSize(horizontal: false, vertical: true)
 
         Spacer()
       }
 
       ZStack {
-        VStack(spacing: AppSpacing.md) {
+        VStack(spacing: MoruPilotSpacing.ten) {
           ForEach($draft.steps) { $step in
             let stepID = step.id
             let order = stepOrder(for: stepID)
@@ -284,7 +349,12 @@ struct RoutineEditorView: View {
             x: dragStartFrame.midX,
             y: dragStartFrame.midY + dragTranslation
           )
-          .shadow(color: AppColor.babyBlue150.opacity(0.7), radius: 14, x: 0, y: 4)
+          .shadow(
+            color: MoruPilotColor.shadow.opacity(0.7),
+            radius: 14,
+            x: 0,
+            y: 4
+          )
           .allowsHitTesting(false)
         }
       }
@@ -301,23 +371,24 @@ struct RoutineEditorView: View {
     Button {
       isStepAddSheetPresented = true
     } label: {
-      HStack(spacing: AppSpacing.xs) {
+      HStack(spacing: MoruPilotSpacing.eight) {
         MoruRoutineStepControlIcon(style: .plus)
           .frame(width: 18, height: 18)
 
-        Text("새 루틴 추가하기")
-          .font(AppFont.label1NormalSemiBold)
-          .foregroundStyle(AppColor.moruTextSecondary)
+        Text(RoutineManagementCopy.addStep)
+          .routineManagementTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textTertiary)
+          .fixedSize(horizontal: false, vertical: true)
       }
       .frame(maxWidth: .infinity)
-      .frame(height: 52)
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 88 : 62)
       .background(AppColor.grayWhite)
-      .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
       .overlay(
-        RoundedRectangle(cornerRadius: AppRadius.sm)
-          .stroke(AppColor.moruBorder, lineWidth: 1)
+        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+          .stroke(MoruPilotColor.border, lineWidth: 1)
       )
-      .shadow(color: AppColor.babyBlue150, radius: 10, x: 0, y: 0)
+      .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
     }
     .buttonStyle(.plain)
   }
@@ -364,7 +435,7 @@ struct RoutineEditorView: View {
 
       MoruDialog(
         title: "다른 루틴에서 사용 중",
-        message: "\(conflict.weekdayText)은 알림이 설정된\n다른 루틴이 이미 있어요.\n해당 루틴으로 요일을 변경하시겠어요?",
+        message: RoutineManagementCopy.weekdayConflictMessage(conflict),
         primaryTitle: "괜찮아요",
         secondaryTitle: "변경하기",
         primaryAction: {
@@ -403,66 +474,41 @@ struct RoutineEditorView: View {
 
   private func sectionTitle(_ title: String) -> some View {
     Text(title)
-      .font(AppFont.heading3SemiBold)
-      .foregroundStyle(AppColor.moruTextPrimary)
+      .routineManagementTextStyle(.b4.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textPrimary)
+      .fixedSize(horizontal: false, vertical: true)
   }
 
   private func editorInputRow(
     text: Binding<String>,
     placeholder: String
   ) -> some View {
-    HStack(spacing: AppSpacing.md) {
-      TextField(placeholder, text: text)
-        .font(AppFont.body1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-        .tint(AppColor.orange350)
-
-      Button {
-        text.wrappedValue = ""
-      } label: {
-        Image(systemName: "minus.circle")
-          .resizable()
-          .scaledToFit()
-          .frame(width: 22, height: 22)
-          .foregroundStyle(AppColor.orange350)
-      }
-      .buttonStyle(.plain)
-    }
-    .padding(.horizontal, AppSpacing.md)
-    .frame(height: 56)
-    .background(inputBackground)
+    TextField(placeholder, text: text, axis: .vertical)
+      .routineManagementTextStyle(.b4)
+      .foregroundStyle(MoruPilotColor.textStrong)
+      .tint(MoruPilotColor.accent)
+      .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+      .padding(.horizontal, MoruPilotSpacing.sixteen)
+      .padding(.vertical, MoruPilotSpacing.twelve)
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 48)
+      .background(inputBackground)
   }
 
   private var inputBackground: some View {
-    RoundedRectangle(cornerRadius: AppRadius.md)
-      .fill(AppColor.grayWhite)
+    RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+      .fill(AppColor.grayWhite.opacity(0.4))
       .overlay(
-        RoundedRectangle(cornerRadius: AppRadius.md)
-          .stroke(AppColor.moruBorder, lineWidth: 1)
+        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+          .stroke(MoruPilotColor.border, lineWidth: 1)
       )
   }
 
   private var alarmTitle: String {
-    "\(weekdayTitle) \(String(format: "%02d:%02d", draft.hour, draft.minute))"
-  }
-
-  private var weekdayTitle: String {
-    if draft.selectedWeekdays == Set(Weekday.weekdays) {
-      return "평일"
-    }
-
-    if draft.selectedWeekdays == Set(Weekday.allCases) {
-      return "매일"
-    }
-
-    if draft.selectedWeekdays == Set([.saturday, .sunday]) {
-      return "주말"
-    }
-
-    return draft.selectedWeekdays
-      .sortedByDisplayOrder()
-      .map(\.shortTitle)
-      .joined(separator: " ")
+    RoutineManagementCopy.scheduleSummary(
+      weekdays: draft.selectedWeekdays,
+      hour: draft.hour,
+      minute: draft.minute
+    )
   }
 
   private var totalMinutes: Int {

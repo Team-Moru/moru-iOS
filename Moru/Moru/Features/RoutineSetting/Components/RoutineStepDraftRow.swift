@@ -12,47 +12,52 @@ struct RoutineStepDraftRow: View {
   let order: Int
   let onDelete: () -> Void
   let onTapCard: () -> Void
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    HStack(spacing: AppSpacing.md) {
+    HStack(alignment: .center, spacing: MoruPilotSpacing.twelve) {
       Text("\(order)")
-        .font(AppFont.pretendardSemiBold(size: 14))
+        .routineManagementTextStyle(.c2)
         .foregroundStyle(AppColor.grayWhite)
         .frame(width: 24, height: 24)
-        .background(AppColor.orange350)
+        .background(MoruPilotColor.accentSoft)
         .clipShape(Circle())
 
-      VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-        TextField("루틴 이름", text: $step.title)
-          .font(AppFont.body1NormalSemiBold)
-          .foregroundStyle(AppColor.moruTextPrimary)
-          .frame(height: 24)
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+        TextField("루틴 이름", text: $step.title, axis: .vertical)
+          .routineManagementTextStyle(.c1.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
+          .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
 
         Text("\(step.type.routineSettingTitle) - \(step.estimatedMinutes)분")
-          .font(AppFont.label1NormalMedium)
-          .foregroundStyle(AppColor.moruTextSecondary)
+          .routineManagementTextStyle(.c2)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
-
-      Spacer(minLength: AppSpacing.md)
+      .frame(maxWidth: .infinity, alignment: .leading)
 
       Button(action: onDelete) {
         Image(systemName: "minus.circle")
           .resizable()
           .scaledToFit()
           .frame(width: 22, height: 22)
-          .foregroundStyle(AppColor.orange350)
+          .foregroundStyle(MoruPilotColor.accent)
+          .frame(minWidth: 44, minHeight: 44)
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("\(step.title) 항목 삭제")
     }
-    .padding(.horizontal, AppSpacing.xl)
-    .frame(height: 76)
+    .padding(.leading, MoruPilotSpacing.sixteen)
+    .padding(.trailing, MoruPilotSpacing.eight)
+    .padding(.vertical, MoruPilotSpacing.eight)
+    .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 62)
     .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
     .overlay(
-      RoundedRectangle(cornerRadius: AppRadius.sm)
-        .stroke(AppColor.moruBorder, lineWidth: 1)
+      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+        .stroke(MoruPilotColor.border, lineWidth: 1)
     )
-    .shadow(color: AppColor.babyBlue150, radius: 10, x: 0, y: 0)
+    .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
     .contentShape(Rectangle())
     .onTapGesture {
       onTapCard()

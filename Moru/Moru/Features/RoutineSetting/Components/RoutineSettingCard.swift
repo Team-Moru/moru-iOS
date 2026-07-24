@@ -129,7 +129,10 @@ struct RoutineSettingCard: View {
 
   @ViewBuilder
   private var routineDescription: some View {
-    let description = "\(routine.stepCountText) · \(routine.estimatedDurationText)"
+    let description = RoutineManagementCopy.routineMetadata(
+      stepCountText: routine.stepCountText,
+      durationText: routine.estimatedDurationText
+    )
 
     if componentStyle == .figmaPilot {
       Text(description)

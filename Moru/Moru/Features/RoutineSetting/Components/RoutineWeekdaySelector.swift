@@ -13,26 +13,59 @@ struct RoutineWeekdaySelector: View {
   ]
 
   @Binding var selectedWeekdays: Set<Weekday>
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    HStack(spacing: AppSpacing.sm) {
-      ForEach(weekdays) { weekday in
-        Button {
-          toggle(weekday)
-        } label: {
-          Text(weekday.shortTitle)
-            .font(AppFont.pretendardSemiBold(size: 16))
-            .foregroundStyle(
-              selectedWeekdays.contains(weekday) ? AppColor.grayWhite : AppColor.moruDisabled
-            )
-            .frame(width: 40, height: 40)
-            .background(
-              selectedWeekdays.contains(weekday) ? AppColor.orange350 : AppColor.grayWhite
-            )
-            .clipShape(Circle())
+    Group {
+      if dynamicTypeSize.isAccessibilitySize {
+        LazyVGrid(
+          columns: Array(
+            repeating: GridItem(.flexible(), spacing: MoruPilotSpacing.twelve),
+            count: 4
+          ),
+          spacing: MoruPilotSpacing.twelve
+        ) {
+          weekdayButtons
         }
-        .buttonStyle(.plain)
+      } else {
+        HStack(spacing: 0) {
+          weekdayButtons
+        }
+        .frame(maxWidth: .infinity)
       }
+    }
+  }
+
+  @ViewBuilder
+  private var weekdayButtons: some View {
+    ForEach(weekdays) { weekday in
+      Button {
+        toggle(weekday)
+      } label: {
+        Text(weekday.shortTitle)
+          .routineManagementTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(
+            selectedWeekdays.contains(weekday)
+              ? AppColor.grayWhite
+              : AppColor.moruDisabled
+          )
+          .frame(
+            width: dynamicTypeSize.isAccessibilitySize ? 52 : 40,
+            height: dynamicTypeSize.isAccessibilitySize ? 52 : 40
+          )
+          .background(
+            selectedWeekdays.contains(weekday)
+              ? MoruPilotColor.accent
+              : AppColor.gray150.opacity(0.55)
+          )
+          .clipShape(Circle())
+      }
+      .buttonStyle(.plain)
+      .frame(maxWidth: .infinity)
+      .accessibilityLabel("\(weekday.shortTitle)요일")
+      .accessibilityValue(
+        selectedWeekdays.contains(weekday) ? "선택됨" : "선택 안 됨"
+      )
     }
   }
 
