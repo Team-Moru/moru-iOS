@@ -166,7 +166,7 @@ struct HistoryReportSummaryCard: View {
 
             Text(metric.value)
                 .historyOverviewTextStyle(.h1.weight(.bold))
-                .foregroundStyle(AppColor.grayWhite)
+                .foregroundStyle(MoruPilotColor.textStrong)
                 .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                 .minimumScaleFactor(0.62)
                 .fixedSize(horizontal: false, vertical: true)
@@ -434,7 +434,7 @@ private struct HistoryStepAnalysisRow: View {
         .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(item.title), 완료율 "
+            "\(item.title), 완수율 "
             + "\(Int((item.completionRate * 100).rounded()))퍼센트, "
             + item.completionText
         )
@@ -483,7 +483,7 @@ private struct HistoryWeekBar: View {
         .buttonStyle(.plain)
         .disabled(completion.completionRate <= 0 || action == nil)
         .accessibilityLabel(
-            "\(historyWeekdayText(completion.date, calendar: calendar))요일 완료율 "
+            "\(historyWeekdayText(completion.date, calendar: calendar))요일 완수율 "
             + "\(Int((completion.completionRate * 100).rounded()))퍼센트"
         )
         .accessibilityHint(
@@ -532,7 +532,7 @@ struct HistoryHeatmapCellPresentation: Equatable {
         }
 
         if let completionRate = day.completionRate {
-            accessibilityLabel = "\(dateText), 완료율 "
+            accessibilityLabel = "\(dateText), 완수율 "
             + "\(Int((completionRate * 100).rounded()))퍼센트"
         } else {
             accessibilityLabel = "\(dateText), 기록 없음"
@@ -735,7 +735,6 @@ struct HistoryStepResultRow: View {
     let title: String
     let resultText: String
     let isCompleted: Bool
-    let transcript: String?
 
     var body: some View {
         Group {

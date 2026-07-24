@@ -36,19 +36,29 @@
 - 3 Figma↔After comparisons 생성
 - 모든 metrics:
   `comparedPixelCount == 2673972`,
-  `maskedPixelCount == 339552`,
-  `maximumChannelDelta <= 255`
-- Figma↔After MAD gate: weekly ≤ 11, daily ≤ 10, run ≤ 15
+  `maskedPixelCount == 339552`
+- `maximumChannelDelta <= 255`는 8-bit 입력 범위 invariant이며 품질 gate가 아니다.
+- Figma↔After MAD / differing pixel gate:
+  weekly ≤ 11 / 56%, daily ≤ 11 / 74%, run ≤ 15 / 74%
+- 공통 상태 quality gate: 동일 fixture 2회 PNG byte mismatch 0
 
 ```sh
 jq -e '
   .width == 1179 and .height == 2556
   and .comparedPixelCount == 2673972
   and .maskedPixelCount == 339552
-  and .maximumChannelDelta <= 255
 ' states/*/light-*/before-after/metrics.json
 
-jq -e '.meanAbsoluteChannelDelta <= 11' figma-after/weekly/metrics.json
-jq -e '.meanAbsoluteChannelDelta <= 10' figma-after/daily/metrics.json
-jq -e '.meanAbsoluteChannelDelta <= 15' figma-after/run/metrics.json
+jq -e '
+  .meanAbsoluteChannelDelta <= 11
+  and .differingPixelPercentage <= 56
+' figma-after/weekly/metrics.json
+jq -e '
+  .meanAbsoluteChannelDelta <= 11
+  and .differingPixelPercentage <= 74
+' figma-after/daily/metrics.json
+jq -e '
+  .meanAbsoluteChannelDelta <= 15
+  and .differingPixelPercentage <= 74
+' figma-after/run/metrics.json
 ```

@@ -548,15 +548,7 @@ private extension HistoryDaySummary {
   }
 
   var recordedStepResults: [HistoryStepResult] {
-    stepResults.filter { result in
-      guard let transcript = result.transcript else {
-        return false
-      }
-
-      return !transcript.trimmingCharacters(
-        in: .whitespacesAndNewlines
-      ).isEmpty
-    }
+    stepResults.recordedResults
   }
 
   var firstRun: HistoryRun? {
@@ -584,7 +576,13 @@ private extension HistoryRun {
   }
 
   var recordedStepResults: [HistoryStepResult] {
-    stepResults.filter { result in
+    stepResults.recordedResults
+  }
+}
+
+private extension Sequence where Element == HistoryStepResult {
+  var recordedResults: [HistoryStepResult] {
+    filter { result in
       guard let transcript = result.transcript else {
         return false
       }
@@ -788,6 +786,7 @@ private struct HistoryDetailHeader: View {
         .lineLimit(1)
         .minimumScaleFactor(0.75)
         .accessibilityAddTraits(.isHeader)
+        .allowsHitTesting(false)
     }
     .padding(.horizontal, MoruPilotSpacing.twenty)
     .frame(height: 54)
@@ -835,8 +834,7 @@ struct HistoryDailyDetailView: View {
                     index: index + 1,
                     title: result.stepTitle,
                     resultText: result.displayText,
-                    isCompleted: result.isCompleted,
-                    transcript: nil
+                    isCompleted: result.isCompleted
                   )
                 }
               }
@@ -914,8 +912,7 @@ struct HistoryRunDetailView: View {
                     index: index + 1,
                     title: result.stepTitle,
                     resultText: result.displayText,
-                    isCompleted: result.isCompleted,
-                    transcript: nil
+                    isCompleted: result.isCompleted
                   )
                 }
               }

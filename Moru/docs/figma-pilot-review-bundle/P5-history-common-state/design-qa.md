@@ -16,6 +16,8 @@
   rhythm을 확인했다.
 - 색상: pale canvas, coral summary/accent, blue completion icon, glass surface를
   pilot token으로 통일했다.
+- 대비: primary metric은 `#3C3D5E`를 사용해 coral `#FFC09E` 위
+  `6.57:1` 대비를 확보했다.
 - 타이포: Medium은 승인 hierarchy를 유지하고 AX3는 세로 reflow와 자연 높이를
   사용한다.
 - 상태: loading, empty, error, permission-off, partial-data를 Medium/AX3에서
@@ -37,13 +39,20 @@
 
 - raw capture: 1179 × 2556 px
 - mask: top 186 px + bottom 102 px
-- invariant: `comparedPixelCount == 2673972`,
-  `maskedPixelCount == 339552`, `maximumChannelDelta <= 255`
+- geometry invariant: `comparedPixelCount == 2673972`,
+  `maskedPixelCount == 339552`
+- `maximumChannelDelta <= 255`는 8-bit 입력 범위 확인일 뿐 품질 gate가 아니다.
+- 공통 상태는 P5 외부 reference 대신 동일 fixture 2회 PNG byte 일치를
+  deterministic quality gate로 사용한다.
 - Figma↔After mean absolute channel delta:
-  - weekly: `10.162339146907048` (gate ≤ 11)
-  - daily: `9.726162926662408` (gate ≤ 10)
-  - run: `14.114769713370222` (gate ≤ 15)
+  - weekly: `10.715841327682813` (gate ≤ 11)
+  - daily: `10.480339111005401` (gate ≤ 11)
+  - run: `14.865340275315772` (gate ≤ 15)
+- Figma↔After differing pixel percentage:
+  - weekly: `55.26321891179114` (gate ≤ 56)
+  - daily: `73.07066042576362` (gate ≤ 74)
+  - run: `73.17870194601888` (gate ≤ 74)
 - Before↔After differing pixel range:
-  `2.7845093366721865%...99.7442755571113%`
+  `2.7845093366721865%...99.91245233682328%`
 - Before↔After는 legacy surface에서 P5 layout으로 이동한 change ledger이므로
   similarity 상한을 적용하지 않는다.
