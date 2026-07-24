@@ -14,43 +14,41 @@ struct CurrentRoutineCard: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    MoruCard(
-      backgroundColor: AppColor.babyBlue50,
-      shadowColor: AppColor.babyBlue150,
-      shadowRadius: 7.5,
-      shadowY: 0
-    ) {
-      VStack(alignment: .leading, spacing: AppSpacing.md) {
-        Button(action: onTap) {
-          HStack {
-            Text("현재 사용 중인 루틴")
-              .font(AppFont.label1NormalSemiBold)
-              .foregroundStyle(AppColor.moruTextPrimary)
-              .fixedSize(horizontal: false, vertical: true)
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+      Button(action: onTap) {
+        HStack {
+          Text(HomeCopy.currentRoutine)
+            .homeFigmaTextStyle(.c1.weight(.semiBold))
+            .foregroundStyle(MoruPilotColor.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
 
-            Spacer()
+          Spacer()
 
-            MoruChevron(color: AppColor.moruTextSecondary)
-          }
+          MoruChevron(color: MoruPilotColor.textPrimary)
+        }
+        .frame(minHeight: 22)
+      }
+      .buttonStyle(.plain)
+
+      if let routine {
+        Button(action: onStart) {
+          routineSummary(routine)
         }
         .buttonStyle(.plain)
 
-        if let routine {
-          Button(action: onStart) {
-            routineSummary(routine)
+        VStack(spacing: AppSpacing.none) {
+          ForEach(routine.steps) { step in
+            routineStepRow(step)
           }
-          .buttonStyle(.plain)
-
-          VStack(spacing: AppSpacing.none) {
-            ForEach(routine.steps) { step in
-              routineStepRow(step)
-            }
-          }
-        } else {
-          emptyState
         }
+      } else {
+        emptyState
       }
     }
+    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.vertical, MoruPilotSpacing.sixteen)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .homePilotSurface()
   }
 
   private func routineSummary(_ routine: HomeRoutineState) -> some View {
@@ -74,16 +72,18 @@ struct CurrentRoutineCard: View {
         }
       }
     }
-    .padding(AppSpacing.md)
-    .background(AppColor.orange100)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .padding(.vertical, MoruPilotSpacing.twelve)
+    .frame(minHeight: 72)
+    .background(MoruPilotColor.accentSurface)
+    .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.sixteen))
   }
 
   private var summaryIndicator: some View {
     Rectangle()
       .fill(AppColor.orange350)
       .frame(width: 2)
-      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 48)
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 41)
   }
 
   @ViewBuilder
@@ -91,7 +91,7 @@ struct CurrentRoutineCard: View {
     _ routine: HomeRoutineState,
     stacksStatus: Bool
   ) -> some View {
-    VStack(alignment: .leading, spacing: AppSpacing.xs) {
+    VStack(alignment: .leading, spacing: 0) {
       if stacksStatus {
         VStack(alignment: .leading, spacing: AppSpacing.xs) {
           routineTitle(routine)
@@ -105,23 +105,23 @@ struct CurrentRoutineCard: View {
       }
 
       Text(routine.estimatedDurationText)
-        .font(AppFont.caption1Medium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .homeFigmaTextStyle(.c2)
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
   }
 
   private func routineTitle(_ routine: HomeRoutineState) -> some View {
     Text(routine.title)
-      .font(AppFont.body1NormalSemiBold)
-      .foregroundStyle(AppColor.moruTextPrimary)
+      .homeFigmaTextStyle(.b4.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private func routineStatus(_ routine: HomeRoutineState) -> some View {
     Text(routine.statusText)
-      .font(AppFont.caption1SemiBold)
-      .foregroundStyle(AppColor.orange350)
+      .homeFigmaTextStyle(.c2)
+      .foregroundStyle(MoruPilotColor.accent)
       .fixedSize(horizontal: false, vertical: true)
       .padding(.horizontal, AppSpacing.sm)
       .padding(.vertical, AppSpacing.xxs)
@@ -152,8 +152,8 @@ struct CurrentRoutineCard: View {
         .frame(width: progressRingSize, height: progressRingSize)
 
       Text(routine.progressText)
-        .font(AppFont.pretendardSemiBold(size: 13))
-        .foregroundStyle(AppColor.orange350)
+        .homeFigmaTextStyle(.c1.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.accent)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
@@ -188,7 +188,7 @@ struct CurrentRoutineCard: View {
         }
       }
     }
-    .padding(.vertical, AppSpacing.md)
+    .padding(.vertical, MoruPilotSpacing.twelve)
     .overlay(alignment: .bottom) {
       Rectangle()
         .fill(AppColor.moruBorder)
@@ -198,32 +198,29 @@ struct CurrentRoutineCard: View {
 
   private func stepTitle(_ step: HomeRoutineStepState) -> some View {
     Text(step.title)
-      .font(AppFont.body1NormalMedium)
-      .foregroundStyle(AppColor.moruTextPrimary)
+      .homeFigmaTextStyle(.c1)
+      .foregroundStyle(MoruPilotColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private func stepDetail(_ step: HomeRoutineStepState) -> some View {
     Text(step.detail)
-      .font(AppFont.label1NormalMedium)
-      .foregroundStyle(AppColor.moruTextSecondary)
+      .homeFigmaTextStyle(.c2)
+      .foregroundStyle(MoruPilotColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private var emptyState: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.md) {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       Text("오늘 사용할 루틴이 아직 없어요.")
-        .font(AppFont.body1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .homeFigmaTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textPrimary)
 
       Text("루틴 탭에서 아침 루틴을 설정해보세요.")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .homeFigmaTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textSecondary)
     }
-    .padding(AppSpacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color.white.opacity(0.5))
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
   }
 }
 

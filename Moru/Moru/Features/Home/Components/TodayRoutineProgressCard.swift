@@ -12,53 +12,60 @@ struct TodayRoutineProgressCard: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    MoruCard(
-      backgroundColor: AppColor.babyBlue50,
-      shadowColor: AppColor.babyBlue150,
-      shadowRadius: 7.5,
-      shadowY: 0
-    ) {
-      VStack(spacing: AppSpacing.sm) {
-        ZStack {
-          Circle()
-            .stroke(AppColor.orange150, lineWidth: 8)
-            .frame(width: progressRingSize, height: progressRingSize)
+    VStack(spacing: MoruPilotSpacing.eight) {
+      ZStack {
+        Circle()
+          .stroke(MoruPilotColor.progressTrack, lineWidth: ringLineWidth)
+          .frame(width: progressRingSize, height: progressRingSize)
 
-          Circle()
-            .trim(from: 0, to: progress.progress)
-            .stroke(
-              progressGradient,
-              style: StrokeStyle(lineWidth: 8, lineCap: .round)
-            )
-            .rotationEffect(.degrees(-90))
-            .frame(width: progressRingSize, height: progressRingSize)
+        Circle()
+          .trim(from: 0, to: min(max(progress.progress, 0), 1))
+          .stroke(
+            progressGradient,
+            style: StrokeStyle(lineWidth: ringLineWidth, lineCap: .round)
+          )
+          .rotationEffect(.degrees(-90))
+          .frame(width: progressRingSize, height: progressRingSize)
 
-          VStack(spacing: AppSpacing.xxs) {
-            Text(progress.percentText)
-              .font(AppFont.title3SemiBold)
-              .foregroundStyle(AppColor.moruTextPrimary)
+        VStack(spacing: 0) {
+          Text(progress.percentText)
+            .homeFigmaTextStyle(.h2)
+            .foregroundStyle(MoruPilotColor.textPrimary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
 
-            Text(progress.completedText)
-              .font(AppFont.caption1Medium)
-              .foregroundStyle(AppColor.moruTextSecondary)
-          }
+          Text(progress.completedText)
+            .homeFigmaTextStyle(.c2.weight(.regular))
+            .foregroundStyle(MoruPilotColor.textTertiary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
-
-        Text("오늘의 루틴")
-          .font(AppFont.label1NormalSemiBold)
-          .foregroundStyle(AppColor.moruTextSecondary)
       }
-      .frame(maxWidth: .infinity)
-      .frame(minHeight: cardMinimumHeight)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(HomeCopy.todayRoutine)
+      .accessibilityValue("\(progress.percentText), \(progress.completedText)")
+
+      Text(HomeCopy.todayRoutine)
+        .homeFigmaTextStyle(.c1.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textSecondary)
     }
+    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 22)
+    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .frame(maxWidth: .infinity)
+    .frame(minHeight: cardMinimumHeight)
+    .homePilotSurface()
   }
 
   private var progressRingSize: CGFloat {
-    dynamicTypeSize.isAccessibilitySize ? 164 : 88
+    dynamicTypeSize.isAccessibilitySize ? 164 : 112
   }
 
   private var cardMinimumHeight: CGFloat {
-    dynamicTypeSize.isAccessibilitySize ? 240 : 128
+    dynamicTypeSize.isAccessibilitySize ? 272 : 184
+  }
+
+  private var ringLineWidth: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? 10 : 8
   }
 
   private var progressGradient: LinearGradient {

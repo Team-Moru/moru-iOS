@@ -57,6 +57,7 @@ struct HomeView: View {
   private let routineSettingContent: AnyView
   private let routineCreationContent: AnyView
   private let clearsRoutineLaunchMessageOnRefresh: Bool
+  private let automaticallyLoads: Bool
 
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var viewModel: HomeViewModel
@@ -69,53 +70,69 @@ struct HomeView: View {
     refreshToken: Int,
     routineSettingContent: AnyView,
     routineCreationContent: AnyView? = nil,
-    initialRoutineLaunchMessage: String? = nil
+    initialRoutineLaunchMessage: String? = nil,
+    automaticallyLoads: Bool = true
   ) {
     self.routineLaunchBoundary = HomeRoutineLaunchBoundary(onStartRoutine: onStartRoutine)
     self.refreshToken = refreshToken
     self.routineSettingContent = routineSettingContent
     self.routineCreationContent = routineCreationContent ?? routineSettingContent
     self.clearsRoutineLaunchMessageOnRefresh = initialRoutineLaunchMessage == nil
+    self.automaticallyLoads = automaticallyLoads
     _viewModel = State(initialValue: viewModel)
     _routineLaunchMessage = State(initialValue: initialRoutineLaunchMessage)
   }
 
   var body: some View {
     ScrollView(showsIndicators: false) {
-      VStack(spacing: AppSpacing.lg) {
+      VStack(spacing: 0) {
         switch viewModel.state {
         case .loading(let previousContent):
           if let previousContent {
             homeContent(previousContent)
             HomeRefreshIndicator()
+              .padding(.top, MoruPilotSpacing.twenty)
           } else {
-            weatherCard
-            HomeLoadingView()
+            HomeHeaderView(userName: "")
+            HomeLoadingSkeleton()
+              .padding(.top, 24)
+              .padding(.horizontal, MoruPilotSpacing.twenty)
           }
         case .content(let content):
           homeContent(content)
-        case .empty:
+        case .empty(let content):
+          HomeHeaderView(userName: content.userName)
           weatherCard
+            .padding(.top, 24)
           HomeEmptyView(onCreateRoutine: {
             presentedRoutineSheet = .create
           })
+          .padding(.top, MoruPilotSpacing.twenty)
         case .failed(let failure, let previousContent):
           if let previousContent {
             homeContent(previousContent)
             HomeFailureBanner(failure: failure, retryAction: viewModel.retry)
+              .padding(.top, MoruPilotSpacing.twenty)
           } else {
+            HomeHeaderView(userName: "")
             weatherCard
+              .padding(.top, 24)
             HomeFailureView(failure: failure, retryAction: viewModel.retry)
+              .padding(.top, MoruPilotSpacing.twenty)
           }
         }
       }
-      .padding(.bottom, AppSpacing.xxl)
+      .padding(.bottom, MoruPilotSpacing.sixtyFour)
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
     .accessibilityLabel("홈")
     .background(homeBackground.ignoresSafeArea())
     .task(id: refreshToken) {
+      guard automaticallyLoads else {
+        return
+      }
+
       if clearsRoutineLaunchMessageOnRefresh {
         routineLaunchMessage = nil
       }
@@ -146,9 +163,11 @@ struct HomeView: View {
     HomeHeaderView(userName: content.userName)
 
     routineProgressCards(content)
-      .padding(.horizontal, AppSpacing.screenHorizontal)
+      .padding(.top, 24)
+      .padding(.horizontal, MoruPilotSpacing.twenty)
 
     weatherCard
+      .padding(.top, MoruPilotSpacing.twenty)
 
     CurrentRoutineCard(
       routine: content.todayRoutine,
@@ -163,7 +182,8 @@ struct HomeView: View {
         startRoutine(routineID)
       }
     )
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .padding(.top, MoruPilotSpacing.twenty)
+    .padding(.horizontal, MoruPilotSpacing.twenty)
 
     HomeActiveRoutineSection(
       routines: content.activeRoutines,
@@ -172,13 +192,15 @@ struct HomeView: View {
       },
       onStartRoutine: startRoutine
     )
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .padding(.top, MoruPilotSpacing.thirtyTwo)
+    .padding(.horizontal, MoruPilotSpacing.twenty)
 
     if let routineLaunchMessage {
       Text(routineLaunchMessage)
         .font(AppFont.caption1Medium)
         .foregroundStyle(AppColor.orange500)
-        .padding(.horizontal, AppSpacing.screenHorizontal)
+        .padding(.top, MoruPilotSpacing.sixteen)
+        .padding(.horizontal, MoruPilotSpacing.twenty)
     }
   }
 
@@ -195,7 +217,7 @@ struct HomeView: View {
         HomeStreakCard(streak: content.streak)
       }
     } else {
-      HStack(spacing: AppSpacing.md) {
+      HStack(spacing: MoruPilotSpacing.twenty) {
         TodayRoutineProgressCard(progress: content.todayProgress)
         HomeStreakCard(streak: content.streak)
       }
@@ -228,14 +250,13 @@ private struct HomeWeatherCard: View {
   let requestWeather: () -> Void
 
   var body: some View {
-    MoruCard(
-      backgroundColor: AppColor.grayWhite,
-      shadowColor: AppColor.babyBlue150,
-      shadowRadius: 7.5,
-      shadowY: 0
-    ) {
+    Group {
       weatherContent
     }
+    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.vertical, MoruPilotSpacing.twelve)
+    .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+    .homePilotSurface()
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("home.weather.card")
   }
@@ -274,8 +295,8 @@ private struct HomeWeatherCard: View {
         .tint(AppColor.orange400)
         .accessibilityHidden(true)
       Text("날씨를 불러오는 중이에요")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .homeFigmaTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textSecondary)
     }
     .accessibilityElement(children: .combine)
   }
@@ -283,8 +304,8 @@ private struct HomeWeatherCard: View {
   private var weatherRequestButton: some View {
     Button(action: requestWeather) {
       Label("현재 위치 날씨 보기", systemImage: "location.fill")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .homeFigmaTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textPrimary)
     }
     .accessibilityHint("현재 위치의 날씨를 요청합니다.")
   }
@@ -293,48 +314,65 @@ private struct HomeWeatherCard: View {
     _ snapshot: HomeWeatherSnapshot,
     updateText: String
   ) -> some View {
-    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-      HStack(spacing: AppSpacing.sm) {
-        Image(systemName: symbolName(for: snapshot.condition))
-          .foregroundStyle(AppColor.orange400)
-          .accessibilityHidden(true)
-
-        Text(conditionLabel(for: snapshot.condition))
-          .font(AppFont.label1NormalMedium)
-          .foregroundStyle(AppColor.moruTextPrimary)
-
-        Text(temperatureText(for: snapshot))
-          .font(AppFont.heading3SemiBold)
-          .foregroundStyle(AppColor.moruTextPrimary)
+    ViewThatFits(in: .horizontal) {
+      HStack(alignment: .bottom, spacing: MoruPilotSpacing.sixteen) {
+        weatherReading(snapshot, updateText: updateText)
+        Spacer(minLength: MoruPilotSpacing.eight)
+        refreshButton
       }
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel(weatherSnapshotAccessibilityLabel(snapshot))
-
-      HStack {
-        Text("\(updateText) \(updateTime(for: snapshot))")
-          .font(AppFont.caption1Medium)
-          .foregroundStyle(AppColor.moruTextSecondary)
-        Spacer()
-        Button(action: requestWeather) {
-          Image(systemName: "arrow.clockwise")
-            .foregroundStyle(AppColor.moruTextSecondary)
-        }
-        .accessibilityLabel("현재 위치 날씨 새로고침")
-        .accessibilityHint("현재 위치의 날씨를 다시 요청합니다.")
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+        weatherReading(snapshot, updateText: updateText)
+        refreshButton
       }
     }
   }
 
+  private func weatherReading(
+    _ snapshot: HomeWeatherSnapshot,
+    updateText: String
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Text(temperatureText(for: snapshot))
+        .homeFigmaTextStyle(.h2)
+        .foregroundStyle(MoruPilotColor.textPrimary)
+        .lineLimit(1)
+
+      Text(
+        "\(conditionLabel(for: snapshot.condition)) · "
+          + "\(updateText) \(updateTime(for: snapshot))"
+      )
+      .homeFigmaTextStyle(.c2.weight(.regular))
+      .foregroundStyle(MoruPilotColor.textTertiary)
+      .fixedSize(horizontal: false, vertical: true)
+    }
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(weatherSnapshotAccessibilityLabel(snapshot))
+  }
+
+  private var refreshButton: some View {
+    Button(action: requestWeather) {
+      Image(systemName: "arrow.clockwise")
+        .font(.system(size: 16, weight: .medium))
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+    }
+    .accessibilityLabel("현재 위치 날씨 새로고침")
+    .accessibilityHint("현재 위치의 날씨를 다시 요청합니다.")
+  }
+
   private func weatherMessage(_ message: String) -> some View {
     Text(message)
-      .font(AppFont.label1NormalMedium)
-      .foregroundStyle(AppColor.moruTextSecondary)
+      .homeFigmaTextStyle(.c1)
+      .foregroundStyle(MoruPilotColor.textSecondary)
   }
 
   private func weatherSnapshotAccessibilityLabel(
     _ snapshot: HomeWeatherSnapshot
   ) -> String {
-    "\(conditionLabel(for: snapshot.condition)), \(temperatureText(for: snapshot))"
+    let rounded = snapshot.temperatureCelsius.rounded(.toNearestOrAwayFromZero)
+    return "\(conditionLabel(for: snapshot.condition)), 섭씨 "
+      + "\(String(format: "%.0f", rounded))도"
   }
 
   private func conditionLabel(for condition: HomeWeatherCondition) -> String {
@@ -360,32 +398,9 @@ private struct HomeWeatherCard: View {
     }
   }
 
-  private func symbolName(for condition: HomeWeatherCondition) -> String {
-    switch condition {
-    case .clear:
-      "sun.max.fill"
-    case .cloudy:
-      "cloud.fill"
-    case .rain:
-      "cloud.rain.fill"
-    case .snow:
-      "snowflake"
-    case .wind:
-      "wind"
-    case .fog:
-      "cloud.fog.fill"
-    case .thunderstorm:
-      "cloud.bolt.rain.fill"
-    case .mixed:
-      "cloud.sleet.fill"
-    case .other:
-      "cloud.fill"
-    }
-  }
-
   private func temperatureText(for snapshot: HomeWeatherSnapshot) -> String {
     let rounded = snapshot.temperatureCelsius.rounded(.toNearestOrAwayFromZero)
-    return "\(String(format: "%.0f", rounded))°C"
+    return "\(String(format: "%.0f", rounded))°"
   }
 
   private func updateTime(for snapshot: HomeWeatherSnapshot) -> String {
@@ -403,17 +418,42 @@ private struct HomeWeatherCard: View {
   }
 }
 
-private struct HomeLoadingView: View {
+private struct HomeLoadingSkeleton: View {
   var body: some View {
-    VStack(spacing: AppSpacing.sm) {
-      ProgressView()
-        .tint(AppColor.orange400)
-      Text("홈 정보를 불러오는 중이에요.")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+    VStack(spacing: MoruPilotSpacing.twenty) {
+      HStack(spacing: MoruPilotSpacing.twenty) {
+        HomeSkeletonBlock()
+          .frame(height: 184)
+        HomeSkeletonBlock()
+          .frame(height: 184)
+      }
+
+      HomeSkeletonBlock()
+        .frame(height: 84)
+
+      HomeSkeletonBlock()
+        .frame(height: 326)
     }
-    .frame(maxWidth: .infinity, minHeight: 320)
-    .accessibilityElement(children: .combine)
+    .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("홈 정보를 불러오는 중이에요.")
+  }
+}
+
+private struct HomeSkeletonBlock: View {
+  var body: some View {
+    RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+      .fill(
+        LinearGradient(
+          colors: [
+            AppColor.gray150.opacity(0.5),
+            AppColor.gray250.opacity(0.5),
+          ],
+          startPoint: .leading,
+          endPoint: .trailing
+        )
+      )
+      .accessibilityHidden(true)
   }
 }
 

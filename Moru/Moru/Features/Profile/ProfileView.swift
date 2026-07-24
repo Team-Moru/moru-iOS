@@ -11,14 +11,20 @@ struct ProfileView: View {
   static let rootAccessibilityIdentifier = "profile.root"
 
   @State private var viewModel: ProfileViewModel
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.scenePhase) private var scenePhase
   @State private var displayNameDraft = ""
   @State private var isDisplayNameEditorPresented = false
   @State private var isVoiceSelectionPresented = false
   @State private var isResetConfirmationPresented = false
+  private let automaticallyLoads: Bool
 
-  init(viewModel: ProfileViewModel) {
+  init(
+    viewModel: ProfileViewModel,
+    automaticallyLoads: Bool = true
+  ) {
     _viewModel = State(initialValue: viewModel)
+    self.automaticallyLoads = automaticallyLoads
   }
 
   var body: some View {
@@ -33,13 +39,16 @@ struct ProfileView: View {
           failureView(message)
         }
       }
-      .background(AppColor.babyBlue50.ignoresSafeArea())
-      .navigationTitle("마이")
-      .navigationBarTitleDisplayMode(.large)
+      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .toolbar(.hidden, for: .navigationBar)
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
     .task {
+      guard automaticallyLoads else {
+        return
+      }
+
       viewModel.loadProfileSettings()
     }
     .onChange(of: scenePhase) { _, newPhase in
@@ -75,62 +84,113 @@ struct ProfileView: View {
 
   private func profileContent(_ content: ProfileSettingsLoadResult) -> some View {
     ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: AppSpacing.xl) {
+      VStack(alignment: .leading, spacing: 0) {
+        profileTitle
+
         displayNameCard(content.profile)
-        voiceCard(content)
-        alarmStatusCard
-        resetCard
+          .padding(.top, MoruPilotSpacing.twelve)
+
+        settingsSection(title: ProfileCopy.voiceSettings) {
+          voiceCard(content)
+        }
+        .padding(.top, MoruPilotSpacing.thirtyEight)
+
+        settingsSection(title: ProfileCopy.alarmSettings) {
+          alarmStatusCard
+        }
+        .padding(.top, MoruPilotSpacing.twentyEight)
+
+        settingsSection(title: ProfileCopy.dataManagement) {
+          resetCard
+        }
+        .padding(.top, MoruPilotSpacing.twentyEight)
       }
-      .padding(.horizontal, AppSpacing.screenHorizontal)
-      .padding(.top, AppSpacing.lg)
-      .padding(.bottom, AppSpacing.xxl)
+      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+    }
+  }
+
+  private var profileTitle: some View {
+    Text(ProfileCopy.title)
+      .profileFigmaTextStyle(.b3.weight(.semiBold))
+      .foregroundStyle(AppColor.gray550)
+      .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+  }
+
+  private func settingsSection<Content: View>(
+    title: String,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+      Text(title)
+        .profileFigmaTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textSecondary)
+
+      content()
     }
   }
 
   private func displayNameCard(_ profile: LocalProfile) -> some View {
-    MoruCard {
-      Text("이름")
-        .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+    Button {
+      displayNameDraft = profile.displayName
+      isDisplayNameEditorPresented = true
+    } label: {
+      HStack(spacing: 14) {
+        Circle()
+          .fill(MoruPilotColor.accent)
+          .frame(width: 58, height: 58)
+          .overlay {
+            Text(profileInitial(for: profile.displayName))
+              .profileFigmaTextStyle(.b2.weight(.semiBold))
+              .foregroundStyle(AppColor.grayWhite)
+              .accessibilityHidden(true)
+          }
 
-      Button {
-        displayNameDraft = profile.displayName
-        isDisplayNameEditorPresented = true
-      } label: {
-        HStack(spacing: AppSpacing.sm) {
+        VStack(alignment: .leading, spacing: 0) {
           Text(profile.displayName)
-            .font(AppFont.body1NormalSemiBold)
-            .foregroundStyle(AppColor.moruTextPrimary)
-            .lineLimit(2)
+            .profileFigmaTextStyle(.b2.weight(.semiBold))
+            .foregroundStyle(MoruPilotColor.textStrong)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             .layoutPriority(1)
 
-          Spacer()
-          MoruChevron(color: AppColor.moruTextSecondary)
+          Text(ProfileCopy.localProfile)
+            .profileFigmaTextStyle(.b4)
+            .foregroundStyle(MoruPilotColor.textSecondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+
+        Spacer(minLength: MoruPilotSpacing.eight)
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("표시 이름, \(profile.displayName)")
-      .accessibilityHint("표시 이름을 변경합니다.")
-      .accessibilityIdentifier("profile.name")
+      .padding(.horizontal, MoruPilotSpacing.sixteen)
+      .padding(.vertical, MoruPilotSpacing.eight)
+      .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
+      .profilePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
     }
+    .buttonStyle(.plain)
+    .accessibilityLabel("표시 이름, \(profile.displayName)")
+    .accessibilityHint("표시 이름을 변경합니다.")
+    .accessibilityIdentifier("profile.name")
+  }
+
+  private func profileInitial(for displayName: String) -> String {
+    String(displayName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1))
   }
 
   private func voiceCard(_ content: ProfileSettingsLoadResult) -> some View {
-    MoruCard {
-      Text("목소리")
-        .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-
-      Text(content.profile.selectedVoice.displayName)
-        .font(AppFont.body1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-
-      Button("목소리 선택") {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      Button {
         isVoiceSelectionPresented = true
+      } label: {
+        settingsRow(
+          title: ProfileCopy.moruVoice,
+          detail: content.profile.selectedVoice.displayName,
+          systemImage: "speaker.wave.2.fill"
+        )
       }
-      .buttonStyle(.borderedProminent)
-      .tint(AppColor.moruBlue)
+      .buttonStyle(.plain)
+      .accessibilityLabel(
+        "\(ProfileCopy.moruVoice), \(content.profile.selectedVoice.displayName)"
+      )
+      .accessibilityHint("앱 내장 목소리를 선택하고 미리 듣습니다.")
       .accessibilityIdentifier("profile.voice.chooser")
 
       if let fallbackNotice = content.fallbackNotice {
@@ -144,59 +204,59 @@ struct ProfileView: View {
   }
 
   private var alarmStatusCard: some View {
-    MoruCard {
-      Text("알람 상태")
-        .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      settingsRow(
+        title: "알람 상태",
+        detail: alarmStatusMessage,
+        systemImage: "alarm.fill",
+        showsChevron: false
+      )
+      .accessibilityIdentifier("profile.alarm.status")
 
-      Text(alarmStatusMessage)
-        .font(AppFont.body1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
-        .accessibilityIdentifier("profile.alarm.status")
-
-      switch viewModel.alarmStatus {
-      case .configured:
-        EmptyView()
-      case .fallbackConfigured:
-        Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
-          .buttonStyle(.bordered)
-      case .permissionNotDetermined:
-        Button("알람 권한 확인") {
-          Task {
-            await viewModel.alarmAuthorizationButtonDidTap()
+      HStack {
+        switch viewModel.alarmStatus {
+        case .configured:
+          EmptyView()
+        case .fallbackConfigured:
+          Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
+            .buttonStyle(.bordered)
+        case .permissionNotDetermined:
+          Button("알람 권한 확인") {
+            Task {
+              await viewModel.alarmAuthorizationButtonDidTap()
+            }
           }
-        }
-        .buttonStyle(.bordered)
-        .disabled(viewModel.isAlarmRequestInProgress)
-      case .permissionOff:
-        Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
           .buttonStyle(.bordered)
-      case .repairRequired, .unavailable:
-        Button("예약 다시 시도") {
-          Task {
-            await viewModel.alarmRetryButtonDidTap()
+          .disabled(viewModel.isAlarmRequestInProgress)
+        case .permissionOff:
+          Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
+            .buttonStyle(.bordered)
+        case .repairRequired, .unavailable:
+          Button("예약 다시 시도") {
+            Task {
+              await viewModel.alarmRetryButtonDidTap()
+            }
           }
+          .buttonStyle(.bordered)
+          .disabled(viewModel.isAlarmRequestInProgress)
         }
-        .buttonStyle(.bordered)
-        .disabled(viewModel.isAlarmRequestInProgress)
       }
+      .tint(MoruPilotColor.accent)
     }
   }
 
   private var resetCard: some View {
-    MoruCard {
-      Text("로컬 데이터 초기화")
-        .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-
-      Text("이 기기에 저장된 로컬 데이터를 초기화합니다.")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
-
-      Button("로컬 데이터 초기화", role: .destructive) {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      Button(role: .destructive) {
         isResetConfirmationPresented = true
+      } label: {
+        settingsRow(
+          title: "로컬 데이터 초기화",
+          detail: "프로필, 루틴과 수행 기록을 이 기기에서 삭제해요.",
+          systemImage: "trash.fill"
+        )
       }
-      .buttonStyle(.bordered)
+      .buttonStyle(.plain)
       .disabled(!viewModel.isResetAvailable)
       .accessibilityIdentifier("profile.reset")
 
@@ -222,7 +282,7 @@ struct ProfileView: View {
   private var alarmStatusMessage: String {
     switch viewModel.alarmStatus {
     case .configured:
-      "AlarmKit 권한이 허용되어 있어요."
+      "알람이 정상적으로 설정되어 있어요."
     case .fallbackConfigured:
       "일반 알림으로 예약돼요. "
         + "무음·집중 모드에서는 울리지 않을 수 있어요."
@@ -238,27 +298,56 @@ struct ProfileView: View {
   }
 
   private var loadingView: some View {
-    VStack(spacing: AppSpacing.sm) {
-      ProgressView()
-      Text("프로필 설정을 불러오고 있어요.")
-        .font(AppFont.body1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+    ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: 0) {
+        profileTitle
+
+        VStack(spacing: MoruPilotSpacing.twenty) {
+          ProfileSkeletonBlock(cornerRadius: MoruPilotSpacing.sixteen)
+            .frame(height: 82)
+          ProfileSkeletonBlock(cornerRadius: MoruPilotSpacing.twelve)
+            .frame(height: 64)
+          ProfileSkeletonBlock(cornerRadius: MoruPilotSpacing.twelve)
+            .frame(height: 64)
+        }
+        .padding(.top, MoruPilotSpacing.twelve)
+
+        Text("프로필 설정을 불러오고 있어요.")
+          .profileFigmaTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .padding(.top, MoruPilotSpacing.sixteen)
+      }
+      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.bottom, MoruPilotSpacing.sixtyFour)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .accessibilityElement(children: .combine)
   }
 
   private func failureView(_ message: String) -> some View {
-    VStack(spacing: AppSpacing.md) {
-      Text(message)
-        .font(AppFont.body1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
-        .multilineTextAlignment(.center)
-      Button("다시 시도", action: viewModel.retryButtonDidTap)
-        .buttonStyle(.borderedProminent)
-        .tint(AppColor.moruBlue)
+    ScrollView {
+      VStack(alignment: .leading, spacing: 0) {
+        profileTitle
+
+        VStack(spacing: MoruPilotSpacing.sixteen) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .font(AppFont.title1SemiBold)
+            .foregroundStyle(MoruPilotColor.accent)
+            .accessibilityHidden(true)
+
+          Text(message)
+            .profileFigmaTextStyle(.b4)
+            .foregroundStyle(MoruPilotColor.textSecondary)
+            .multilineTextAlignment(.center)
+
+          Button("다시 시도", action: viewModel.retryButtonDidTap)
+            .buttonStyle(.borderedProminent)
+            .tint(MoruPilotColor.accent)
+        }
+        .frame(maxWidth: .infinity, minHeight: 320)
+      }
+      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.bottom, MoruPilotSpacing.sixtyFour)
     }
-    .padding(AppSpacing.xl)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
   private var displayNameEditor: some View {
@@ -309,7 +398,7 @@ struct ProfileView: View {
           profileMessage(message, color: AppColor.coral300)
         }
       }
-      .navigationTitle("목소리 선택")
+      .navigationTitle(ProfileCopy.moruVoice)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
@@ -397,8 +486,76 @@ struct ProfileView: View {
 
   private func profileMessage(_ message: String, color: Color) -> some View {
     Text(message)
-      .font(AppFont.label1NormalMedium)
+      .profileFigmaTextStyle(.c1)
       .foregroundStyle(color)
       .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private func settingsRow(
+    title: String,
+    detail: String,
+    systemImage: String,
+    showsChevron: Bool = true
+  ) -> some View {
+    HStack(spacing: MoruPilotSpacing.twelve) {
+      Image(systemName: systemImage)
+        .font(.system(size: 10, weight: .semibold))
+        .foregroundStyle(AppColor.grayWhite)
+        .frame(width: 20, height: 20)
+        .background(MoruPilotColor.accentSoft)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+
+      VStack(alignment: .leading, spacing: 0) {
+        Text(title)
+          .profileFigmaTextStyle(.b4)
+          .foregroundStyle(MoruPilotColor.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
+
+        Text(detail)
+          .profileFigmaTextStyle(.c2)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      Spacer(minLength: MoruPilotSpacing.eight)
+
+      if showsChevron {
+        MoruChevron(color: MoruPilotColor.textPrimary)
+      }
+    }
+    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .padding(.vertical, MoruPilotSpacing.eight)
+    .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+    .profilePilotSurface(cornerRadius: MoruPilotSpacing.twelve)
+  }
+}
+
+private struct ProfileSkeletonBlock: View {
+  let cornerRadius: CGFloat
+
+  var body: some View {
+    RoundedRectangle(cornerRadius: cornerRadius)
+      .fill(
+        LinearGradient(
+          colors: [
+            AppColor.gray150.opacity(0.5),
+            AppColor.gray250.opacity(0.5),
+          ],
+          startPoint: .leading,
+          endPoint: .trailing
+        )
+      )
+      .accessibilityHidden(true)
+  }
+}
+
+private extension View {
+  func profileFigmaTextStyle(_ style: MoruTextStyle) -> some View {
+    moruPilotTextStyle(style)
+  }
+
+  func profilePilotSurface(cornerRadius: CGFloat) -> some View {
+    homePilotSurface(cornerRadius: cornerRadius)
   }
 }

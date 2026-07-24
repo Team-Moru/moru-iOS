@@ -17,74 +17,89 @@ struct HomeStreakCard: View {
   }
 
   var body: some View {
-    MoruCard(
-      backgroundColor: AppColor.babyBlue50,
-      shadowColor: AppColor.babyBlue150,
-      shadowRadius: 7.5,
-      shadowY: 0
-    ) {
-      VStack(spacing: AppSpacing.xs) {
-        MoruFireIcon(size: dynamicTypeSize.isAccessibilitySize ? 44 : 32)
+    VStack(spacing: 0) {
+      Image(AppIcon.moruHomeFireIcon)
+        .resizable()
+        .scaledToFit()
+        .frame(
+          width: dynamicTypeSize.isAccessibilitySize ? 64 : 42,
+          height: dynamicTypeSize.isAccessibilitySize ? 64 : 42
+        )
+        .accessibilityHidden(true)
 
-        HStack(alignment: .firstTextBaseline, spacing: AppSpacing.xxs) {
-          Text("\(streak.currentDays)")
-            .font(AppFont.title3Bold)
-            .foregroundStyle(AppColor.orange350)
+      HStack(alignment: .firstTextBaseline, spacing: MoruPilotSpacing.four) {
+        Text("\(streak.currentDays)")
+          .homeFigmaTextStyle(.h2)
+          .foregroundStyle(MoruPilotColor.accent)
 
-          Text("일 연속")
-            .font(AppFont.caption1SemiBold)
-            .foregroundStyle(AppColor.moruTextPrimary)
-        }
-
-        if dynamicTypeSize.isAccessibilitySize {
-          LazyVGrid(
-            columns: Array(
-              repeating: GridItem(.flexible(), spacing: AppSpacing.sm),
-              count: 4
-            ),
-            spacing: AppSpacing.sm
-          ) {
-            ForEach(streak.weekdays) { weekday in
-              weekdayCell(weekday)
-            }
-          }
-        } else {
-          HStack(spacing: AppSpacing.six) {
-            ForEach(streak.weekdays) { weekday in
-              weekdayCell(weekday)
-            }
-          }
-        }
-
-        Text("최고 기록 \(streak.bestDays)일")
-          .font(AppFont.caption1Medium)
-          .foregroundStyle(AppColor.moruTextSecondary)
-          .padding(.horizontal, AppSpacing.sm)
-          .padding(.vertical, AppSpacing.xxs)
-          .background(AppColor.babyBlue100)
-          .clipShape(Capsule())
+        Text("일 연속")
+          .homeFigmaTextStyle(.c1.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textPrimary)
       }
-      .frame(maxWidth: .infinity)
-      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 264 : 128)
+
+      if dynamicTypeSize.isAccessibilitySize {
+        LazyVGrid(
+          columns: Array(
+            repeating: GridItem(.flexible(), spacing: MoruPilotSpacing.eight),
+            count: 4
+          ),
+          spacing: MoruPilotSpacing.eight
+        ) {
+          ForEach(streak.weekdays) { weekday in
+            weekdayCell(weekday)
+          }
+        }
+        .padding(.top, MoruPilotSpacing.eight)
+      } else {
+        HStack(spacing: MoruPilotSpacing.eight) {
+          ForEach(streak.weekdays) { weekday in
+            weekdayCell(weekday)
+          }
+        }
+        .padding(.top, MoruPilotSpacing.four)
+      }
+
+      Text("최고 기록 \(streak.bestDays)일")
+        .homeFigmaTextStyle(.c2)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .padding(.horizontal, MoruPilotSpacing.sixteen)
+        .frame(minHeight: 22)
+        .background(AppColor.babyBlue100)
+        .clipShape(Capsule())
+        .padding(.top, MoruPilotSpacing.eight)
     }
+    .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 16)
+    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .frame(maxWidth: .infinity)
+    .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 304 : 184)
+    .homePilotSurface()
   }
 
   private func weekdayCell(_ weekday: HomeWeekdayState) -> some View {
-    VStack(spacing: AppSpacing.xxs) {
-      Circle()
-        .fill(
-          weekday.isCompleted
-            ? AppColor.orange350
-            : AppColor.babyBlue100
-        )
-        .frame(
-          width: dynamicTypeSize.isAccessibilitySize ? 20 : 14,
-          height: dynamicTypeSize.isAccessibilitySize ? 20 : 14
-        )
+    VStack(spacing: MoruPilotSpacing.four) {
+      ZStack {
+        Circle()
+          .fill(
+            weekday.isCompleted
+              ? MoruPilotColor.accent
+              : AppColor.babyBlue150
+          )
+
+        if weekday.isCompleted {
+          Image(systemName: "checkmark")
+            .font(.system(size: dynamicTypeSize.isAccessibilitySize ? 9 : 6, weight: .bold))
+            .foregroundStyle(AppColor.grayWhite)
+            .accessibilityHidden(true)
+        }
+      }
+      .frame(
+        width: dynamicTypeSize.isAccessibilitySize ? 24 : 12,
+        height: dynamicTypeSize.isAccessibilitySize ? 24 : 12
+      )
 
       Text(weekday.label)
-        .font(AppFont.caption1Medium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .homeFigmaTextStyle(.c2.weight(.regular))
+        .foregroundStyle(MoruPilotColor.textTertiary)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(weekday.label)

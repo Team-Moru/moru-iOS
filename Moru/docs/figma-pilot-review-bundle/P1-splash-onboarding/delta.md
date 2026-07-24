@@ -24,6 +24,7 @@
 
 - Medium은 Pretendard exact line-height를 유지한다.
 - AX3는 온보딩 화면에만 자연 line-height를 적용하고 목표 grid를 1열로 reflow한다.
-- 고정 progress 보조 숫자와 54 pt footer CTA는 Medium을 유지해 AX3에서도
-  viewport 밖으로 잘리지 않게 했다. 본문은 AX3 크기와 ScrollView 접근성을 유지한다.
+- progress 보조 숫자는 AX 크기에서 relative font와 자연 line-height로 확대되고,
+  footer CTA도 AX3까지 커지면서 한 줄·축소 안전장치로 전체 문구를 유지한다.
+  본문은 AX3 크기와 ScrollView 접근성을 그대로 유지한다.
 - long-korean, preview-unavailable, selected/disabled CTA를 결정론적으로 캡처했다.
