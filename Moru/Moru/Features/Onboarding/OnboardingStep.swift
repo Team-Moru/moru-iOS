@@ -25,10 +25,26 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
 
   var progressIndex: Int? {
     switch self {
+    case .experience:
+      return 1
+    case .goals:
+      return 2
+    case .suggestedRoutine:
+      return 3
+    case .duration:
+      return 4
+    case .freeform:
+      return 5
+    case .organizing:
+      return nil
+    case .review:
+      return 6
+    case .alarm:
+      return 7
+    case .voice:
+      return 8
     case .completion:
       return nil
-    default:
-      return min(rawValue + 1, Self.progressTotal)
     }
   }
 

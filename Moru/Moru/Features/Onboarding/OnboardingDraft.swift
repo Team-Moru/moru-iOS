@@ -62,10 +62,26 @@ struct OnboardingDraft: Equatable {
   }
 
   static let goalOptions: [OnboardingGoalOption] = [
-    OnboardingGoalOption(tag: "energy", title: "활력", subtitle: "상쾌하게 하루를 시작"),
-    OnboardingGoalOption(tag: "health", title: "건강", subtitle: "몸을 부드럽게 깨우기"),
-    OnboardingGoalOption(tag: "mind", title: "마음 안정", subtitle: "차분한 시작 만들기"),
-    OnboardingGoalOption(tag: "habit", title: "습관 형성", subtitle: "작은 행동을 꾸준히")
+    OnboardingGoalOption(
+      tag: "energy",
+      title: "활력",
+      subtitle: OnboardingCopy.goalDescription(for: "energy")
+    ),
+    OnboardingGoalOption(
+      tag: "health",
+      title: "건강",
+      subtitle: OnboardingCopy.goalDescription(for: "health")
+    ),
+    OnboardingGoalOption(
+      tag: "mind",
+      title: "마음 안정",
+      subtitle: OnboardingCopy.goalDescription(for: "mind")
+    ),
+    OnboardingGoalOption(
+      tag: "habit",
+      title: "습관 형성",
+      subtitle: OnboardingCopy.goalDescription(for: "habit")
+    ),
   ]
 
   static let keywordOptions = [

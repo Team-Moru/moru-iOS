@@ -10,5 +10,7 @@ enum AppImage {
   static let moruImageHalo = "moruImageHalo"
   static let moruIllustrationPrimary = "moruIllustrationPrimary"
   static let moruIllustrationSecondary = "moruIllustrationSecondary"
+  static let moruOnboardingClock = "moruOnboardingClock"
   static let moruRoutineCompleted = "moruRoutineCompleted"
+  static let moruSplashBrand = "moruSplashBrand"
 }

@@ -28,7 +28,7 @@ struct MoruApp: App {
       Group {
         switch bootstrapper.state {
         case .idle, .loading:
-          ProgressView()
+          SplashScreenView()
         case .ready(let app):
           AppRouter(
             dependencies: app.dependencies,
