@@ -27,25 +27,13 @@ struct RoutineStepCompletedView: View {
 
             VStack(spacing: 12) {
                 Text("\(stepTitle)가\n완료되었어요")
-                    .font(
-                        .custom(
-                            "Pretendard-Bold",
-                            size: 28,
-                            relativeTo: .title2
-                        )
-                    )
+                    .font(AppFont.pretendardBold(size: 28, relativeTo: .title2))
                     .foregroundStyle(AppColor.gray600)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text("다음 항목으로 넘어갈게요")
-                    .font(
-                        .custom(
-                            "Pretendard-Medium",
-                            size: 16,
-                            relativeTo: .body
-                        )
-                    )
+                    .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
                     .foregroundStyle(AppColor.gray350)
 
                 if isGuidancePlaying {

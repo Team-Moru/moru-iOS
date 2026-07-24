@@ -183,8 +183,7 @@ struct RoutinePlayerView: View {
                     } label: {
                         Text("건너뛰기")
                             .font(
-                                .custom(
-                                    "Pretendard-Medium",
+                                AppFont.pretendardMedium(
                                     size: 14,
                                     relativeTo: .caption
                                 )
@@ -356,13 +355,7 @@ struct RoutinePlayerView: View {
             viewModel.requestCloseRoutine()
         } label: {
             Text("닫기")
-                .font(
-                    .custom(
-                        "Pretendard-Medium",
-                        size: 16,
-                        relativeTo: .body
-                    )
-                )
+                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
                 .foregroundStyle(AppColor.gray350)
                 .frame(minWidth: 56, minHeight: 40)
                 .contentShape(Rectangle())
@@ -372,13 +365,7 @@ struct RoutinePlayerView: View {
 
     private var topBarTitle: some View {
         Text("오늘의 루틴")
-            .font(
-                .custom(
-                    "Pretendard-SemiBold",
-                    size: 18,
-                    relativeTo: .body
-                )
-            )
+            .font(AppFont.pretendardSemiBold(size: 18, relativeTo: .body))
             .foregroundStyle(AppColor.gray600)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
@@ -389,13 +376,7 @@ struct RoutinePlayerView: View {
             viewModel.requestEndRoutine()
         } label: {
             Text("종료")
-                .font(
-                    .custom(
-                        "Pretendard-Medium",
-                        size: 16,
-                        relativeTo: .body
-                    )
-                )
+                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
                 .foregroundStyle(AppColor.gray350)
                 .frame(minWidth: 56, minHeight: 40)
                 .contentShape(Rectangle())
@@ -412,11 +393,7 @@ struct RoutinePlayerView: View {
 
             Text(viewModel.currentStepNumberText)
                 .font(
-                    .custom(
-                        "Pretendard-Medium",
-                        size: 12,
-                        relativeTo: .caption2
-                    )
+                    AppFont.pretendardMedium(size: 12, relativeTo: .caption2)
                 )
                 .foregroundStyle(AppColor.gray400)
         }

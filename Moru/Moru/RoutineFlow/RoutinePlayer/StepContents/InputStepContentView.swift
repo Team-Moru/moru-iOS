@@ -43,13 +43,7 @@ struct InputStepContentView: View {
           }
 
           Text(feedbackText ?? inputGuideText)
-            .font(
-              .custom(
-                "Pretendard-SemiBold",
-                size: 16,
-                relativeTo: .body
-              )
-            )
+            .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
             .foregroundStyle(AppColor.gray500)
             .multilineTextAlignment(.center)
         }
@@ -79,25 +73,13 @@ struct InputStepContentView: View {
   private var stepTitleSection: some View {
     VStack(spacing: 8) {
       Text(step.title)
-        .font(
-          .custom(
-            "Pretendard-SemiBold",
-            size: 22,
-            relativeTo: .title3
-          )
-        )
+        .font(AppFont.pretendardSemiBold(size: 22, relativeTo: .title3))
         .foregroundStyle(AppColor.gray600)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
 
       Text("입력형 · \(estimatedMinuteText)")
-        .font(
-          .custom(
-            "Pretendard-Medium",
-            size: 16,
-            relativeTo: .body
-          )
-        )
+        .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
         .foregroundStyle(AppColor.gray400)
     }
   }
@@ -119,23 +101,11 @@ struct InputStepContentView: View {
   private var transcriptCard: some View {
     VStack(alignment: .leading, spacing: 14) {
       Text(RoutinePlayerCopy.transcriptTitle(for: step))
-        .font(
-          .custom(
-            "Pretendard-SemiBold",
-            size: 16,
-            relativeTo: .body
-          )
-        )
+        .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
         .foregroundStyle(AppColor.gray500)
 
       Text(speechInputController.displayTranscript)
-        .font(
-          .custom(
-            "Pretendard-Medium",
-            size: 18,
-            relativeTo: .body
-          )
-        )
+        .font(AppFont.pretendardMedium(size: 18, relativeTo: .body))
         .foregroundStyle(AppColor.gray350)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityLabel(RoutinePlayerCopy.transcriptTitle(for: step))

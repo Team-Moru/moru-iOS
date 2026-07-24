@@ -74,24 +74,14 @@ struct TimerStepContentView: View {
         VStack(spacing: 8) {
             Text(step.title)
                 .font(
-                    .custom(
-                        "Pretendard-SemiBold",
-                        size: 22,
-                        relativeTo: .title3
-                    )
+                    AppFont.pretendardSemiBold(size: 22, relativeTo: .title3)
                 )
                 .foregroundStyle(AppColor.gray600)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text("타이머형 · \(estimatedTimeText)")
-                .font(
-                    .custom(
-                        "Pretendard-Medium",
-                        size: 16,
-                        relativeTo: .body
-                    )
-                )
+                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
                 .foregroundStyle(AppColor.gray400)
         }
     }
@@ -181,13 +171,7 @@ struct TimerStepContentView: View {
             }
 
             Text(guideText)
-                .font(
-                    .custom(
-                        "Pretendard-SemiBold",
-                        size: 16,
-                        relativeTo: .body
-                    )
-                )
+                .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
                 .foregroundStyle(AppColor.gray500)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
@@ -202,8 +186,7 @@ struct TimerStepContentView: View {
                 HStack(spacing: 8) {
                     Text("\(index + 1)")
                         .font(
-                            .custom(
-                                "Pretendard-SemiBold",
+                            AppFont.pretendardSemiBold(
                                 size: 11,
                                 relativeTo: .caption2
                             )
@@ -223,8 +206,7 @@ struct TimerStepContentView: View {
 
                     Text(segment.title)
                         .font(
-                            .custom(
-                                "Pretendard-Medium",
+                            AppFont.pretendardMedium(
                                 size: 14,
                                 relativeTo: .caption
                             )
@@ -242,8 +224,7 @@ struct TimerStepContentView: View {
                     if let duration = segment.duration {
                         Text(duration)
                             .font(
-                                .custom(
-                                    "Pretendard-Medium",
+                                AppFont.pretendardMedium(
                                     size: 14,
                                     relativeTo: .caption
                                 )

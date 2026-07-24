@@ -27,8 +27,10 @@ CodeRabbit 후속 검토에서 adaptive dialog button row의 가변 높이,
 AX Dynamic Type의 Skip/End dialog 위치, transcript accessibility label,
 approved visual baseline assertion을 보강했다. 표시용 timer duration을
 active segment 계산에서 다시 파싱하지 않도록 명시적 초 단위 값으로
-분리했다. 변경된 Skip/End AX3 After baseline도 같은 환경에서 다시
-캡처하고 육안 검토했다.
+분리했다. P4의 Dynamic Type-aware Pretendard 선언은 동일한
+`relativeTo` semantics를 제공하는 `AppFont` overload로 중앙화했다.
+변경된 Skip/End AX3 After baseline도 같은 환경에서 다시 캡처하고
+육안 검토했다.
 
 첫 parallel 전체 실행에서 P3 delete dialog baseline이 변경된 유효한
 회귀를 발견했다. 공통 `MoruDialog`의 기존 render를 default로 복구하고

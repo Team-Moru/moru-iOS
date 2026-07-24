@@ -89,26 +89,14 @@ struct MoruDialog: View {
     VStack(spacing: AppSpacing.lg) {
       VStack(spacing: AppSpacing.md) {
         Text(title)
-          .font(
-            .custom(
-              "Pretendard-SemiBold",
-              size: 22,
-              relativeTo: .title3
-            )
-          )
+          .font(AppFont.pretendardSemiBold(size: 22, relativeTo: .title3))
           .foregroundStyle(AppColor.moruTextStrong)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .fixedSize(horizontal: false, vertical: true)
 
         Text(message)
-          .font(
-            .custom(
-              "Pretendard-Medium",
-              size: 16,
-              relativeTo: .body
-            )
-          )
+          .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
           .foregroundStyle(AppColor.moruTextSecondary)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
@@ -184,13 +172,7 @@ struct MoruDialog: View {
   ) -> some View {
     SwiftUI.Button(action: action) {
       Text(title)
-        .font(
-          .custom(
-            "Pretendard-SemiBold",
-            size: 16,
-            relativeTo: .body
-          )
-        )
+        .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
         .foregroundStyle(color)
         .frame(width: width)
         .frame(minHeight: 54)
