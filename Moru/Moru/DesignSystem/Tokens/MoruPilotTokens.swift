@@ -17,6 +17,11 @@ enum MoruPilotColor {
   static let accentSoft = AppColor.orange300
   static let accentTint = AppColor.orange150
   static let accentSurface = AppColor.orange100
+  static let summarySurface = Color(
+    red: 1,
+    green: 192 / 255,
+    blue: 158 / 255
+  )
   static let progressTrack = Color(
     red: 246 / 255,
     green: 248 / 255,

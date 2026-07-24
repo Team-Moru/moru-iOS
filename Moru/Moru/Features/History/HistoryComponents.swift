@@ -37,90 +37,63 @@ struct HistorySectionHeader: View {
 }
 
 struct HistoryWeeklySummaryCard: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     let title: String
     let completedRuns: Int
     let totalRuns: Int
     let completionRate: Double
     let completionRateChangePercentagePoints: Int?
-    let action: () -> Void
+    let averageDurationText: String
+
+    init(
+        title: String,
+        completedRuns: Int,
+        totalRuns: Int,
+        completionRate: Double,
+        completionRateChangePercentagePoints: Int?,
+        averageDurationText: String
+    ) {
+        self.title = title
+        self.completedRuns = completedRuns
+        self.totalRuns = totalRuns
+        self.completionRate = completionRate
+        self.completionRateChangePercentagePoints =
+            completionRateChangePercentagePoints
+        self.averageDurationText = averageDurationText
+    }
 
     var body: some View {
-        Button(action: action) {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: AppSpacing.xs) {
-                        Text("이번 주 리포트")
-                            .font(AppFont.caption1Medium)
-                            .foregroundStyle(AppColor.gray400)
-
-                        Text(title)
-                            .font(AppFont.caption1Medium)
-                            .foregroundStyle(AppColor.gray500)
-
-                        Text("\(Int((completionRate * 100).rounded()))%")
-                            .font(AppFont.pretendardBold(size: 30))
-                            .foregroundStyle(AppColor.grayWhite)
-
-                        Text("\(completedRuns)/\(max(totalRuns, 1))회 완료")
-                            .font(AppFont.caption1SemiBold)
-                            .foregroundStyle(AppColor.grayWhite)
-
-                        Text(comparisonText)
-                            .font(AppFont.pretendardRegular(size: 10))
-                            .foregroundStyle(AppColor.gray500)
-                    }
-                } else {
-                    HStack(alignment: .bottom) {
-                        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                            Text("이번 주 리포트")
-                                .font(AppFont.caption1Medium)
-                                .foregroundStyle(AppColor.gray400)
-
-                            Text("\(Int((completionRate * 100).rounded()))%")
-                                .font(AppFont.pretendardBold(size: 30))
-                                .foregroundStyle(AppColor.grayWhite)
-                        }
-
-                        Spacer()
-
-                        VStack(alignment: .trailing, spacing: AppSpacing.xxs) {
-                            Text(title)
-                                .font(AppFont.caption1Medium)
-                                .foregroundStyle(AppColor.gray500)
-
-                            Text("\(completedRuns)/\(max(totalRuns, 1))회 완료")
-                                .font(AppFont.caption1SemiBold)
-                                .foregroundStyle(AppColor.grayWhite)
-
-                            Text(comparisonText)
-                                .font(AppFont.pretendardRegular(size: 10))
-                                .foregroundStyle(AppColor.gray500)
-                        }
-                    }
-                }
-            }
-            .padding(AppSpacing.md)
-            .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-            .background(AppColor.grayBlack)
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-        }
-        .buttonStyle(.plain)
+        HistoryReportSummaryCard(
+            compactTextOrder: .weeklyCompact,
+            metrics: [
+                HistoryReportMetric(
+                    title: HistoryCopy.weeklyCompletionRate,
+                    value: "\(Int((completionRate * 100).rounded()))%"
+                ),
+                HistoryReportMetric(
+                    title: HistoryCopy.comparedToLastWeek,
+                    value: comparisonText
+                ),
+                HistoryReportMetric(
+                    title: HistoryCopy.averageDuration,
+                    value: averageDurationText
+                ),
+            ]
+        )
         .accessibilityLabel(
-            "\(title), 이번 주 리포트, \(completedRuns)/\(totalRuns)회 완료, "
-            + "완수율 \(Int((completionRate * 100).rounded()))퍼센트, "
-            + comparisonAccessibilityText
+            "\(title), \(completedRuns)/\(totalRuns)회 완료, "
+              + "완수율 \(Int((completionRate * 100).rounded()))퍼센트, "
+              + comparisonAccessibilityText
+              + ", 평균 소요 시간 \(averageDurationText)"
         )
     }
 
     private var comparisonText: String {
         guard let change = completionRateChangePercentagePoints else {
-            return "지난주 대비 —"
+            return "—"
         }
 
         let prefix = change > 0 ? "+" : ""
-        return "지난주 대비 \(prefix)\(change)%p"
+        return "\(prefix)\(change)%p"
     }
 
     private var comparisonAccessibilityText: String {
@@ -129,6 +102,108 @@ struct HistoryWeeklySummaryCard: View {
         }
 
         return "지난주 대비 \(change)퍼센트포인트"
+    }
+}
+
+struct HistoryReportMetric: Identifiable, Equatable {
+    let title: String
+    let value: String
+    var systemImage: String?
+
+    var id: String {
+        title
+    }
+}
+
+enum HistoryReportMetricTextOrder: Equatable {
+    case titleThenValue
+    case valueThenTitle
+
+    static let weeklyCompact: Self = .titleThenValue
+
+    func resolved(for dynamicTypeSize: DynamicTypeSize) -> Self {
+        dynamicTypeSize.isAccessibilitySize ? .valueThenTitle : self
+    }
+}
+
+struct HistoryReportSummaryCard: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var compactTextOrder: HistoryReportMetricTextOrder = .valueThenTitle
+    let metrics: [HistoryReportMetric]
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: MoruPilotSpacing.twenty) {
+                    ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                        metricView(metric)
+
+                        if index < metrics.count - 1 {
+                            Divider()
+                                .overlay(AppColor.orange100.opacity(0.8))
+                        }
+                    }
+                }
+                .padding(MoruPilotSpacing.twenty)
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                        metricView(metric)
+
+                        if index < metrics.count - 1 {
+                            Rectangle()
+                                .fill(AppColor.orange100.opacity(0.8))
+                                .frame(width: 1, height: 74)
+                        }
+                    }
+                }
+                .padding(.horizontal, MoruPilotSpacing.twenty)
+                .frame(minHeight: 110)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .background(MoruPilotColor.summarySurface)
+        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+        .shadow(color: MoruPilotColor.shadow, radius: 15, x: 0, y: 0)
+    }
+
+    private func metricView(_ metric: HistoryReportMetric) -> some View {
+        VStack(spacing: 0) {
+            if let systemImage = metric.systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(MoruPilotColor.accentSurface)
+                    .accessibilityHidden(true)
+            }
+
+            if compactTextOrder.resolved(for: dynamicTypeSize) == .titleThenValue {
+                metricTitle(metric)
+                metricValue(metric)
+            } else {
+                metricValue(metric)
+                metricTitle(metric)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func metricTitle(_ metric: HistoryReportMetric) -> some View {
+        Text(metric.title)
+            .historyOverviewTextStyle(.c1)
+            .foregroundStyle(MoruPilotColor.textPrimary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func metricValue(_ metric: HistoryReportMetric) -> some View {
+        Text(metric.value)
+            .historyOverviewTextStyle(.h1.weight(.bold))
+            .foregroundStyle(MoruPilotColor.textStrong)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .minimumScaleFactor(0.62)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -270,7 +345,7 @@ private struct HistoryPilotSectionHeader: View {
     }
 }
 
-private var historyPilotSurface: Color {
+var historyPilotSurface: Color {
     AppColor.grayWhite.opacity(0.2)
 }
 
@@ -280,10 +355,10 @@ struct HistoryWeeklyCompletionChart: View {
     var onSelect: ((HistoryDailyCompletion) -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HistorySectionHeader(title: "이번 주 완수율", actionTitle: nil, action: nil)
+        VStack(alignment: .leading, spacing: 0) {
+            HistoryPilotSectionHeader(title: HistoryCopy.weekdayCompletionRate)
 
-            VStack(spacing: AppSpacing.sm) {
+            VStack(spacing: MoruPilotSpacing.twelve) {
                 HStack(alignment: .bottom, spacing: AppSpacing.sm) {
                     ForEach(completions, id: \.date) { completion in
                         HistoryWeekBar(
@@ -295,43 +370,15 @@ struct HistoryWeeklyCompletionChart: View {
                         )
                     }
                 }
-                .frame(height: 92)
-
-                Text(weeklyInsight)
-                    .font(AppFont.pretendardRegular(size: 10))
-                    .foregroundStyle(AppColor.gray500)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, AppSpacing.xxs)
-                    .background(AppColor.gray100)
-                    .clipShape(Capsule())
+                .frame(height: 112)
             }
-            .padding(AppSpacing.md)
-            .background(AppColor.grayWhite)
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppRadius.xs)
-                    .stroke(AppColor.moruBorder, lineWidth: 1)
-            }
+            .padding(.horizontal, MoruPilotSpacing.twenty)
+            .padding(.vertical, MoruPilotSpacing.twenty)
+            .background(historyPilotSurface)
+            .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
+            .shadow(color: MoruPilotColor.shadow, radius: 15, x: 0, y: 0)
+            .padding(.vertical, MoruPilotSpacing.eight)
         }
-    }
-
-    private var weeklyInsight: String {
-        guard let minCompletion = completions.min(
-            by: { $0.completionRate < $1.completionRate }
-        ), let maxCompletion = completions.max(
-            by: { $0.completionRate < $1.completionRate }
-        ) else {
-            return "이번 주 기록을 쌓고 있어요"
-        }
-
-        let minDay = historyWeekdayText(minCompletion.date, calendar: calendar)
-        let maxDay = historyWeekdayText(maxCompletion.date, calendar: calendar)
-        return "\(minDay)요일 완수율이 가장 낮아요 (\(rateText(minCompletion)))"
-            + " · \(maxDay)요일이 가장 꾸준해요"
-    }
-
-    private func rateText(_ completion: HistoryDailyCompletion) -> String {
-        "\(Int((completion.completionRate * 100).rounded()))%"
     }
 }
 
@@ -361,21 +408,21 @@ struct HistoryWeeklyStepAnalysisView: View {
     let items: [HistoryStepAnalysisItem]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HistorySectionHeader(title: "항목별 분석", actionTitle: nil, action: nil)
+        VStack(alignment: .leading, spacing: 0) {
+            HistoryPilotSectionHeader(title: HistoryCopy.itemAnalysis)
 
-            VStack(spacing: AppSpacing.sm) {
+            VStack(spacing: MoruPilotSpacing.eight) {
                 if items.isEmpty {
-                    Text("이번 주 항목별 기록이 없어요")
-                        .font(AppFont.caption1Medium)
-                        .foregroundStyle(AppColor.gray500)
-                        .frame(maxWidth: .infinity, minHeight: 72)
+                    HistoryInlineEmptyCard(
+                        message: "이번 주 항목별 기록이 없어요."
+                    )
                 } else {
                     ForEach(items) { item in
                         HistoryStepAnalysisRow(item: item)
                     }
                 }
             }
+            .padding(.vertical, MoruPilotSpacing.eight)
         }
     }
 }
@@ -384,35 +431,35 @@ private struct HistoryStepAnalysisRow: View {
     let item: HistoryStepAnalysisItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
             HStack(alignment: .firstTextBaseline) {
                 Text(item.title)
-                    .font(AppFont.label1NormalMedium)
-                    .foregroundStyle(AppColor.grayBlack)
-                    .lineLimit(1)
+                    .historyOverviewTextStyle(.b4.weight(.semiBold))
+                    .foregroundStyle(MoruPilotColor.textStrong)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Spacer()
 
-                Text(item.completionText)
-                    .font(AppFont.pretendardRegular(size: 10))
-                    .foregroundStyle(AppColor.gray500)
+                Text("완수율 \(Int((item.completionRate * 100).rounded()))%")
+                    .historyOverviewTextStyle(.c1)
+                    .foregroundStyle(MoruPilotColor.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
 
-            HistoryCompletionRateBar(completionRate: item.completionRate)
+            HistoryCompletionRateBar(
+                completionRate: item.completionRate,
+                fillColor: MoruPilotColor.accent
+            )
         }
-        .padding(AppSpacing.sm)
-        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+        .padding(MoruPilotSpacing.sixteen)
+        .frame(maxWidth: .infinity, minHeight: 75, alignment: .leading)
         .background(AppColor.grayWhite)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.xs)
-                .stroke(AppColor.moruBorder, lineWidth: 1)
-        }
+        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(item.title), 완료율 "
+            "\(item.title), 완수율 "
             + "\(Int((item.completionRate * 100).rounded()))퍼센트, "
             + item.completionText
         )
@@ -435,21 +482,30 @@ private struct HistoryWeekBar: View {
             VStack(spacing: AppSpacing.xxs) {
                 Spacer(minLength: 0)
 
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(completion.completionRate > 0 ? AppColor.grayBlack : AppColor.gray150)
-                    .frame(height: max(4, 58 * completion.completionRate))
+                RoundedRectangle(cornerRadius: MoruPilotSpacing.four)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                MoruPilotColor.accent,
+                                MoruPilotColor.accent.opacity(0),
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(height: max(4, 78 * completion.completionRate))
 
                 Text(historyWeekdayText(completion.date, calendar: calendar))
-                    .font(AppFont.pretendardRegular(size: 10))
-                    .foregroundStyle(AppColor.gray500)
+                    .historyOverviewTextStyle(.c1)
+                    .foregroundStyle(MoruPilotColor.textTertiary)
 
                 Text(
                     completion.completionRate > 0
                         ? "\(Int((completion.completionRate * 100).rounded()))%"
                         : "-"
                 )
-                    .font(AppFont.pretendardRegular(size: 9))
-                    .foregroundStyle(AppColor.gray500)
+                    .historyOverviewTextStyle(.c1)
+                    .foregroundStyle(MoruPilotColor.textPrimary)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
@@ -457,7 +513,7 @@ private struct HistoryWeekBar: View {
         .buttonStyle(.plain)
         .disabled(completion.completionRate <= 0 || action == nil)
         .accessibilityLabel(
-            "\(historyWeekdayText(completion.date, calendar: calendar))요일 완료율 "
+            "\(historyWeekdayText(completion.date, calendar: calendar))요일 완수율 "
             + "\(Int((completion.completionRate * 100).rounded()))퍼센트"
         )
         .accessibilityHint(
@@ -465,6 +521,23 @@ private struct HistoryWeekBar: View {
                 ? "날짜별 상세 화면으로 이동합니다"
                 : "기록이 없습니다"
         )
+    }
+}
+
+struct HistoryInlineEmptyCard: View {
+    let message: String
+
+    var body: some View {
+        Text(message)
+            .historyOverviewTextStyle(.b4)
+            .foregroundStyle(MoruPilotColor.textSecondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, minHeight: 76)
+            .padding(.horizontal, MoruPilotSpacing.sixteen)
+            .background(AppColor.grayWhite.opacity(0.35))
+            .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+            .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
     }
 }
 
@@ -489,7 +562,7 @@ struct HistoryHeatmapCellPresentation: Equatable {
         }
 
         if let completionRate = day.completionRate {
-            accessibilityLabel = "\(dateText), 완료율 "
+            accessibilityLabel = "\(dateText), 완수율 "
             + "\(Int((completionRate * 100).rounded()))퍼센트"
         } else {
             accessibilityLabel = "\(dateText), 기록 없음"
@@ -686,66 +759,83 @@ struct HistoryRunRow: View {
 }
 
 struct HistoryStepResultRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let index: Int
     let title: String
     let resultText: String
     let isCompleted: Bool
-    let transcript: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack(spacing: AppSpacing.sm) {
-                ZStack {
-                    Circle()
-                        .fill(isCompleted ? AppColor.grayBlack : AppColor.gray100)
-                        .frame(width: 22, height: 22)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+                    HStack(alignment: .top, spacing: MoruPilotSpacing.twelve) {
+                        completionIcon
+                        titleText
+                    }
 
-                    Image(systemName: isCompleted ? "checkmark" : "minus")
-                        .font(AppFont.pretendardBold(size: 10))
-                        .foregroundStyle(isCompleted ? AppColor.grayWhite : AppColor.gray400)
+                    resultBadge
+                        .padding(.leading, 30)
                 }
-
-                VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-                    Text(title)
-                        .font(AppFont.label1NormalMedium)
-                        .foregroundStyle(isCompleted ? AppColor.grayBlack : AppColor.gray500)
-                        .lineLimit(1)
-
-                    Text(resultText)
-                        .font(AppFont.pretendardRegular(size: 11))
-                        .foregroundStyle(AppColor.gray500)
+            } else {
+                HStack(spacing: MoruPilotSpacing.eight) {
+                    completionIcon
+                    titleText
+                    Spacer(minLength: MoruPilotSpacing.eight)
+                    resultBadge
                 }
-
-                Spacer()
-
-                Text(resultText)
-                    .font(AppFont.pretendardRegular(size: 11))
-                    .foregroundStyle(isCompleted ? AppColor.grayBlack : AppColor.gray350)
-                    .padding(.horizontal, AppSpacing.sm)
-                    .padding(.vertical, AppSpacing.xxs)
-                    .background(AppColor.gray100)
-                    .clipShape(Capsule())
-            }
-
-            if let transcript, !transcript.isEmpty {
-                Text(transcript)
-                    .font(AppFont.caption1Medium)
-                    .foregroundStyle(AppColor.moruTextBody)
-                    .padding(AppSpacing.sm)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppColor.gray100)
-                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-                    .accessibilityLabel("음성 기록: \(transcript)")
             }
         }
-        .padding(AppSpacing.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppColor.grayWhite)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-        .overlay {
-            RoundedRectangle(cornerRadius: AppRadius.xs)
-                .stroke(AppColor.moruBorder, lineWidth: 1)
+        .padding(.horizontal, MoruPilotSpacing.sixteen)
+        .padding(.vertical, MoruPilotSpacing.twelve)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .background(historyPilotSurface)
+        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+        .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(index)번째, \(title), \(resultText)")
+    }
+
+    private var completionIcon: some View {
+        ZStack {
+            Circle()
+                .stroke(
+                    isCompleted
+                        ? Color(red: 117 / 255, green: 161 / 255, blue: 1)
+                        : MoruPilotColor.textTertiary,
+                    lineWidth: 1
+                )
+                .frame(width: 18, height: 18)
+
+            Image(systemName: isCompleted ? "checkmark" : "minus")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(
+                    isCompleted
+                        ? Color(red: 117 / 255, green: 161 / 255, blue: 1)
+                        : MoruPilotColor.textTertiary
+                )
         }
+        .accessibilityHidden(true)
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .historyOverviewTextStyle(.b4.weight(.semiBold))
+            .foregroundStyle(MoruPilotColor.textStrong)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var resultBadge: some View {
+        Text(resultText)
+            .historyOverviewTextStyle(.c1)
+            .foregroundStyle(
+                isCompleted
+                    ? MoruPilotColor.textPrimary
+                    : MoruPilotColor.textSecondary
+            )
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -770,7 +860,7 @@ struct HistoryLoadingView: View {
             .padding(.horizontal, MoruPilotSpacing.twenty)
             .padding(.bottom, MoruPilotSpacing.sixtyFour)
         }
-        .accessibilityLabel("기록을 불러오는 중이에요.")
+        .accessibilityLabel(HistoryCopy.loadingAccessibilityLabel)
         .accessibilityAddTraits(.updatesFrequently)
     }
 
@@ -812,29 +902,11 @@ struct HistoryEmptyView: View {
     let message: String
 
     var body: some View {
-        GeometryReader { proxy in
-            ScrollView {
-                VStack(spacing: MoruPilotSpacing.sixteen) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(AppFont.title1SemiBold)
-                        .foregroundStyle(MoruPilotColor.accent)
-
-                    Text(title)
-                        .historyOverviewTextStyle(.h3)
-                        .foregroundStyle(MoruPilotColor.textStrong)
-                        .multilineTextAlignment(.center)
-
-                    Text(message)
-                        .historyOverviewTextStyle(.b4)
-                        .foregroundStyle(MoruPilotColor.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
-                .padding(.horizontal, MoruPilotSpacing.twenty)
-                .padding(.vertical, MoruPilotSpacing.thirtyTwo)
-            }
-        }
+        HistoryStatusView(
+            systemImage: "calendar.badge.clock",
+            title: title,
+            message: message
+        )
     }
 }
 
@@ -843,48 +915,90 @@ struct HistoryFailureView: View {
     let retryAction: () -> Void
 
     var body: some View {
+        HistoryStatusView(
+            systemImage: "exclamationmark.triangle.fill",
+            title: message,
+            message: HistoryCopy.retryLater,
+            primaryActionTitle: HistoryCopy.retry,
+            primaryAction: retryAction
+        )
+    }
+}
+
+struct HistoryStatusView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let systemImage: String
+    let title: String
+    let message: String
+    var primaryActionTitle: String?
+    var primaryAction: (() -> Void)?
+    var secondaryActionTitle: String?
+    var secondaryAction: (() -> Void)?
+
+    var body: some View {
         GeometryReader { proxy in
             ScrollView {
                 VStack(spacing: MoruPilotSpacing.sixteen) {
-                    Image(systemName: "exclamationmark.triangle.fill")
+                    Image(systemName: systemImage)
                         .font(AppFont.title1SemiBold)
                         .foregroundStyle(MoruPilotColor.accent)
+                        .accessibilityHidden(true)
 
-                    Text(message)
+                    Text(title)
                         .historyOverviewTextStyle(.h3)
                         .foregroundStyle(MoruPilotColor.textStrong)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    Text("잠시 후 다시 시도해 주세요.")
+                    Text(message)
                         .historyOverviewTextStyle(.b4)
                         .foregroundStyle(MoruPilotColor.textSecondary)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    HistoryRetryButton(action: retryAction)
+                    if let primaryActionTitle, let primaryAction {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            Button(action: primaryAction) {
+                                Text(primaryActionTitle)
+                                    .historyOverviewTextStyle(.b4.weight(.semiBold))
+                                    .foregroundStyle(MoruPilotColor.textStrong)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(.horizontal, MoruPilotSpacing.twenty)
+                                    .padding(.vertical, MoruPilotSpacing.sixteen)
+                                    .frame(maxWidth: .infinity, minHeight: 54)
+                                    .background(AppColor.grayWhite)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            MoruButton(
+                                primaryActionTitle,
+                                style: .secondary,
+                                componentStyle: .figmaPilot,
+                                action: primaryAction
+                            )
+                        }
+                    }
+
+                    if let secondaryActionTitle, let secondaryAction {
+                        Button(secondaryActionTitle, action: secondaryAction)
+                            .historyOverviewTextStyle(.b4.weight(.semiBold))
+                            .foregroundStyle(MoruPilotColor.textPrimary)
+                            .buttonStyle(.plain)
+                            .frame(minHeight: 44)
+                    }
                 }
-                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: proxy.size.height,
+                    alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center
+                )
                 .padding(.horizontal, MoruPilotSpacing.twenty)
                 .padding(.vertical, MoruPilotSpacing.thirtyTwo)
             }
         }
-    }
-}
-
-private struct HistoryRetryButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text("다시 시도")
-                .historyOverviewTextStyle(.b4.weight(.semiBold))
-                .foregroundStyle(MoruPilotColor.textStrong)
-                .padding(.horizontal, AppSpacing.buttonHorizontal)
-                .padding(.vertical, AppSpacing.buttonVertical)
-                .frame(maxWidth: .infinity, minHeight: 54)
-                .background(AppColor.grayWhite)
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
-        }
-        .buttonStyle(.plain)
     }
 }
 

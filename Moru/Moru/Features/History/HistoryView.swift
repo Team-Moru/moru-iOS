@@ -93,10 +93,8 @@ struct HistoryView: View {
         case .empty:
           if pendingDestination == nil {
             HistoryEmptyView(
-              title: "아직 기록이 없어요.",
-              message:
-                "루틴을 완료하면 이곳에서 매일의 기록과 "
-                + "주간 리포트를 확인할 수 있어요."
+              title: HistoryCopy.noHistoryTitle,
+              message: HistoryCopy.noHistoryMessage
             )
           } else {
             HistoryDestinationMissingView(
@@ -152,7 +150,7 @@ struct HistoryView: View {
   private func overviewContent(_ overview: HistoryOverview) -> some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 0) {
-        Text("이력")
+        Text(HistoryCopy.overviewTitle)
           .historyOverviewTextStyle(.h3)
           .foregroundStyle(AppColor.gray550)
           .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
@@ -300,6 +298,18 @@ private func historyFormattedDate(
   return date.formatted(configuredFormat)
 }
 
+private func historyElapsedText(
+  startedAt: Date,
+  completedAt: Date?
+) -> String {
+  guard let completedAt else {
+    return "--:--"
+  }
+
+  let seconds = max(0, Int(completedAt.timeIntervalSince(startedAt)))
+  return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+}
+
 private extension HistoryOverview {
   func daySummary(for date: Date) -> HistoryDaySummary? {
     recentDays.first { day in
@@ -308,11 +318,7 @@ private extension HistoryOverview {
   }
 
   var weeklyStepAnalysisItems: [HistoryStepAnalysisItem] {
-    let weekRuns = recentDays
-      .flatMap(\.runs)
-      .filter { run in
-        run.startedAt >= week.weekStartDate && run.startedAt < week.weekEndDate
-      }
+    let weekRuns = runsInCurrentWeek
     let stepGroups = Dictionary(grouping: weekRuns.flatMap(\.stepResults)) { result in
       result.stepTitle
     }
@@ -334,6 +340,35 @@ private extension HistoryOverview {
         }
 
         return $0.title < $1.title
+      }
+  }
+
+  var weeklyAverageElapsedText: String {
+    let durations = runsInCurrentWeek.compactMap { run -> Int? in
+      guard let completedAt = run.completedAt else {
+        return nil
+      }
+
+      return max(0, Int(completedAt.timeIntervalSince(run.startedAt)))
+    }
+
+    guard !durations.isEmpty else {
+      return "--:--"
+    }
+
+    let averageSeconds = durations.reduce(0, +) / durations.count
+    return String(
+      format: "%02d:%02d",
+      averageSeconds / 60,
+      averageSeconds % 60
+    )
+  }
+
+  private var runsInCurrentWeek: [HistoryRun] {
+    recentDays
+      .flatMap(\.runs)
+      .filter { run in
+        run.startedAt >= week.weekStartDate && run.startedAt < week.weekEndDate
       }
   }
 }
@@ -422,7 +457,7 @@ private struct HistoryStreakWeeklyCard: View {
 
   private var weeklySummary: some View {
     VStack(spacing: 0) {
-      Text("주간 리포트")
+      Text(HistoryCopy.weeklyReportTitle)
         .historyOverviewTextStyle(.c2)
         .foregroundStyle(MoruPilotColor.accentSurface)
 
@@ -503,11 +538,7 @@ private struct HistoryStreakWeeklyCard: View {
   }
 
   private var historyStreakBackground: Color {
-    Color(
-      red: 1,
-      green: 192 / 255,
-      blue: 158 / 255
-    )
+    MoruPilotColor.summarySurface
   }
 }
 
@@ -517,15 +548,7 @@ private extension HistoryDaySummary {
   }
 
   var recordedStepResults: [HistoryStepResult] {
-    let recorded = stepResults.filter { result in
-      if let transcript = result.transcript {
-        return !transcript.isEmpty
-      }
-
-      return result.isSkipped
-    }
-
-    return recorded.isEmpty ? stepResults.filter(\.isSkipped) : recorded
+    stepResults.recordedResults
   }
 
   var firstRun: HistoryRun? {
@@ -533,12 +556,41 @@ private extension HistoryDaySummary {
   }
 
   func elapsedText(calendar: Calendar) -> String {
-    guard let firstRun, let completedAt = firstRun.completedAt else {
+    guard let firstRun else {
       return "--:--"
     }
 
-    let seconds = max(0, Int(completedAt.timeIntervalSince(firstRun.startedAt)))
-    return String(format: "%02d:%02d", seconds / 60, seconds % 60)
+    return historyElapsedText(
+      startedAt: firstRun.startedAt,
+      completedAt: firstRun.completedAt
+    )
+  }
+}
+
+private extension HistoryRun {
+  var elapsedText: String {
+    historyElapsedText(
+      startedAt: startedAt,
+      completedAt: completedAt
+    )
+  }
+
+  var recordedStepResults: [HistoryStepResult] {
+    stepResults.recordedResults
+  }
+}
+
+private extension Sequence where Element == HistoryStepResult {
+  var recordedResults: [HistoryStepResult] {
+    filter { result in
+      guard let transcript = result.transcript else {
+        return false
+      }
+
+      return !transcript.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      ).isEmpty
+    }
   }
 }
 
@@ -547,30 +599,25 @@ private struct HistoryDailySummaryCard: View {
   let calendar: Calendar
 
   var body: some View {
-    HStack(spacing: AppSpacing.md) {
-      VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-        Text("완수율")
-          .font(AppFont.pretendardRegular(size: 10))
-          .foregroundStyle(AppColor.gray400)
-
-        Text("\(Int((day.completionRate * 100).rounded()))%")
-          .font(AppFont.pretendardBold(size: 32))
-          .foregroundStyle(AppColor.grayWhite)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-
-      HistorySummaryDivider()
-
-      HistoryDailyMetric(title: "기상 시각", value: wakeText, detail: "첫 루틴 시작")
-
-      HistorySummaryDivider()
-
-      HistoryDailyMetric(title: "소요 시간", value: day.elapsedText(calendar: calendar), detail: "실행 기준")
-    }
-    .padding(AppSpacing.sm)
-    .frame(maxWidth: .infinity, minHeight: 86)
-    .background(AppColor.grayBlack)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
+    HistoryReportSummaryCard(
+      metrics: [
+        HistoryReportMetric(
+          title: HistoryCopy.completionRate,
+          value: "\(Int((day.completionRate * 100).rounded()))%",
+          systemImage: "checkmark"
+        ),
+        HistoryReportMetric(
+          title: HistoryCopy.duration,
+          value: day.elapsedText(calendar: calendar),
+          systemImage: "clock"
+        ),
+        HistoryReportMetric(
+          title: HistoryCopy.wakeTime,
+          value: wakeText,
+          systemImage: "sun.haze"
+        ),
+      ]
+    )
   }
 
   private var wakeText: String {
@@ -586,64 +633,58 @@ private struct HistoryDailySummaryCard: View {
   }
 }
 
-private struct HistorySummaryDivider: View {
-  var body: some View {
-    Rectangle()
-      .fill(AppColor.gray650)
-      .frame(width: 1, height: 54)
-  }
-}
+struct HistoryRecordCard: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-private struct HistoryDailyMetric: View {
-  let title: String
-  let value: String
-  let detail: String
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-      Text(title)
-        .font(AppFont.pretendardRegular(size: 10))
-        .foregroundStyle(AppColor.gray500)
-
-      Text(value)
-        .font(AppFont.pretendardBold(size: 16))
-        .foregroundStyle(AppColor.grayWhite)
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-
-      Text(detail)
-        .font(AppFont.pretendardRegular(size: 10))
-        .foregroundStyle(AppColor.gray550)
-        .lineLimit(1)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-}
-
-private struct HistoryRecordCard: View {
   let result: HistoryStepResult
 
   var body: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-      Text(result.stepTitle)
-        .font(AppFont.pretendardBold(size: 11))
-        .foregroundStyle(AppColor.gray500)
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .top, spacing: MoruPilotSpacing.eight) {
+        ZStack {
+          Circle()
+            .stroke(
+              Color(red: 117 / 255, green: 161 / 255, blue: 1),
+              lineWidth: 1
+            )
+            .frame(width: 18, height: 18)
 
-      Divider()
+          Image(systemName: "checkmark")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(
+              Color(red: 117 / 255, green: 161 / 255, blue: 1)
+            )
+        }
+        .accessibilityHidden(true)
+
+        Text(result.stepTitle)
+          .historyOverviewTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
+          .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+          .fixedSize(horizontal: false, vertical: true)
+
+        Spacer(minLength: MoruPilotSpacing.eight)
+
+        Text(result.displayText)
+          .historyOverviewTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .padding(MoruPilotSpacing.twenty)
 
       Text(recordText)
-        .font(AppFont.caption1Medium)
-        .foregroundStyle(AppColor.gray350)
+        .historyOverviewTextStyle(.b4)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(MoruPilotSpacing.twenty)
+        .background(AppColor.grayWhite.opacity(0.2))
     }
-    .padding(AppSpacing.sm)
-    .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
-    .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-    .overlay {
-      RoundedRectangle(cornerRadius: AppRadius.xs)
-        .stroke(AppColor.moruBorder, lineWidth: 1)
-    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(historyPilotSurface)
+    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+    .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+    .accessibilityElement(children: .combine)
   }
 
   private var recordText: String {
@@ -651,7 +692,7 @@ private struct HistoryRecordCard: View {
       return transcript
     }
 
-    return result.isSkipped ? "건너뜀 - 기록 없음" : "기록 없음"
+    return HistoryCopy.noTranscripts
   }
 }
 
@@ -695,135 +736,237 @@ private struct HistoryDaySummaryRow: View {
   }
 }
 
-private struct HistoryDailyDetailView: View {
-  let day: HistoryDaySummary
-  let calendar: Calendar
+private struct HistoryDetailSectionTitle: View {
+  let title: String
+
   var body: some View {
-    ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: AppSpacing.md) {
-        HistoryDailySummaryCard(day: day, calendar: calendar)
-
-        HistorySectionHeader(title: "항목별 결과", actionTitle: nil, action: nil)
-
-        LazyVStack(spacing: AppSpacing.sm) {
-          ForEach(Array(day.stepResults.enumerated()), id: \.element.stepID) { index, result in
-            HistoryStepResultRow(
-              index: index + 1,
-              title: result.stepTitle,
-              resultText: result.displayText,
-              isCompleted: result.isCompleted,
-              transcript: nil
-            )
-          }
-        }
-
-        HistorySectionHeader(title: "오늘의 기록", actionTitle: nil, action: nil)
-
-        VStack(spacing: AppSpacing.sm) {
-          ForEach(day.recordedStepResults, id: \.stepID) { result in
-            HistoryRecordCard(result: result)
-          }
-        }
-      }
-      .padding(.horizontal, AppSpacing.screenHorizontal)
-      .padding(.top, AppSpacing.md)
-      .padding(.bottom, AppSpacing.xxl)
-    }
-    .background(AppColor.grayWhite.ignoresSafeArea())
-    .navigationTitle(historyFormattedDate(
-      day.date,
-      calendar: calendar,
-      format: .dateTime.month().day().weekday(.wide)
-    ))
-    .navigationBarTitleDisplayMode(.inline)
+    Text(title)
+      .historyOverviewTextStyle(.b3.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textPrimary)
+      .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+      .fixedSize(horizontal: false, vertical: true)
+      .accessibilityAddTraits(.isHeader)
   }
 }
 
-private struct HistoryRunDetailView: View {
+private struct HistoryDetailHeader: View {
+  @Environment(\.dismiss) private var dismiss
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  let title: String
+
+  var body: some View {
+    HStack {
+      Button {
+        dismiss()
+      } label: {
+        if dynamicTypeSize.isAccessibilitySize {
+          Image(systemName: "chevron.backward")
+            .font(.system(size: 20, weight: .semibold))
+        } else {
+          Text("뒤로")
+            .historyOverviewTextStyle(.b4)
+        }
+      }
+      .foregroundStyle(MoruPilotColor.textTertiary)
+      .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+      .accessibilityLabel("뒤로")
+      .accessibilityHint("이전 화면으로 돌아갑니다.")
+
+      Spacer()
+
+      Color.clear
+        .frame(width: 44, height: 44)
+        .accessibilityHidden(true)
+    }
+    .overlay {
+      Text(title)
+        .historyOverviewTextStyle(.h3)
+        .foregroundStyle(MoruPilotColor.textStrong)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .accessibilityAddTraits(.isHeader)
+        .allowsHitTesting(false)
+    }
+    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .frame(height: 54)
+  }
+}
+
+struct HistoryDailyDetailView: View {
+  let day: HistoryDaySummary
+  let calendar: Calendar
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HistoryDetailHeader(title: HistoryCopy.dailyReportTitle)
+
+      ScrollView(showsIndicators: false) {
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+          HistoryDailySummaryCard(day: day, calendar: calendar)
+
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+            HistoryDetailSectionTitle(title: HistoryCopy.todayRecords)
+
+            if day.recordedStepResults.isEmpty {
+              HistoryInlineEmptyCard(message: HistoryCopy.noTranscripts)
+            } else {
+              VStack(spacing: MoruPilotSpacing.twelve) {
+                ForEach(day.recordedStepResults, id: \.stepID) { result in
+                  HistoryRecordCard(result: result)
+                }
+              }
+            }
+          }
+
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+            HistoryDetailSectionTitle(title: HistoryCopy.itemResults)
+
+            if day.stepResults.isEmpty {
+              HistoryInlineEmptyCard(message: HistoryCopy.noStepResults)
+            } else {
+              LazyVStack(spacing: MoruPilotSpacing.twelve) {
+                ForEach(
+                  Array(day.stepResults.enumerated()),
+                  id: \.element.stepID
+                ) { index, result in
+                  HistoryStepResultRow(
+                    index: index + 1,
+                    title: result.stepTitle,
+                    resultText: result.displayText,
+                    isCompleted: result.isCompleted
+                  )
+                }
+              }
+            }
+          }
+        }
+        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      }
+    }
+    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .toolbar(.hidden, for: .navigationBar)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("history.dailyDetail")
+  }
+}
+
+struct HistoryRunDetailView: View {
   let run: HistoryRun
   let calendar: Calendar
 
   var body: some View {
-    ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: AppSpacing.md) {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-          HistoryRunRow(
-            routineName: run.routineName,
-            timeText: historyFormattedDate(
-              run.startedAt,
-              calendar: calendar,
-              format: Date.FormatStyle(date: .omitted, time: .shortened)
-            ),
-            completionText: run.status.displayText,
-            isCompleted: run.status == .completed
+    VStack(spacing: 0) {
+      HistoryDetailHeader(title: dateTitle)
+
+      ScrollView(showsIndicators: false) {
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+          HistoryReportSummaryCard(
+            metrics: [
+              HistoryReportMetric(
+                title: HistoryCopy.completionRate,
+                value: "\(Int((run.completionRate * 100).rounded()))%",
+                systemImage: "checkmark"
+              ),
+              HistoryReportMetric(
+                title: HistoryCopy.duration,
+                value: run.elapsedText,
+                systemImage: "clock"
+              ),
+              HistoryReportMetric(
+                title: HistoryCopy.wakeTime,
+                value: wakeText,
+                systemImage: "sun.haze"
+              ),
+            ]
           )
 
-          HistoryCompletionRateBar(completionRate: run.completionRate)
-        }
-        .padding(AppSpacing.md)
-        .background(AppColor.grayWhite)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-        .overlay {
-          RoundedRectangle(cornerRadius: AppRadius.xs)
-            .stroke(AppColor.moruBorder, lineWidth: 1)
-        }
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+            HistoryDetailSectionTitle(title: HistoryCopy.todayRecords)
 
-        HistorySectionHeader(title: "단계 기록", actionTitle: nil, action: nil)
+            if run.recordedStepResults.isEmpty {
+              HistoryInlineEmptyCard(message: HistoryCopy.noTranscripts)
+            } else {
+              VStack(spacing: MoruPilotSpacing.twelve) {
+                ForEach(run.recordedStepResults, id: \.stepID) { result in
+                  HistoryRecordCard(result: result)
+                }
+              }
+            }
+          }
 
-        LazyVStack(spacing: AppSpacing.sm) {
-          ForEach(Array(run.stepResults.enumerated()), id: \.element.stepID) { index, result in
-            HistoryStepResultRow(
-              index: index + 1,
-              title: result.stepTitle,
-              resultText: result.displayText,
-              isCompleted: result.isCompleted,
-              transcript: result.transcript
-            )
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+            HistoryDetailSectionTitle(title: HistoryCopy.itemResults)
+
+            if run.stepResults.isEmpty {
+              HistoryInlineEmptyCard(message: HistoryCopy.noStepResults)
+            } else {
+              LazyVStack(spacing: MoruPilotSpacing.twelve) {
+                ForEach(
+                  Array(run.stepResults.enumerated()),
+                  id: \.element.stepID
+                ) { index, result in
+                  HistoryStepResultRow(
+                    index: index + 1,
+                    title: result.stepTitle,
+                    resultText: result.displayText,
+                    isCompleted: result.isCompleted
+                  )
+                }
+              }
+            }
           }
         }
+        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.bottom, MoruPilotSpacing.sixtyFour)
       }
-      .padding(.horizontal, AppSpacing.screenHorizontal)
-      .padding(.top, AppSpacing.lg)
-      .padding(.bottom, AppSpacing.xxl)
     }
-    .background(AppColor.grayWhite.ignoresSafeArea())
-    .navigationTitle("실행 기록")
-    .navigationBarTitleDisplayMode(.inline)
+    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .toolbar(.hidden, for: .navigationBar)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.runDetail")
   }
+
+  private var dateTitle: String {
+    historyFormattedDate(
+      run.startedAt,
+      calendar: calendar,
+      format: .dateTime.month().day().weekday(.wide)
+    )
+  }
+
+  private var wakeText: String {
+    historyFormattedDate(
+      run.startedAt,
+      calendar: calendar,
+      format: Date.FormatStyle(date: .omitted, time: .shortened)
+    )
+  }
 }
 
-private struct HistoryDestinationMissingView: View {
+struct HistoryDestinationMissingView: View {
   let retryAction: () -> Void
   let backAction: () -> Void
 
   var body: some View {
-    VStack(spacing: AppSpacing.md) {
-      Image(systemName: "exclamationmark.triangle.fill")
-        .font(AppFont.title1SemiBold)
-        .foregroundStyle(AppColor.orange500)
-
-      Text("실행 기록을 찾을 수 없어요.")
-        .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-
-      Text("요청한 실행 기록이 삭제되었거나 아직 저장되지 않았어요.")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
-        .multilineTextAlignment(.center)
-
-      MoruButton("다시 시도", style: .secondary, action: retryAction)
-      MoruButton("기록으로 돌아가기", style: .text, action: backAction)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(AppSpacing.xxl)
+    HistoryStatusView(
+      systemImage: "exclamationmark.triangle.fill",
+      title: HistoryCopy.missingRunTitle,
+      message: HistoryCopy.missingRunMessage,
+      primaryActionTitle: HistoryCopy.retry,
+      primaryAction: retryAction,
+      secondaryActionTitle: HistoryCopy.returnToHistory,
+      secondaryAction: backAction
+    )
     .accessibilityIdentifier("history.runDetail.missing")
   }
 }
 
 
-private struct HistoryWeeklyReportView: View {
+struct HistoryWeeklyReportView: View {
   let overview: HistoryOverview
   @State private var selectedDay: HistoryDaySummary?
 
@@ -836,35 +979,38 @@ private struct HistoryWeeklyReportView: View {
   }
 
   var body: some View {
-    ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: AppSpacing.md) {
-        HistoryWeeklySummaryCard(
-          title: weekRangeText,
-          completedRuns: report.completedRunCount,
-          totalRuns: report.totalRunCount,
-          completionRate: report.completionRate,
-          completionRateChangePercentagePoints:
-            report.completionRateChangePercentagePoints,
-          action: {}
-        )
+    VStack(spacing: 0) {
+      HistoryDetailHeader(title: HistoryCopy.weeklyReportTitle)
 
-        HistoryWeeklyCompletionChart(
-          completions: report.dailyCompletionRates,
-          calendar: calendar,
-          onSelect: { completion in
-            selectedDay = overview.daySummary(for: completion.date)
-          }
-        )
+      ScrollView(showsIndicators: false) {
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+          HistoryWeeklySummaryCard(
+            title: weekRangeText,
+            completedRuns: report.completedRunCount,
+            totalRuns: report.totalRunCount,
+            completionRate: report.completionRate,
+            completionRateChangePercentagePoints:
+              report.completionRateChangePercentagePoints,
+            averageDurationText: overview.weeklyAverageElapsedText
+          )
 
-        HistoryWeeklyStepAnalysisView(items: overview.weeklyStepAnalysisItems)
+          HistoryWeeklyCompletionChart(
+            completions: report.dailyCompletionRates,
+            calendar: calendar,
+            onSelect: { completion in
+              selectedDay = overview.daySummary(for: completion.date)
+            }
+          )
+
+          HistoryWeeklyStepAnalysisView(items: overview.weeklyStepAnalysisItems)
+        }
+        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.bottom, MoruPilotSpacing.sixtyFour)
       }
-      .padding(.horizontal, AppSpacing.screenHorizontal)
-      .padding(.top, AppSpacing.md)
-      .padding(.bottom, AppSpacing.xxl)
     }
-    .background(AppColor.grayWhite.ignoresSafeArea())
-    .navigationTitle(weekRangeText)
-    .navigationBarTitleDisplayMode(.inline)
+    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .toolbar(.hidden, for: .navigationBar)
     .navigationDestination(isPresented: isDayDetailPresented) {
       if let selectedDay {
         HistoryDailyDetailView(day: selectedDay, calendar: calendar)
