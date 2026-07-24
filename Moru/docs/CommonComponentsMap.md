@@ -24,6 +24,10 @@ AppSpacing
 AppRadius
 ```
 
+Figma 세부 보정 파일럿에서는 기존 화면을 전역 변경하지 않고
+opt-in API를 사용합니다.
+사용법과 캡처·비교 기준은 `docs/FigmaPilotFoundation.md`를 참고합니다.
+
 ## 현재 공용 컴포넌트
 
 | SwiftUI 이름 | 주로 쓰는 곳 |
