@@ -334,6 +334,7 @@ struct RoutinePlayerView: View {
             completionRate: summary.completionRate,
             streak: summary.streak,
             completedStepTitles: viewModel.completedStepTitles,
+            isTrial: summary.persistedRunID == nil,
             onTapTodayRecord: {
                 if summary.persistedRunID == nil {
                     isShowingTodayRecord = true
