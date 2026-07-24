@@ -19,48 +19,20 @@ struct EndRoutineDialogView: View {
                     onCancel()
                 }
 
-            VStack(spacing: 20) {
-                Text("루틴을 종료할까요?")
-                    .font(AppFont.title2Bold)
-                    .foregroundStyle(AppColor.gray600)
-
-                Text("지금까지 완료한 단계만 기록돼요.")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.gray500)
-                    .multilineTextAlignment(.center)
-
-                HStack(spacing: 12) {
-                    Button {
-                        onCancel()
-                    } label: {
-                        Text("계속하기")
-                            .font(AppFont.body1NormalSemiBold)
-                            .foregroundStyle(AppColor.gray600)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(AppColor.grayWhite)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        onConfirm()
-                    } label: {
-                        Text("종료")
-                            .font(AppFont.body1NormalSemiBold)
-                            .foregroundStyle(AppColor.grayWhite)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(AppColor.orange350)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(24)
-            .background(AppColor.grayWhite)
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .padding(.horizontal, 32)
+            MoruDialog(
+                title: "루틴을 종료할까요?",
+                message: """
+                지금까지 완료한 항목만 저장돼요.
+                나머지는 미완료로 기록됩니다.
+                """,
+                primaryTitle: "계속하기",
+                secondaryTitle: "종료하기",
+                primaryAction: onCancel,
+                secondaryAction: onConfirm,
+                adaptsForAccessibility: true
+            )
+            .offset(y: -12)
         }
+        .accessibilityAddTraits(.isModal)
     }
 }

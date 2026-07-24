@@ -14,6 +14,8 @@ import SwiftUI
 import Combine
 
 struct TimerStepContentView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let step: RoutineStep
     let isGuidancePlaying: Bool
     let onComplete: () -> Void
@@ -47,14 +49,18 @@ struct TimerStepContentView: View {
             stepTitleSection
 
             Spacer()
-                .frame(height: 68)
+                .frame(height: timerSegments == nil ? 68 : 28)
 
             timerProgressView
 
             Spacer()
-                .frame(height: 76)
+                .frame(height: timerSegments == nil ? 76 : 24)
 
-            guideSection
+            if let timerSegments {
+                timerSegmentList(timerSegments)
+            } else {
+                guideSection
+            }
         }
         .padding(.horizontal, 24)
         .onReceive(timer) { _ in
@@ -67,12 +73,25 @@ struct TimerStepContentView: View {
     private var stepTitleSection: some View {
         VStack(spacing: 8) {
             Text(step.title)
-                .font(AppFont.title3SemiBold)
+                .font(
+                    .custom(
+                        "Pretendard-SemiBold",
+                        size: 22,
+                        relativeTo: .title3
+                    )
+                )
                 .foregroundStyle(AppColor.gray600)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text("타이머형 · \(estimatedTimeText)")
-                .font(AppFont.body1NormalMedium)
+                .font(
+                    .custom(
+                        "Pretendard-Medium",
+                        size: 16,
+                        relativeTo: .body
+                    )
+                )
                 .foregroundStyle(AppColor.gray400)
         }
     }
@@ -87,7 +106,10 @@ struct TimerStepContentView: View {
 
             timerTextSection
         }
-        .frame(width: 220, height: 220)
+        .frame(
+            width: timerSegments == nil ? 198 : 168,
+            height: timerSegments == nil ? 198 : 168
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("남은 시간 \(timeText)")
     }
@@ -126,14 +148,26 @@ struct TimerStepContentView: View {
     private var timerTextSection: some View {
         VStack(spacing: 2) {
             Text("남은 시간")
-                .font(AppFont.body1NormalSemiBold)
+                .moruTextStyle(
+                    timerSegments == nil
+                      ? .b4.weight(.semiBold)
+                      : .c1.weight(.semiBold)
+                )
                 .foregroundStyle(AppColor.gray350)
 
             Text(timeText)
-                .font(AppFont.pretendardSemiBold(size: 48))
+                .font(
+                    AppFont.pretendardSemiBold(
+                        size: timerSegments == nil ? 48 : 36
+                    )
+                )
                 .foregroundStyle(AppColor.gray550)
                 .monospacedDigit()
         }
+        // The text lives inside a fixed-size visual gauge. Keep it legible without
+        // allowing accessibility scaling to make the two labels overlap; the
+        // complete value remains exposed through the gauge's accessibility label.
+        .dynamicTypeSize(...DynamicTypeSize.large)
     }
 
     // MARK: - Guide
@@ -147,11 +181,120 @@ struct TimerStepContentView: View {
             }
 
             Text(guideText)
-                .font(AppFont.body1NormalSemiBold)
+                .font(
+                    .custom(
+                        "Pretendard-SemiBold",
+                        size: 16,
+                        relativeTo: .body
+                    )
+                )
                 .foregroundStyle(AppColor.gray500)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
         }
+    }
+
+    private func timerSegmentList(
+        _ segments: [RoutinePlayerCopy.TimerSegment]
+    ) -> some View {
+        VStack(spacing: 8) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                HStack(spacing: 8) {
+                    Text("\(index + 1)")
+                        .font(
+                            .custom(
+                                "Pretendard-SemiBold",
+                                size: 11,
+                                relativeTo: .caption2
+                            )
+                        )
+                        .foregroundStyle(
+                            index == activeTimerSegmentIndex
+                              ? AppColor.grayWhite
+                              : AppColor.gray300
+                        )
+                        .frame(width: 18, height: 18)
+                        .background(
+                            index == activeTimerSegmentIndex
+                              ? AppColor.orange200
+                              : AppColor.babyBlue100,
+                            in: Circle()
+                        )
+
+                    Text(segment.title)
+                        .font(
+                            .custom(
+                                "Pretendard-Medium",
+                                size: 14,
+                                relativeTo: .caption
+                            )
+                        )
+                        .foregroundStyle(
+                            index == segments.indices.last
+                              ? AppColor.gray600
+                              : AppColor.gray500
+                        )
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 4)
+
+                    if let duration = segment.duration {
+                        Text(duration)
+                            .font(
+                                .custom(
+                                    "Pretendard-Medium",
+                                    size: 14,
+                                    relativeTo: .caption
+                                )
+                            )
+                            .foregroundStyle(AppColor.gray350)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: dynamicTypeSize.isAccessibilitySize ? 68 : 42
+                )
+                .background(
+                    index == segments.indices.last
+                      ? AppColor.grayWhite.opacity(0.72)
+                      : AppColor.grayWhite.opacity(0.42),
+                    in: RoundedRectangle(
+                        cornerRadius: 18,
+                        style: .continuous
+                    )
+                )
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("스트레칭 순서")
+    }
+
+    private var activeTimerSegmentIndex: Int {
+        guard let timerSegments else { return 0 }
+        let segmentDurations = timerSegments.map { segment -> Int in
+            switch segment.duration {
+            case "30초":
+                return 30
+            case "1분":
+                return 60
+            default:
+                return 60
+            }
+        }
+        let elapsedSeconds = max(totalSeconds - remainingSeconds, 0)
+        var cumulativeSeconds = 0
+
+        for (index, duration) in segmentDurations.enumerated() {
+            cumulativeSeconds += duration
+            if elapsedSeconds < cumulativeSeconds {
+                return index
+            }
+        }
+
+        return max(segmentDurations.count - 1, 0)
     }
 
     // MARK: - Timer logic
@@ -215,10 +358,10 @@ struct TimerStepContentView: View {
     }
 
     private var guideText: String {
-        if !step.instruction.isEmpty {
-            return step.instruction
-        }
+        RoutinePlayerCopy.guide(for: step)
+    }
 
-        return "눈을 감고 천천히 호흡해봐요."
+    private var timerSegments: [RoutinePlayerCopy.TimerSegment]? {
+        RoutinePlayerCopy.timerSegments(for: step)
     }
 }

@@ -28,14 +28,14 @@ struct RoutinePlayerOrbView: View {
       Image(AppImage.moruImageHalo)
         .resizable()
         .scaledToFit()
-        .scaleEffect(outerHaloScale)
+        .scaleEffect(1.33 * outerHaloScale)
         .opacity(outerHaloOpacity)
         .blur(radius: outerHaloBlur)
 
       Image(AppImage.moruImageHalo)
         .resizable()
         .scaledToFit()
-        .scaleEffect(coreScale)
+        .scaleEffect(1.33 * coreScale)
     }
     .frame(width: 254, height: 254)
     .animation(
