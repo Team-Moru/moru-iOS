@@ -40,16 +40,16 @@ struct RoutineSettingView: View {
 
           if viewModel.state.routines.isEmpty {
             emptyRoutineState
-              .padding(.top, AppSpacing.xxl)
+              .padding(.top, MoruPilotSpacing.thirtyTwo)
           } else {
             activeRoutineSection
-              .padding(.top, AppSpacing.xxl)
+              .padding(.top, MoruPilotSpacing.thirtyTwo)
 
             inactiveRoutineSection
               .padding(.top, AppSpacing.forty)
 
             addRoutineButton
-              .padding(.top, AppSpacing.sm)
+              .padding(.top, MoruPilotSpacing.sixteen)
           }
 
           if let errorMessage = viewModel.state.errorMessage {
@@ -59,12 +59,12 @@ struct RoutineSettingView: View {
               .padding(.top, AppSpacing.sm)
           }
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, AppSpacing.lg)
-        .padding(.bottom, AppSpacing.thirtySix)
+        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.top, MoruPilotSpacing.twenty)
+        .padding(.bottom, MoruPilotSpacing.thirtySix)
       }
       .defaultScrollAnchor(.top)
-      .background(AppColor.babyBlue50.ignoresSafeArea())
+      .background(MoruPilotColor.canvas.ignoresSafeArea())
       .navigationBarTitleDisplayMode(.inline)
     }
     .accessibilityElement(children: .contain)
@@ -116,11 +116,10 @@ struct RoutineSettingView: View {
   }
 
   private var header: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.xs) {
-      Text("루틴")
-        .font(AppFont.pretendardSemiBold(size: 24))
-        .foregroundStyle(AppColor.moruTextPrimary)
-    }
+    Text("루틴")
+      .routineListTextStyle(.h3)
+      .foregroundStyle(AppColor.gray550)
+      .fixedSize(horizontal: false, vertical: true)
   }
 
   private var activeRoutineSection: some View {
@@ -143,18 +142,22 @@ struct RoutineSettingView: View {
     VStack(spacing: AppSpacing.md) {
       Image(systemName: "checklist")
         .font(AppFont.title1SemiBold)
-        .foregroundStyle(AppColor.orange300)
+        .foregroundStyle(MoruPilotColor.accentSoft)
 
       Text("아직 만든 루틴이 없어요.")
-        .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .routineListTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
 
       Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
-        .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .routineListTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .multilineTextAlignment(.center)
 
-      MoruButton("새 루틴 만들기", style: .secondary) {
+      MoruButton(
+        "새 루틴 만들기",
+        style: .secondary,
+        componentStyle: .figmaPilot
+      ) {
         presentCreationSheet()
       }
       .accessibilityIdentifier(
@@ -171,18 +174,20 @@ struct RoutineSettingView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(title)
-        .font(AppFont.pretendardSemiBold(size: 16))
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .routineListTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(AppColor.gray400)
+        .fixedSize(horizontal: false, vertical: true)
 
       if routines.isEmpty {
         emptySectionCard(title: emptyTitle)
-          .padding(.top, AppSpacing.md)
+          .padding(.top, MoruPilotSpacing.sixteen)
       } else {
-        VStack(spacing: AppSpacing.sm) {
+        VStack(spacing: MoruPilotSpacing.sixteen) {
           ForEach(routines) { routine in
             RoutineSettingCard(
               routine: routine,
               isActive: activationBinding(for: routine),
+              componentStyle: .figmaPilot,
               onTap: {
                 editorDraft = viewModel.makeDraft(for: routine.id)
               },
@@ -194,7 +199,7 @@ struct RoutineSettingView: View {
             )
           }
         }
-        .padding(.top, AppSpacing.md)
+        .padding(.top, MoruPilotSpacing.sixteen)
       }
     }
   }
@@ -203,7 +208,11 @@ struct RoutineSettingView: View {
     Button {
       presentCreationSheet()
     } label: {
-      MoruRoutineCard(title: "새 루틴 추가하기", isAddCard: true)
+      MoruRoutineCard(
+        title: "새 루틴 추가하기",
+        isAddCard: true,
+        componentStyle: .figmaPilot
+      )
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier(Self.addRoutineAccessibilityIdentifier)
@@ -220,15 +229,15 @@ struct RoutineSettingView: View {
   private func emptySectionCard(title: String) -> some View {
     VStack(spacing: AppSpacing.md) {
       Text(title)
-        .font(AppFont.pretendardMedium(size: 14))
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .routineListTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textSecondary)
     }
     .frame(maxWidth: .infinity)
     .frame(minHeight: 76)
     .padding(.vertical, AppSpacing.sm)
     .background(AppColor.grayWhite.opacity(0.35))
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
-    .shadow(color: AppColor.babyBlue150, radius: 7.5, x: 0, y: 0)
+    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+    .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
   }
 
   private func activationBinding(for routine: RoutineSettingItemState) -> Binding<Bool> {
@@ -295,6 +304,33 @@ struct RoutineSettingView: View {
         }
       )
     }
+  }
+}
+
+private struct RoutineListTextStyleModifier: ViewModifier {
+  let style: MoruTextStyle
+
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if dynamicTypeSize.isAccessibilitySize {
+      content.font(
+        .custom(
+          style.weight.rawValue,
+          size: style.fontSize,
+          relativeTo: style.relativeTextStyle
+        )
+      )
+    } else {
+      content.moruTextStyle(style)
+    }
+  }
+}
+
+extension View {
+  func routineListTextStyle(_ style: MoruTextStyle) -> some View {
+    modifier(RoutineListTextStyleModifier(style: style))
   }
 }
 

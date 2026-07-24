@@ -81,15 +81,21 @@ struct MainTabView: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      selectedContent
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-      MoruTabBar(
-        selection: $selection,
-        items: MainTabState.availableTabs
-      )
-    }
+    selectedContent
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        MoruTabBar(
+          selection: $selection,
+          items: MainTabState.availableTabs,
+          componentStyle: .figmaPilot
+        )
+        .background {
+          AppColor.grayWhite
+            .opacity(0.7)
+            .background(.ultraThinMaterial)
+            .ignoresSafeArea(edges: .bottom)
+        }
+      }
   }
 
   @ViewBuilder
