@@ -27,8 +27,20 @@ struct MoruApp: App {
     WindowGroup {
       Group {
         switch bootstrapper.state {
-        case .idle, .loading:
-          ProgressView()
+        case .idle:
+          SplashScreenView()
+        case .loading:
+          SplashScreenView()
+            .overlay(alignment: .bottom) {
+              ProgressView()
+                .controlSize(.small)
+                .tint(MoruPilotColor.accent)
+                .padding(.bottom, 96)
+                .accessibilityLabel("앱을 준비하고 있어요")
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("MORU, 모두의 아침 루틴")
+            .accessibilityValue("앱을 준비하고 있어요")
         case .ready(let app):
           AppRouter(
             dependencies: app.dependencies,

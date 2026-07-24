@@ -102,7 +102,7 @@ struct AppRouter: View {
     Group {
       switch sessionStore.phase {
       case .loading:
-        ProgressView()
+        SplashScreenView()
 
       case .onboardingRequired:
         onboardingBuilder.make(
