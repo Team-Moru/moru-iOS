@@ -38,7 +38,11 @@ struct RoutineSettingView: View {
         VStack(alignment: .leading, spacing: 0) {
           header
 
-          if viewModel.state.routines.isEmpty {
+          if let errorMessage = viewModel.state.errorMessage,
+             viewModel.state.routines.isEmpty {
+            routineErrorState(message: errorMessage)
+              .padding(.top, MoruPilotSpacing.thirtyTwo)
+          } else if viewModel.state.routines.isEmpty {
             emptyRoutineState
               .padding(.top, MoruPilotSpacing.thirtyTwo)
           } else {
@@ -52,10 +56,9 @@ struct RoutineSettingView: View {
               .padding(.top, MoruPilotSpacing.sixteen)
           }
 
-          if let errorMessage = viewModel.state.errorMessage {
-            Text(errorMessage)
-              .font(AppFont.caption1Medium)
-              .foregroundStyle(AppColor.orange500)
+          if let errorMessage = viewModel.state.errorMessage,
+             !viewModel.state.routines.isEmpty {
+            retainedRoutineErrorState(message: errorMessage)
               .padding(.top, AppSpacing.sm)
           }
         }
@@ -167,6 +170,53 @@ struct RoutineSettingView: View {
     .frame(maxWidth: .infinity, minHeight: 320)
   }
 
+  private func routineErrorState(message: String) -> some View {
+    VStack(spacing: AppSpacing.md) {
+      Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
+        .font(AppFont.title1SemiBold)
+        .foregroundStyle(MoruPilotColor.accentSoft)
+        .accessibilityHidden(true)
+
+      Text(message)
+        .routineListTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Text("잠시 후 다시 시도해 주세요.")
+        .routineListTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+
+      MoruButton(
+        "다시 불러오기",
+        style: .secondary,
+        componentStyle: .figmaPilot
+      ) {
+        viewModel.load()
+      }
+    }
+    .frame(maxWidth: .infinity, minHeight: 320)
+  }
+
+  private func retainedRoutineErrorState(message: String) -> some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      Text(message)
+        .routineListTextStyle(.c1)
+        .foregroundStyle(AppColor.orange500)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Button("다시 불러오기") {
+        viewModel.load()
+      }
+      .routineListTextStyle(.c1.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.accent)
+      .buttonStyle(.plain)
+      .accessibilityHint("루틴 목록을 다시 불러옵니다.")
+    }
+  }
+
   private func routineSection(
     title: String,
     routines: [RoutineSettingItemState],
@@ -209,7 +259,7 @@ struct RoutineSettingView: View {
       presentCreationSheet()
     } label: {
       MoruRoutineCard(
-        title: "새 루틴 추가하기",
+        title: RoutineManagementCopy.addRoutine,
         isAddCard: true,
         componentStyle: .figmaPilot
       )
@@ -279,11 +329,7 @@ struct RoutineSettingView: View {
 
       MoruDialog(
         title: "다른 루틴에서 사용 중",
-        message: [
-          "\(conflict.weekdayText)은 알림이 설정된",
-          "다른 루틴이 이미 있어요.",
-          "해당 루틴으로 요일을 변경하시겠어요?",
-        ].joined(separator: "\n"),
+        message: RoutineManagementCopy.weekdayConflictMessage(conflict),
         primaryTitle: "괜찮아요",
         secondaryTitle: "변경하기",
         primaryAction: {

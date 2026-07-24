@@ -12,6 +12,7 @@ struct RoutineCreationSheet: View {
   static let directAccessibilityIdentifier = "routine.creation.choice.direct"
 
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var selectedMode: RoutineCreationFlowMode?
 
   private let dependencies: DependencyContainer
@@ -39,28 +40,40 @@ struct RoutineCreationSheet: View {
   }
 
   var body: some View {
-    switch selectedMode {
-    case .recommendedAddition:
-      recommendedCreationFlow
-    case .directAddition:
-      RoutineEditorView(
-        draft: directDraft,
-        onSave: onSave,
-        onResolveWeekdayConflict: onResolveWeekdayConflict,
-        weekdayConflictState: weekdayConflictState
-      )
-    case .onboarding:
-      EmptyView()
-    case nil:
-      RoutineCreationModeSelectionView(
-        onSelect: { mode in
+    Group {
+      switch selectedMode {
+      case .recommendedAddition:
+        recommendedCreationFlow
+      case .directAddition:
+        RoutineEditorView(
+          draft: directDraft,
+          onSave: onSave,
+          onResolveWeekdayConflict: onResolveWeekdayConflict,
+          weekdayConflictState: weekdayConflictState
+        )
+      case .onboarding:
+        EmptyView()
+      case nil:
+        RoutineCreationModeSelectionView { mode in
           selectedMode = mode
-        },
-        onCancel: {
-          dismiss()
         }
-      )
+      }
     }
+    .presentationDetents(presentationDetents)
+    .presentationDragIndicator(selectedMode == nil ? .visible : .hidden)
+    .presentationCornerRadius(selectedMode == nil ? 24 : 0)
+  }
+
+  private var presentationDetents: Set<PresentationDetent> {
+    guard selectedMode == nil else {
+      return [.large]
+    }
+
+    return [
+      dynamicTypeSize.isAccessibilitySize
+        ? .height(540)
+        : .height(313)
+    ]
   }
 
   private var recommendedCreationFlow: some View {
@@ -84,62 +97,51 @@ struct RoutineCreationSheet: View {
   }
 }
 
-private struct RoutineCreationModeSelectionView: View {
+struct RoutineCreationModeSelectionView: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
   let onSelect: (RoutineCreationFlowMode) -> Void
-  let onCancel: () -> Void
 
   var body: some View {
-    NavigationStack {
-      ScrollView {
-        VStack(alignment: .leading, spacing: AppSpacing.thirtySix) {
-          VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            Text("새 루틴 만들기")
-              .font(AppFont.title2Bold)
-              .foregroundStyle(AppColor.moruTextStrong)
-              .fixedSize(horizontal: false, vertical: true)
+    VStack(spacing: 0) {
+      Text(RoutineManagementCopy.creationTitle)
+        .routineManagementTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 76 : 55)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityAddTraits(.isHeader)
 
-            Text("추천을 받거나 직접 구성할 수 있어요.")
-              .font(AppFont.label1NormalMedium)
-              .foregroundStyle(AppColor.moruTextSecondary)
-              .fixedSize(horizontal: false, vertical: true)
+      Divider()
+        .overlay(MoruPilotColor.border)
+
+      ScrollView(showsIndicators: false) {
+        VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 20 : 12) {
+          creationOption(
+            title: RoutineManagementCopy.recommendedTitle,
+            subtitle: RoutineManagementCopy.recommendedDescription,
+            imageName: AppImage.moruRoutineRecommendation,
+            accessibilityIdentifier:
+              RoutineCreationSheet.recommendedAccessibilityIdentifier
+          ) {
+            onSelect(.recommendedAddition)
           }
 
-          VStack(spacing: AppSpacing.md) {
-            creationOption(
-              title: "추천 루틴 만들기",
-              subtitle: "경험과 목표를 바탕으로 로컬 템플릿을 추천해요.",
-              icon: "sparkles",
-              accessibilityIdentifier:
-                RoutineCreationSheet.recommendedAccessibilityIdentifier
-            ) {
-              onSelect(.recommendedAddition)
-            }
-
-            creationOption(
-              title: "직접 루틴 만들기",
-              subtitle: "이름, 알람, 루틴 항목을 직접 설정해요.",
-              icon: "square.and.pencil",
-              accessibilityIdentifier:
-                RoutineCreationSheet.directAccessibilityIdentifier
-            ) {
-              onSelect(.directAddition)
-            }
+          creationOption(
+            title: RoutineManagementCopy.directTitle,
+            subtitle: RoutineManagementCopy.directDescription,
+            imageName: AppImage.moruRoutineDirectCreation,
+            accessibilityIdentifier:
+              RoutineCreationSheet.directAccessibilityIdentifier
+          ) {
+            onSelect(.directAddition)
           }
-
-          Spacer(minLength: AppSpacing.thirtySix)
         }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
-        .padding(.top, AppSpacing.forty)
-      }
-      .background(AppColor.babyBlue50.ignoresSafeArea())
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button("취소", action: onCancel)
-            .font(AppFont.body1NormalMedium)
-            .foregroundStyle(AppColor.moruTextSecondary)
-        }
+        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 12)
       }
     }
+    .background(AppColor.grayWhite)
     .accessibilityIdentifier(
       RoutineCreationSheet.choiceAccessibilityIdentifier
     )
@@ -148,28 +150,23 @@ private struct RoutineCreationModeSelectionView: View {
   private func creationOption(
     title: String,
     subtitle: String,
-    icon: String,
+    imageName: String,
     accessibilityIdentifier: String,
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
-      HStack(spacing: AppSpacing.md) {
-        Image(systemName: icon)
-          .font(.system(size: 28, weight: .semibold))
-          .foregroundStyle(AppColor.orange350)
-          .frame(width: 48, height: 48)
-          .background(AppColor.orange100)
-          .clipShape(Circle())
+      HStack(spacing: MoruPilotSpacing.sixteen) {
+        creationImage(imageName)
 
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
           Text(title)
-            .font(AppFont.heading3SemiBold)
-            .foregroundStyle(AppColor.moruTextStrong)
+            .routineManagementTextStyle(.b3.weight(.semiBold))
+            .foregroundStyle(MoruPilotColor.textStrong)
             .fixedSize(horizontal: false, vertical: true)
 
           Text(subtitle)
-            .font(AppFont.caption1Medium)
-            .foregroundStyle(AppColor.moruTextSecondary)
+            .routineManagementTextStyle(.b4)
+            .foregroundStyle(MoruPilotColor.textTertiary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -177,19 +174,31 @@ private struct RoutineCreationModeSelectionView: View {
 
         Spacer()
 
-        Image(systemName: "chevron.right")
-          .foregroundStyle(AppColor.moruTextSecondary)
+        MoruChevron(
+          color: MoruPilotColor.textSecondary,
+          direction: .right
+        )
+        .frame(width: 24, height: 44)
       }
-      .padding(AppSpacing.lg)
-      .frame(maxWidth: .infinity, minHeight: 104)
-      .background(AppColor.grayWhite)
-      .overlay(
-        RoundedRectangle(cornerRadius: AppRadius.lg)
-          .stroke(AppColor.moruBorder, lineWidth: 1)
-      )
-      .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 172 : 110)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier(accessibilityIdentifier)
+  }
+
+  private func creationImage(_ imageName: String) -> some View {
+    let layoutSize: CGFloat = dynamicTypeSize.isAccessibilitySize ? 76 : 64
+    let renderedSize = imageName == AppImage.moruRoutineRecommendation
+      ? layoutSize * 1.72
+      : layoutSize
+
+    return Image(imageName)
+      .resizable()
+      .scaledToFit()
+      .frame(width: renderedSize, height: renderedSize)
+      .frame(width: layoutSize, height: layoutSize)
+      .accessibilityHidden(true)
   }
 }

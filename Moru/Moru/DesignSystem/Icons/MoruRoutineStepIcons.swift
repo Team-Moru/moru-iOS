@@ -34,12 +34,31 @@ struct MoruRoutineStepControlIcon: View {
 
 struct MoruRoutineStepTypeIcon: View {
   let type: RoutineStepType
+  let tint: Color?
 
+  init(
+    type: RoutineStepType,
+    tint: Color? = nil
+  ) {
+    self.type = type
+    self.tint = tint
+  }
+
+  @ViewBuilder
   var body: some View {
-    Image(imageName)
-      .resizable()
-      .scaledToFit()
-      .frame(width: 28, height: 28)
+    if let tint {
+      Image(imageName)
+        .renderingMode(.template)
+        .resizable()
+        .scaledToFit()
+        .foregroundStyle(tint)
+        .frame(width: 28, height: 28)
+    } else {
+      Image(imageName)
+        .resizable()
+        .scaledToFit()
+        .frame(width: 28, height: 28)
+    }
   }
 
   private var imageName: String {

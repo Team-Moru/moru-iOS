@@ -11,32 +11,33 @@ struct TimeWheelPicker: View {
   @Binding var value: Int
   let range: Int
 
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var dragOffset: CGFloat = 0
   @State private var isDragging = false
   @State private var initialValue: Int = 0
 
-  private let itemHeight: CGFloat = 72
+  @ScaledMetric(relativeTo: .body) private var accessibilityItemHeight: CGFloat = 48
 
   var body: some View {
     VStack(spacing: 0) {
       Text(String(format: "%02d", wrappedValue(value - 1, in: range)))
-        .font(AppFont.pretendardBold(size: 52))
-        .foregroundStyle(AppColor.moruTextPrimary.opacity(0.35))
+        .routineManagementTextStyle(.b2.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(height: itemHeight)
 
       Text(String(format: "%02d", value))
-        .font(AppFont.pretendardBold(size: 52))
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .routineManagementTextStyle(.b1.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
         .frame(height: itemHeight)
 
       Text(String(format: "%02d", wrappedValue(value + 1, in: range)))
-        .font(AppFont.pretendardBold(size: 52))
-        .foregroundStyle(AppColor.moruTextPrimary.opacity(0.35))
+        .routineManagementTextStyle(.b2.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(height: itemHeight)
     }
     .frame(height: itemHeight * 3)
     .offset(y: dragOffset)
-    .frame(width: 92, height: itemHeight)
+    .frame(width: 84, height: itemHeight * 3)
     .clipped()
     .contentShape(Rectangle())
     .gesture(
@@ -66,6 +67,25 @@ struct TimeWheelPicker: View {
           }
         }
     )
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(range == 24 ? "시" : "분")
+    .accessibilityValue(String(format: "%02d", value))
+    .accessibilityAdjustableAction { direction in
+      switch direction {
+      case .increment:
+        value = wrappedValue(value + 1, in: range)
+      case .decrement:
+        value = wrappedValue(value - 1, in: range)
+      @unknown default:
+        break
+      }
+    }
+  }
+
+  private var itemHeight: CGFloat {
+    dynamicTypeSize.isAccessibilitySize
+      ? max(accessibilityItemHeight, 60)
+      : 48
   }
 
   private func wrappedValue(_ value: Int, in range: Int) -> Int {
