@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import QuartzCore
 import SwiftUI
 import UIKit
 import XCTest
@@ -95,10 +96,7 @@ enum MoruVisualCaptureFixture {
     }
 
     hostingController.view.frame = bounds
-    hostingController.view.setNeedsLayout()
-    hostingController.view.layoutIfNeeded()
-    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-    hostingController.view.layoutIfNeeded()
+    stabilizeLayout(of: hostingController.view)
 
     let format = UIGraphicsImageRendererFormat()
     format.scale = configuration.scale
@@ -121,5 +119,86 @@ enum MoruVisualCaptureFixture {
       options: .atomic
     )
     return image
+  }
+
+  private static func stabilizeLayout(
+    of view: UIView,
+    maximumPasses: Int = 8,
+    requiredStablePasses: Int = 2
+  ) {
+    var previousState: LayoutState?
+    var stablePasses = 0
+
+    for _ in 0..<maximumPasses {
+      view.setNeedsUpdateConstraints()
+      view.updateConstraintsIfNeeded()
+      view.setNeedsLayout()
+      view.layoutIfNeeded()
+      CATransaction.flush()
+      _ = RunLoop.main.run(mode: .default, before: Date())
+      view.layoutIfNeeded()
+      CATransaction.flush()
+
+      let currentState = LayoutState(rootView: view)
+      if currentState == previousState {
+        stablePasses += 1
+        if stablePasses >= requiredStablePasses {
+          return
+        }
+      } else {
+        previousState = currentState
+        stablePasses = 0
+      }
+    }
+  }
+}
+
+private struct LayoutState: Equatable {
+  let viewFrames: [CGRect]
+  let viewBounds: [CGRect]
+  let viewChildCounts: [Int]
+  let layerFrames: [CGRect]
+  let layerBounds: [CGRect]
+  let layerPositions: [CGPoint]
+  let layerOpacities: [Float]
+  let layerChildCounts: [Int]
+
+  init(rootView: UIView) {
+    var viewFrames: [CGRect] = []
+    var viewBounds: [CGRect] = []
+    var viewChildCounts: [Int] = []
+    var layerFrames: [CGRect] = []
+    var layerBounds: [CGRect] = []
+    var layerPositions: [CGPoint] = []
+    var layerOpacities: [Float] = []
+    var layerChildCounts: [Int] = []
+
+    func appendViewState(_ view: UIView) {
+      viewFrames.append(view.frame)
+      viewBounds.append(view.bounds)
+      viewChildCounts.append(view.subviews.count)
+      view.subviews.forEach(appendViewState)
+    }
+
+    func appendLayerState(_ layer: CALayer) {
+      layerFrames.append(layer.frame)
+      layerBounds.append(layer.bounds)
+      layerPositions.append(layer.position)
+      layerOpacities.append(layer.opacity)
+      layerChildCounts.append(layer.sublayers?.count ?? 0)
+      layer.sublayers?.forEach(appendLayerState)
+    }
+
+    appendViewState(rootView)
+    appendLayerState(rootView.layer)
+
+    self.viewFrames = viewFrames
+    self.viewBounds = viewBounds
+    self.viewChildCounts = viewChildCounts
+    self.layerFrames = layerFrames
+    self.layerBounds = layerBounds
+    self.layerPositions = layerPositions
+    self.layerOpacities = layerOpacities
+    self.layerChildCounts = layerChildCounts
   }
 }

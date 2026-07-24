@@ -110,10 +110,12 @@ final class FigmaPilotFoundationTests: XCTestCase {
   }
 
   func testPilotComponentBoardRendersDeterministicallyAtReferenceVariants() throws {
+    let fallbackDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("moru-figma-pilot-d0")
     let outputDirectory = URL(
       fileURLWithPath: ProcessInfo.processInfo.environment[
         "MORU_CAPTURE_OUTPUT_DIR"
-      ] ?? "/private/tmp/moru-figma-pilot-d0"
+      ] ?? fallbackDirectory.path
     )
 
     for variant in MoruVisualCaptureVariant.allCases {

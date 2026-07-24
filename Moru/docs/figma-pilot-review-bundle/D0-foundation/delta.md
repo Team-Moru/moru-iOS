@@ -59,6 +59,6 @@
 도입 차이를 계측합니다. 따라서 pixel 차이율은 승인 threshold가 아니라
 의도된 foundation delta의 크기입니다.
 
-- Medium differing pixels: `19.669994332217033%`.
-- AX3 differing pixels: `25.36817360671427%`.
+- Medium differing pixels: `21.987414070702606%`.
+- AX3 differing pixels: `36.574820708247216%`.
 - 동일 After를 재렌더한 비교는 masked/unmasked 영역 모두 `0` diff입니다.

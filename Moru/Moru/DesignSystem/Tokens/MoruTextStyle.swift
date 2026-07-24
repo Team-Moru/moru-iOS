@@ -77,7 +77,7 @@ private struct MoruTextStyleModifier: ViewModifier {
   func body(content: Content) -> some View {
     content
       .font(.custom(style.weight.rawValue, size: scaledFontSize))
-      .lineSpacing(max(0, scaledLineHeight - scaledFontSize))
+      .lineHeight(.exact(points: scaledLineHeight))
   }
 }
 

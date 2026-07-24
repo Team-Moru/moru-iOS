@@ -9,6 +9,8 @@
 - `ko_KR`, `Asia/Seoul`, Light
 - Medium, AX3
 - PNG scale 3, 1179×2556px
+- Gregorian calendar, fixed clock `2026-07-24 06:15 KST`
+- animations disabled, Core Animation layer capture
 
 ## 완료
 
@@ -24,7 +26,7 @@
 - `Scripts/check-swiftdata-boundary.sh`: passed.
 - `Info.plist` validation: passed.
 - Domain/Data/App boundary diff: no changed files.
-- Figma API version gate: `2379548990233618412`.
+- Figma API version gate: `2379679754802507594`.
 - `origin/main` gate: `53a2c6d24bc449f816f069dce8a558af40e15006`.
 
 ## 자체 리뷰

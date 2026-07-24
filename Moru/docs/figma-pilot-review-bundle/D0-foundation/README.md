@@ -3,8 +3,8 @@
 - Base: `main@53a2c6d24bc449f816f069dce8a558af40e15006`
 - Branch: `fix/#58-figma-pilot-foundation`
 - Figma file: `RNf4Q84fgsZf3V8MtZmGBc`
-- Figma version: `2379548990233618412`
-- Figma last modified: `2026-07-23T21:56:51Z`
+- Figma version: `2379679754802507594`
+- Figma last modified: `2026-07-24T07:06:38Z`
 - Issue: [#58](https://github.com/Team-Moru/moru-iOS/issues/58)
 
 ## 증거

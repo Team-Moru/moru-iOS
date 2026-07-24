@@ -104,7 +104,6 @@ struct MoruTabBar: View {
         .accessibilityIdentifier(Self.accessibilityIdentifier(for: item))
       }
     }
-    .frame(maxWidth: .infinity, minHeight: 45)
     .padding(.horizontal, AppSpacing.screenHorizontal)
     .frame(
       maxWidth: .infinity,

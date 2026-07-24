@@ -3,7 +3,7 @@
 이 문서는 Figma 세부 보정 파일럿에서만 선택적으로 쓰는 token, typography,
 공용 컴포넌트 스타일, 캡처 fixture와 비교 도구를 설명합니다.
 
-기준 Figma file version은 `2379548990233618412`입니다.
+기준 Figma file version은 `2379679754802507594`입니다.
 
 ## Opt-in token
 
