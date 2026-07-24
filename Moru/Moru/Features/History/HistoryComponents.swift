@@ -133,40 +133,66 @@ struct HistoryWeeklySummaryCard: View {
 }
 
 struct HistoryWakeMetricsView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let metrics: HistoryWakeMetrics
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HistorySectionHeader(title: "기상 시간 패턴", actionTitle: nil, action: nil)
+        VStack(alignment: .leading, spacing: 0) {
+            HistoryPilotSectionHeader(title: "기상 시간 패턴")
 
-            VStack(spacing: AppSpacing.md) {
-                HStack(spacing: AppSpacing.md) {
-                    HistoryMetricBlock(
-                        title: "평균 기상 시각",
-                        value: averageWakeText,
-                        detail: averageDetailText
-                    )
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(spacing: MoruPilotSpacing.twenty) {
+                        averageWakeMetric
 
-                    Rectangle()
-                        .fill(AppColor.moruBorder)
-                        .frame(width: 1, height: 66)
+                        Divider()
+                            .overlay(MoruPilotColor.border)
 
-                    HistoryMetricBlock(
-                        title: "기상 규칙성",
-                        value: regularityScoreText,
-                        detail: deviationText
-                    )
+                        regularityMetric
+                    }
+                    .padding(MoruPilotSpacing.twenty)
+                } else {
+                    HStack(spacing: MoruPilotSpacing.sixteen) {
+                        averageWakeMetric
+
+                        Rectangle()
+                            .fill(MoruPilotColor.border)
+                            .frame(width: 1, height: 74)
+
+                        regularityMetric
+                    }
+                    .padding(.horizontal, MoruPilotSpacing.twenty)
+                    .frame(height: 111)
                 }
             }
-            .padding(AppSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppColor.grayWhite)
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppRadius.xs)
-                    .stroke(AppColor.moruBorder, lineWidth: 1)
-            }
+            .background(historyPilotSurface)
+            .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+            .shadow(
+                color: MoruPilotColor.shadow,
+                radius: 15,
+                x: 0,
+                y: 0
+            )
+            .padding(.vertical, MoruPilotSpacing.eight)
         }
+    }
+
+    private var averageWakeMetric: some View {
+        HistoryMetricBlock(
+            title: "평균 기상 시각",
+            value: averageWakeText,
+            detail: averageDetailText
+        )
+    }
+
+    private var regularityMetric: some View {
+        HistoryMetricBlock(
+            title: "기상 규칙성",
+            value: regularityScoreText,
+            detail: deviationText
+        )
     }
 
     private var averageWakeText: String {
@@ -211,25 +237,41 @@ private struct HistoryMetricBlock: View {
     let detail: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xxs) {
+        VStack(spacing: 0) {
             Text(title)
-                .font(AppFont.caption1Medium)
-                .foregroundStyle(AppColor.gray500)
+                .historyOverviewTextStyle(.c2)
+                .foregroundStyle(MoruPilotColor.textTertiary)
 
             Text(value)
-                .font(AppFont.pretendardBold(size: 28))
-                .foregroundStyle(AppColor.grayBlack)
+                .historyOverviewTextStyle(.h1.weight(.bold))
+                .foregroundStyle(MoruPilotColor.accent)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.65)
 
             Text(detail)
-                .font(AppFont.pretendardRegular(size: 11))
-                .foregroundStyle(AppColor.gray500)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .historyOverviewTextStyle(.c2)
+                .foregroundStyle(MoruPilotColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
+}
+
+private struct HistoryPilotSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .historyOverviewTextStyle(.b4.weight(.semiBold))
+            .foregroundStyle(AppColor.gray400)
+            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+    }
+}
+
+private var historyPilotSurface: Color {
+    AppColor.grayWhite.opacity(0.2)
 }
 
 struct HistoryWeeklyCompletionChart: View {
@@ -457,110 +499,119 @@ struct HistoryHeatmapCellPresentation: Equatable {
 }
 
 struct HistoryMonthlyHeatmapView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     let heatmap: HistoryMonthlyHeatmap
     let calendar: Calendar
 
     private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: AppSpacing.xxs),
+        repeating: GridItem(.flexible(), spacing: MoruPilotSpacing.four),
         count: 7
     )
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.xs) {
-            HistorySectionHeader(title: "월간 히트맵", actionTitle: monthText, action: nil)
+        VStack(alignment: .leading, spacing: 0) {
+            HistoryPilotSectionHeader(title: "월간 히트맵")
 
-            VStack(spacing: AppSpacing.sm) {
-                LazyVGrid(columns: columns, spacing: AppSpacing.xxs) {
+            VStack(spacing: 0) {
+                Text(monthText)
+                    .historyOverviewTextStyle(.b4)
+                    .foregroundStyle(AppColor.gray400)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+
+                VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 16 : 12) {
+                    LazyVGrid(columns: columns, spacing: 0) {
                     ForEach(
                         ["일", "월", "화", "수", "목", "금", "토"],
                         id: \.self
                     ) { weekday in
                         Text(weekday)
-                            .font(AppFont.pretendardRegular(size: 10))
-                            .foregroundStyle(AppColor.gray500)
-                            .frame(maxWidth: .infinity)
+                            .historyOverviewTextStyle(.c1)
+                            .foregroundStyle(AppColor.gray400)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.45)
+                            .frame(
+                                maxWidth: .infinity,
+                                minHeight: heatmapCellHeight
+                            )
                             .accessibilityLabel("\(weekday)요일")
                             .accessibilityAddTraits(.isHeader)
                     }
+                    }
 
-                    ForEach(heatmap.days) { day in
-                        let presentation = HistoryHeatmapCellPresentation(
-                            day: day,
-                            calendar: calendar
-                        )
+                    LazyVGrid(
+                        columns: columns,
+                        spacing: dynamicTypeSize.isAccessibilitySize ? 8 : 6
+                    ) {
+                        ForEach(heatmap.days) { day in
+                            let presentation = HistoryHeatmapCellPresentation(
+                                day: day,
+                                calendar: calendar
+                            )
 
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(fillColor(for: day.bucket))
+                            ZStack {
+                                RoundedRectangle(cornerRadius: MoruPilotSpacing.eight)
+                                    .fill(fillColor(for: day.bucket))
 
-                            if let date = day.date {
-                                Text("\(calendar.component(.day, from: date))")
-                                    .font(AppFont.pretendardRegular(size: 9))
-                                    .foregroundStyle(
-                                        day.bucket == .noData
-                                            ? AppColor.gray500
-                                            : AppColor.grayWhite
-                                    )
+                                if let date = day.date {
+                                    Text("\(calendar.component(.day, from: date))")
+                                        .historyOverviewTextStyle(.c2)
+                                        .foregroundStyle(AppColor.gray500)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.45)
+                                }
                             }
+                            .frame(height: heatmapCellHeight)
+                            .accessibilityLabel(presentation.accessibilityLabel ?? "")
+                            .accessibilityHidden(presentation.isAccessibilityHidden)
                         }
-                        .frame(height: 24)
-                        .accessibilityLabel(presentation.accessibilityLabel ?? "")
-                        .accessibilityHidden(presentation.isAccessibilityHidden)
                     }
                 }
-
-                HStack(spacing: AppSpacing.sm) {
-                    legendItem("기록 없음", bucket: .noData)
-                    legendItem("일부", bucket: .high)
-                    legendItem("완료", bucket: .complete)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MoruPilotSpacing.twenty)
+                .padding(.top, dynamicTypeSize.isAccessibilitySize ? 20 : 24)
+                .padding(.bottom, MoruPilotSpacing.eight)
+                .frame(maxWidth: .infinity, minHeight: 212, alignment: .top)
+                .background(historyPilotSurface)
+                .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
             }
-            .padding(AppSpacing.md)
-            .background(AppColor.grayWhite)
-            .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
-            .overlay {
-                RoundedRectangle(cornerRadius: AppRadius.xs)
-                    .stroke(AppColor.moruBorder, lineWidth: 1)
-            }
+            .padding(.top, MoruPilotSpacing.eight)
+            .padding(.bottom, MoruPilotSpacing.twenty)
+            .frame(maxWidth: .infinity, minHeight: 284, alignment: .top)
+            .background(historyPilotSurface)
+            .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+            .shadow(
+                color: MoruPilotColor.shadow,
+                radius: 15,
+                x: 0,
+                y: 0
+            )
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("history.heatmap")
     }
 
     private var monthText: String {
+        let year = calendar.component(.year, from: heatmap.monthStartDate)
         let month = calendar.component(.month, from: heatmap.monthStartDate)
-        return "\(month)월"
+        return "\(year)년 \(month)월"
     }
 
-    private func legendItem(
-        _ label: String,
-        bucket: HistoryHeatmapBucket
-    ) -> some View {
-        HStack(spacing: AppSpacing.xxs) {
-            RoundedRectangle(cornerRadius: 3)
-                .fill(fillColor(for: bucket))
-                .frame(width: 10, height: 10)
-
-            Text(label)
-                .font(AppFont.pretendardRegular(size: 10))
-                .foregroundStyle(AppColor.gray500)
-        }
-        .accessibilityElement(children: .combine)
+    private var heatmapCellHeight: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 44 : 24
     }
 
     private func fillColor(for bucket: HistoryHeatmapBucket) -> Color {
         switch bucket {
         case .noData:
-            return AppColor.gray100
+            return MoruPilotColor.accentSurface
         case .zero:
-            return AppColor.gray200
+            return MoruPilotColor.accentTint
         case .low:
-            return AppColor.gray350
+            return Color(red: 1, green: 211 / 255, blue: 189 / 255)
         case .high:
-            return AppColor.gray550
+            return MoruPilotColor.accentSoft
         case .complete:
-            return AppColor.grayBlack
+            return MoruPilotColor.accent
         }
     }
 }
@@ -700,15 +751,59 @@ struct HistoryStepResultRow: View {
 
 struct HistoryLoadingView: View {
     var body: some View {
-        VStack(spacing: AppSpacing.sm) {
-            ProgressView()
-                .tint(AppColor.grayBlack)
-            Text("기록을 불러오는 중이에요.")
-                .font(AppFont.label1NormalMedium)
-                .foregroundStyle(AppColor.moruTextSecondary)
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("이력")
+                    .historyOverviewTextStyle(.h3)
+                    .foregroundStyle(AppColor.gray550)
+                    .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+                    HistorySkeletonBlock(cornerRadius: MoruPilotRadius.largeCard)
+                        .frame(height: 114)
+                        .padding(.vertical, MoruPilotSpacing.eight)
+
+                    skeletonSection(cardHeight: 111)
+                    heatmapSkeleton
+                }
+            }
+            .padding(.horizontal, MoruPilotSpacing.twenty)
+            .padding(.bottom, MoruPilotSpacing.sixtyFour)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .combine)
+        .accessibilityLabel("기록을 불러오는 중이에요.")
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    private func skeletonSection(cardHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HistorySkeletonBlock(cornerRadius: MoruPilotRadius.card)
+                .frame(width: 90, height: 22)
+                .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+
+            HistorySkeletonBlock(cornerRadius: MoruPilotRadius.largeCard)
+                .frame(height: cardHeight)
+                .padding(.vertical, MoruPilotSpacing.eight)
+        }
+    }
+
+    private var heatmapSkeleton: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HistorySkeletonBlock(cornerRadius: MoruPilotRadius.card)
+                .frame(width: 90, height: 22)
+                .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+
+            VStack(spacing: 0) {
+                HistorySkeletonBlock(cornerRadius: MoruPilotRadius.card)
+                    .frame(width: 160, height: 24)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+
+                HistorySkeletonBlock(cornerRadius: MoruPilotSpacing.twelve)
+                    .frame(height: 212)
+            }
+            .padding(.top, MoruPilotSpacing.eight)
+            .padding(.bottom, MoruPilotSpacing.twenty)
+            .frame(maxWidth: .infinity, minHeight: 284, alignment: .top)
+        }
     }
 }
 
@@ -717,22 +812,29 @@ struct HistoryEmptyView: View {
     let message: String
 
     var body: some View {
-        VStack(spacing: AppSpacing.sm) {
-            Image(systemName: "calendar.badge.clock")
-                .font(AppFont.title1SemiBold)
-                .foregroundStyle(AppColor.grayBlack)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: MoruPilotSpacing.sixteen) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(AppFont.title1SemiBold)
+                        .foregroundStyle(MoruPilotColor.accent)
 
-            Text(title)
-                .font(AppFont.heading3SemiBold)
-                .foregroundStyle(AppColor.moruTextPrimary)
+                    Text(title)
+                        .historyOverviewTextStyle(.h3)
+                        .foregroundStyle(MoruPilotColor.textStrong)
+                        .multilineTextAlignment(.center)
 
-            Text(message)
-                .font(AppFont.label1NormalMedium)
-                .foregroundStyle(AppColor.moruTextSecondary)
-                .multilineTextAlignment(.center)
+                    Text(message)
+                        .historyOverviewTextStyle(.b4)
+                        .foregroundStyle(MoruPilotColor.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                .padding(.horizontal, MoruPilotSpacing.twenty)
+                .padding(.vertical, MoruPilotSpacing.thirtyTwo)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(AppSpacing.xxl)
     }
 }
 
@@ -741,24 +843,94 @@ struct HistoryFailureView: View {
     let retryAction: () -> Void
 
     var body: some View {
-        VStack(spacing: AppSpacing.md) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(AppFont.title1SemiBold)
-                .foregroundStyle(AppColor.grayBlack)
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: MoruPilotSpacing.sixteen) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(AppFont.title1SemiBold)
+                        .foregroundStyle(MoruPilotColor.accent)
 
-            Text(message)
-                .font(AppFont.heading3SemiBold)
-                .foregroundStyle(AppColor.moruTextPrimary)
+                    Text(message)
+                        .historyOverviewTextStyle(.h3)
+                        .foregroundStyle(MoruPilotColor.textStrong)
+                        .multilineTextAlignment(.center)
 
-            Text("잠시 후 다시 시도해 주세요.")
-                .font(AppFont.label1NormalMedium)
-                .foregroundStyle(AppColor.moruTextSecondary)
-                .multilineTextAlignment(.center)
+                    Text("잠시 후 다시 시도해 주세요.")
+                        .historyOverviewTextStyle(.b4)
+                        .foregroundStyle(MoruPilotColor.textSecondary)
+                        .multilineTextAlignment(.center)
 
-            MoruButton("다시 시도", style: .secondary, action: retryAction)
+                    HistoryRetryButton(action: retryAction)
+                }
+                .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                .padding(.horizontal, MoruPilotSpacing.twenty)
+                .padding(.vertical, MoruPilotSpacing.thirtyTwo)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(AppSpacing.xxl)
+    }
+}
+
+private struct HistoryRetryButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text("다시 시도")
+                .historyOverviewTextStyle(.b4.weight(.semiBold))
+                .foregroundStyle(MoruPilotColor.textStrong)
+                .padding(.horizontal, AppSpacing.buttonHorizontal)
+                .padding(.vertical, AppSpacing.buttonVertical)
+                .frame(maxWidth: .infinity, minHeight: 54)
+                .background(AppColor.grayWhite)
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct HistorySkeletonBlock: View {
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        AppColor.gray150.opacity(0.5),
+                        AppColor.gray250.opacity(0.5),
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+private struct HistoryOverviewTextStyleModifier: ViewModifier {
+    let style: MoruTextStyle
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            content.font(
+                .custom(
+                    style.weight.rawValue,
+                    size: style.fontSize,
+                    relativeTo: style.relativeTextStyle
+                )
+            )
+        } else {
+            content.moruTextStyle(style)
+        }
+    }
+}
+
+extension View {
+    func historyOverviewTextStyle(_ style: MoruTextStyle) -> some View {
+        modifier(HistoryOverviewTextStyleModifier(style: style))
     }
 }
 
