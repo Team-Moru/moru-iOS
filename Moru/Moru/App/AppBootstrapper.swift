@@ -13,6 +13,8 @@ struct BootstrappedApp {
   let modelContainer: ModelContainer
   let dependencies: DependencyContainer
   let sessionStore: SessionStore
+  let accountSessionStore: AccountSessionStore
+  let appCapabilities: AppCapabilities
   let navigationCoordinator: AppNavigationCoordinator
   let onboardingBuilder: any OnboardingFlowBuilding
   let routinePlayerBuilder: any RoutinePlayerBuilding
@@ -34,13 +36,24 @@ final class AppBootstrapper: ObservableObject {
   @Published private(set) var state: AppBootstrapState = .idle
 
   private let modelContainerFactory: () throws -> ModelContainer
+  private let accountSessionStoreFactory: () -> AccountSessionStore
+  private let appCapabilities: AppCapabilities
 
   init(
     modelContainerFactory: @escaping () throws -> ModelContainer = {
       try ModelContainer.moruContainer()
-    }
+    },
+    accountSessionStoreFactory: @escaping () -> AccountSessionStore = {
+      AccountSessionStore(
+        credentialStore: KeychainCredentialStore(),
+        accessTokenProvider: MemoryAccessTokenProvider()
+      )
+    },
+    appCapabilities: AppCapabilities = .production
   ) {
     self.modelContainerFactory = modelContainerFactory
+    self.accountSessionStoreFactory = accountSessionStoreFactory
+    self.appCapabilities = appCapabilities
   }
 
   func start() {
@@ -66,6 +79,8 @@ final class AppBootstrapper: ObservableObject {
       let modelContainer = try modelContainerFactory()
       let dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
       let sessionStore = dependencies.makeSessionStore()
+      sessionStore.load()
+      let accountSessionStore = accountSessionStoreFactory()
       let navigationCoordinator = AppNavigationCoordinator()
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
       let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
@@ -75,17 +90,34 @@ final class AppBootstrapper: ObservableObject {
           modelContainer: modelContainer,
           dependencies: dependencies,
           sessionStore: sessionStore,
+          accountSessionStore: accountSessionStore,
+          appCapabilities: appCapabilities,
           navigationCoordinator: navigationCoordinator,
           onboardingBuilder: onboardingBuilder,
           routinePlayerBuilder: routinePlayerBuilder
         )
       )
+
+      restoreAccountSessionIfAvailable(accountSessionStore)
     } catch {
       state = .failed(
         AppBootstrapFailure(
           message: "저장소를 초기화할 수 없어요. 다시 시도해 주세요."
         )
       )
+    }
+  }
+
+  private func restoreAccountSessionIfAvailable(
+    _ accountSessionStore: AccountSessionStore
+  ) {
+    guard appCapabilities.shouldRestoreAccountSession else {
+      return
+    }
+
+    Task { @MainActor in
+      await Task.yield()
+      accountSessionStore.restore()
     }
   }
 }

@@ -141,7 +141,8 @@ struct AppRouter: View {
         .interactiveDismissDisabled()
     }
     .task {
-      if coordinator.beginInitialSessionLoadIfNeeded() {
+      if coordinator.beginInitialSessionLoadIfNeeded(),
+         sessionStore.phase == .loading {
         sessionStore.load()
       }
       await consumePendingAlarmIngress()
