@@ -69,6 +69,13 @@ Swift 6.2
 - 자동 검증과 실제 iPhone QA 기준은
   [`Moru/docs/iPhoneFunctionalGate.md`](Moru/docs/iPhoneFunctionalGate.md)를 따릅니다.
 
+### v2 서버 연동 준비
+
+v2는 기존 v1 로컬 실행 경로를 유지합니다.
+서버 기능은 기능별로 점진 전환합니다.
+공통 API Client, 인증 경계, Target 추가 방법은
+[`Moru/docs/V2NetworkFoundation.md`](Moru/docs/V2NetworkFoundation.md)를 따릅니다.
+
 <br>
 
 ## ⚒️ 개발 환경
@@ -349,9 +356,15 @@ Moru
 │  ├─ Repositories/              // RoutineRepository, RoutineRunRepository, LocalProfileRepository
 │  └─ Services/                  // RoutineSuggestionService (D5)
 ├─ Data
-│  ├─ Persistence/               // MoruSchemaV1, SchemaMigrationPlan (D3)
+│  ├─ Persistence/               // MoruSchemaV1~V3, SchemaMigrationPlan
 │  ├─ Local/                     // SwiftData repositories + Mappers
+│  ├─ Remote/                    // v2 예정: 기능별 Target/DTO/Remote
+│  ├─ Security/                  // v2 예정: Keychain token store
+│  ├─ Sync/                      // v2 예정: Outbox + Sync Coordinator
 │  └─ Mock/                      // Preview/Snapshot/QA/Test 전용
+├─ Network
+│  ├─ Core/                      // APIClient actor, Configuration, Moya 조립
+│  └─ Targets/                   // 공통 smoke-test Target
 ├─ Resources
 │  ├─ Fonts/                     // 앱 번들 폰트
 │  └─ RoutinePresets/            // 추천 항목 CSV + 로컬 음성 리소스
@@ -386,3 +399,15 @@ Moru
 - SwiftData 접근은 `Data/Persistence`, `Data/Local`, App bootstrap, 테스트로 제한합니다.
 - Foundation 테스트는 `DependencyContainer`가 repository/service 계약만 노출하는지 확인하고, 실제 소스 토큰 검사는 `bash Scripts/check-swiftdata-boundary.sh`로 수행합니다.
 - 앱 루트는 `.modelContainer(...)`를 전역 주입하지 않습니다.
+
+### v2 서버 연동 경계
+
+- SwiftData Local Repository를 화면과 핵심 루틴의 Source of Truth로 유지합니다.
+- View/ViewModel은 Target, APIClient, Moya를 직접 사용하지 않습니다.
+- 기능별 서버 코드는 `Data/Remote/<Feature>`에 둡니다.
+- 해당 계층에서 DTO와 Domain 변환을 담당합니다.
+- 서버 응답은 Sync Coordinator를 거쳐 SwiftData에 반영합니다.
+- 로그인 상태는 기존 Local Session과 분리합니다.
+- 인증 실패가 앱 부팅을 막지 않게 합니다.
+- 세부 기준은 [`Moru/docs/V2NetworkFoundation.md`](Moru/docs/V2NetworkFoundation.md)를
+  따릅니다.
