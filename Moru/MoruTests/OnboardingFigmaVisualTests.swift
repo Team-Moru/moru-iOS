@@ -81,7 +81,24 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     XCTAssertFalse(copy.contains("운세"))
   }
 
+  func testAlarmSoundGuidanceCopyAndVisualContract() throws {
+    XCTAssertEqual(
+      OnboardingCopy.alarmSoundGuidance,
+      "알람 소리와 음량은 iPhone 설정을 따릅니다."
+    )
+
+    try assertStateRendersDeterministically(.alarm)
+  }
+
   func testOnboardingStatesRenderDeterministicallyAtReferenceVariants() throws {
+    for state in OnboardingCaptureState.allCases where state != .alarm {
+      try assertStateRendersDeterministically(state)
+    }
+  }
+
+  private func assertStateRendersDeterministically(
+    _ state: OnboardingCaptureState
+  ) throws {
     let environment = ProcessInfo.processInfo.environment
     let phase = environment["MORU_ONBOARDING_CAPTURE_PHASE"] ?? "after"
     let outputDirectory = URL(
@@ -89,26 +106,24 @@ final class OnboardingFigmaVisualTests: XCTestCase {
         ?? "/private/tmp/moru-figma-p1-\(phase)"
     )
 
-    for state in OnboardingCaptureState.allCases {
-      for variant in MoruVisualCaptureVariant.allCases {
-        let filename = "\(state.rawValue)-\(variant.rawValue).png"
-        let first = try MoruVisualCaptureFixture.render(
-          screen(for: state),
-          filename: filename,
-          variant: variant,
-          outputDirectory: outputDirectory
-        )
-        let second = try MoruVisualCaptureFixture.render(
-          screen(for: state),
-          filename: "\(state.rawValue)-\(variant.rawValue)-repeat.png",
-          variant: variant,
-          outputDirectory: outputDirectory
-        )
+    for variant in MoruVisualCaptureVariant.allCases {
+      let filename = "\(state.rawValue)-\(variant.rawValue).png"
+      let first = try MoruVisualCaptureFixture.render(
+        screen(for: state),
+        filename: filename,
+        variant: variant,
+        outputDirectory: outputDirectory
+      )
+      let second = try MoruVisualCaptureFixture.render(
+        screen(for: state),
+        filename: "\(state.rawValue)-\(variant.rawValue)-repeat.png",
+        variant: variant,
+        outputDirectory: outputDirectory
+      )
 
-        XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
-        XCTAssertEqual(first.scale, 3)
-        XCTAssertEqual(first.pngData(), second.pngData())
-      }
+      XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
+      XCTAssertEqual(first.scale, 3)
+      XCTAssertEqual(first.pngData(), second.pngData())
     }
   }
 

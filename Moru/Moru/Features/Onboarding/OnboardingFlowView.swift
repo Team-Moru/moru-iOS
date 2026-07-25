@@ -581,8 +581,17 @@ private struct OnboardingAlarmSettingView: View {
             .foregroundStyle(MoruPilotColor.textSecondary)
             .frame(maxWidth: .infinity)
 
-          WeekdayCircleSelector(viewModel: viewModel)
-            .frame(maxWidth: .infinity)
+          VStack(spacing: MoruPilotSpacing.twelve) {
+            WeekdayCircleSelector(viewModel: viewModel)
+              .frame(maxWidth: .infinity)
+
+            Text(OnboardingCopy.alarmSoundGuidance)
+              .onboardingTextStyle(.c1)
+              .foregroundStyle(MoruPilotColor.textPrimary)
+              .multilineTextAlignment(.center)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(maxWidth: .infinity)
+          }
         }
       } else {
         PreviewUnavailableState(errorMessage: viewModel.errorMessage)
