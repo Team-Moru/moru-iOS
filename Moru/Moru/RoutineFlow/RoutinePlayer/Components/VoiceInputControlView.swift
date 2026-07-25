@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import UIKit
 
 struct VoiceInputControlView: View {
   private enum AutomaticStartState {
@@ -21,7 +20,7 @@ struct VoiceInputControlView: View {
   let isAutomaticStartBlocked: Bool
   let waitUntilGuidanceFinishes: () async -> Bool
   let onFinished: (String) -> Void
-  @Environment(\.openURL) private var openURL
+  private let appSettingsOpener: AppSettingsOpener
   @State private var isAutomaticallyFinishing = false
   @State private var automaticStartState: AutomaticStartState = .waitingForGuidance
   @State private var pendingAutomaticFinishTask: Task<Void, Never>?
@@ -33,6 +32,7 @@ struct VoiceInputControlView: View {
     showsTranscript: Bool = true,
     isAutomaticStartBlocked: Bool = false,
     waitUntilGuidanceFinishes: @escaping () async -> Bool = { true },
+    appSettingsOpener: AppSettingsOpener = AppSettingsOpener(),
     onFinished: @escaping (String) -> Void
   ) {
     self.speechInputController = speechInputController
@@ -41,6 +41,7 @@ struct VoiceInputControlView: View {
     self.showsTranscript = showsTranscript
     self.isAutomaticStartBlocked = isAutomaticStartBlocked
     self.waitUntilGuidanceFinishes = waitUntilGuidanceFinishes
+    self.appSettingsOpener = appSettingsOpener
     self.onFinished = onFinished
   }
 
@@ -297,11 +298,9 @@ struct VoiceInputControlView: View {
 
       if isMicrophonePermissionDenied {
         Button("설정 열기") {
-          guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else {
-            return
+          Task {
+            await appSettingsOpener.open()
           }
-
-          openURL(settingsURL)
         }
         .buttonStyle(.plain)
         .font(AppFont.label1NormalSemiBold)
