@@ -46,21 +46,10 @@ actor DefaultAPIClient: APIClient {
     let response = try await perform(target)
     try validateStatus(response)
 
-    let envelope: APIResponse<Payload>
-
-    do {
-      envelope = try decoder.decode(APIResponse<Payload>.self, from: response.data)
-    } catch {
-      throw APIError.decoding(error.localizedDescription)
-    }
-
-    guard envelope.isSuccess else {
-      throw APIError.server(
-        statusCode: response.statusCode,
-        code: envelope.code,
-        message: envelope.message
-      )
-    }
+    let envelope = try decodeSuccessfulEnvelope(
+      payloadType,
+      from: response
+    )
 
     guard let result = envelope.result else {
       throw APIError.missingResult(
@@ -81,24 +70,10 @@ actor DefaultAPIClient: APIClient {
       return
     }
 
-    let envelope: APIResponse<EmptyAPIResult>
-
-    do {
-      envelope = try decoder.decode(
-        APIResponse<EmptyAPIResult>.self,
-        from: response.data
-      )
-    } catch {
-      throw APIError.decoding(error.localizedDescription)
-    }
-
-    guard envelope.isSuccess else {
-      throw APIError.server(
-        statusCode: response.statusCode,
-        code: envelope.code,
-        message: envelope.message
-      )
-    }
+    _ = try decodeSuccessfulEnvelope(
+      EmptyAPIResult.self,
+      from: response
+    )
   }
 
   func requestData<Target: MoruTargetType>(_ target: Target) async throws -> Data {
@@ -172,6 +147,32 @@ actor DefaultAPIClient: APIClient {
         )
       )
     }
+  }
+
+  private func decodeSuccessfulEnvelope<Payload: Decodable & Sendable>(
+    _: Payload.Type,
+    from response: HTTPResponseSnapshot
+  ) throws -> APIResponse<Payload> {
+    let envelope: APIResponse<Payload>
+
+    do {
+      envelope = try decoder.decode(
+        APIResponse<Payload>.self,
+        from: response.data
+      )
+    } catch {
+      throw APIError.decoding(error.localizedDescription)
+    }
+
+    guard envelope.isSuccess else {
+      throw APIError.server(
+        statusCode: response.statusCode,
+        code: envelope.code,
+        message: envelope.message
+      )
+    }
+
+    return envelope
   }
 
   static func mapMoyaError(_ error: MoyaError) -> APIError {
