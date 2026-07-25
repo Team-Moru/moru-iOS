@@ -96,6 +96,7 @@ struct MoruTabBar: View {
         AppColor.grayWhite
           .opacity(0.7)
           .background(.ultraThinMaterial)
+          .ignoresSafeArea(edges: .bottom)
       } else {
         AppColor.grayWhite
       }

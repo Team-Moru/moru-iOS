@@ -68,7 +68,8 @@ enum MoruVisualCaptureFixture {
     filename: String,
     variant: MoruVisualCaptureVariant,
     outputDirectory: URL,
-    configuration: MoruVisualCaptureConfiguration = .iPhone16
+    configuration: MoruVisualCaptureConfiguration = .iPhone16,
+    additionalSafeAreaInsets: UIEdgeInsets = .zero
   ) throws -> UIImage {
     let renderedContent = content
       .environment(\.dynamicTypeSize, variant.dynamicTypeSize)
@@ -87,6 +88,7 @@ enum MoruVisualCaptureFixture {
     window.overrideUserInterfaceStyle = configuration.userInterfaceStyle
     window.rootViewController = hostingController
     window.makeKeyAndVisible()
+    hostingController.additionalSafeAreaInsets = additionalSafeAreaInsets
 
     let animationsWereEnabled = UIView.areAnimationsEnabled
     UIView.setAnimationsEnabled(false)
