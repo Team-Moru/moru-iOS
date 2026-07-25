@@ -13,6 +13,25 @@ import XCTest
 
 @MainActor
 final class RoutinePlayerFigmaVisualTests: XCTestCase {
+  func testAppStoreScreenshotsRoutinePlayer() async throws {
+    let outputDirectory = try appStoreScreenshotOutputDirectory()
+    let captures: [(RoutinePlayerCaptureState, String)] = [
+      (.regularConfirm, "01-routine-start.png"),
+      (.confirmTranscript, "03-voice-coaching.png"),
+      (.regularTimer, "04-timer-step.png"),
+    ]
+
+    for (state, filename) in captures {
+      _ = try MoruVisualCaptureFixture.render(
+        try await view(for: state),
+        filename: filename,
+        variant: .lightMedium,
+        outputDirectory: outputDirectory,
+        configuration: .iPad13
+      )
+    }
+  }
+
   func testRoutinePlayerCopyUsesPresetSpecificAndTruthfulFallbackText() {
     let bedAliases = ["ENERGY-01", "HEALTH-02", "CALM-01", "HABIT-01"]
     for presetItemID in bedAliases {
@@ -136,6 +155,17 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
         + "hash distance: \(distance)",
       file: file,
       line: line
+    )
+  }
+
+  private func appStoreScreenshotOutputDirectory() throws -> URL {
+    let environment = ProcessInfo.processInfo.environment
+    guard environment["MORU_CAPTURE_APP_STORE_SCREENSHOTS"] == "1" else {
+      throw XCTSkip("App Store screenshot capture is opt-in.")
+    }
+    return URL(
+      fileURLWithPath: environment["MORU_CAPTURE_OUTPUT_DIR"]
+        ?? "/private/tmp/moru-app-store-screenshots"
     )
   }
 

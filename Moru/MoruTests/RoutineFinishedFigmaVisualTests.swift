@@ -12,6 +12,17 @@ import XCTest
 
 @MainActor
 final class RoutineFinishedFigmaVisualTests: XCTestCase {
+  func testAppStoreScreenshotRoutineCompletion() throws {
+    let outputDirectory = try appStoreScreenshotOutputDirectory()
+    _ = try MoruVisualCaptureFixture.render(
+      routineFinishedView(for: .regular),
+      filename: "05-completion.png",
+      variant: .lightMedium,
+      outputDirectory: outputDirectory,
+      configuration: .iPad13
+    )
+  }
+
   func testRoutineFinishedStatesRenderDeterministicallyAtReferenceVariants() throws {
     let environment = ProcessInfo.processInfo.environment
     let phase = environment["MORU_ROUTINE_FINISHED_CAPTURE_PHASE"] ?? "after"
@@ -53,6 +64,17 @@ final class RoutineFinishedFigmaVisualTests: XCTestCase {
       isTrial: state == .trial,
       onTapTodayRecord: {},
       onTapHome: {}
+    )
+  }
+
+  private func appStoreScreenshotOutputDirectory() throws -> URL {
+    let environment = ProcessInfo.processInfo.environment
+    guard environment["MORU_CAPTURE_APP_STORE_SCREENSHOTS"] == "1" else {
+      throw XCTSkip("App Store screenshot capture is opt-in.")
+    }
+    return URL(
+      fileURLWithPath: environment["MORU_CAPTURE_OUTPUT_DIR"]
+        ?? "/private/tmp/moru-app-store-screenshots"
     )
   }
 }

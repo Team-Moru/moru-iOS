@@ -27,6 +27,10 @@ enum MoruVisualCaptureVariant: String, CaseIterable {
 
 struct MoruVisualCaptureConfiguration {
   static let iPhone16 = MoruVisualCaptureConfiguration()
+  static let iPad13 = MoruVisualCaptureConfiguration(
+    size: CGSize(width: 1_032, height: 1_376),
+    scale: 2
+  )
 
   let size: CGSize
   let scale: CGFloat

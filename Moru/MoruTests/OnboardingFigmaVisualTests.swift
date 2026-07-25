@@ -12,6 +12,17 @@ import XCTest
 
 @MainActor
 final class OnboardingFigmaVisualTests: XCTestCase {
+  func testAppStoreScreenshotOnboardingGoals() throws {
+    let outputDirectory = try appStoreScreenshotOutputDirectory()
+    _ = try MoruVisualCaptureFixture.render(
+      screen(for: .goals),
+      filename: "02-onboarding-goals.png",
+      variant: .lightMedium,
+      outputDirectory: outputDirectory,
+      configuration: .iPad13
+    )
+  }
+
   func testFigmaCopyAndProgressContract() {
     XCTAssertEqual(
       RoutineExperience.allCases.map(OnboardingCopy.experienceDescription),
@@ -125,6 +136,17 @@ final class OnboardingFigmaVisualTests: XCTestCase {
       XCTAssertEqual(first.scale, 3)
       XCTAssertEqual(first.pngData(), second.pngData())
     }
+  }
+
+  private func appStoreScreenshotOutputDirectory() throws -> URL {
+    let environment = ProcessInfo.processInfo.environment
+    guard environment["MORU_CAPTURE_APP_STORE_SCREENSHOTS"] == "1" else {
+      throw XCTSkip("App Store screenshot capture is opt-in.")
+    }
+    return URL(
+      fileURLWithPath: environment["MORU_CAPTURE_OUTPUT_DIR"]
+        ?? "/private/tmp/moru-app-store-screenshots"
+    )
   }
 
   private func screen(for state: OnboardingCaptureState) throws -> AnyView {
