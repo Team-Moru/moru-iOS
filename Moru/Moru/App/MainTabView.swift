@@ -89,12 +89,6 @@ struct MainTabView: View {
           items: MainTabState.availableTabs,
           componentStyle: .figmaPilot
         )
-        .background {
-          AppColor.grayWhite
-            .opacity(0.7)
-            .background(.ultraThinMaterial)
-            .ignoresSafeArea(edges: .bottom)
-        }
       }
   }
 

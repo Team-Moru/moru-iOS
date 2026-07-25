@@ -144,6 +144,52 @@ final class FigmaPilotFoundationTests: XCTestCase {
     }
   }
 
+  func testPilotTabBarBackgroundContinuesThroughBottomSafeArea() throws {
+    let fallbackDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("moru-tab-safe-area-77")
+    let outputDirectory = URL(
+      fileURLWithPath: ProcessInfo.processInfo.environment[
+        "MORU_CAPTURE_OUTPUT_DIR"
+      ] ?? fallbackDirectory.path
+    )
+
+    for variant in MoruVisualCaptureVariant.allCases {
+      for selection in MainTabState.availableTabs {
+        let first = try MoruVisualCaptureFixture.render(
+          tabBarSafeAreaScreen(selection: selection),
+          filename: "tab-safe-area-\(selection.rawValue)-\(variant.rawValue).png",
+          variant: variant,
+          outputDirectory: outputDirectory,
+          additionalSafeAreaInsets: UIEdgeInsets(
+            top: 0,
+            left: 0,
+            bottom: 34,
+            right: 0
+          )
+        )
+        let second = try MoruVisualCaptureFixture.render(
+          tabBarSafeAreaScreen(selection: selection),
+          filename: "tab-safe-area-repeat-\(selection.rawValue)-\(variant.rawValue).png",
+          variant: variant,
+          outputDirectory: outputDirectory,
+          additionalSafeAreaInsets: UIEdgeInsets(
+            top: 0,
+            left: 0,
+            bottom: 34,
+            right: 0
+          )
+        )
+
+        XCTAssertEqual(first.pngData(), second.pngData())
+        XCTAssertEqual(
+          try rgba(at: CGPoint(x: 8, y: 760), in: first),
+          try rgba(at: CGPoint(x: 8, y: 840), in: first),
+          "Tab body and bottom safe area must use the same background layer"
+        )
+      }
+    }
+  }
+
   private func rgbHex(_ color: Color) -> UInt32 {
     let resolved = UIColor(color).resolvedColor(
       with: UITraitCollection(userInterfaceStyle: .light)
@@ -216,5 +262,44 @@ final class FigmaPilotFoundationTests: XCTestCase {
       )
     }
     .background(MoruPilotColor.canvas)
+  }
+
+  private func tabBarSafeAreaScreen(selection: MoruTabItem) -> some View {
+    MoruPilotColor.accent
+      .ignoresSafeArea()
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        MoruTabBar(
+          selection: .constant(selection),
+          componentStyle: .figmaPilot
+        )
+      }
+  }
+
+  private func rgba(
+    at point: CGPoint,
+    in image: UIImage
+  ) throws -> [UInt8] {
+    let cgImage = try XCTUnwrap(image.cgImage)
+    let pixel = CGRect(
+      x: point.x * image.scale,
+      y: point.y * image.scale,
+      width: 1,
+      height: 1
+    )
+    let croppedImage = try XCTUnwrap(cgImage.cropping(to: pixel))
+    var rgba = [UInt8](repeating: 0, count: 4)
+    let context = try XCTUnwrap(
+      CGContext(
+        data: &rgba,
+        width: 1,
+        height: 1,
+        bitsPerComponent: 8,
+        bytesPerRow: 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+      )
+    )
+    context.draw(croppedImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+    return rgba
   }
 }
