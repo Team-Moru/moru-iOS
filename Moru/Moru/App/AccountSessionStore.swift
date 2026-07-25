@@ -88,4 +88,50 @@ final class AccountSessionStore: ObservableObject {
       )
     )
   }
+
+  func credentialsForTokenRefresh(
+    matching accessToken: String
+  ) throws -> AccountCredentials {
+    guard case .signedIn = state,
+          accessTokenProvider.accessToken == accessToken,
+          let credentials = try credentialStore.load(),
+          credentials.isValid,
+          credentials.accessToken == accessToken else {
+      throw CredentialStoreError.invalidCredentials
+    }
+
+    return credentials
+  }
+
+  func replaceCredentialsAfterTokenRefresh(
+    _ credentials: AccountCredentials,
+    replacing accessToken: String
+  ) throws {
+    guard credentials.isValid,
+          case .signedIn = state,
+          accessTokenProvider.accessToken == accessToken else {
+      throw CredentialStoreError.invalidCredentials
+    }
+
+    try credentialStore.save(credentials)
+    accessTokenProvider.replace(with: credentials.accessToken)
+    state = .signedIn(
+      SignedInAccount(
+        memberID: credentials.memberID,
+        onboardingCompleted: credentials.onboardingCompleted
+      )
+    )
+  }
+
+  func invalidateAfterTokenRefreshFailure(
+    matching accessToken: String
+  ) {
+    guard accessTokenProvider.accessToken == accessToken else {
+      return
+    }
+
+    try? credentialStore.remove()
+    accessTokenProvider.remove()
+    state = .signedOut
+  }
 }

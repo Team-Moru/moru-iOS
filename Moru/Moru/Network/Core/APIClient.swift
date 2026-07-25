@@ -23,16 +23,19 @@ actor DefaultAPIClient: APIClient {
   private let provider: MoyaProvider<MultiTarget>
   private let configuration: NetworkConfiguration
   private let tokenProvider: any AccessTokenProviding
+  private let accessTokenRefresher: (any AccessTokenRefreshing)?
   private let decoder: JSONDecoder
 
   init(
     configuration: NetworkConfiguration = .production,
     tokenProvider: any AccessTokenProviding = EmptyAccessTokenProvider(),
+    accessTokenRefresher: (any AccessTokenRefreshing)? = nil,
     decoder: sending JSONDecoder = JSONDecoder(),
     providerFactory: MoyaProviderFactory = MoyaProviderFactory()
   ) {
     self.configuration = configuration
     self.tokenProvider = tokenProvider
+    self.accessTokenRefresher = accessTokenRefresher
     self.decoder = decoder
     self.provider = providerFactory.makeProvider(
       configuration: configuration
@@ -86,7 +89,31 @@ actor DefaultAPIClient: APIClient {
     _ target: Target
   ) async throws -> HTTPResponseSnapshot {
     let accessToken = try accessToken(for: target)
+    let response = try await send(
+      target,
+      accessToken: accessToken
+    )
 
+    guard response.statusCode == 401,
+          target.authenticationRequirement == .bearer,
+          let failedAccessToken = accessToken,
+          let accessTokenRefresher else {
+      return response
+    }
+
+    let refreshedAccessToken = try await accessTokenRefresher
+      .refreshAccessToken(afterUnauthorized: failedAccessToken)
+
+    return try await send(
+      target,
+      accessToken: refreshedAccessToken
+    )
+  }
+
+  private func send<Target: MoruTargetType>(
+    _ target: Target,
+    accessToken: String?
+  ) async throws -> HTTPResponseSnapshot {
     let cancellation = RequestCancellation()
     let adaptedTarget = MoyaTargetAdapter(
       target: target,
