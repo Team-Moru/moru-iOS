@@ -31,6 +31,12 @@ final class OnboardingViewModel: ObservableObject {
     }
   }
 
+  private(set) var isSuggesting: Bool = false {
+    willSet {
+      objectWillChange.send()
+    }
+  }
+
   private(set) var errorMessage: String? {
     willSet {
       objectWillChange.send()
@@ -44,6 +50,8 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   private let routineSuggestionService: any RoutineSuggestionService
+  private let routineSuggestionCoordinator:
+    (any RoutineSuggestionCoordinating)?
   private let completeOnboardingUseCase: (any CompleteOnboardingUseCaseProtocol)?
   private let recommendedRoutineCreationUseCase:
     (any RecommendedRoutineCreationUseCaseProtocol)?
@@ -53,12 +61,15 @@ final class OnboardingViewModel: ObservableObject {
     @MainActor (RecommendedRoutineCreationResult) -> Void
   private let onCancelled: @MainActor () -> Void
   private var didComplete = false
+  private var suggestionRequestID: UUID?
 
   init(
     flowMode: RoutineCreationFlowMode = .onboarding,
     draft: OnboardingDraft = OnboardingDraft(),
     step: OnboardingStep = .experience,
     routineSuggestionService: any RoutineSuggestionService,
+    routineSuggestionCoordinator:
+      (any RoutineSuggestionCoordinating)? = nil,
     completeOnboardingUseCase: (any CompleteOnboardingUseCaseProtocol)? = nil,
     recommendedRoutineCreationUseCase:
       (any RecommendedRoutineCreationUseCaseProtocol)? = nil,
@@ -72,6 +83,7 @@ final class OnboardingViewModel: ObservableObject {
     self.draft = draft
     self.step = step
     self.routineSuggestionService = routineSuggestionService
+    self.routineSuggestionCoordinator = routineSuggestionCoordinator
     self.completeOnboardingUseCase = completeOnboardingUseCase
     self.recommendedRoutineCreationUseCase = recommendedRoutineCreationUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
@@ -144,6 +156,10 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   var canAdvance: Bool {
+    guard !isSuggesting else {
+      return false
+    }
+
     switch step {
     case .suggestedRoutine, .duration:
       return hasValidatedPreviewRoutine
@@ -243,7 +259,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   func primaryButtonDidTap() {
-    guard canAdvance else {
+    guard canAdvance, !isSuggesting else {
       errorMessage = "필수 항목을 확인해 주세요."
       return
     }
@@ -252,15 +268,33 @@ final class OnboardingViewModel: ObservableObject {
 
     switch step {
     case .goals:
-      guard refreshPreview() else {
-        return
+      if routineSuggestionCoordinator != nil {
+        Task {
+          guard await refreshPreviewAsync() else {
+            return
+          }
+          step = .suggestedRoutine
+        }
+      } else {
+        guard refreshPreview() else {
+          return
+        }
+        step = .suggestedRoutine
       }
-      step = .suggestedRoutine
     case .freeform:
-      guard refreshPreview() else {
-        return
+      if routineSuggestionCoordinator != nil {
+        Task {
+          guard await refreshPreviewAsync() else {
+            return
+          }
+          step = .organizing
+        }
+      } else {
+        guard refreshPreview() else {
+          return
+        }
+        step = .organizing
       }
-      step = .organizing
     case .completion:
       Task {
         await completeButtonDidTap()
@@ -277,7 +311,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   func backButtonDidTap() {
-    guard !isSaving, let previous = step.previous else {
+    guard !isSaving, !isSuggesting, let previous = step.previous else {
       return
     }
 
@@ -317,12 +351,15 @@ final class OnboardingViewModel: ObservableObject {
 
   @discardableResult
   func refreshPreview() -> Bool {
+    suggestionRequestID = nil
     draft.previewRoutine = nil
+    draft.suggestionSource = nil
 
     do {
       draft.previewRoutine = try routineSuggestionService.makeRoutine(
         from: draft.suggestionInput
       )
+      draft.suggestionSource = .localFallback(.signedOut)
 
       guard hasValidatedPreviewRoutine else {
         draft.previewRoutine = nil
@@ -333,6 +370,59 @@ final class OnboardingViewModel: ObservableObject {
       return true
     } catch {
       errorMessage = error.localizedDescription
+      return false
+    }
+  }
+
+  @discardableResult
+  func refreshPreviewAsync() async -> Bool {
+    guard let routineSuggestionCoordinator else {
+      return refreshPreview()
+    }
+
+    let input = draft.suggestionInput
+    let requestID = UUID()
+    suggestionRequestID = requestID
+    isSuggesting = true
+    draft.previewRoutine = nil
+    draft.suggestionSource = nil
+    errorMessage = nil
+
+    do {
+      let result = try await routineSuggestionCoordinator.suggest(from: input)
+
+      guard suggestionRequestID == requestID,
+            draft.suggestionInput == input else {
+        if suggestionRequestID == requestID {
+          isSuggesting = false
+        }
+        return false
+      }
+
+      draft.previewRoutine = result.routine
+      draft.suggestionSource = result.source
+      isSuggesting = false
+
+      guard hasValidatedPreviewRoutine else {
+        draft.previewRoutine = nil
+        draft.suggestionSource = nil
+        errorMessage = "루틴 항목을 불러올 수 없어요."
+        return false
+      }
+
+      return true
+    } catch is CancellationError {
+      guard suggestionRequestID == requestID else {
+        return false
+      }
+      isSuggesting = false
+      return false
+    } catch {
+      guard suggestionRequestID == requestID else {
+        return false
+      }
+      isSuggesting = false
+      errorMessage = "루틴 추천을 불러올 수 없어요."
       return false
     }
   }
@@ -359,7 +449,8 @@ final class OnboardingViewModel: ObservableObject {
       let result = try await completeOnboardingUseCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: draft.suggestionInput,
-          selectedVoice: draft.selectedVoice
+          selectedVoice: draft.selectedVoice,
+          previewRoutine: validatedPreviewRoutine
         )
       )
       didComplete = true

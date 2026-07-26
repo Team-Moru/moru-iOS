@@ -18,15 +18,18 @@ protocol OnboardingFlowBuilding: AnyObject {
 @MainActor
 final class DefaultOnboardingFlowBuilder: OnboardingFlowBuilding {
   private let routineSuggestionService: any RoutineSuggestionService
+  private let routineSuggestionCoordinator: any RoutineSuggestionCoordinating
   private let completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
 
   init(
     routineSuggestionService: any RoutineSuggestionService,
+    routineSuggestionCoordinator: any RoutineSuggestionCoordinating,
     completeOnboardingUseCase: any CompleteOnboardingUseCaseProtocol,
     voicePreviewPlayer: any VoicePreviewPlaying
   ) {
     self.routineSuggestionService = routineSuggestionService
+    self.routineSuggestionCoordinator = routineSuggestionCoordinator
     self.completeOnboardingUseCase = completeOnboardingUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
   }
@@ -38,6 +41,7 @@ final class DefaultOnboardingFlowBuilder: OnboardingFlowBuilding {
       OnboardingFlowView(
         viewModel: OnboardingViewModel(
           routineSuggestionService: routineSuggestionService,
+          routineSuggestionCoordinator: routineSuggestionCoordinator,
           completeOnboardingUseCase: completeOnboardingUseCase,
           voicePreviewPlayer: voicePreviewPlayer,
           onCompleted: onCompleted
