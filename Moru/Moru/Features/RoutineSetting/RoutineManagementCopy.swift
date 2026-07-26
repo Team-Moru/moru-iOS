@@ -15,7 +15,7 @@ enum RoutineManagementCopy {
   static let editCompletion = "저장"
   static let creationTitle = "루틴 추가"
   static let recommendedTitle = "추천 루틴 만들기"
-  static let recommendedDescription = "경험과 목표를 바탕으로\n로컬 템플릿을 추천해요."
+  static let recommendedDescription = "경험과 목표를 바탕으로\n수정 가능한 초안을 추천해요."
   static let directTitle = "직접 루틴 만들기"
   static let directDescription = "각각의 항목을 직접 지정할 수 있어요."
 

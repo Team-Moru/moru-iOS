@@ -100,9 +100,16 @@ final class AppBootstrapper: ObservableObject {
       let voiceRemoteDataSource = DefaultVoiceRemoteDataSource(
         apiClient: authenticatedAPIClient
       )
+      let routineSuggestionRemoteDataSource =
+        DefaultRoutineSuggestionRemoteDataSource(
+          apiClient: authenticatedAPIClient
+        )
       let dependencies = DependencyContainer.local(
         modelContext: modelContainer.mainContext,
-        voiceRemoteDataSource: voiceRemoteDataSource
+        voiceRemoteDataSource: voiceRemoteDataSource,
+        routineSuggestionRemoteDataSource:
+          routineSuggestionRemoteDataSource,
+        accountSessionStore: accountSessionStore
       )
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
