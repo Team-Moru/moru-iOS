@@ -13,6 +13,8 @@ struct ProfileView: View {
   static let accountCardAccessibilityIdentifier = "profile.account.card"
   static let accountConnectAccessibilityIdentifier = "profile.account.connect"
   static let appleSignInAccessibilityIdentifier = "profile.account.apple-sign-in"
+  static let accountLogoutAccessibilityIdentifier = "profile.account.logout"
+  static let accountWithdrawalAccessibilityIdentifier = "profile.account.withdrawal"
 
   @State private var viewModel: ProfileViewModel
   @ObservedObject private var accountSessionStore: AccountSessionStore
@@ -23,6 +25,7 @@ struct ProfileView: View {
   @State private var isVoiceSelectionPresented = false
   @State private var isResetConfirmationPresented = false
   @State private var isAppleSignInPresented = false
+  @State private var isWithdrawalConfirmationPresented = false
   private let automaticallyLoads: Bool
 
   init(
@@ -90,6 +93,23 @@ struct ProfileView: View {
       Button("취소", role: .cancel) {}
     } message: {
       Text("프로필, 루틴, 수행 기록을 삭제하며 되돌릴 수 없어요.")
+    }
+    .confirmationDialog(
+      "MORU 계정을 탈퇴할까요?",
+      isPresented: $isWithdrawalConfirmationPresented,
+      titleVisibility: .visible
+    ) {
+      Button("회원 탈퇴", role: .destructive) {
+        Task {
+          await viewModel.withdrawalConfirmationButtonDidTap()
+        }
+      }
+      Button("취소", role: .cancel) {}
+    } message: {
+      Text(
+        "서버 계정은 삭제되며 되돌릴 수 없어요. "
+          + "이 기기의 로컬 프로필, 루틴과 수행 기록은 유지됩니다."
+      )
     }
   }
 
@@ -213,14 +233,7 @@ struct ProfileView: View {
             .accessibilityLabel("계정 연결 확인 중")
         }
       case .signedIn:
-        settingsRow(
-          title: "Apple 계정 연결됨",
-          detail: "계정 연결은 선택형 서버 기능에만 사용돼요.",
-          systemImage: "person.crop.circle.badge.checkmark",
-          showsChevron: false
-        )
-        .accessibilityLabel("Apple 계정 연결됨")
-        .accessibilityHint("로컬 루틴과 기록은 기기에 계속 저장됩니다.")
+        signedInAccountActions
       case .failure:
         accountConnectButton(
           detail: "계정 정보를 복구하지 못했어요. "
@@ -239,12 +252,77 @@ struct ProfileView: View {
         .accessibilityLabel("Apple 계정을 연결하고 있어요.")
       }
 
+      if let action = viewModel.accountLifecycleAction {
+        HStack(spacing: AppSpacing.xs) {
+          ProgressView()
+          Text(accountProgressMessage(for: action))
+            .profileFigmaTextStyle(.c1)
+            .foregroundStyle(MoruPilotColor.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accountProgressMessage(for: action))
+      }
+
       if let message = viewModel.accountErrorMessage {
         profileMessage(message, color: AppColor.coral300)
           .accessibilityIdentifier("profile.account.error")
       }
     }
     .accessibilityIdentifier(Self.accountCardAccessibilityIdentifier)
+  }
+
+  private var signedInAccountActions: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      settingsRow(
+        title: "Apple 계정 연결됨",
+        detail: "계정 연결은 선택형 서버 기능에만 사용돼요.",
+        systemImage: "person.crop.circle.badge.checkmark",
+        showsChevron: false
+      )
+      .accessibilityLabel("Apple 계정 연결됨")
+      .accessibilityHint("로컬 루틴과 기록은 기기에 계속 저장됩니다.")
+
+      Button {
+        Task {
+          await viewModel.logoutButtonDidTap()
+        }
+      } label: {
+        settingsRow(
+          title: "로그아웃",
+          detail: "계정 연결만 종료하며 로컬 데이터는 유지해요.",
+          systemImage: "rectangle.portrait.and.arrow.right"
+        )
+      }
+      .buttonStyle(.plain)
+      .disabled(viewModel.isAccountLifecycleInProgress)
+      .accessibilityHint(
+        "서버 로그아웃 실패와 관계없이 이 기기에서 로그아웃합니다."
+      )
+      .accessibilityIdentifier(Self.accountLogoutAccessibilityIdentifier)
+
+      Button(role: .destructive) {
+        isWithdrawalConfirmationPresented = true
+      } label: {
+        settingsRow(
+          title: "회원 탈퇴",
+          detail: "서버 계정을 삭제해요. 로컬 데이터 초기화와는 별도예요.",
+          systemImage: "person.crop.circle.badge.minus"
+        )
+      }
+      .buttonStyle(.plain)
+      .disabled(viewModel.isAccountLifecycleInProgress)
+      .accessibilityHint("확인 후 서버 계정을 영구 삭제합니다.")
+      .accessibilityIdentifier(Self.accountWithdrawalAccessibilityIdentifier)
+    }
+  }
+
+  private func accountProgressMessage(for action: AccountLifecycleAction) -> String {
+    switch action {
+    case .logout:
+      "로그아웃하고 있어요."
+    case .withdrawal:
+      "회원 탈퇴를 처리하고 있어요."
+    }
   }
 
   private func accountConnectButton(detail: String) -> some View {

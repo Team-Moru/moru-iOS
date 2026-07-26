@@ -15,6 +15,7 @@ struct BootstrappedApp {
   let sessionStore: SessionStore
   let accountSessionStore: AccountSessionStore
   let appleAccountLinkingService: any AppleAccountLinking
+  let accountLifecycleService: any AccountLifecycleManaging
   let appCapabilities: AppCapabilities
   let navigationCoordinator: AppNavigationCoordinator
   let onboardingBuilder: any OnboardingFlowBuilding
@@ -47,7 +48,8 @@ final class AppBootstrapper: ObservableObject {
     accountSessionStoreFactory: @escaping () -> AccountSessionStore = {
       AccountSessionStore(
         credentialStore: KeychainCredentialStore(),
-        accessTokenProvider: MemoryAccessTokenProvider()
+        accessTokenProvider: MemoryAccessTokenProvider(),
+        restorationGuard: UserDefaultsAccountSessionRestorationGuard()
       )
     },
     appCapabilities: AppCapabilities = .production
@@ -91,6 +93,11 @@ final class AppBootstrapper: ObservableObject {
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore
       )
+      let accountLifecycleService = DefaultAccountLifecycleService(
+        authRemoteDataSource: authRemoteDataSource,
+        accountSessionStore: accountSessionStore,
+        accountScopedDataCleaner: NoAccountScopedDataCleaner()
+      )
       let navigationCoordinator = AppNavigationCoordinator()
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
       let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
@@ -102,6 +109,7 @@ final class AppBootstrapper: ObservableObject {
           sessionStore: sessionStore,
           accountSessionStore: accountSessionStore,
           appleAccountLinkingService: appleAccountLinkingService,
+          accountLifecycleService: accountLifecycleService,
           appCapabilities: appCapabilities,
           navigationCoordinator: navigationCoordinator,
           onboardingBuilder: onboardingBuilder,
