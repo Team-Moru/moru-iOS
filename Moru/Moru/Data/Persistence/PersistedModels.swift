@@ -357,3 +357,73 @@ final class PersistedSnoozedAlarm {
     self.createdAt = createdAt
   }
 }
+
+@Model
+final class PersistedServerMutation {
+  @Attribute(.unique) var id: UUID
+  var memberID: Int64
+  var operationRawValue: String
+  var operationKey: String
+  var payload: Data
+  var idempotencyKey: UUID
+  var createdAt: Date
+  var updatedAt: Date
+  var attemptCount: Int
+  var nextAttemptAt: Date?
+  var lastFailureRawValue: String?
+
+  init(
+    id: UUID,
+    memberID: Int64,
+    operationRawValue: String,
+    operationKey: String,
+    payload: Data,
+    idempotencyKey: UUID,
+    createdAt: Date,
+    updatedAt: Date,
+    attemptCount: Int,
+    nextAttemptAt: Date?,
+    lastFailureRawValue: String?
+  ) {
+    self.id = id
+    self.memberID = memberID
+    self.operationRawValue = operationRawValue
+    self.operationKey = operationKey
+    self.payload = payload
+    self.idempotencyKey = idempotencyKey
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.attemptCount = attemptCount
+    self.nextAttemptAt = nextAttemptAt
+    self.lastFailureRawValue = lastFailureRawValue
+  }
+}
+
+@Model
+final class PersistedVoiceCatalogEntry {
+  @Attribute(.unique) var id: UUID
+  var memberID: Int64
+  var voiceCode: String
+  var displayName: String
+  var tierRawValue: String
+  var isLocallyPlayable: Bool
+  var fetchedAt: Date
+
+  init(
+    id: UUID,
+    memberID: Int64,
+    voiceCode: String,
+    displayName: String,
+    tierRawValue: String,
+    isLocallyPlayable: Bool,
+    fetchedAt: Date
+  ) {
+    self.id = id
+    self.memberID = memberID
+    self.voiceCode = voiceCode
+    self.displayName = displayName
+    self.tierRawValue = tierRawValue
+    self.isLocallyPlayable = isLocallyPlayable
+    self.fetchedAt = fetchedAt
+  }
+}

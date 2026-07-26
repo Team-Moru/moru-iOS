@@ -16,6 +16,10 @@ struct DependencyContainer {
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
+  let serverMutationRepository: (any ServerMutationRepository)?
+  let serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)?
+  let syncCoordinator: SyncCoordinator?
+  let accountScopedDataCleaner: any AccountScopedDataCleaning
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -34,6 +38,11 @@ struct DependencyContainer {
     homeWeatherRepository: (any HomeWeatherRepository)? = nil,
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
+    serverMutationRepository: (any ServerMutationRepository)? = nil,
+    serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)? = nil,
+    syncCoordinator: SyncCoordinator? = nil,
+    accountScopedDataCleaner: any AccountScopedDataCleaning =
+      NoAccountScopedDataCleaner(),
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -52,6 +61,10 @@ struct DependencyContainer {
     self.homeWeatherRepository = homeWeatherRepository
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
+    self.serverMutationRepository = serverMutationRepository
+    self.serverVoiceCatalogRepository = serverVoiceCatalogRepository
+    self.syncCoordinator = syncCoordinator
+    self.accountScopedDataCleaner = accountScopedDataCleaner
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -77,6 +90,13 @@ struct DependencyContainer {
       resourceLoader: audioResourceLoader
     )
     let routineRepository = SwiftDataRoutineRepository(modelContext: modelContext)
+    let serverPreferenceRepository = SwiftDataServerPreferenceRepository(
+      modelContext: modelContext
+    )
+    let syncCoordinator = SyncCoordinator(
+      mutationRepository: serverPreferenceRepository,
+      executor: DeferredServerMutationExecutor()
+    )
     let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
       modelContext: modelContext
     )
@@ -117,6 +137,12 @@ struct DependencyContainer {
       homeWeatherService: CoreLocationWeatherService(),
       localDataResetRepository: SwiftDataLocalDataResetRepository(
         modelContext: modelContext
+      ),
+      serverMutationRepository: serverPreferenceRepository,
+      serverVoiceCatalogRepository: serverPreferenceRepository,
+      syncCoordinator: syncCoordinator,
+      accountScopedDataCleaner: SwiftDataAccountScopedDataCleaner(
+        repository: serverPreferenceRepository
       ),
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,

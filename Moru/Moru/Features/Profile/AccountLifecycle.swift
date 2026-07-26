@@ -9,8 +9,7 @@ nonisolated protocol AccountScopedDataCleaning: Sendable {
   func removeAccountScopedData(memberID: Int64) async throws
 }
 
-/// P5 has no account-scoped SwiftData models. P6 replaces this boundary with its
-/// Outbox and server preference cleanup implementation.
+/// Used by previews and tests that intentionally do not construct account-scoped storage.
 nonisolated struct NoAccountScopedDataCleaner: AccountScopedDataCleaning {
   func removeAccountScopedData(memberID: Int64) async throws {}
 }

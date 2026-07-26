@@ -84,6 +84,18 @@ final class AppBootstrapper: ObservableObject {
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
       let accountSessionStore = accountSessionStoreFactory()
+      accountSessionStore.setLoginSucceededHandler { memberID in
+        guard let syncCoordinator = dependencies.syncCoordinator else {
+          return
+        }
+
+        Task { @MainActor in
+          await syncCoordinator.synchronize(
+            memberID: memberID,
+            trigger: .loginSucceeded
+          )
+        }
+      }
       let authRemoteDataSource = DefaultAuthRemoteDataSource(
         apiClient: DefaultAPIClient(
           tokenProvider: accountSessionStore.accessTokenProvider
@@ -96,7 +108,7 @@ final class AppBootstrapper: ObservableObject {
       let accountLifecycleService = DefaultAccountLifecycleService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
-        accountScopedDataCleaner: NoAccountScopedDataCleaner()
+        accountScopedDataCleaner: dependencies.accountScopedDataCleaner
       )
       let navigationCoordinator = AppNavigationCoordinator()
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
