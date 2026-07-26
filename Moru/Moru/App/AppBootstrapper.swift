@@ -80,10 +80,32 @@ final class AppBootstrapper: ObservableObject {
 
     do {
       let modelContainer = try modelContainerFactory()
-      let dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
+      let accountSessionStore = accountSessionStoreFactory()
+      let publicAuthRemoteDataSource = DefaultAuthRemoteDataSource(
+        apiClient: DefaultAPIClient(
+          tokenProvider: accountSessionStore.accessTokenProvider
+        )
+      )
+      let tokenRefreshCoordinator = TokenRefreshCoordinator(
+        authRemoteDataSource: publicAuthRemoteDataSource,
+        accountSessionStore: accountSessionStore
+      )
+      let authenticatedAPIClient = DefaultAPIClient(
+        tokenProvider: accountSessionStore.accessTokenProvider,
+        accessTokenRefresher: tokenRefreshCoordinator
+      )
+      let authRemoteDataSource = DefaultAuthRemoteDataSource(
+        apiClient: authenticatedAPIClient
+      )
+      let voiceRemoteDataSource = DefaultVoiceRemoteDataSource(
+        apiClient: authenticatedAPIClient
+      )
+      let dependencies = DependencyContainer.local(
+        modelContext: modelContainer.mainContext,
+        voiceRemoteDataSource: voiceRemoteDataSource
+      )
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
-      let accountSessionStore = accountSessionStoreFactory()
       accountSessionStore.setLoginSucceededHandler { memberID in
         guard let syncCoordinator = dependencies.syncCoordinator else {
           return
@@ -96,11 +118,6 @@ final class AppBootstrapper: ObservableObject {
           )
         }
       }
-      let authRemoteDataSource = DefaultAuthRemoteDataSource(
-        apiClient: DefaultAPIClient(
-          tokenProvider: accountSessionStore.accessTokenProvider
-        )
-      )
       let appleAccountLinkingService = DefaultAppleAccountLinkingService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore

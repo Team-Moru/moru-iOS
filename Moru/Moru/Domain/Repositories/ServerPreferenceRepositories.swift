@@ -29,4 +29,7 @@ protocol ServerVoiceCatalogRepository: AnyObject {
     _ entries: [ServerVoiceCatalogEntry],
     memberID: Int64
   ) throws
+  func recordAuthoritativeSelection(
+    _ selection: AuthoritativeServerVoiceSelection
+  ) throws
 }
