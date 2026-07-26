@@ -229,7 +229,15 @@ final class FinalScreenVisualTests: XCTestCase {
       onResetSucceeded: {}
     )
     viewModel.loadProfileSettings()
-    return ProfileView(viewModel: viewModel)
+    return ProfileView(
+      viewModel: viewModel,
+      accountSessionStore: AccountSessionStore(
+        credentialStore: KeychainCredentialStore(
+          service: "com.teammoru.MoruTests.final-profile-visual"
+        ),
+        accessTokenProvider: MemoryAccessTokenProvider()
+      )
+    )
   }
 
   @MainActor
@@ -483,9 +491,9 @@ private enum VisualBaseline {
     "moru-pr32-final-history-light-AX3.png":
       "AAAIAOAA5ADUAcgEwWTBNMCkwLTBVMAkwjTDNMjMyMzIjMjQyNDIzMiEyATIBMgEYMDKAsogCYBkyGTIAAAAAA==",
     "moru-pr32-final-profile-light-M.png":
-      "AAAAAEAAkACRgOoB6kHkAREAyADAAPIEwATIAMwAcADyARgAwADhEPBE8sQAEAAAAAAAAAAAEyJsyGTIAAAAAA==",
+      "AAAAAEAAkACRgOoB6kHkAZEAggA8gPSk8iQQEMgA4ADyBMAEyADMAHIA8gEYAMAAoBDwhPKEEzBsyGTIAAAAAA==",
     "moru-pr32-final-profile-light-AX3.png":
-      "AAAQAOAAxADBLG7R6tHtwW3JFjDJANkAMgB2RfAEMwEOAMkA2YAyQDZJ8qVzQTFJAzDEAMSAGyBkyGTIAAAAAA==",
+      "AAAQAOAAxADBLG7R6tHtwW3JMjDIAMiIMyAxJTqh9mT2ZDYZMQE4AAYA2QDZADIA9kXwBDMBCiBkyGTIAAAAAA==",
     "moru-pr32-final-current-routine-light-M.png":
       "AAAAAAAA4ARiBfKY8pjoGFANUA1RDVEFWQ1RBVAN0AyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr32-final-current-routine-light-AX3.png":
