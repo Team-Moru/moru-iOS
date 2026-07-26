@@ -15,6 +15,7 @@ protocol ProfileFlowBuilding: AnyObject {
 @MainActor
 final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
+  private let accountVoiceSelectionUseCase: any AccountVoiceSelectionUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
   private let accountSessionStore: AccountSessionStore
@@ -27,6 +28,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
 
   init(
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
+    accountVoiceSelectionUseCase: any AccountVoiceSelectionUseCaseProtocol,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
     accountSessionStore: AccountSessionStore,
@@ -38,6 +40,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     onResetSucceeded: @escaping @MainActor () -> Void
   ) {
     self.profileSettingsUseCase = profileSettingsUseCase
+    self.accountVoiceSelectionUseCase = accountVoiceSelectionUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
     self.accountSessionStore = accountSessionStore
@@ -54,6 +57,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
       ProfileView(
         viewModel: ProfileViewModel(
           profileSettingsUseCase: profileSettingsUseCase,
+          accountVoiceSelectionUseCase: accountVoiceSelectionUseCase,
           voicePreviewPlayer: voicePreviewPlayer,
           alarmService: alarmService,
           appleAccountLinkingService: appleAccountLinkingService,

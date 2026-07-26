@@ -294,6 +294,26 @@ struct AppRouter: View {
     )
     let profileAlarmService = dependencies.profileAlarmService
       ?? UnavailableProfileAlarmService()
+    let accountVoiceSelectionUseCase: any AccountVoiceSelectionUseCaseProtocol
+    if let remoteDataSource = dependencies.voiceRemoteDataSource,
+       let catalogueRepository = dependencies.serverVoiceCatalogRepository,
+       let mutationRepository = dependencies.serverMutationRepository,
+       let syncCoordinator = dependencies.syncCoordinator {
+      accountVoiceSelectionUseCase = AccountVoiceSelectionUseCase(
+        profileSettingsUseCase: profileSettingsUseCase,
+        voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe,
+        remoteDataSource: remoteDataSource,
+        catalogueRepository: catalogueRepository,
+        mutationRepository: mutationRepository,
+        syncCoordinator: syncCoordinator,
+        accountSessionStore: accountSessionStore
+      )
+    } else {
+      accountVoiceSelectionUseCase = UnavailableAccountVoiceSelectionUseCase(
+        profileSettingsUseCase: profileSettingsUseCase,
+        voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
+      )
+    }
     let resetUseCase = dependencies.localDataResetRepository.map {
       ResetLocalDataUseCase(
         localDataResetRepository: $0,
@@ -302,6 +322,7 @@ struct AppRouter: View {
     }
     let profileBuilder = DefaultProfileFlowBuilder(
       profileSettingsUseCase: profileSettingsUseCase,
+      accountVoiceSelectionUseCase: accountVoiceSelectionUseCase,
       voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
       accountSessionStore: accountSessionStore,

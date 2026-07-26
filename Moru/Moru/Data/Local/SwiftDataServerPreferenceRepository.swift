@@ -245,6 +245,76 @@ final class SwiftDataServerPreferenceRepository:
     }
   }
 
+  func recordAuthoritativeSelection(
+    _ selection: AuthoritativeServerVoiceSelection
+  ) throws {
+    guard selection.memberID > 0 else {
+      throw ServerPreferenceRepositoryError.invalidMemberID
+    }
+
+    let voiceCode = VoiceCompatibilityTable.normalizedServerVoiceCode(
+      selection.voiceCode
+    )
+    let displayName = selection.displayName.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    guard !voiceCode.isEmpty else {
+      throw ServerPreferenceRepositoryError.invalidVoiceCode
+    }
+    guard !displayName.isEmpty, selection.ttsID > 0 else {
+      throw ServerPreferenceRepositoryError.invalidVoiceDisplayName
+    }
+
+    do {
+      let accountEntries = try persistedVoiceEntries().filter {
+        $0.memberID == selection.memberID
+      }
+      var foundSelection = false
+
+      for entry in accountEntries {
+        guard let metadata = VoiceCatalogMetadata.decode(
+          rawValue: entry.tierRawValue
+        ) else {
+          continue
+        }
+
+        let isSelection = entry.voiceCode == voiceCode
+          && metadata.ttsID == selection.ttsID
+        entry.tierRawValue = try VoiceCatalogMetadata(
+          ttsID: metadata.ttsID,
+          proOnly: metadata.proOnly,
+          description: metadata.description,
+          isAuthoritativeSelection: isSelection
+        ).encodedRawValue()
+        foundSelection = foundSelection || isSelection
+      }
+
+      if !foundSelection {
+        modelContext.insert(
+          PersistedVoiceCatalogEntry(
+            id: UUID(),
+            memberID: selection.memberID,
+            voiceCode: voiceCode,
+            displayName: displayName,
+            tierRawValue: try VoiceCatalogMetadata(
+              ttsID: selection.ttsID,
+              proOnly: false,
+              description: nil,
+              isAuthoritativeSelection: true
+            ).encodedRawValue(),
+            isLocallyPlayable: false,
+            fetchedAt: Date()
+          )
+        )
+      }
+
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
+  }
+
   func removeAccountScopedData(memberID: Int64) throws {
     do {
       try persistedMutations()
