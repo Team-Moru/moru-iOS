@@ -53,6 +53,7 @@ final class AccountSessionStore: ObservableObject {
 
   private let credentialStore: any CredentialStore
   private let restorationGuard: any AccountSessionRestorationGuarding
+  private var loginSucceededHandler: (@MainActor (Int64) -> Void)?
 
   init(
     credentialStore: any CredentialStore,
@@ -127,6 +128,13 @@ final class AccountSessionStore: ObservableObject {
         onboardingCompleted: credentials.onboardingCompleted
       )
     )
+    loginSucceededHandler?(credentials.memberID)
+  }
+
+  func setLoginSucceededHandler(
+    _ handler: (@MainActor (Int64) -> Void)?
+  ) {
+    loginSucceededHandler = handler
   }
 
   func credentialsForTokenRefresh(
