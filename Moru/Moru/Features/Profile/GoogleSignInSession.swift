@@ -147,7 +147,10 @@ final class GoogleSignInSession:
     return GIDSignIn.sharedInstance.handle(url)
   }
 
-  func signOut(provider: AuthProvider) {
+  func signOut(
+    provider: AuthProvider,
+    reason: SocialProviderSessionSignOutReason
+  ) async throws {
     guard provider == .google else {
       return
     }

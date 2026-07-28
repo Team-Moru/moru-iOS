@@ -20,6 +20,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let accountSessionStore: AccountSessionStore
   private let socialLoginCoordinator: any SocialLoginCoordinating
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
+  private let kakaoAuthorizationSession: any KakaoAuthorizationStarting
   private let accountLifecycleService: any AccountLifecycleManaging
   private let appCapabilities: AppCapabilities
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
@@ -34,6 +35,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     accountSessionStore: AccountSessionStore,
     socialLoginCoordinator: any SocialLoginCoordinating,
     googleAuthorizationSession: any GoogleAuthorizationStarting,
+    kakaoAuthorizationSession: any KakaoAuthorizationStarting,
     accountLifecycleService: any AccountLifecycleManaging,
     appCapabilities: AppCapabilities,
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
@@ -47,6 +49,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.accountSessionStore = accountSessionStore
     self.socialLoginCoordinator = socialLoginCoordinator
     self.googleAuthorizationSession = googleAuthorizationSession
+    self.kakaoAuthorizationSession = kakaoAuthorizationSession
     self.accountLifecycleService = accountLifecycleService
     self.appCapabilities = appCapabilities
     self.resetUseCase = resetUseCase
@@ -71,6 +74,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
         ),
         accountSessionStore: accountSessionStore,
         googleAuthorizationSession: googleAuthorizationSession,
+        kakaoAuthorizationSession: kakaoAuthorizationSession,
         appCapabilities: appCapabilities
       )
     )

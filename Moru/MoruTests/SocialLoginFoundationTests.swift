@@ -154,6 +154,8 @@ final class SocialLoginFoundationTests: XCTestCase {
         SocialLoginPublicConfiguration.googleReversedClientIDInfoKey:
           " com.googleusercontent.apps.public ",
         SocialLoginPublicConfiguration.kakaoNativeAppKeyInfoKey: "public-kakao-key",
+        SocialLoginPublicConfiguration.kakaoURLSchemeInfoKey:
+          "kakaopublic-kakao-key",
         "MoruGoogleClientSecret": "must-not-be-read",
         "MoruKakaoAdminKey": "must-not-be-read",
       ]
@@ -166,13 +168,15 @@ final class SocialLoginFoundationTests: XCTestCase {
       "com.googleusercontent.apps.public"
     )
     XCTAssertEqual(configuration.kakaoNativeAppKey, "public-kakao-key")
+    XCTAssertEqual(configuration.kakaoURLScheme, "kakaopublic-kakao-key")
   }
 
   @MainActor
   func testCallbackRouterDispatchesOnlyConfiguredProviderSchemes() throws {
     let configuration = SocialLoginPublicConfiguration(
       googleReversedClientID: "com.googleusercontent.apps.public",
-      kakaoNativeAppKey: "public-kakao-key"
+      kakaoNativeAppKey: "0123456789abcdef0123456789abcdef",
+      kakaoURLScheme: "kakao0123456789abcdef0123456789abcdef"
     )
     let router = AuthCallbackRouter(configuration: configuration)
     let googleHandler = AuthCallbackHandlerSpy()
@@ -184,7 +188,7 @@ final class SocialLoginFoundationTests: XCTestCase {
       URL(string: "com.googleusercontent.apps.public:/oauth")
     )
     let kakaoURL = try XCTUnwrap(
-      URL(string: "kakaopublic-kakao-key://oauth")
+      URL(string: "kakao0123456789abcdef0123456789abcdef://oauth")
     )
     let unknownURL = try XCTUnwrap(URL(string: "moru://oauth"))
 

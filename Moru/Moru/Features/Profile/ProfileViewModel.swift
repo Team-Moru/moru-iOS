@@ -241,6 +241,40 @@ final class ProfileViewModel {
     }
   }
 
+  func kakaoAuthorizationDidComplete(
+    _ outcome: SocialAuthorizationOutcome
+  ) async {
+    guard !isAccountLinkInProgress,
+          !isAccountLifecycleInProgress else {
+      return
+    }
+
+    accountErrorMessage = nil
+
+    switch outcome {
+    case .cancelled:
+      return
+    case .failed:
+      reportAccountError(
+        "Kakao 인증 정보를 확인하지 못했어요. "
+          + "로컬 데이터는 그대로 사용할 수 있어요."
+      )
+    case .authorized(let authorization):
+      isAccountLinkInProgress = true
+      defer { isAccountLinkInProgress = false }
+
+      do {
+        try await socialLoginCoordinator.login(with: authorization)
+        announce("Kakao 계정이 연결되었어요.")
+      } catch {
+        reportAccountError(
+          "Kakao 계정을 연결하지 못했어요. "
+            + "로컬 데이터는 그대로 사용할 수 있어요."
+        )
+      }
+    }
+  }
+
   func logoutButtonDidTap() async {
     guard !isAccountLinkInProgress,
           !isAccountLifecycleInProgress else {

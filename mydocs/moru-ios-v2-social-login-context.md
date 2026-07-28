@@ -1,7 +1,7 @@
 # MORU iOS v2 Social Login 실행 Context
 
 - 마지막 갱신: 2026-07-27
-- 상태: `L2_OPEN_DRAFT`
+- 상태: `L3_OPEN_DRAFT`
 - 고정 계획: `mydocs/moru-ios-v2-social-login-plan.md`
 - 원본 계획: `/Users/minhyeok/Downloads/PLAN (5).md`
 - v2 context:
@@ -219,6 +219,103 @@
   - Google session과 Apple credential monitor는 각 provider에만 반응
   - AppCapabilities account/server master kill switch와 local-first Source of Truth
   - L2 Draft PR #106의 CI 확인·OPEN 동결 후 Kakao iOS SDK 2.28.x를 고정할 것
+
+## L3 Ledger
+
+- Issue: https://github.com/Team-Moru/moru-iOS/issues/107
+- PR: https://github.com/Team-Moru/moru-iOS/pull/108 (`OPEN`, `DRAFT`)
+- Branch: `feat/#107-kakao-login`
+- Base branch: `feat/#105-google-login`
+- Base SHA: `86ff16379b52230f479aa099d36bc2b2fc084a8b`
+- Worktree: `/private/tmp/moru-ios-l3.PvWgag`
+- 구현 Head SHA: `935c383b913bb8027b1418c2df11714934347045`
+- 최종 PR Head: 이 ledger 문서 commit(정확한 SHA는 PR #108 기준)
+- Merge SHA: 없음
+- 구현 기능:
+  - Kakao iOS SDK 원격 SPM `2.28.0` pin과 앱 target의 최소
+    `KakaoSDKCommon`, `KakaoSDKAuth`, `KakaoSDKUser` product 직접 연결
+  - 32자리 16진수 Native app key와 정확한 `kakao{NativeAppKey}` callback scheme을
+    함께 검증하는 공개 build configuration gate
+  - Kakao Talk 조회용 `kakaokompassauth` scheme과 앱 루트 `onOpenURL` →
+    `AuthCallbackRouter` → Kakao SDK callback 연결
+  - 공식 Kakao 한국어 medium-wide PNG 로그인 버튼
+  - Talk 설치 시 Talk 로그인만, 미설치 시 Kakao Account 로그인만 수행하며
+    사용자 취소·실패 뒤 자동 fallback 없음
+  - Kakao access token만 MORU `POST /auth/login/kakao`의 `token`으로 전달
+  - MORU 로그아웃 때 Kakao SDK `UserApi.logout`, MORU 회원 탈퇴 서버 성공 뒤
+    Kakao SDK `UserApi.unlink` 수행
+  - Google·Kakao provider SDK local session 정리를 함께 보존하는 composite
+- 주요 계약 변경:
+  - configuration gate를 통과한 경우에만 Kakao SDK 초기화·로그인·callback 처리
+  - Kakao refresh token·ID token·profile·email·authorization code는 MORU 서버
+    요청에 포함하지 않음
+  - Talk 설치 여부가 로그인 adapter를 결정하며 취소·오류 때 다른 adapter로 전환하지
+    않음
+  - 일반 로그아웃은 Kakao session logout, 회원 탈퇴는 MORU 서버 성공 뒤 unlink
+  - provider sign-out composite가 Google·Kakao 정리 경계를 모두 보존
+  - Kakao 로그인 성공 여부와 무관하게 로컬 프로필·루틴·기록 교체 없음
+- SDK pin:
+  - 원격 URL: `https://github.com/kakao/kakao-ios-sdk`
+  - resolved version/revision: `2.28.0` /
+    `2a68ca01e2d7900a1559b31d0d59843837f130f2`
+  - 직접 연결 product: `KakaoSDKCommon`, `KakaoSDKAuth`, `KakaoSDKUser`
+- 공개 configuration blocker:
+  - 실제 Kakao Developers Native app key를 제공받지 못함
+  - Kakao Developers에 bundle ID `com.teammoru.Moru` 등록 필요
+  - Kakao Login 활성화와 필요한 동의 항목 설정 필요
+  - Debug/Release 환경별 Native app key와 callback scheme 운영값 확정 필요
+  - MORU backend의 실제 Kakao access token 검증 E2E 필요
+  - placeholder configuration은 실제 값으로 오인되지 않으며 로그인과 callback을 차단
+  - 상세 설정·검증 대기 항목: `Moru/docs/KakaoLoginReadiness.md`
+- SwiftData/schema·migration 변경: 없음(고정)
+- Local Repository·routine Domain 계약 변경: 없음(고정)
+- 테스트:
+  - 관련 XCTest 46/46 성공, failed/skipped 0
+  - 전체 XCTest 380/380 성공, failed/skipped 0
+- 빌드:
+  - 원격 Kakao SPM package resolution 성공
+  - iPhone 16 Simulator Debug 성공
+  - generic iPhone Debug 성공
+  - generic iPhone Release 성공
+- 정적 검증:
+  - iPhone functional gate 성공
+  - SwiftData boundary gate 성공
+  - source Info.plist·entitlement와 Debug/Release built Info.plist `plutil` 성공
+  - `git diff --check` 성공
+  - Kakao admin key·client secret·private key·실제 Native app key 저장소 추가 없음
+- 실제 iPhone: 미검증
+  - Kakao Talk 설치 상태의 로그인·취소·callback 복귀
+  - Kakao Talk 미설치 상태의 Kakao Account 로그인·취소
+  - 사용자 취소·실패 뒤 다른 로그인 방식으로 fallback하지 않는지 확인
+  - Kakao access token만 사용하는 실제 MORU backend E2E
+  - 로그아웃·회원 탈퇴 unlink·재로그인
+  - 앱 재실행 뒤 MORU Keychain session 복원
+- 리뷰:
+  - 로컬 자체 리뷰 완료
+  - GitHub review·inline thread와 CI는 최종 ledger head push 후 확인
+- CI(ledger 작성 시점):
+  - 최종 ledger head push 후 확인
+- 남은 위험·release blocker:
+  - 실제 Native app key·Kakao Developers bundle/Login/consent 설정이 없어 Kakao
+    로그인을 활성화할 수 없음
+  - 실제 MORU backend의 Kakao access token 검증과 실패 응답 계약 미검증
+  - 실제 Kakao Talk·Kakao Account·callback·logout·unlink의 실제 iPhone 동작 미검증
+  - placeholder build는 Kakao 로그인을 의도적으로 제공하지 않음
+- L4 입력:
+  - Apple·Google·Kakao 3개 provider를 보존하는 `SocialLoginCoordinator`와 공식
+    provider 버튼
+  - Google·Kakao callback을 처리하는 root `AuthCallbackRouter`
+  - provider별 configuration gate와 `AppCapabilities` account/server master kill switch
+  - 로그아웃·탈퇴 뒤 provider SDK session까지 정리하는 account lifecycle composite
+  - SwiftData/Local Repository가 Source of Truth인 local-first 계약
+  - Splash는 bootstrap 로딩 전용으로 유지하고 별도 `AccountEntryView`를 둘 것
+  - LocalProfile이 있으면 계정 상태와 무관하게 Main으로 진입할 것
+  - LocalProfile이 없고 계정 복원 중이면 Splash, 미로그인이면 선택형 로그인 화면을
+    표시할 것
+  - 로그인 성공 또는 건너뛰기 뒤 기존 로컬 온보딩을 진행할 것
+  - 로그아웃·토큰 만료·탈퇴 뒤에도 로컬 프로필과 루틴이 있으면 Main을 유지할 것
+  - 공식 provider 버튼, `로그인 없이 시작하기`, local-first 안내, 정책 링크를 제공할 것
+  - L3 Draft PR #108의 CI 확인·OPEN 동결 후 선택형 로그인 진입 화면을 구현할 것
 
 ## L0 고정 범위
 
