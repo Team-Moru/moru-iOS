@@ -11,6 +11,28 @@ nonisolated struct SignedInAccount: Equatable, Sendable {
   let onboardingCompleted: Bool
 }
 
+nonisolated struct AccountLifecycleCredentials: Equatable, Sendable {
+  let memberID: Int64
+  let refreshToken: String
+}
+
+nonisolated extension AccountLifecycleCredentials:
+  CustomDebugStringConvertible,
+  CustomStringConvertible {
+  var description: String {
+    """
+    AccountLifecycleCredentials(\
+    memberID: \(memberID), \
+    refreshToken: <redacted>\
+    )
+    """
+  }
+
+  var debugDescription: String {
+    description
+  }
+}
+
 nonisolated enum AccountSessionFailure: Equatable, Sendable {
   case invalidCredentials
   case credentialStoreUnavailable
@@ -30,17 +52,34 @@ final class AccountSessionStore: ObservableObject {
   let accessTokenProvider: MemoryAccessTokenProvider
 
   private let credentialStore: any CredentialStore
+  private let restorationGuard: any AccountSessionRestorationGuarding
 
   init(
     credentialStore: any CredentialStore,
-    accessTokenProvider: MemoryAccessTokenProvider
+    accessTokenProvider: MemoryAccessTokenProvider,
+    restorationGuard: any AccountSessionRestorationGuarding =
+      InMemoryAccountSessionRestorationGuard()
   ) {
     self.credentialStore = credentialStore
     self.accessTokenProvider = accessTokenProvider
+    self.restorationGuard = restorationGuard
   }
 
   func restore() {
     state = .restoring
+
+    guard !restorationGuard.isRestorationBlocked else {
+      do {
+        try credentialStore.remove()
+        restorationGuard.allowRestoration()
+      } catch {
+        // Keep the non-sensitive guard set so stale credentials cannot revive.
+      }
+
+      accessTokenProvider.remove()
+      state = .signedOut
+      return
+    }
 
     do {
       guard let credentials = try credentialStore.load() else {
@@ -80,6 +119,7 @@ final class AccountSessionStore: ObservableObject {
     }
 
     try credentialStore.save(credentials)
+    restorationGuard.allowRestoration()
     accessTokenProvider.replace(with: credentials.accessToken)
     state = .signedIn(
       SignedInAccount(
@@ -123,6 +163,42 @@ final class AccountSessionStore: ObservableObject {
     )
   }
 
+  func credentialsForAccountLifecycle() throws -> AccountLifecycleCredentials {
+    guard case .signedIn(let account) = state,
+          let accessToken = accessTokenProvider.accessToken,
+          let credentials = try credentialStore.load(),
+          credentials.isValid,
+          credentials.memberID == account.memberID,
+          credentials.accessToken == accessToken else {
+      throw CredentialStoreError.invalidCredentials
+    }
+
+    return AccountLifecycleCredentials(
+      memberID: credentials.memberID,
+      refreshToken: credentials.refreshToken
+    )
+  }
+
+  func removeLocalAccountSession() throws {
+    restorationGuard.blockRestoration()
+    let removalError: Error?
+
+    do {
+      try credentialStore.remove()
+      restorationGuard.allowRestoration()
+      removalError = nil
+    } catch {
+      removalError = error
+    }
+
+    accessTokenProvider.remove()
+    state = .signedOut
+
+    if let removalError {
+      throw removalError
+    }
+  }
+
   func invalidateAfterTokenRefreshFailure(
     matching accessToken: String
   ) {
@@ -130,8 +206,6 @@ final class AccountSessionStore: ObservableObject {
       return
     }
 
-    try? credentialStore.remove()
-    accessTokenProvider.remove()
-    state = .signedOut
+    try? removeLocalAccountSession()
   }
 }

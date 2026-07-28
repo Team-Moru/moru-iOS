@@ -22,6 +22,7 @@ final class ProfileViewModel {
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
   private let appleAccountLinkingService: any AppleAccountLinking
+  private let accountLifecycleService: any AccountLifecycleManaging
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
   private let resetAvailability: @MainActor () -> Bool
   private let onOpenSettings: @MainActor () -> Void
@@ -36,9 +37,14 @@ final class ProfileViewModel {
   private(set) var isAlarmRequestInProgress = false
   private(set) var isResetInProgress = false
   private(set) var isAccountLinkInProgress = false
+  private(set) var accountLifecycleAction: AccountLifecycleAction?
 
   var isResetAvailable: Bool {
     resetUseCase != nil && resetAvailability() && !isResetInProgress
+  }
+
+  var isAccountLifecycleInProgress: Bool {
+    accountLifecycleAction != nil
   }
 
   var resetAvailabilityMessage: String? {
@@ -58,6 +64,8 @@ final class ProfileViewModel {
     alarmService: any ProfileAlarmServicing,
     appleAccountLinkingService: any AppleAccountLinking =
       UnavailableAppleAccountLinkingService(),
+    accountLifecycleService: any AccountLifecycleManaging =
+      UnavailableAccountLifecycleService(),
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
     resetAvailability: @escaping @MainActor () -> Bool,
     onOpenSettings: @escaping @MainActor () -> Void,
@@ -67,6 +75,7 @@ final class ProfileViewModel {
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
     self.appleAccountLinkingService = appleAccountLinkingService
+    self.accountLifecycleService = accountLifecycleService
     self.resetUseCase = resetUseCase
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
@@ -167,7 +176,8 @@ final class ProfileViewModel {
   func appleAuthorizationDidComplete(
     _ outcome: AppleAuthorizationOutcome
   ) async {
-    guard !isAccountLinkInProgress else {
+    guard !isAccountLinkInProgress,
+          !isAccountLifecycleInProgress else {
       return
     }
 
@@ -197,6 +207,52 @@ final class ProfileViewModel {
             + "로컬 데이터는 그대로 사용할 수 있어요."
         )
       }
+    }
+  }
+
+  func logoutButtonDidTap() async {
+    guard !isAccountLinkInProgress,
+          !isAccountLifecycleInProgress else {
+      return
+    }
+
+    accountLifecycleAction = .logout
+    accountErrorMessage = nil
+    defer { accountLifecycleAction = nil }
+
+    do {
+      try await accountLifecycleService.logout()
+      announce("로그아웃했어요. 로컬 루틴과 기록은 유지됩니다.")
+    } catch {
+      reportAccountError(
+        "로그아웃 정보를 정리하지 못했어요. 다시 시도해 주세요."
+      )
+    }
+  }
+
+  func withdrawalConfirmationButtonDidTap() async {
+    guard !isAccountLinkInProgress,
+          !isAccountLifecycleInProgress else {
+      return
+    }
+
+    accountLifecycleAction = .withdrawal
+    accountErrorMessage = nil
+    defer { accountLifecycleAction = nil }
+
+    do {
+      try await accountLifecycleService.withdraw()
+      announce("회원 탈퇴가 완료됐어요. 로컬 루틴과 기록은 유지됩니다.")
+    } catch AccountLifecycleError.localCleanupFailed {
+      reportAccountError(
+        "회원 탈퇴는 완료됐지만 "
+          + "기기의 계정 정보를 모두 정리하지 못했어요."
+      )
+    } catch {
+      reportAccountError(
+        "회원 탈퇴를 완료하지 못했어요. "
+          + "계정 연결은 유지되며 다시 시도할 수 있어요."
+      )
     }
   }
 
@@ -259,4 +315,9 @@ final class ProfileViewModel {
       "이름을 저장하지 못했어요. 다시 시도해 주세요."
     }
   }
+}
+
+nonisolated enum AccountLifecycleAction: Equatable, Sendable {
+  case logout
+  case withdrawal
 }

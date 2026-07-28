@@ -47,6 +47,7 @@ struct MoruApp: App {
             sessionStore: app.sessionStore,
             accountSessionStore: app.accountSessionStore,
             appleAccountLinkingService: app.appleAccountLinkingService,
+            accountLifecycleService: app.accountLifecycleService,
             coordinator: app.navigationCoordinator,
             onboardingBuilder: app.onboardingBuilder,
             routinePlayerBuilder: app.routinePlayerBuilder

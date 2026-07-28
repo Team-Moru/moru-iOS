@@ -54,6 +54,7 @@ struct AppRouter: View {
 
   private let dependencies: DependencyContainer
   private let appleAccountLinkingService: any AppleAccountLinking
+  private let accountLifecycleService: any AccountLifecycleManaging
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
   private let homeBuilder: any HomeFlowBuilding
@@ -64,6 +65,8 @@ struct AppRouter: View {
     sessionStore: SessionStore,
     accountSessionStore: AccountSessionStore,
     appleAccountLinkingService: any AppleAccountLinking,
+    accountLifecycleService: any AccountLifecycleManaging =
+      UnavailableAccountLifecycleService(),
     coordinator: AppNavigationCoordinator,
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
@@ -75,6 +78,7 @@ struct AppRouter: View {
     _coordinator = ObservedObject(wrappedValue: coordinator)
     self.dependencies = dependencies
     self.appleAccountLinkingService = appleAccountLinkingService
+    self.accountLifecycleService = accountLifecycleService
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
     _state = StateObject(wrappedValue: state ?? AppRouterState())
@@ -296,6 +300,7 @@ struct AppRouter: View {
       alarmService: profileAlarmService,
       accountSessionStore: accountSessionStore,
       appleAccountLinkingService: appleAccountLinkingService,
+      accountLifecycleService: accountLifecycleService,
       resetUseCase: resetUseCase,
       resetAvailability: {
         coordinator.presentation == nil && coordinator.pendingDismissalToken == nil
