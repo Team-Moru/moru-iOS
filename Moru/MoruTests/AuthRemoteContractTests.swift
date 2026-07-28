@@ -115,6 +115,12 @@ final class AuthRemoteContractTests: XCTestCase {
       body["authorizationCode"] as? String,
       "apple-authorization-code"
     )
+    XCTAssertEqual(
+      Set(body.keys),
+      Set(["token", "authorizationCode"])
+    )
+    XCTAssertNil(body["rawNonce"])
+    XCTAssertNil(body["providerUserIdentifier"])
   }
 
   func testLoginResponseAllowsMissingIsNewMember() async throws {

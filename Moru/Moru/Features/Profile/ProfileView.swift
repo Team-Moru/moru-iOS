@@ -26,6 +26,7 @@ struct ProfileView: View {
   @State private var isResetConfirmationPresented = false
   @State private var isAppleSignInPresented = false
   @State private var isWithdrawalConfirmationPresented = false
+  @State private var appleAuthorizationSession = AppleAuthorizationSession()
   private let appCapabilities: AppCapabilities
   private let automaticallyLoads: Bool
 
@@ -614,9 +615,9 @@ struct ProfileView: View {
         .fixedSize(horizontal: false, vertical: true)
 
         SignInWithAppleButton(.continue) { request in
-          request.requestedScopes = []
+          _ = appleAuthorizationSession.configure(request)
         } onCompletion: { result in
-          let outcome = AppleAuthorizationAdapter().outcome(for: result)
+          let outcome = appleAuthorizationSession.outcome(for: result)
           isAppleSignInPresented = false
 
           Task {

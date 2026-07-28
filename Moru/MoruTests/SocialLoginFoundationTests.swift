@@ -26,13 +26,15 @@ final class SocialLoginFoundationTests: XCTestCase {
       from: legacyData
     )
     XCTAssertEqual(legacyCredentials.provider, .apple)
+    XCTAssertNil(legacyCredentials.providerUserIdentifier)
 
     let googleCredentials = AccountCredentials(
       memberID: 8,
       accessToken: "google-access-token",
       refreshToken: "google-refresh-token",
       onboardingCompleted: false,
-      provider: .google
+      provider: .google,
+      providerUserIdentifier: "google-user-id"
     )
     let encoded = try JSONEncoder().encode(googleCredentials)
     XCTAssertEqual(
@@ -43,13 +45,19 @@ final class SocialLoginFoundationTests: XCTestCase {
       JSONSerialization.jsonObject(with: encoded) as? [String: Any]
     )
     XCTAssertEqual(object["provider"] as? String, "google")
+    XCTAssertEqual(
+      object["providerUserIdentifier"] as? String,
+      "google-user-id"
+    )
   }
 
   func testSocialAuthorizationDescriptionRedactsProviderPayload() {
     let authorization = SocialAuthorization(
       provider: .kakao,
       token: "kakao-access-token",
-      authorizationCode: "private-authorization-code"
+      authorizationCode: "private-authorization-code",
+      rawNonce: "private-raw-nonce",
+      providerUserIdentifier: "private-provider-user-id"
     )
     let values = [
       String(describing: authorization),
@@ -61,6 +69,10 @@ final class SocialLoginFoundationTests: XCTestCase {
     XCTAssertTrue(values.allSatisfy { !$0.contains("kakao-access-token") })
     XCTAssertTrue(
       values.allSatisfy { !$0.contains("private-authorization-code") }
+    )
+    XCTAssertTrue(values.allSatisfy { !$0.contains("private-raw-nonce") })
+    XCTAssertTrue(
+      values.allSatisfy { !$0.contains("private-provider-user-id") }
     )
   }
 

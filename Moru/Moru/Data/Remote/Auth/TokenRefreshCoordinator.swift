@@ -156,7 +156,8 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
       onboardingCompleted: response.onboardingCompleted,
-      provider: previousCredentials.provider
+      provider: previousCredentials.provider,
+      providerUserIdentifier: previousCredentials.providerUserIdentifier
     )
 
     guard credentials.isValid else {

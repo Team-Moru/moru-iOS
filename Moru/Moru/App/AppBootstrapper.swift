@@ -14,6 +14,7 @@ struct BootstrappedApp {
   let dependencies: DependencyContainer
   let sessionStore: SessionStore
   let accountSessionStore: AccountSessionStore
+  let appleCredentialMonitor: AppleCredentialMonitor
   let socialLoginCoordinator: any SocialLoginCoordinating
   let accountLifecycleService: any AccountLifecycleManaging
   let appCapabilities: AppCapabilities
@@ -105,6 +106,10 @@ final class AppBootstrapper: ObservableObject {
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore
       )
+      let appleCredentialMonitor = AppleCredentialMonitor(
+        accountSessionStore: accountSessionStore
+      )
+      appleCredentialMonitor.start()
       let accountLifecycleService = DefaultAccountLifecycleService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
@@ -123,6 +128,7 @@ final class AppBootstrapper: ObservableObject {
           dependencies: dependencies,
           sessionStore: sessionStore,
           accountSessionStore: accountSessionStore,
+          appleCredentialMonitor: appleCredentialMonitor,
           socialLoginCoordinator: socialLoginCoordinator,
           accountLifecycleService: accountLifecycleService,
           appCapabilities: appCapabilities,
