@@ -195,6 +195,13 @@ struct AppRouter: View {
       Task {
         await consumePendingAlarmIngress()
         await dependencies.alarmScheduleMutator?.reconcile()
+        if appCapabilities.shouldAllowServerRequests,
+           case .signedIn(let account) = accountSessionStore.state {
+          await dependencies.syncCoordinator?.synchronize(
+            memberID: account.memberID,
+            trigger: .appActive
+          )
+        }
       }
     }
     .onChange(of: sessionStore.phase) { _, newPhase in
