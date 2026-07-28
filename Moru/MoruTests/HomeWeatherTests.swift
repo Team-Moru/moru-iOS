@@ -48,6 +48,60 @@ final class HomeWeatherTests: XCTestCase {
     }
   }
 
+  func testLocationFixAcceptsRecentCachedLocationForIPadCompatibility() {
+    let now = fixtureDate("2026-07-28T09:00:00Z")
+    let requestedAt = now.addingTimeInterval(-1)
+    let recentCachedLocation = CLLocation(
+      coordinate: CLLocationCoordinate2D(latitude: 37.5666, longitude: 126.9781),
+      altitude: 0,
+      horizontalAccuracy: 1_000,
+      verticalAccuracy: -1,
+      timestamp: now.addingTimeInterval(-10 * 60)
+    )
+
+    XCTAssertTrue(
+      CoreLocationWeatherService.isValidLocationFix(
+        recentCachedLocation,
+        requestedAt: requestedAt,
+        now: now
+      )
+    )
+  }
+
+  func testLocationFixRejectsStaleOrFutureLocation() {
+    let now = fixtureDate("2026-07-28T09:00:00Z")
+    let requestedAt = now.addingTimeInterval(-1)
+    let staleLocation = CLLocation(
+      coordinate: CLLocationCoordinate2D(latitude: 37.5666, longitude: 126.9781),
+      altitude: 0,
+      horizontalAccuracy: 1_000,
+      verticalAccuracy: -1,
+      timestamp: now.addingTimeInterval(-15 * 60 - 1)
+    )
+    let futureLocation = CLLocation(
+      coordinate: CLLocationCoordinate2D(latitude: 37.5666, longitude: 126.9781),
+      altitude: 0,
+      horizontalAccuracy: 1_000,
+      verticalAccuracy: -1,
+      timestamp: now.addingTimeInterval(6)
+    )
+
+    XCTAssertFalse(
+      CoreLocationWeatherService.isValidLocationFix(
+        staleLocation,
+        requestedAt: requestedAt,
+        now: now
+      )
+    )
+    XCTAssertFalse(
+      CoreLocationWeatherService.isValidLocationFix(
+        futureLocation,
+        requestedAt: requestedAt,
+        now: now
+      )
+    )
+  }
+
   @MainActor
   func testAuthorizedRequestMovesThroughPermissionLocationAndWeatherStates() async {
     let now = fixtureDate("2026-07-22T09:00:00Z")

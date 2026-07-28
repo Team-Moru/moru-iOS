@@ -250,12 +250,16 @@ private struct HomeWeatherCard: View {
   let requestWeather: () -> Void
 
   var body: some View {
-    Group {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      Label("현재 위치 날씨", systemImage: "cloud.sun.fill")
+        .homeFigmaTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textPrimary)
+
       weatherContent
     }
     .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.vertical, MoruPilotSpacing.twelve)
-    .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+    .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
     .homePilotSurface()
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("home.weather.card")
@@ -273,7 +277,10 @@ private struct HomeWeatherCard: View {
     case .stale(let snapshot):
       weatherSnapshotContent(snapshot, updateText: "마지막 업데이트")
     case .denied:
-      weatherMessage("위치 권한이 꺼져 있어요")
+      VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        weatherMessage("위치 권한이 꺼져 있어요")
+        openLocationSettingsButton
+      }
     case .restricted:
       weatherMessage("위치 접근이 제한되어 있어요")
     case .noFix:
@@ -308,6 +315,19 @@ private struct HomeWeatherCard: View {
         .foregroundStyle(MoruPilotColor.textPrimary)
     }
     .accessibilityHint("현재 위치의 날씨를 요청합니다.")
+  }
+
+  private var openLocationSettingsButton: some View {
+    Button {
+      Task {
+        await AppSettingsOpener().open()
+      }
+    } label: {
+      Label("설정에서 위치 권한 켜기", systemImage: "gearshape.fill")
+        .homeFigmaTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textPrimary)
+    }
+    .accessibilityHint("MORU의 위치 권한을 변경할 수 있는 설정을 엽니다.")
   }
 
   private func weatherSnapshotContent(

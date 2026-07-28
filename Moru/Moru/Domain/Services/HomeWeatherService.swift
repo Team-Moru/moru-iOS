@@ -49,6 +49,10 @@ protocol HomeWeatherService: AnyObject {
 
 @MainActor
 final class CoreLocationWeatherService: NSObject, HomeWeatherService {
+  nonisolated private static let maximumLocationAge: TimeInterval = 15 * 60
+  private static let maximumLocationRequestAttempts = 3
+  private static let locationRequestTimeout: Duration = .seconds(10)
+
   private let locationManager: CLLocationManager
   private let weatherService: WeatherService
   private var authorizationContinuations: [
@@ -56,12 +60,15 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   ] = []
   private var locationContinuations: [CheckedContinuation<CLLocation, Error>] = []
   private var locationRequestStartedAt: Date?
+  private var locationRequestAttempt = 0
+  private var locationTimeoutTask: Task<Void, Never>?
 
   override init() {
     locationManager = CLLocationManager()
     weatherService = .shared
     super.init()
     locationManager.delegate = self
+    locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
   }
 
   var authorizationStatus: HomeWeatherAuthorizationStatus {
@@ -118,8 +125,8 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
       locationContinuations.append(continuation)
 
       if shouldRequestLocation {
-        locationRequestStartedAt = Date()
-        locationManager.requestLocation()
+        locationRequestAttempt = 0
+        startLocationRequest()
       }
     }
   }
@@ -164,9 +171,12 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   }
 
   func cancelCurrentLocationRequests() {
+    locationTimeoutTask?.cancel()
+    locationTimeoutTask = nil
     let continuations = locationContinuations
     locationContinuations.removeAll()
     locationRequestStartedAt = nil
+    locationRequestAttempt = 0
     continuations.forEach { $0.resume(throwing: CancellationError()) }
   }
 
@@ -185,13 +195,13 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
     requestedAt: Date?,
     now: Date
   ) -> Bool {
-    guard let requestedAt, isValidLocation(location) else {
+    guard requestedAt != nil, isValidLocation(location) else {
       return false
     }
 
-    let tolerance: TimeInterval = 5
-    return location.timestamp >= requestedAt.addingTimeInterval(-tolerance)
-      && location.timestamp <= now.addingTimeInterval(tolerance)
+    let futureTolerance: TimeInterval = 5
+    return location.timestamp >= now.addingTimeInterval(-maximumLocationAge)
+      && location.timestamp <= now.addingTimeInterval(futureTolerance)
   }
 
   nonisolated static func condition(for condition: WeatherCondition) -> HomeWeatherCondition {
@@ -240,10 +250,45 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   }
 
   private func resumeLocationContinuations(throwing error: Error) {
+    locationTimeoutTask?.cancel()
+    locationTimeoutTask = nil
     let continuations = locationContinuations
     locationContinuations.removeAll()
     locationRequestStartedAt = nil
+    locationRequestAttempt = 0
     continuations.forEach { $0.resume(throwing: error) }
+  }
+
+  private func startLocationRequest() {
+    guard !locationContinuations.isEmpty else {
+      return
+    }
+
+    locationTimeoutTask?.cancel()
+    locationRequestAttempt += 1
+    locationRequestStartedAt = Date()
+    locationManager.requestLocation()
+
+    locationTimeoutTask = Task { [weak self] in
+      try? await Task.sleep(for: Self.locationRequestTimeout)
+      guard !Task.isCancelled else {
+        return
+      }
+
+      self?.retryLocationRequestOrFinish()
+    }
+  }
+
+  private func retryLocationRequestOrFinish() {
+    guard !locationContinuations.isEmpty else {
+      return
+    }
+
+    if locationRequestAttempt < Self.maximumLocationRequestAttempts {
+      startLocationRequest()
+    } else {
+      resumeLocationContinuations(throwing: HomeWeatherServiceError.noLocationFix)
+    }
   }
 }
 
@@ -264,13 +309,16 @@ extension CoreLocationWeatherService: CLLocationManagerDelegate {
         now: Date()
       )
     }) else {
-      resumeLocationContinuations(throwing: HomeWeatherServiceError.noLocationFix)
+      retryLocationRequestOrFinish()
       return
     }
 
+    locationTimeoutTask?.cancel()
+    locationTimeoutTask = nil
     let continuations = locationContinuations
     locationContinuations.removeAll()
     locationRequestStartedAt = nil
+    locationRequestAttempt = 0
     continuations.forEach { $0.resume(returning: location) }
   }
 
@@ -278,6 +326,10 @@ extension CoreLocationWeatherService: CLLocationManagerDelegate {
     let serviceError: HomeWeatherServiceError
     if let locationError = error as? CLError, locationError.code == .denied {
       serviceError = .authorizationDenied
+    } else if let locationError = error as? CLError,
+              locationError.code == .locationUnknown {
+      retryLocationRequestOrFinish()
+      return
     } else {
       serviceError = .noLocationFix
     }
