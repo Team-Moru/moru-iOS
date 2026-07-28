@@ -11,55 +11,111 @@ import SwiftUI
 import GoogleSignInSwift
 
 nonisolated struct AccountEntryPolicyConfiguration: Equatable, Sendable {
+  private enum Route {
+    case main
+    case privacy
+    case terms
+    case support
+
+    var infoKey: String {
+      switch self {
+      case .main:
+        "MoruMainURL"
+      case .privacy:
+        "MoruPrivacyPolicyURL"
+      case .terms:
+        "MoruTermsOfServiceURL"
+      case .support:
+        "MoruSupportURL"
+      }
+    }
+
+    var path: String {
+      switch self {
+      case .main:
+        "/"
+      case .privacy:
+        "/privacy"
+      case .terms:
+        "/terms"
+      case .support:
+        "/support"
+      }
+    }
+  }
+
+  private static let allowedHost = "team-moru.github.io"
+
+  let mainURL: URL?
   let privacyPolicyURL: URL?
   let termsOfServiceURL: URL?
+  let supportURL: URL?
 
   var isReady: Bool {
-    privacyPolicyURL != nil && termsOfServiceURL != nil
+    mainURL != nil
+      && privacyPolicyURL != nil
+      && termsOfServiceURL != nil
+      && supportURL != nil
   }
 
   init(
+    mainURL: URL?,
     privacyPolicyURL: URL?,
-    termsOfServiceURL: URL?
+    termsOfServiceURL: URL?,
+    supportURL: URL?
   ) {
-    self.privacyPolicyURL = Self.publicHTTPSURL(privacyPolicyURL)
-    self.termsOfServiceURL = Self.publicHTTPSURL(termsOfServiceURL)
+    self.mainURL = Self.publicHTTPSURL(mainURL, route: .main)
+    self.privacyPolicyURL = Self.publicHTTPSURL(
+      privacyPolicyURL,
+      route: .privacy
+    )
+    self.termsOfServiceURL = Self.publicHTTPSURL(
+      termsOfServiceURL,
+      route: .terms
+    )
+    self.supportURL = Self.publicHTTPSURL(supportURL, route: .support)
   }
 
   init(infoDictionary: [String: Any]?) {
     self.init(
-      privacyPolicyURL: Self.url(
-        for: "MoruPrivacyPolicyURL",
-        in: infoDictionary
-      ),
-      termsOfServiceURL: Self.url(
-        for: "MoruTermsOfServiceURL",
-        in: infoDictionary
-      )
+      mainURL: Self.url(for: .main, in: infoDictionary),
+      privacyPolicyURL: Self.url(for: .privacy, in: infoDictionary),
+      termsOfServiceURL: Self.url(for: .terms, in: infoDictionary),
+      supportURL: Self.url(for: .support, in: infoDictionary)
     )
   }
 
   static let unavailable = AccountEntryPolicyConfiguration(
+    mainURL: nil,
     privacyPolicyURL: nil,
-    termsOfServiceURL: nil
+    termsOfServiceURL: nil,
+    supportURL: nil
   )
 
   private static func url(
-    for key: String,
+    for route: Route,
     in infoDictionary: [String: Any]?
   ) -> URL? {
-    guard let value = infoDictionary?[key] as? String else {
+    guard let value = infoDictionary?[route.infoKey] as? String else {
       return nil
     }
 
     return URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines))
   }
 
-  private static func publicHTTPSURL(_ url: URL?) -> URL? {
+  private static func publicHTTPSURL(
+    _ url: URL?,
+    route: Route
+  ) -> URL? {
     guard let url,
           url.scheme?.lowercased() == "https",
-          let host = url.host,
-          !host.isEmpty,
+          url.host?.lowercased() == allowedHost,
+          url.port == nil,
+          url.user == nil,
+          url.password == nil,
+          url.query == nil,
+          url.fragment == nil,
+          (url.path.isEmpty ? "/" : url.path) == route.path,
           !url.absoluteString.contains("$(") else {
       return nil
     }
@@ -115,8 +171,10 @@ nonisolated enum AccountEntryAccessibility {
   static let googleIdentifier = "account-entry.google-sign-in"
   static let kakaoIdentifier = "account-entry.kakao-sign-in"
   static let guestIdentifier = "account-entry.continue-without-login"
+  static let mainIdentifier = "account-entry.main-website"
   static let privacyIdentifier = "account-entry.privacy-policy"
   static let termsIdentifier = "account-entry.terms-of-service"
+  static let supportIdentifier = "account-entry.support"
 
   static let voiceOverOrder = [
     titleIdentifier,
@@ -126,8 +184,10 @@ nonisolated enum AccountEntryAccessibility {
     googleIdentifier,
     kakaoIdentifier,
     guestIdentifier,
+    mainIdentifier,
     privacyIdentifier,
     termsIdentifier,
+    supportIdentifier,
   ]
 }
 
@@ -440,23 +500,41 @@ struct AccountEntryView: View {
 
       HStack(spacing: MoruPilotSpacing.sixteen) {
         policyLink(
+          title: "MORU 홈",
+          url: policyConfiguration.mainURL,
+          identifier: AccountEntryAccessibility.mainIdentifier
+        )
+        .accessibilitySortPriority(3)
+
+        policyLink(
           title: "개인정보처리방침",
           url: policyConfiguration.privacyPolicyURL,
           identifier: AccountEntryAccessibility.privacyIdentifier
         )
-        .accessibilitySortPriority(1)
+        .accessibilitySortPriority(2)
+      }
 
+      HStack(spacing: MoruPilotSpacing.sixteen) {
         policyLink(
           title: "이용약관",
           url: policyConfiguration.termsOfServiceURL,
           identifier: AccountEntryAccessibility.termsIdentifier
         )
+        .accessibilitySortPriority(1)
+
+        policyLink(
+          title: "고객지원",
+          url: policyConfiguration.supportURL,
+          identifier: AccountEntryAccessibility.supportIdentifier
+        )
         .accessibilitySortPriority(0)
       }
 
-      if policyConfiguration.privacyPolicyURL == nil
-          || policyConfiguration.termsOfServiceURL == nil {
-        Text("공개 정책 URL이 준비되지 않아 현재 빌드에서는 링크를 열 수 없어요.")
+      if !policyConfiguration.isReady {
+        Text(
+          "공개 웹 URL이 준비되지 않아 현재 빌드에서는 "
+            + "링크를 열 수 없어요."
+        )
           .font(AppFont.pretendardMedium(size: 12, relativeTo: .caption))
           .foregroundStyle(MoruPilotColor.textTertiary)
           .multilineTextAlignment(.center)

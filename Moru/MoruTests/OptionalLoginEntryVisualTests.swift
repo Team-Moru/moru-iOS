@@ -57,10 +57,48 @@ final class OptionalLoginEntryVisualTests: XCTestCase {
 
     return AccountEntryView(
       viewModel: viewModel,
-      policyConfiguration: .unavailable,
+      googleAuthorizationSession:
+        AccountEntryConfiguredGoogleAuthorizationSession(),
+      kakaoAuthorizationSession:
+        AccountEntryConfiguredKakaoAuthorizationSession(),
+      policyConfiguration: AccountEntryPolicyConfiguration(
+        mainURL: URL(string: "https://team-moru.github.io"),
+        privacyPolicyURL: URL(
+          string: "https://team-moru.github.io/privacy"
+        ),
+        termsOfServiceURL: URL(
+          string: "https://team-moru.github.io/terms"
+        ),
+        supportURL: URL(
+          string: "https://team-moru.github.io/support"
+        )
+      ),
+      providerAvailability: AccountEntryProviderAvailability(
+        appleSignInEnabled: true
+      ),
       copy: state.copy,
       onContinueWithoutLogin: {}
     )
+  }
+}
+
+@MainActor
+private final class AccountEntryConfiguredGoogleAuthorizationSession:
+  GoogleAuthorizationStarting {
+  let isConfigured = true
+
+  func authorize() async -> SocialAuthorizationOutcome {
+    .failed
+  }
+}
+
+@MainActor
+private final class AccountEntryConfiguredKakaoAuthorizationSession:
+  KakaoAuthorizationStarting {
+  let isConfigured = true
+
+  func authorize() async -> SocialAuthorizationOutcome {
+    .failed
   }
 }
 

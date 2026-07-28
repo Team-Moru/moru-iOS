@@ -171,6 +171,46 @@ final class SocialLoginFoundationTests: XCTestCase {
     XCTAssertEqual(configuration.kakaoURLScheme, "kakaopublic-kakao-key")
   }
 
+  func testReleasePublicConfigurationEnablesProviderCallbackRoutes() throws {
+    let googleClientID =
+      "800384412803-r62hbcns8s3jdkjaq5failk863bl19nv"
+      + ".apps.googleusercontent.com"
+    let googleServerClientID =
+      "800384412803-it81p3lkv9q9o9cel5sa6imqk1mtrr6m"
+      + ".apps.googleusercontent.com"
+    let googleReversedClientID =
+      "com.googleusercontent.apps."
+      + "800384412803-r62hbcns8s3jdkjaq5failk863bl19nv"
+    let kakaoNativeAppKey = "35f2ceb3a41aef9369e7de6ad3406685"
+    let kakaoURLScheme = "kakao\(kakaoNativeAppKey)"
+    let configuration = SocialLoginPublicConfiguration(
+      googleClientID: googleClientID,
+      googleServerClientID: googleServerClientID,
+      googleReversedClientID: googleReversedClientID,
+      kakaoNativeAppKey: kakaoNativeAppKey,
+      kakaoURLScheme: kakaoURLScheme
+    )
+
+    XCTAssertNotNil(configuration.googleSignInConfiguration)
+    XCTAssertNotNil(configuration.kakaoSignInConfiguration)
+    XCTAssertEqual(
+      configuration.provider(
+        forCallbackURL: try XCTUnwrap(
+          URL(string: "\(googleReversedClientID):/oauth")
+        )
+      ),
+      .google
+    )
+    XCTAssertEqual(
+      configuration.provider(
+        forCallbackURL: try XCTUnwrap(
+          URL(string: "\(kakaoURLScheme)://oauth")
+        )
+      ),
+      .kakao
+    )
+  }
+
   @MainActor
   func testCallbackRouterDispatchesOnlyConfiguredProviderSchemes() throws {
     let configuration = SocialLoginPublicConfiguration(

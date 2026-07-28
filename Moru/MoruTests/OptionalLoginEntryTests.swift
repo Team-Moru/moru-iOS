@@ -244,16 +244,26 @@ final class OptionalLoginEntryTests: XCTestCase {
   func testPolicyLinksRequirePublicHTTPSURLs() {
     let configuration = AccountEntryPolicyConfiguration(
       infoDictionary: [
-        "MoruPrivacyPolicyURL": "https://moru.example/privacy",
-        "MoruTermsOfServiceURL": "http://moru.example/terms",
+        "MoruMainURL": "https://team-moru.github.io",
+        "MoruPrivacyPolicyURL": "https://team-moru.github.io/privacy",
+        "MoruTermsOfServiceURL": "http://team-moru.github.io/terms",
+        "MoruSupportURL": "https://team-moru.github.io/support",
       ]
     )
 
     XCTAssertEqual(
+      configuration.mainURL?.absoluteString,
+      "https://team-moru.github.io"
+    )
+    XCTAssertEqual(
       configuration.privacyPolicyURL?.absoluteString,
-      "https://moru.example/privacy"
+      "https://team-moru.github.io/privacy"
     )
     XCTAssertNil(configuration.termsOfServiceURL)
+    XCTAssertEqual(
+      configuration.supportURL?.absoluteString,
+      "https://team-moru.github.io/support"
+    )
     XCTAssertFalse(configuration.isReady)
     XCTAssertEqual(
       AccountEntryPolicyConfiguration(
@@ -266,11 +276,27 @@ final class OptionalLoginEntryTests: XCTestCase {
     XCTAssertTrue(
       AccountEntryPolicyConfiguration(
         infoDictionary: [
-          "MoruPrivacyPolicyURL": "https://moru.example/privacy",
-          "MoruTermsOfServiceURL": "https://moru.example/terms",
+          "MoruMainURL": "https://team-moru.github.io",
+          "MoruPrivacyPolicyURL": "https://team-moru.github.io/privacy",
+          "MoruTermsOfServiceURL": "https://team-moru.github.io/terms",
+          "MoruSupportURL": "https://team-moru.github.io/support",
         ]
       ).isReady
     )
+  }
+
+  func testPublicWebLinksRejectUnapprovedHostsRoutesAndURLComponents() {
+    let configuration = AccountEntryPolicyConfiguration(
+      infoDictionary: [
+        "MoruMainURL": "https://example.com",
+        "MoruPrivacyPolicyURL": "https://team-moru.github.io/terms",
+        "MoruTermsOfServiceURL":
+          "https://team-moru.github.io/terms?source=login",
+        "MoruSupportURL": "https://user@team-moru.github.io/support",
+      ]
+    )
+
+    XCTAssertEqual(configuration, .unavailable)
   }
 
   func testAppleLoginRequiresExplicitReleaseReadinessGate() {
@@ -309,8 +335,10 @@ final class OptionalLoginEntryTests: XCTestCase {
         AccountEntryAccessibility.googleIdentifier,
         AccountEntryAccessibility.kakaoIdentifier,
         AccountEntryAccessibility.guestIdentifier,
+        AccountEntryAccessibility.mainIdentifier,
         AccountEntryAccessibility.privacyIdentifier,
         AccountEntryAccessibility.termsIdentifier,
+        AccountEntryAccessibility.supportIdentifier,
       ]
     )
     XCTAssertTrue(

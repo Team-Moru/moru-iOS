@@ -10,8 +10,13 @@ import XCTest
 
 final class AppleAccountLinkingTests: XCTestCase {
   func testAuthorizationCallbackRequiresAllBoundAppleCredentials() {
+    let failureReporter = RecordingAppleAuthorizationFailureReporter()
+    let adapter = AppleAuthorizationAdapter(
+      failureReporter: failureReporter
+    )
+
     XCTAssertEqual(
-      AppleAuthorizationAdapter().outcome(
+      adapter.outcome(
         identityToken: Data(" identity-token ".utf8),
         authorizationCode: Data(" authorization-code ".utf8),
         userIdentifier: " apple-user-id ",
@@ -28,7 +33,7 @@ final class AppleAccountLinkingTests: XCTestCase {
       )
     )
     XCTAssertEqual(
-      AppleAuthorizationAdapter().outcome(
+      adapter.outcome(
         identityToken: Data(),
         authorizationCode: Data("authorization-code".utf8),
         userIdentifier: "apple-user-id",
@@ -37,7 +42,7 @@ final class AppleAccountLinkingTests: XCTestCase {
       .failed
     )
     XCTAssertEqual(
-      AppleAuthorizationAdapter().outcome(
+      adapter.outcome(
         identityToken: Data([0xFF]),
         authorizationCode: Data("authorization-code".utf8),
         userIdentifier: "apple-user-id",
@@ -46,7 +51,7 @@ final class AppleAccountLinkingTests: XCTestCase {
       .failed
     )
     XCTAssertEqual(
-      AppleAuthorizationAdapter().outcome(
+      adapter.outcome(
         identityToken: Data("identity-token".utf8),
         authorizationCode: nil,
         userIdentifier: "apple-user-id",
@@ -55,7 +60,7 @@ final class AppleAccountLinkingTests: XCTestCase {
       .failed
     )
     XCTAssertEqual(
-      AppleAuthorizationAdapter().outcome(
+      adapter.outcome(
         identityToken: Data("identity-token".utf8),
         authorizationCode: Data("authorization-code".utf8),
         userIdentifier: nil,
@@ -64,13 +69,23 @@ final class AppleAccountLinkingTests: XCTestCase {
       .failed
     )
     XCTAssertEqual(
-      AppleAuthorizationAdapter().outcome(
+      adapter.outcome(
         identityToken: Data("identity-token".utf8),
         authorizationCode: Data("authorization-code".utf8),
         userIdentifier: "apple-user-id",
         rawNonce: " "
       ),
       .failed
+    )
+    XCTAssertEqual(
+      failureReporter.reasons,
+      [
+        .missingIdentityToken,
+        .invalidIdentityTokenEncoding,
+        .missingAuthorizationCode,
+        .missingUserIdentifier,
+        .missingNonce,
+      ]
     )
   }
 
@@ -80,8 +95,10 @@ final class AppleAccountLinkingTests: XCTestCase {
       rawNonce: "private-raw-nonce",
       hashedNonce: "public-sha256-challenge"
     )
+    let failureReporter = RecordingAppleAuthorizationFailureReporter()
     let session = AppleAuthorizationSession(
-      nonceGenerator: FixedAppleNonceGenerator(context: context)
+      nonceGenerator: FixedAppleNonceGenerator(context: context),
+      failureReporter: failureReporter
     )
     let request = ASAuthorizationAppleIDProvider().createRequest()
 
@@ -102,9 +119,42 @@ final class AppleAccountLinkingTests: XCTestCase {
       session.outcome(for: .failure(cancellation)),
       .cancelled
     )
+
+    XCTAssertTrue(session.configure(request))
     XCTAssertEqual(
       session.outcome(for: .failure(unknownFailure)),
       .failed
+    )
+    XCTAssertEqual(
+      failureReporter.reasons,
+      [
+        .authorizationError(
+          category: .authenticationServices,
+          code: ASAuthorizationError.failed.rawValue
+        ),
+      ]
+    )
+  }
+
+  @MainActor
+  func testAuthorizationSessionReportsMissingRequestContextWithoutValues() {
+    let failureReporter = RecordingAppleAuthorizationFailureReporter()
+    let session = AppleAuthorizationSession(
+      failureReporter: failureReporter
+    )
+    let cancellation = NSError(
+      domain: ASAuthorizationError.errorDomain,
+      code: ASAuthorizationError.canceled.rawValue
+    )
+
+    XCTAssertEqual(
+      session.outcome(for: .failure(cancellation)),
+      .failed
+    )
+    XCTAssertEqual(failureReporter.reasons, [.missingRequestContext])
+    XCTAssertEqual(
+      AppleAuthorizationFailureReason.missingRequestContext.logMessage,
+      "missing_request_context"
     )
   }
 
@@ -250,6 +300,52 @@ final class AppleAccountLinkingTests: XCTestCase {
 
     XCTAssertEqual(linkingService.callCount, 0)
     XCTAssertFalse(viewModel.isAccountLinkInProgress)
+    XCTAssertEqual(
+      viewModel.accountErrorMessage,
+      "Apple 인증 정보를 확인하지 못했어요. "
+        + "로컬 데이터는 그대로 사용할 수 있어요."
+    )
+  }
+
+  @MainActor
+  func testEveryCredentialValidationFailureSkipsRemoteLogin() async {
+    let adapter = AppleAuthorizationAdapter(
+      failureReporter: RecordingAppleAuthorizationFailureReporter()
+    )
+    let outcomes = [
+      adapter.outcome(
+        identityToken: nil,
+        authorizationCode: Data("authorization-code".utf8),
+        userIdentifier: "apple-user-id",
+        rawNonce: "raw-nonce"
+      ),
+      adapter.outcome(
+        identityToken: Data("identity-token".utf8),
+        authorizationCode: nil,
+        userIdentifier: "apple-user-id",
+        rawNonce: "raw-nonce"
+      ),
+      adapter.outcome(
+        identityToken: Data("identity-token".utf8),
+        authorizationCode: Data("authorization-code".utf8),
+        userIdentifier: nil,
+        rawNonce: "raw-nonce"
+      ),
+      adapter.outcome(
+        identityToken: Data("identity-token".utf8),
+        authorizationCode: Data("authorization-code".utf8),
+        userIdentifier: "apple-user-id",
+        rawNonce: nil
+      ),
+    ]
+    let linkingService = SocialLoginCoordinatorSpy()
+    let viewModel = makeViewModel(linkingService: linkingService)
+
+    for outcome in outcomes {
+      await viewModel.appleAuthorizationDidComplete(outcome)
+    }
+
+    XCTAssertEqual(linkingService.callCount, 0)
     XCTAssertEqual(
       viewModel.accountErrorMessage,
       "Apple 인증 정보를 확인하지 못했어요. "
@@ -414,6 +510,25 @@ nonisolated private struct FixedAppleNonceGenerator: AppleNonceGenerating {
 
   func makeContext() throws -> AppleAuthorizationRequestContext {
     context
+  }
+}
+
+nonisolated private final class RecordingAppleAuthorizationFailureReporter:
+  AppleAuthorizationFailureReporting,
+  @unchecked Sendable {
+  private let lock = NSLock()
+  private var recordedReasons: [AppleAuthorizationFailureReason] = []
+
+  var reasons: [AppleAuthorizationFailureReason] {
+    lock.lock()
+    defer { lock.unlock() }
+    return recordedReasons
+  }
+
+  func report(_ reason: AppleAuthorizationFailureReason) {
+    lock.lock()
+    recordedReasons.append(reason)
+    lock.unlock()
   }
 }
 

@@ -1,7 +1,7 @@
 # MORU iOS v2 Social Login 실행 Context
 
 - 마지막 갱신: 2026-07-27
-- 상태: `L4_OPEN_DRAFT`
+- 상태: `L5_OPEN_DRAFT`
 - 고정 계획: `mydocs/moru-ios-v2-social-login-plan.md`
 - 원본 계획: `/Users/minhyeok/Downloads/PLAN (5).md`
 - v2 context:
@@ -410,6 +410,226 @@
   - 실제 iPhone 3-provider·callback·Keychain·logout/withdrawal·VoiceOver E2E와
     정확한 Figma node visual 승인이 끝나기 전 merge하지 않음
   - `DO NOT MERGE — 소셜 로그인 stack 일괄 검토 대기`
+
+## L5 Ledger
+
+- Issue: https://github.com/Team-Moru/moru-iOS/issues/111
+- PR: https://github.com/Team-Moru/moru-iOS/pull/112 (`OPEN`, `DRAFT`)
+- Branch: `feat/#111-social-login-release-config`
+- Base branch: `feat/#109-optional-login-entry`
+- Base SHA: `2c5425b199cff75ec54bd4af5798876d8bc0da2c`
+- Worktree: `/private/tmp/moru-ios-l5.7kLsgl`
+- 구현 Head SHA: `4dae91010f48960bb34e24855ae71c86528312f7`
+- 최종 PR Head: 이 ledger 문서 commit(정확한 SHA는 PR #112 기준)
+- Merge SHA: 없음
+- 구현 기능:
+  - Debug/Release에 Google iOS·Web client ID와 reversed callback scheme 연결
+  - Debug/Release에 Kakao Native app key와 callback scheme 연결
+  - Apple Bundle/Team/capability를 확인하고 app-side gate를 `YES`로 연결
+  - Main·개인정보처리방침·이용약관·고객지원 HTTPS URL을 Info.plist build
+    substitution으로 연결
+  - `https`, 정확한 host·route와 port·user info·query·fragment 부재를 요구하는
+    공개 URL allowlist
+  - 로그인 화면의 MORU 홈·개인정보처리방침·이용약관·고객지원 링크와
+    VoiceOver 순서 계약
+  - Debug/Release 공개 설정, callback, bundle/team, source entitlement와 금지
+    runtime secret key 부재를 확인하는 자동 gate
+- 공개 Google 설정:
+  - iOS client ID:
+    `800384412803-r62hbcns8s3jdkjaq5failk863bl19nv.apps.googleusercontent.com`
+  - reversed client ID:
+    `com.googleusercontent.apps.800384412803-r62hbcns8s3jdkjaq5failk863bl19nv`
+  - Web client ID / backend audience:
+    `800384412803-it81p3lkv9q9o9cel5sa6imqk1mtrr6m.apps.googleusercontent.com`
+  - callback:
+    `com.googleusercontent.apps.800384412803-r62hbcns8s3jdkjaq5failk863bl19nv:/oauth`
+- 공개 Kakao 설정:
+  - Native app key: `35f2ceb3a41aef9369e7de6ad3406685`
+  - callback scheme: `kakao35f2ceb3a41aef9369e7de6ad3406685`
+  - callback: `kakao35f2ceb3a41aef9369e7de6ad3406685://oauth`
+- 공개 Apple metadata:
+  - Bundle / Client ID: `com.teammoru.Moru`
+  - Team ID: `Z7FSDLFCMK`
+  - Key ID metadata: `M88877LL32`
+  - Sign in with Apple entitlement: `com.apple.developer.applesignin = Default`
+  - App-side gate: `MORU_APPLE_SIGN_IN_ENABLED=YES`
+  - Key ID는 서버용 metadata로만 문서화하고 실제 `.p8` private key는 앱·Git에
+    추가하지 않음
+- 공개 웹 route:
+  - Main: `https://team-moru.github.io`
+  - Privacy: `https://team-moru.github.io/privacy`
+  - Terms: `https://team-moru.github.io/terms`
+  - Support: `https://team-moru.github.io/support`
+  - 2026-07-27 실제 HTTPS 요청에서 네 route 모두 200 확인
+- 주요 계약:
+  - 공개 식별자는 provider token·client secret·admin key·private key가 아님
+  - provider configuration과 네 공개 URL이 준비되어야 provider 인증을 활성화
+  - configuration 결과와 관계없이 `로그인 없이 시작하기`와 기존 local-first
+    경로를 유지
+  - 로그인 성공 여부와 무관하게 서버 데이터로 로컬 프로필·루틴·기록을
+    자동 교체하지 않음
+  - SwiftData schema·migration, Local Repository, routine Domain 계약 변경 없음
+- 테스트:
+  - 관련 signed XCTest 36/36 성공, failed/skipped/expected failure 0
+    (`/private/tmp/moru-ios-l5-related.xcresult`)
+  - 전체 signed XCTest 396/396 성공, failed/skipped/expected failure 0
+    (`/private/tmp/moru-ios-l5-full.xcresult`)
+- 빌드·서명:
+  - MORU Release iPhone 16, iOS 26.5 Simulator Debug 성공
+  - generic iPhone Debug 성공
+  - generic iPhone Release 성공
+  - Debug/Release built Info.plist에서 공개 설정과 callback을 정확히 확인
+  - Debug/Release signed entitlement에서 application identifier, Team ID와
+    `com.apple.developer.applesignin = Default` 확인
+- 정적 검증:
+  - iPhone functional gate 성공
+  - SwiftData boundary gate 성공
+  - social login release configuration gate 성공
+  - source/built Info.plist·entitlement `plutil` 성공
+  - `git diff --check` 성공
+  - client secret·Kakao admin key·private key·service account·`.p8` 파일과
+    key material 저장소 노출 없음
+  - SwiftData schema·migration, Local Repository, routine Domain 변경 없음
+- visual·accessibility:
+  - 운영 provider/UI configuration으로 visual signed XCTest 1/1 성공
+    (`/private/tmp/moru-ios-l5-visual-operational.xcresult`)
+  - idle·loading·cancel·offline·401·5xx·Keychain·긴 한국어 8상태를 Medium·AX3에서
+    각 2회 렌더링해 32개 PNG가 byte-identical임을 확인
+  - capture: `/private/tmp/moru-social-login-l5-operational`
+  - idle Medium·idle AX3·긴 한국어 AX3 대표 산출물 수동 확인
+  - title → local-first 안내 → 상태 → Apple → Google → Kakao → guest →
+    Main → Privacy → Terms → Support VoiceOver 순서 계약 테스트 성공
+- Figma manifest·export blocker:
+  - File key: `vrVBDLEy0UmqlLVfxnUcY9`
+  - Login frame node: `2644:2751`
+  - URL:
+    `https://www.figma.com/design/vrVBDLEy0UmqlLVfxnUcY9/moru--%EB%B3%B5%EC%82%AC---%EB%B3%B5%EC%82%AC-?node-id=2644-2751&t=T66xtzrK6YKuDfCW-1`
+  - Keychain API token과 browser canvas/PNG export를 확보하지 못함
+  - node API 응답·PNG·before/after/overlay가 없어 구조·수치·asset을 추정하지
+    않았으며 exact pixel match를 통과로 기록하지 않음
+- 실제 iPhone·backend release blocker:
+  - Apple·Google·Kakao 실제 계정 성공·취소·callback 복귀
+  - Google consent screen·테스트 계정과 갱신된 ID token의 backend audience 검증
+  - Kakao Developers bundle/Login/consent 설정과 backend access token 검증
+  - Apple 서버 raw nonce 검증과 provider token revoke 증거
+  - 실제 logout·withdrawal·Kakao unlink와 재로그인
+  - 앱 재실행 뒤 MORU Keychain session 복원
+  - 비행기 모드·네트워크 단절과 실제 backend 401/5xx
+  - 공식 provider 버튼과 Medium·AX3·긴 한국어의 실제 VoiceOver 검증
+- 리뷰:
+  - 로컬 자체 리뷰 완료
+  - GitHub review·inline thread와 CI는 최종 ledger head push 후 확인
+- CI(ledger 작성 시점):
+  - 최종 ledger head push 후 확인
+- 전체 stack 최종 검토 입력:
+  - L0 #102 → L1 #104 → L2 #106 → L3 #108 → L4 #110 → L5 #112는 모두
+    Draft + OPEN
+  - 각 PR의 base branch·구현 Head·ledger·CI와 secret 비노출을 순서대로 확인
+  - 공개 Google/Kakao 식별자와 callback, Apple capability, 네 공개 웹 route는
+    L5에서 연결됐지만 실제 provider E2E 통과 증거는 아님
+  - Apple raw nonce/revoke, Google audience, Kakao token 검증과 provider별 실제
+    console 설정을 하나의 release readiness checklist로 검토
+  - LocalProfile 우선 Main, local-first Source of Truth, 서버 데이터 자동 교체 없음,
+    guest 경로, account/server kill switch를 stack 공통 회귀 계약으로 확인
+  - 실제 iPhone 3-provider·callback·Keychain·logout/withdrawal·VoiceOver E2E와
+    Figma node API·PNG·overlay 기반 exact visual 승인이 끝나기 전 merge하지 않음
+  - `DO NOT MERGE — 운영 설정·실기기 검증 대기`
+
+## L5 실제 iPhone QA Note
+
+- 확인 일자: 2026-07-28
+- 대상 Head: `0b84241845595b0c4d61f6a8ed7b2fdd4ce6e0f3`
+- 기기:
+  - iPhone 13 Pro (`iPhone14,2`)
+  - iOS `26.5.2`
+  - `paired`, manual pairing, wired transport, tunnel connected
+  - booted, Developer Mode enabled
+- 실제 기기 build·install·launch:
+  - 실제 iPhone destination Debug build 성공
+  - Apple Development provisioning, Team `Z7FSDLFCMK`, Bundle
+    `com.teammoru.Moru` 확인
+  - signed entitlement에서 Sign in with Apple `Default` 확인
+  - 기존 앱을 uninstall하지 않고 같은 Bundle ID로 덮어 설치
+  - 로컬 앱 컨테이너·사용자 데이터 reset 없이 launch 성공
+- 진입·로컬 데이터 보존:
+  - 기존 LocalProfile이 있어 선택형 로그인 진입 대신 Main 홈으로 이동
+  - `오늘의 루틴`, 루틴·이력 navigation을 확인해 기존 local-first UI 유지
+  - `마이 > 설정`의 계정 상태는 signed-out
+  - destructive reset 없이 `계정 연결` sheet 진입
+  - Apple·Google·Kakao 세 provider 버튼 표시 확인
+  - Google/Kakao configuration-required 경고가 없어 운영 공개 설정 활성 확인
+- provider 실제 기기 matrix:
+  - Google:
+    - provider 버튼 표시·configuration 활성: 확인
+    - SDK/system 인증 surface: 미확인
+    - 사용자 취소·MORU 복귀·callback: 미확인
+    - 성공·session restore: 사용자 계정 선택/동의 필요
+  - Kakao:
+    - provider 버튼 표시·configuration 활성: 확인
+    - SDK/system 인증 surface: 미확인
+    - 사용자 취소·MORU 복귀·callback: 미확인
+    - 성공·session restore: 사용자 Talk/계정 인증 필요
+  - Apple:
+    - provider 버튼 표시·capability 활성: 확인
+    - system 인증 surface: 미확인
+    - 사용자 취소·MORU 복귀·callback: 미확인
+    - 성공·session restore: 사용자 Apple 인증 필요
+- 사용자 수동 provider follow-up:
+  - Kakao 계정 연결 성공과 `Kakao 계정 연결됨` 상태를 확인
+  - Apple 인증 surface 완료 뒤
+    `Apple 인증 정보를 확인하지 못했어요. 로컬 데이터는 그대로 사용할 수 있어요.`
+    표시
+    - `SocialAuthorizationOutcome.failed`의 backend 호출 전 분기
+    - 당시 빌드는 credential 누락·인코딩, request context, system authorization
+      오류를 구분해 기록하지 않아 정확한 하위 원인은 미확정
+  - Google 인증 surface 완료 뒤
+    `Google 계정을 연결하지 못했어요. 로컬 데이터는 그대로 사용할 수 있어요.`
+    표시
+    - ID token adapter 통과 뒤 coordinator catch 분기
+    - remote exchange와 local session storage 중 정확한 실패 단계는 당시
+      빌드의 로그만으로 미확정
+  - Kakao 연결과 로컬 데이터는 logout·unlink·reset·uninstall 없이 보존
+- provider surface blocker:
+  - iPhone Mirroring 화면 read와 안전한 sheet open은 성공
+  - provider sheet 이후 자동 coordinate click이 반복
+    `noWindowsAvailable`로 실패
+  - 계정 선택·동의·생체 인증과 혼동할 수 있어 임의 좌표 입력을 중단
+  - 앱 코드 결함 증거가 아니라 실제 기기 UI automation tooling blocker
+- lifecycle·crash:
+  - Home 전환 뒤 background에서 MORU PID 유지
+  - 종료 없이 foreground launch 뒤 같은 PID와 Main 유지
+  - SIGTERM 정상 종료 뒤 cold launch 성공, 새 PID 유지
+  - cold launch 뒤 기존 LocalProfile 우선 Main과 `오늘의 루틴` UI 복원
+  - `systemCrashLogs`에서 이름에 MORU가 포함된 crash report 0건
+  - token 노출 위험을 피하려 device console stream은 수집하지 않음
+- 수행하지 않은 동작:
+  - account 선택, email/password, OTP, passcode, Face ID/Touch ID
+  - provider 동의·권한 승인, account 추가·변경
+  - logout(signed-in 성공이 없어 생략)
+  - withdrawal·unlink·로컬 reset·앱 삭제
+  - 네트워크 토글·기기 설정 변경
+- 민감 정보:
+  - token, ID/access/refresh token, auth code, nonce를 수집·출력하지 않음
+  - provider 계정명·email·사용자 실명을 QA 결과에 기록하지 않음
+- 실제 성공 로그인에 필요한 사용자 action:
+  - Google: `계정 연결` sheet에서 Google 버튼을 누르고 사용자가 계정
+    선택·동의를 직접 완료한 뒤 callback과 cold launch restore 확인
+  - Kakao: Kakao 버튼을 누르고 사용자가 Talk/계정 인증을 직접 완료한 뒤
+    callback과 cold launch restore 확인
+  - Apple: Apple 버튼을 누르고 사용자가 system 인증을 직접 완료한 뒤
+    callback과 cold launch restore 확인
+  - 각 provider는 성공 전 사용자 취소를 한 번 수행해 MORU 복귀, 오류 미잔류,
+    다른 provider 버튼 재활성화를 확인
+- 최초 실제 기기 QA 당시 코드 변경·commit·push: 없음
+- 후속 진단 보강:
+  - Apple 실패 원인을 credential/context/system error의 값 없는 category와
+    숫자 error code로 구분
+  - 공통 로그인 실패를 `remote_exchange`와 `session_storage`로 구분하고,
+    HTTP status·ASCII server error code·transport/keychain 숫자 code만 기록
+  - token·authorization code·nonce·provider user ID·error message는 기록하지 않음
+  - 집중 XCTest 23건 통과
+  - 실제 iPhone이 무선 목록에서 `unavailable`로 전환되어 진단 build의
+    덮어 설치·Apple/Google 재시도는 후속 E2E로 유지
 
 ## L0 고정 범위
 

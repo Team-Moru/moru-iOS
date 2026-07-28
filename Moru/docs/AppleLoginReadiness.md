@@ -4,6 +4,18 @@
 - 기준 문서: `https://moru-api.duckdns.org/v3/api-docs`
 - 대상: `POST /auth/login/{provider}`, `DELETE /auth/withdrawal`
 
+## 공개 앱 metadata
+
+- Bundle / Client ID: `com.teammoru.Moru`
+- Team ID: `Z7FSDLFCMK`
+- Sign in with Apple entitlement: `com.apple.developer.applesignin = Default`
+- App-side gate: `MORU_APPLE_SIGN_IN_ENABLED=YES`
+- Key ID metadata: `M88877LL32`
+
+Key ID는 서버의 Apple client secret 생성·키 회전 metadata로만 기록합니다. 앱
+런타임에 필요하지 않으므로 Info.plist와 build setting에 넣지 않습니다. 실제 `.p8`
+private key는 제공받지 않았으며 앱·Git·문서에 저장하지 않습니다.
+
 ## 앱에서 완료한 범위
 
 - `SecRandomCopyBytes`로 32자 raw nonce를 생성하고 SHA-256 challenge를 Apple 요청에
