@@ -84,10 +84,38 @@ final class AppBootstrapper: ObservableObject {
 
     do {
       let modelContainer = try modelContainerFactory()
-      let dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
+      let accountSessionStore = accountSessionStoreFactory()
+      let tokenRefreshRemoteDataSource = DefaultAuthRemoteDataSource(
+        apiClient: DefaultAPIClient(
+          serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
+        )
+      )
+      let tokenRefreshCoordinator = TokenRefreshCoordinator(
+        authRemoteDataSource: tokenRefreshRemoteDataSource,
+        accountSessionStore: accountSessionStore
+      )
+      let authenticatedAPIClient = DefaultAPIClient(
+        tokenProvider: accountSessionStore.accessTokenProvider,
+        accessTokenRefresher: tokenRefreshCoordinator,
+        serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
+      )
+      let authRemoteDataSource = DefaultAuthRemoteDataSource(
+        apiClient: authenticatedAPIClient
+      )
+      let voiceRemoteDataSource: (any VoiceRemoteDataSource)?
+      if appCapabilities.shouldAllowServerRequests {
+        voiceRemoteDataSource = DefaultVoiceRemoteDataSource(
+          apiClient: authenticatedAPIClient
+        )
+      } else {
+        voiceRemoteDataSource = nil
+      }
+      let dependencies = DependencyContainer.local(
+        modelContext: modelContainer.mainContext,
+        voiceRemoteDataSource: voiceRemoteDataSource
+      )
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
-      let accountSessionStore = accountSessionStoreFactory()
       if appCapabilities.shouldAllowServerRequests {
         accountSessionStore.setLoginSucceededHandler { memberID in
           guard let syncCoordinator = dependencies.syncCoordinator else {
@@ -102,22 +130,6 @@ final class AppBootstrapper: ObservableObject {
           }
         }
       }
-      let tokenRefreshRemoteDataSource = DefaultAuthRemoteDataSource(
-        apiClient: DefaultAPIClient(
-          serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
-        )
-      )
-      let tokenRefreshCoordinator = TokenRefreshCoordinator(
-        authRemoteDataSource: tokenRefreshRemoteDataSource,
-        accountSessionStore: accountSessionStore
-      )
-      let authRemoteDataSource = DefaultAuthRemoteDataSource(
-        apiClient: DefaultAPIClient(
-          tokenProvider: accountSessionStore.accessTokenProvider,
-          accessTokenRefresher: tokenRefreshCoordinator,
-          serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
-        )
-      )
       let socialLoginCoordinator = SocialLoginCoordinator(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore

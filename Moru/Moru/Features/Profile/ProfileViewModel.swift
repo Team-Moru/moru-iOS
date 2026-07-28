@@ -19,6 +19,7 @@ enum ProfileViewState: Equatable {
 @Observable
 final class ProfileViewModel {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
+  private let accountVoiceSelectionUseCase: any AccountVoiceSelectionUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
   private let socialLoginCoordinator: any SocialLoginCoordinating
@@ -32,6 +33,12 @@ final class ProfileViewModel {
   private(set) var alarmStatus: ProfileAlarmStatus = .unavailable
   private(set) var displayNameErrorMessage: String?
   private(set) var voiceErrorMessage: String?
+  private(set) var voiceCatalogue = AccountVoiceCatalogueSnapshot(
+    options: [],
+    mismatch: nil,
+    notice: nil
+  )
+  private(set) var isVoiceCatalogueLoading = false
   private(set) var resetErrorMessage: String?
   private(set) var accountErrorMessage: String?
   private(set) var isAlarmRequestInProgress = false
@@ -60,6 +67,7 @@ final class ProfileViewModel {
 
   init(
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
+    accountVoiceSelectionUseCase: (any AccountVoiceSelectionUseCaseProtocol)? = nil,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
     socialLoginCoordinator: any SocialLoginCoordinating =
@@ -72,6 +80,11 @@ final class ProfileViewModel {
     onResetSucceeded: @escaping @MainActor () -> Void
   ) {
     self.profileSettingsUseCase = profileSettingsUseCase
+    self.accountVoiceSelectionUseCase = accountVoiceSelectionUseCase
+      ?? UnavailableAccountVoiceSelectionUseCase(
+        profileSettingsUseCase: profileSettingsUseCase,
+        voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
+      )
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
     self.socialLoginCoordinator = socialLoginCoordinator
@@ -139,6 +152,75 @@ final class ProfileViewModel {
 
   func voiceSelectionViewDidDisappear() {
     voicePreviewPlayer.stopVoicePreview()
+  }
+
+  func voiceSelectionViewDidAppear() async {
+    isVoiceCatalogueLoading = true
+    voiceCatalogue = await accountVoiceSelectionUseCase.loadCatalogue()
+    isVoiceCatalogueLoading = false
+  }
+
+  func accountVoiceSelectionButtonDidTap(
+    _ option: AccountVoiceOption
+  ) async -> Bool {
+    voiceErrorMessage = nil
+
+    do {
+      let result = try await accountVoiceSelectionUseCase.select(option)
+      state = .content(result.profileResult)
+      voicePreviewPlayer.stopVoicePreview()
+      if result.serverDisposition == .queueFailed {
+        reportVoiceError(
+          "기기에는 저장했지만 서버 반영 대기를 등록하지 못했어요."
+        )
+      }
+      voiceCatalogue = await accountVoiceSelectionUseCase.loadCatalogue()
+      return true
+    } catch {
+      reportVoiceError("이 목소리는 지금 선택할 수 없어요.")
+      return false
+    }
+  }
+
+  func accountVoicePreviewButtonDidTap(_ option: AccountVoiceOption) {
+    guard let voice = option.localVoice,
+          option.availability.isSelectable else {
+      reportVoiceError("이 목소리를 미리 들을 수 없어요.")
+      return
+    }
+    voicePreviewButtonDidTap(voice)
+  }
+
+  func voiceMismatchChoiceDidTap(
+    _ choice: AccountVoiceMismatchChoice
+  ) async {
+    guard let mismatch = voiceCatalogue.mismatch else {
+      return
+    }
+
+    do {
+      let result = try await accountVoiceSelectionUseCase.resolveMismatch(
+        mismatch,
+        choice: choice
+      )
+      state = .content(result.profileResult)
+      voiceCatalogue = await accountVoiceSelectionUseCase.loadCatalogue()
+      if result.serverDisposition == .queueFailed {
+        reportVoiceError(
+          "기기에는 저장했지만 서버 반영 대기를 등록하지 못했어요."
+        )
+      }
+    } catch {
+      reportVoiceError("음성 선택 차이를 처리하지 못했어요.")
+    }
+  }
+
+  func voiceMismatchDialogDidDismiss() {
+    voiceCatalogue = AccountVoiceCatalogueSnapshot(
+      options: voiceCatalogue.options,
+      mismatch: nil,
+      notice: voiceCatalogue.notice
+    )
   }
 
   func isVoiceAvailable(_ voice: VoiceProfile) -> Bool {

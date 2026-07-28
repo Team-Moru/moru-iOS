@@ -18,6 +18,7 @@ struct DependencyContainer {
   let localDataResetRepository: (any LocalDataResetRepository)?
   let serverMutationRepository: (any ServerMutationRepository)?
   let serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)?
+  let voiceRemoteDataSource: (any VoiceRemoteDataSource)?
   let syncCoordinator: SyncCoordinator?
   let accountScopedDataCleaner: any AccountScopedDataCleaning
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
@@ -40,6 +41,7 @@ struct DependencyContainer {
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
     serverMutationRepository: (any ServerMutationRepository)? = nil,
     serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)? = nil,
+    voiceRemoteDataSource: (any VoiceRemoteDataSource)? = nil,
     syncCoordinator: SyncCoordinator? = nil,
     accountScopedDataCleaner: any AccountScopedDataCleaning =
       NoAccountScopedDataCleaner(),
@@ -63,6 +65,7 @@ struct DependencyContainer {
     self.localDataResetRepository = localDataResetRepository
     self.serverMutationRepository = serverMutationRepository
     self.serverVoiceCatalogRepository = serverVoiceCatalogRepository
+    self.voiceRemoteDataSource = voiceRemoteDataSource
     self.syncCoordinator = syncCoordinator
     self.accountScopedDataCleaner = accountScopedDataCleaner
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
@@ -76,7 +79,10 @@ struct DependencyContainer {
   }
 
   @MainActor
-  static func local(modelContext: ModelContext) -> DependencyContainer {
+  static func local(
+    modelContext: ModelContext,
+    voiceRemoteDataSource: (any VoiceRemoteDataSource)? = nil
+  ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
     let guidancePlayer = BundledRoutineGuidancePlayer(
@@ -93,9 +99,18 @@ struct DependencyContainer {
     let serverPreferenceRepository = SwiftDataServerPreferenceRepository(
       modelContext: modelContext
     )
+    let mutationExecutor: any ServerMutationExecuting
+    if let voiceRemoteDataSource {
+      mutationExecutor = VoiceSelectionMutationExecutor(
+        remoteDataSource: voiceRemoteDataSource,
+        catalogueRepository: serverPreferenceRepository
+      )
+    } else {
+      mutationExecutor = DeferredServerMutationExecutor()
+    }
     let syncCoordinator = SyncCoordinator(
       mutationRepository: serverPreferenceRepository,
-      executor: DeferredServerMutationExecutor()
+      executor: mutationExecutor
     )
     let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
       modelContext: modelContext
@@ -140,6 +155,7 @@ struct DependencyContainer {
       ),
       serverMutationRepository: serverPreferenceRepository,
       serverVoiceCatalogRepository: serverPreferenceRepository,
+      voiceRemoteDataSource: voiceRemoteDataSource,
       syncCoordinator: syncCoordinator,
       accountScopedDataCleaner: SwiftDataAccountScopedDataCleaner(
         repository: serverPreferenceRepository
