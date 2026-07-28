@@ -16,6 +16,7 @@ struct BootstrappedApp {
   let accountSessionStore: AccountSessionStore
   let appleCredentialMonitor: AppleCredentialMonitor
   let socialLoginCoordinator: any SocialLoginCoordinating
+  let googleAuthorizationSession: GoogleSignInSession
   let accountLifecycleService: any AccountLifecycleManaging
   let appCapabilities: AppCapabilities
   let authCallbackRouter: AuthCallbackRouter
@@ -110,15 +111,21 @@ final class AppBootstrapper: ObservableObject {
         accountSessionStore: accountSessionStore
       )
       appleCredentialMonitor.start()
+      let publicLoginConfiguration = SocialLoginPublicConfiguration.mainBundle
+      let googleAuthorizationSession = GoogleSignInSession(
+        configuration: publicLoginConfiguration
+      )
       let accountLifecycleService = DefaultAccountLifecycleService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
-        accountScopedDataCleaner: NoAccountScopedDataCleaner()
+        accountScopedDataCleaner: NoAccountScopedDataCleaner(),
+        providerSessionSignOut: googleAuthorizationSession
       )
       let navigationCoordinator = AppNavigationCoordinator()
       let authCallbackRouter = AuthCallbackRouter(
-        configuration: .mainBundle
+        configuration: publicLoginConfiguration
       )
+      authCallbackRouter.register(googleAuthorizationSession, for: .google)
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
       let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
 
@@ -130,6 +137,7 @@ final class AppBootstrapper: ObservableObject {
           accountSessionStore: accountSessionStore,
           appleCredentialMonitor: appleCredentialMonitor,
           socialLoginCoordinator: socialLoginCoordinator,
+          googleAuthorizationSession: googleAuthorizationSession,
           accountLifecycleService: accountLifecycleService,
           appCapabilities: appCapabilities,
           authCallbackRouter: authCallbackRouter,

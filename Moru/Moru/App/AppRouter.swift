@@ -54,6 +54,7 @@ struct AppRouter: View {
 
   private let dependencies: DependencyContainer
   private let socialLoginCoordinator: any SocialLoginCoordinating
+  private let googleAuthorizationSession: any GoogleAuthorizationStarting
   private let accountLifecycleService: any AccountLifecycleManaging
   private let appCapabilities: AppCapabilities
   private let onboardingBuilder: any OnboardingFlowBuilding
@@ -66,6 +67,8 @@ struct AppRouter: View {
     sessionStore: SessionStore,
     accountSessionStore: AccountSessionStore,
     socialLoginCoordinator: any SocialLoginCoordinating,
+    googleAuthorizationSession: any GoogleAuthorizationStarting =
+      UnavailableGoogleAuthorizationSession(),
     accountLifecycleService: any AccountLifecycleManaging =
       UnavailableAccountLifecycleService(),
     appCapabilities: AppCapabilities = .production,
@@ -80,6 +83,7 @@ struct AppRouter: View {
     _coordinator = ObservedObject(wrappedValue: coordinator)
     self.dependencies = dependencies
     self.socialLoginCoordinator = socialLoginCoordinator
+    self.googleAuthorizationSession = googleAuthorizationSession
     self.accountLifecycleService = accountLifecycleService
     self.appCapabilities = appCapabilities
     self.onboardingBuilder = onboardingBuilder
@@ -303,6 +307,7 @@ struct AppRouter: View {
       alarmService: profileAlarmService,
       accountSessionStore: accountSessionStore,
       socialLoginCoordinator: socialLoginCoordinator,
+      googleAuthorizationSession: googleAuthorizationSession,
       accountLifecycleService: accountLifecycleService,
       appCapabilities: appCapabilities,
       resetUseCase: resetUseCase,

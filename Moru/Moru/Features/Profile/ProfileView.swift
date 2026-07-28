@@ -8,11 +8,14 @@
 import AuthenticationServices
 import SwiftUI
 
+import GoogleSignInSwift
+
 struct ProfileView: View {
   static let rootAccessibilityIdentifier = "profile.root"
   static let accountCardAccessibilityIdentifier = "profile.account.card"
   static let accountConnectAccessibilityIdentifier = "profile.account.connect"
   static let appleSignInAccessibilityIdentifier = "profile.account.apple-sign-in"
+  static let googleSignInAccessibilityIdentifier = "profile.account.google-sign-in"
   static let accountLogoutAccessibilityIdentifier = "profile.account.logout"
   static let accountWithdrawalAccessibilityIdentifier = "profile.account.withdrawal"
 
@@ -27,17 +30,21 @@ struct ProfileView: View {
   @State private var isAppleSignInPresented = false
   @State private var isWithdrawalConfirmationPresented = false
   @State private var appleAuthorizationSession = AppleAuthorizationSession()
+  private let googleAuthorizationSession: any GoogleAuthorizationStarting
   private let appCapabilities: AppCapabilities
   private let automaticallyLoads: Bool
 
   init(
     viewModel: ProfileViewModel,
     accountSessionStore: AccountSessionStore,
+    googleAuthorizationSession: any GoogleAuthorizationStarting =
+      UnavailableGoogleAuthorizationSession(),
     appCapabilities: AppCapabilities = .production,
     automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
+    self.googleAuthorizationSession = googleAuthorizationSession
     self.appCapabilities = appCapabilities
     self.automaticallyLoads = automaticallyLoads
   }
@@ -243,19 +250,19 @@ struct ProfileView: View {
       case .failure:
         accountConnectButton(
           detail: "계정 정보를 복구하지 못했어요. "
-            + "Apple로 다시 연결할 수 있어요."
+            + "Apple 또는 Google로 다시 연결할 수 있어요."
         )
       }
 
       if viewModel.isAccountLinkInProgress {
         HStack(spacing: AppSpacing.xs) {
           ProgressView()
-          Text("Apple 계정을 연결하고 있어요.")
+          Text("계정을 연결하고 있어요.")
             .profileFigmaTextStyle(.c1)
             .foregroundStyle(MoruPilotColor.textSecondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Apple 계정을 연결하고 있어요.")
+        .accessibilityLabel("계정을 연결하고 있어요.")
       }
 
       if let action = viewModel.accountLifecycleAction {
@@ -351,15 +358,15 @@ struct ProfileView: View {
       isAppleSignInPresented = true
     } label: {
       settingsRow(
-        title: "Apple 계정 연결",
+        title: "계정 연결",
         detail: detail,
-        systemImage: "apple.logo"
+        systemImage: "person.crop.circle.badge.plus"
       )
     }
     .buttonStyle(.plain)
     .disabled(viewModel.isAccountLinkInProgress)
-    .accessibilityLabel("Apple 계정 연결")
-    .accessibilityHint("선택 사항입니다. Apple 로그인 화면을 엽니다.")
+    .accessibilityLabel("계정 연결")
+    .accessibilityHint("선택 사항입니다. 로그인 방법을 선택합니다.")
     .accessibilityIdentifier(Self.accountConnectAccessibilityIdentifier)
   }
 
@@ -602,7 +609,7 @@ struct ProfileView: View {
   private var appleSignInSheet: some View {
     NavigationStack {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
-        Text("Apple 계정 연결")
+        Text("계정 연결")
           .profileFigmaTextStyle(.b2.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
 
@@ -631,6 +638,33 @@ struct ProfileView: View {
         .accessibilityLabel("Apple로 계속하기")
         .accessibilityHint("Apple 인증을 시작합니다.")
         .accessibilityIdentifier(Self.appleSignInAccessibilityIdentifier)
+
+        GoogleSignInButton {
+          Task {
+            let outcome = await googleAuthorizationSession.authorize()
+            isAppleSignInPresented = false
+            await viewModel.googleAuthorizationDidComplete(outcome)
+          }
+        }
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .disabled(
+          viewModel.isAccountLinkInProgress
+            || !googleAuthorizationSession.isConfigured
+        )
+        .accessibilityLabel("Google로 계속하기")
+        .accessibilityHint("Google 인증을 시작합니다.")
+        .accessibilityIdentifier(Self.googleSignInAccessibilityIdentifier)
+
+        if !googleAuthorizationSession.isConfigured {
+          Text(
+            "Google 로그인 설정이 준비되지 않았어요. "
+              + "공개 OAuth client ID 구성이 필요합니다."
+          )
+          .profileFigmaTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .accessibilityIdentifier("profile.account.google-config-required")
+        }
 
         Spacer(minLength: 0)
       }

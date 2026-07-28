@@ -28,6 +28,7 @@ nonisolated struct SignedInAccount: Equatable, Sendable {
 nonisolated struct AccountLifecycleCredentials: Equatable, Sendable {
   let memberID: Int64
   let refreshToken: String
+  let provider: AuthProvider
 }
 
 nonisolated extension AccountLifecycleCredentials:
@@ -37,7 +38,8 @@ nonisolated extension AccountLifecycleCredentials:
     """
     AccountLifecycleCredentials(\
     memberID: \(memberID), \
-    refreshToken: <redacted>\
+    refreshToken: <redacted>, \
+    provider: \(provider.serverValue)\
     )
     """
   }
@@ -67,6 +69,14 @@ final class AccountSessionStore: ObservableObject {
 
   private let credentialStore: any CredentialStore
   private let restorationGuard: any AccountSessionRestorationGuarding
+
+  var signedInProvider: AuthProvider? {
+    guard case .signedIn(let account) = state else {
+      return nil
+    }
+
+    return account.provider
+  }
 
   init(
     credentialStore: any CredentialStore,
@@ -189,13 +199,15 @@ final class AccountSessionStore: ObservableObject {
           let credentials = try credentialStore.load(),
           credentials.isValid,
           credentials.memberID == account.memberID,
+          credentials.provider == account.provider,
           credentials.accessToken == accessToken else {
       throw CredentialStoreError.invalidCredentials
     }
 
     return AccountLifecycleCredentials(
       memberID: credentials.memberID,
-      refreshToken: credentials.refreshToken
+      refreshToken: credentials.refreshToken,
+      provider: credentials.provider
     )
   }
 

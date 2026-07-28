@@ -45,6 +45,21 @@ final class AccountLifecycleTests: XCTestCase {
   }
 
   @MainActor
+  func testGoogleLogoutClearsSDKSessionWhenStoredCredentialsCannotBeLoaded() async throws {
+    let providerSignOut = AccountLifecycleProviderSignOut()
+    let fixture = makeFixture(
+      provider: .google,
+      providerSessionSignOut: providerSignOut
+    )
+    fixture.credentialStore.loadError = CredentialStoreError.invalidStoredData
+
+    try await fixture.service.logout()
+
+    XCTAssertEqual(providerSignOut.providers, [.google])
+    XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
+  }
+
+  @MainActor
   func testLogoutAndReloginKeepLocalProfileRoutineAndRunData() async throws {
     let localData = try makeLocalDataFixture()
     let fixture = makeFixture()
@@ -65,6 +80,23 @@ final class AccountLifecycleTests: XCTestCase {
     XCTAssertEqual(
       try localData.runRepository.fetchRuns(),
       [localData.run]
+    )
+  }
+
+  @MainActor
+  func testGoogleLogoutClearsProviderSDKSessionAndLocalCredentials() async throws {
+    let providerSignOut = AccountLifecycleProviderSignOut()
+    let fixture = makeFixture(
+      provider: .google,
+      providerSessionSignOut: providerSignOut
+    )
+
+    try await fixture.service.logout()
+
+    XCTAssertEqual(providerSignOut.providers, [.google])
+    XCTAssertEqual(
+      fixture.events.values,
+      ["remote logout", "credential remove"]
     )
   }
 
@@ -313,12 +345,15 @@ final class AccountLifecycleTests: XCTestCase {
     logoutError: Error? = nil,
     withdrawalError: Error? = nil,
     cleanupError: Error? = nil,
+    provider: AuthProvider = .apple,
+    providerSessionSignOut: any SocialProviderSessionSigningOut =
+      NoopSocialProviderSessionSignOut(),
     restorationGuard: any AccountSessionRestorationGuarding =
       InMemoryAccountSessionRestorationGuard()
   ) -> AccountLifecycleFixture {
     let events = AccountLifecycleEventRecorder()
     let credentialStore = AccountLifecycleCredentialStore(
-      credentials: makeCredentials(),
+      credentials: makeCredentials(provider: provider),
       events: events
     )
     let tokenProvider = MemoryAccessTokenProvider()
@@ -340,7 +375,8 @@ final class AccountLifecycleTests: XCTestCase {
     let service = DefaultAccountLifecycleService(
       authRemoteDataSource: remote,
       accountSessionStore: accountSessionStore,
-      accountScopedDataCleaner: cleaner
+      accountScopedDataCleaner: cleaner,
+      providerSessionSignOut: providerSessionSignOut
     )
 
     return AccountLifecycleFixture(
@@ -370,12 +406,15 @@ final class AccountLifecycleTests: XCTestCase {
     )
   }
 
-  private func makeCredentials() -> AccountCredentials {
+  private func makeCredentials(
+    provider: AuthProvider = .apple
+  ) -> AccountCredentials {
     AccountCredentials(
       memberID: 92,
       accessToken: "access-token",
       refreshToken: "refresh-token",
-      onboardingCompleted: true
+      onboardingCompleted: true,
+      provider: provider
     )
   }
 
@@ -412,6 +451,22 @@ final class AccountLifecycleTests: XCTestCase {
       routine: routine,
       run: run
     )
+  }
+}
+
+@MainActor
+private final class AccountLifecycleProviderSignOut:
+  SocialProviderSessionSigningOut {
+  private let events: AccountLifecycleEventRecorder?
+  private(set) var providers: [AuthProvider] = []
+
+  init(events: AccountLifecycleEventRecorder? = nil) {
+    self.events = events
+  }
+
+  func signOut(provider: AuthProvider) {
+    providers.append(provider)
+    events?.record("provider sign out \(provider.serverValue)")
   }
 }
 
