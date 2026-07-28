@@ -103,16 +103,26 @@ final class AppBootstrapper: ObservableObject {
         apiClient: authenticatedAPIClient
       )
       let voiceRemoteDataSource: (any VoiceRemoteDataSource)?
+      let routineSuggestionRemoteDataSource:
+        (any RoutineSuggestionRemoteDataSource)?
       if appCapabilities.shouldAllowServerRequests {
         voiceRemoteDataSource = DefaultVoiceRemoteDataSource(
           apiClient: authenticatedAPIClient
         )
+        routineSuggestionRemoteDataSource =
+          DefaultRoutineSuggestionRemoteDataSource(
+            apiClient: authenticatedAPIClient
+          )
       } else {
         voiceRemoteDataSource = nil
+        routineSuggestionRemoteDataSource = nil
       }
       let dependencies = DependencyContainer.local(
         modelContext: modelContainer.mainContext,
-        voiceRemoteDataSource: voiceRemoteDataSource
+        voiceRemoteDataSource: voiceRemoteDataSource,
+        routineSuggestionRemoteDataSource:
+          routineSuggestionRemoteDataSource,
+        accountSessionStore: accountSessionStore
       )
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
