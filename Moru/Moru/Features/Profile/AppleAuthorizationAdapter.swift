@@ -5,6 +5,73 @@
 
 import AuthenticationServices
 import Foundation
+import OSLog
+
+nonisolated enum AppleAuthorizationErrorCategory:
+  String,
+  Equatable,
+  Sendable {
+  case authenticationServices
+  case other
+}
+
+nonisolated enum AppleAuthorizationFailureReason: Equatable, Sendable {
+  case missingRequestContext
+  case authorizationError(
+    category: AppleAuthorizationErrorCategory,
+    code: Int
+  )
+  case unexpectedCredentialType
+  case missingIdentityToken
+  case invalidIdentityTokenEncoding
+  case missingAuthorizationCode
+  case invalidAuthorizationCodeEncoding
+  case missingUserIdentifier
+  case missingNonce
+
+  var logMessage: String {
+    switch self {
+    case .missingRequestContext:
+      "missing_request_context"
+    case .authorizationError(let category, let code):
+      "authorization_error category=\(category.rawValue) code=\(code)"
+    case .unexpectedCredentialType:
+      "unexpected_credential_type"
+    case .missingIdentityToken:
+      "missing_identity_token"
+    case .invalidIdentityTokenEncoding:
+      "invalid_identity_token_encoding"
+    case .missingAuthorizationCode:
+      "missing_authorization_code"
+    case .invalidAuthorizationCodeEncoding:
+      "invalid_authorization_code_encoding"
+    case .missingUserIdentifier:
+      "missing_user_identifier"
+    case .missingNonce:
+      "missing_nonce"
+    }
+  }
+}
+
+nonisolated protocol AppleAuthorizationFailureReporting: Sendable {
+  func report(_ reason: AppleAuthorizationFailureReason)
+}
+
+nonisolated struct AppleAuthorizationFailureLogger:
+  AppleAuthorizationFailureReporting {
+  private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "AppleAuthorization"
+  )
+
+  func report(_ reason: AppleAuthorizationFailureReason) {
+    #if DEBUG
+    logger.error(
+      "Apple authorization failed: \(reason.logMessage, privacy: .public)"
+    )
+    #endif
+  }
+}
 
 nonisolated protocol SocialAuthorizationAdapting {
   associatedtype Callback
@@ -18,6 +85,15 @@ nonisolated struct AppleAuthorizationAdapter {
     rawNonce: String
   )
 
+  private let failureReporter: any AppleAuthorizationFailureReporting
+
+  init(
+    failureReporter: any AppleAuthorizationFailureReporting =
+      AppleAuthorizationFailureLogger()
+  ) {
+    self.failureReporter = failureReporter
+  }
+
   func outcome(for callback: Callback) -> SocialAuthorizationOutcome {
     outcome(for: callback.result, rawNonce: callback.rawNonce)
   }
@@ -30,7 +106,7 @@ nonisolated struct AppleAuthorizationAdapter {
     case .success(let authorization):
       guard let credential = authorization.credential
         as? ASAuthorizationAppleIDCredential else {
-        return .failed
+        return failed(.unexpectedCredentialType)
       }
 
       return outcome(
@@ -43,7 +119,13 @@ nonisolated struct AppleAuthorizationAdapter {
       let nsError = error as NSError
       guard nsError.domain == ASAuthorizationError.errorDomain,
             nsError.code == ASAuthorizationError.canceled.rawValue else {
-        return .failed
+        let category: AppleAuthorizationErrorCategory =
+          nsError.domain == ASAuthorizationError.errorDomain
+            ? .authenticationServices
+            : .other
+        return failed(
+          .authorizationError(category: category, code: nsError.code)
+        )
       }
 
       return .cancelled
@@ -56,33 +138,66 @@ nonisolated struct AppleAuthorizationAdapter {
     userIdentifier: String?,
     rawNonce: String?
   ) -> SocialAuthorizationOutcome {
-    guard let identityToken = string(from: identityToken),
-          let authorizationCode = string(from: authorizationCode),
-          let userIdentifier = normalized(userIdentifier),
-          let rawNonce = normalized(rawNonce) else {
-      return .failed
+    let identityTokenValue: String
+    switch string(from: identityToken) {
+    case .missing:
+      return failed(.missingIdentityToken)
+    case .invalidEncoding:
+      return failed(.invalidIdentityTokenEncoding)
+    case .value(let value):
+      identityTokenValue = value
+    }
+
+    let authorizationCodeValue: String
+    switch string(from: authorizationCode) {
+    case .missing:
+      return failed(.missingAuthorizationCode)
+    case .invalidEncoding:
+      return failed(.invalidAuthorizationCodeEncoding)
+    case .value(let value):
+      authorizationCodeValue = value
+    }
+
+    guard let userIdentifier = normalized(userIdentifier) else {
+      return failed(.missingUserIdentifier)
+    }
+    guard let rawNonce = normalized(rawNonce) else {
+      return failed(.missingNonce)
     }
 
     return .authorized(
       SocialAuthorization(
         provider: .apple,
-        token: identityToken,
-        authorizationCode: authorizationCode,
+        token: identityTokenValue,
+        authorizationCode: authorizationCodeValue,
         rawNonce: rawNonce,
         providerUserIdentifier: userIdentifier
       )
     )
   }
 
-  private func string(from data: Data?) -> String? {
-    guard let data,
-          let value = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-          !value.isEmpty else {
-      return nil
+  private enum StringResult {
+    case missing
+    case invalidEncoding
+    case value(String)
+  }
+
+  private func string(from data: Data?) -> StringResult {
+    guard let data, !data.isEmpty else {
+      return .missing
+    }
+    guard let value = String(data: data, encoding: .utf8) else {
+      return .invalidEncoding
     }
 
-    return value
+    let normalizedValue = value.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    guard !normalizedValue.isEmpty else {
+      return .missing
+    }
+
+    return .value(normalizedValue)
   }
 
   private func normalized(_ value: String?) -> String? {
@@ -94,6 +209,13 @@ nonisolated struct AppleAuthorizationAdapter {
       in: .whitespacesAndNewlines
     )
     return normalizedValue.isEmpty ? nil : normalizedValue
+  }
+
+  private func failed(
+    _ reason: AppleAuthorizationFailureReason
+  ) -> SocialAuthorizationOutcome {
+    failureReporter.report(reason)
+    return .failed
   }
 }
 

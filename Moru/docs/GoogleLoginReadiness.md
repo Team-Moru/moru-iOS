@@ -2,40 +2,26 @@
 
 ## 현재 상태
 
-GoogleSignIn-iOS `9.1.x`와 MORU 로그인 연결은 구현되어 있지만 저장소에는 실제 OAuth
-client ID가 없습니다. Debug와 Release 모두 아래 공개 build setting을 명시적
-placeholder로 유지하며, 세 값이 유효하고 서로 일치하지 않으면 Google 로그인 버튼과
-callback 처리는 동작하지 않습니다.
+GoogleSignIn-iOS `9.1.x`와 MORU 로그인 연결에 검증된 공개 OAuth 식별자를 연결했습니다.
+Debug와 Release 모두 아래 공개 build setting을 사용하며, 세 값이 유효하고 서로
+일치하지 않으면 Google 로그인 버튼과 callback 처리는 동작하지 않습니다.
 
 - `MORU_GOOGLE_IOS_CLIENT_ID`
 - `MORU_GOOGLE_SERVER_CLIENT_ID`
 - `MORU_GOOGLE_REVERSED_CLIENT_ID`
 
-client ID는 공개 식별자이지만 Google Cloud Console에서 발급된 실제 값을 확인하기 전에는
-추정해 넣지 않습니다. client secret, service account key와 기타 비밀값은 앱·xcconfig·
-Info.plist·저장소에 넣지 않습니다.
+연결 값은 `Moru/docs/SocialLoginReleaseConfiguration.md`에 기록합니다. client secret,
+service account key와 기타 비밀값은 앱·xcconfig·Info.plist·저장소에 넣지 않습니다.
 
 ## 외부 구성 blocker
 
-출시 전 Google Cloud Console과 MORU backend 담당자가 다음을 확정해야 합니다.
+출시 전 Google Cloud Console과 MORU backend 담당자가 다음을 실제 환경에서 확인해야
+합니다.
 
 1. bundle ID `com.teammoru.Moru`에 연결된 iOS OAuth client ID
 2. iOS client ID를 뒤집은 URL scheme
 3. MORU backend가 ID token의 `aud`로 검증할 Web/server OAuth client ID
 4. OAuth consent screen과 실제 iPhone 테스트 계정
-
-확정된 공개 값은 로컬 또는 CI의 build setting override로 주입합니다. 소스에 있는
-placeholder 문자열을 실제 값처럼 사용해서는 안 됩니다.
-
-```sh
-xcodebuild \
-  -project Moru/Moru.xcodeproj \
-  -scheme Moru \
-  MORU_GOOGLE_IOS_CLIENT_ID='<confirmed iOS client ID>' \
-  MORU_GOOGLE_SERVER_CLIENT_ID='<confirmed Web/server client ID>' \
-  MORU_GOOGLE_REVERSED_CLIENT_ID='<confirmed reversed iOS client ID>' \
-  ...
-```
 
 `GoogleSignInPublicConfiguration`은 다음을 모두 검증합니다.
 

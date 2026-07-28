@@ -91,14 +91,20 @@ nonisolated struct SecureAppleNonceGenerator: AppleNonceGenerating {
 final class AppleAuthorizationSession {
   private let nonceGenerator: any AppleNonceGenerating
   private let adapter: AppleAuthorizationAdapter
+  private let failureReporter: any AppleAuthorizationFailureReporting
   private var requestContext: AppleAuthorizationRequestContext?
 
   init(
     nonceGenerator: any AppleNonceGenerating = SecureAppleNonceGenerator(),
-    adapter: AppleAuthorizationAdapter = AppleAuthorizationAdapter()
+    adapter: AppleAuthorizationAdapter? = nil,
+    failureReporter: any AppleAuthorizationFailureReporting =
+      AppleAuthorizationFailureLogger()
   ) {
     self.nonceGenerator = nonceGenerator
-    self.adapter = adapter
+    self.adapter = adapter ?? AppleAuthorizationAdapter(
+      failureReporter: failureReporter
+    )
+    self.failureReporter = failureReporter
   }
 
   @discardableResult
@@ -121,6 +127,7 @@ final class AppleAuthorizationSession {
     for result: Result<ASAuthorization, Error>
   ) -> SocialAuthorizationOutcome {
     guard let requestContext else {
+      failureReporter.report(.missingRequestContext)
       return .failed
     }
 
