@@ -21,6 +21,17 @@ nonisolated enum AccountLifecycleError: Error, Equatable, Sendable {
 }
 
 @MainActor
+protocol SocialProviderSessionSigningOut: AnyObject {
+  func signOut(provider: AuthProvider)
+}
+
+@MainActor
+final class NoopSocialProviderSessionSignOut:
+  SocialProviderSessionSigningOut {
+  func signOut(provider: AuthProvider) {}
+}
+
+@MainActor
 protocol AccountLifecycleManaging: AnyObject {
   func logout() async throws
   func withdraw() async throws
@@ -31,22 +42,30 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
   private let authRemoteDataSource: any AuthRemoteDataSource
   private let accountSessionStore: AccountSessionStore
   private let accountScopedDataCleaner: any AccountScopedDataCleaning
+  private let providerSessionSignOut: any SocialProviderSessionSigningOut
 
   init(
     authRemoteDataSource: any AuthRemoteDataSource,
     accountSessionStore: AccountSessionStore,
-    accountScopedDataCleaner: any AccountScopedDataCleaning
+    accountScopedDataCleaner: any AccountScopedDataCleaning,
+    providerSessionSignOut: any SocialProviderSessionSigningOut =
+      NoopSocialProviderSessionSignOut()
   ) {
     self.authRemoteDataSource = authRemoteDataSource
     self.accountSessionStore = accountSessionStore
     self.accountScopedDataCleaner = accountScopedDataCleaner
+    self.providerSessionSignOut = providerSessionSignOut
   }
 
   func logout() async throws {
     let credentials = try? accountSessionStore.credentialsForAccountLifecycle()
+    let provider = credentials?.provider ?? accountSessionStore.signedInProvider
 
     if let refreshToken = credentials?.refreshToken {
       try? await authRemoteDataSource.logout(refreshToken: refreshToken)
+    }
+    if let provider {
+      providerSessionSignOut.signOut(provider: provider)
     }
 
     do {
@@ -66,6 +85,7 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
     }
 
     _ = try await authRemoteDataSource.withdraw()
+    providerSessionSignOut.signOut(provider: credentials.provider)
 
     var cleanupFailed = false
 

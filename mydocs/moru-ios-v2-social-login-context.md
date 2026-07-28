@@ -1,7 +1,7 @@
 # MORU iOS v2 Social Login 실행 Context
 
 - 마지막 갱신: 2026-07-27
-- 상태: `L1_OPEN_DRAFT`
+- 상태: `L2_OPEN_DRAFT`
 - 고정 계획: `mydocs/moru-ios-v2-social-login-plan.md`
 - 원본 계획: `/Users/minhyeok/Downloads/PLAN (5).md`
 - v2 context:
@@ -142,6 +142,83 @@
   - `AppCapabilities` account/server master kill switch
   - Apple credential monitor는 Apple session만 처리하므로 Google session과 분리
   - L1 Draft PR #104의 CI 확인·OPEN 동결 후 GoogleSignIn-iOS 9.1.x를 고정할 것
+
+## L2 Ledger
+
+- Issue: https://github.com/Team-Moru/moru-iOS/issues/105
+- PR: https://github.com/Team-Moru/moru-iOS/pull/106 (`OPEN`, `DRAFT`)
+- Branch: `feat/#105-google-login`
+- Base branch: `feat/#103-apple-login-readiness`
+- Base SHA: `1bd92a1fcb6fcbe0e0dddb8503fe9ec3743ffa64`
+- Worktree: `/private/tmp/moru-ios-l2.sItVax`
+- 구현 Head SHA: `74d1a37133d9b271638e8005b24441757d173de8`
+- 최종 PR Head: 이 ledger 문서 commit(정확한 SHA는 PR #106 기준)
+- Merge SHA: 없음
+- 구현 기능:
+  - GoogleSignIn-iOS `9.1.0..<9.2.0` SPM 요구사항과 `9.1.0` resolved pin
+  - 앱 target에 최소 `GoogleSignIn`, `GoogleSignInSwift` product만 직접 연결
+  - iOS client ID·server client ID·reversed URL scheme의 공개 build configuration과
+    형식·상호 일치 gate
+  - 공식 Google SwiftUI 버튼과 앱 루트 `onOpenURL` →
+    `AuthCallbackRouter` → Google SDK callback 연결
+  - 추가 Google API scope 없이 로그인한 뒤 `refreshTokensIfNeeded()`로 갱신한
+    ID token만 MORU `POST /auth/login/google`의 `token`으로 전달
+  - `GIDSignInErrorCodeCanceled`는 사용자 오류·MORU 서버 요청 없이 취소 처리
+  - Google 계정의 MORU 로그아웃·회원 탈퇴 때 Google SDK local session sign-out
+- 주요 계약 변경:
+  - `AccountLifecycleCredentials`가 provider를 보존하고 stored/session provider가
+    일치할 때만 account lifecycle credential로 사용
+  - account lifecycle에 provider SDK session sign-out 경계를 추가
+  - stored credential을 읽지 못해도 현재 signed-in provider가 Google이면 SDK
+    local session을 정리
+  - Google access token·refresh token·profile·email·authorization code는 MORU
+    서버 요청에 포함하지 않음
+  - Google 로그인 성공 여부와 무관하게 로컬 프로필·루틴·기록 교체 없음
+- 공개 configuration blocker:
+  - 실제 Google Cloud iOS/Web OAuth client ID와 reversed URL scheme을 제공받지 못함
+  - Debug/Release에는 실제 값으로 오인되지 않는 명시적 placeholder를 두고 로그인과
+    callback을 차단
+  - MORU backend가 검증할 Web/server client ID audience 미확정
+  - 상세 설정·검증 대기 항목: `Moru/docs/GoogleLoginReadiness.md`
+- SwiftData/schema·migration 변경: 없음(고정)
+- Local Repository·routine Domain 계약 변경: 없음(고정)
+- 테스트:
+  - 관련 XCTest 25/25 성공, failed/skipped 0
+  - 전체 XCTest 371/371 성공, failed/skipped 0
+- 빌드:
+  - MORU Release iPhone 16 Simulator Debug 성공
+  - generic iPhone Debug 성공
+  - generic iPhone Release 성공
+- 정적 검증:
+  - iPhone functional gate 성공
+  - SwiftData boundary gate 성공
+  - source Info.plist·entitlement와 Debug/Release built Info.plist `plutil` 성공
+  - `git diff --check` 성공
+  - Google client secret·private key·서비스 계정 credential 저장소 추가 없음
+- 실제 iPhone: 미검증
+  - 공식 Google 버튼 로그인 성공·취소와 Google app/Safari 전환
+  - reversed URL callback 복귀
+  - 갱신된 ID token의 실제 backend audience 검증
+  - 로그아웃·회원 탈퇴 뒤 SDK session 정리와 재로그인
+  - 앱 재실행 뒤 MORU Keychain session 복원
+- 리뷰:
+  - 로컬 자체 리뷰 완료
+  - GitHub review·inline thread와 CI는 최종 ledger head push 후 확인
+- 남은 위험·release blocker:
+  - 실제 OAuth client ID·consent screen·테스트 계정·backend audience가 없어
+    Google E2E를 수행할 수 없음
+  - 실제 Google Console 설정·실제 MORU backend·실제 iPhone 동작 미검증
+  - placeholder build는 Google 로그인을 의도적으로 제공하지 않음
+- L3 입력:
+  - provider payload를 보존하는 `SocialAuthorization`과 공통 coordinator
+  - root `AuthCallbackRouter`의 Kakao handler 등록 경계
+  - 공개 식별자를 읽는 `SocialLoginPublicConfiguration`
+  - provider를 보존하는 account lifecycle credential과 SDK session sign-out 경계
+  - L3에서는 Google·Kakao local sign-out을 함께 보존하는 provider router/composite를
+    구성할 것
+  - Google session과 Apple credential monitor는 각 provider에만 반응
+  - AppCapabilities account/server master kill switch와 local-first Source of Truth
+  - L2 Draft PR #106의 CI 확인·OPEN 동결 후 Kakao iOS SDK 2.28.x를 고정할 것
 
 ## L0 고정 범위
 

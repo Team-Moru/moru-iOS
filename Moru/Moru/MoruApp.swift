@@ -47,6 +47,7 @@ struct MoruApp: App {
             sessionStore: app.sessionStore,
             accountSessionStore: app.accountSessionStore,
             socialLoginCoordinator: app.socialLoginCoordinator,
+            googleAuthorizationSession: app.googleAuthorizationSession,
             accountLifecycleService: app.accountLifecycleService,
             appCapabilities: app.appCapabilities,
             coordinator: app.navigationCoordinator,

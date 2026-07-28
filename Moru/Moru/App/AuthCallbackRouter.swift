@@ -10,6 +10,11 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
   static let googleServerClientIDInfoKey = "MoruGoogleServerClientID"
   static let googleReversedClientIDInfoKey = "MoruGoogleReversedClientID"
   static let kakaoNativeAppKeyInfoKey = "MoruKakaoNativeAppKey"
+  static let googleClientIDPlaceholder = "MORU_GOOGLE_IOS_CLIENT_ID_REQUIRED"
+  static let googleServerClientIDPlaceholder =
+    "MORU_GOOGLE_SERVER_CLIENT_ID_REQUIRED"
+  static let googleReversedClientIDPlaceholder =
+    "moru-google-reversed-client-id-required"
 
   let googleClientID: String?
   let googleServerClientID: String?
@@ -44,6 +49,14 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
     infoDictionary: Bundle.main.infoDictionary ?? [:]
   )
 
+  var googleSignInConfiguration: GoogleSignInPublicConfiguration? {
+    GoogleSignInPublicConfiguration(
+      clientID: googleClientID,
+      serverClientID: googleServerClientID,
+      reversedClientID: googleReversedClientID
+    )
+  }
+
   func provider(forCallbackURL url: URL) -> AuthProvider? {
     guard let scheme = Self.normalized(url.scheme) else {
       return nil
@@ -66,7 +79,12 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
     guard let normalized = value?
       .trimmingCharacters(in: .whitespacesAndNewlines),
       !normalized.isEmpty,
-      !normalized.contains("$(") else {
+      !normalized.contains("$("),
+      ![
+        googleClientIDPlaceholder,
+        googleServerClientIDPlaceholder,
+        googleReversedClientIDPlaceholder,
+      ].contains(normalized) else {
       return nil
     }
 

@@ -19,6 +19,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let alarmService: any ProfileAlarmServicing
   private let accountSessionStore: AccountSessionStore
   private let socialLoginCoordinator: any SocialLoginCoordinating
+  private let googleAuthorizationSession: any GoogleAuthorizationStarting
   private let accountLifecycleService: any AccountLifecycleManaging
   private let appCapabilities: AppCapabilities
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
@@ -32,6 +33,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     alarmService: any ProfileAlarmServicing,
     accountSessionStore: AccountSessionStore,
     socialLoginCoordinator: any SocialLoginCoordinating,
+    googleAuthorizationSession: any GoogleAuthorizationStarting,
     accountLifecycleService: any AccountLifecycleManaging,
     appCapabilities: AppCapabilities,
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
@@ -44,6 +46,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.alarmService = alarmService
     self.accountSessionStore = accountSessionStore
     self.socialLoginCoordinator = socialLoginCoordinator
+    self.googleAuthorizationSession = googleAuthorizationSession
     self.accountLifecycleService = accountLifecycleService
     self.appCapabilities = appCapabilities
     self.resetUseCase = resetUseCase
@@ -67,6 +70,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
           onResetSucceeded: onResetSucceeded
         ),
         accountSessionStore: accountSessionStore,
+        googleAuthorizationSession: googleAuthorizationSession,
         appCapabilities: appCapabilities
       )
     )
