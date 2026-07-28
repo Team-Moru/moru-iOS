@@ -1,7 +1,7 @@
 # MORU iOS v2 Social Login 실행 Context
 
 - 마지막 갱신: 2026-07-27
-- 상태: `L0_FROZEN_OPEN_DRAFT`
+- 상태: `L1_OPEN_DRAFT`
 - 고정 계획: `mydocs/moru-ios-v2-social-login-plan.md`
 - 원본 계획: `/Users/minhyeok/Downloads/PLAN (5).md`
 - v2 context:
@@ -12,7 +12,8 @@
 - 저장소: `Team-Moru/moru-iOS`
 - L0 base branch: `feat/#92-account-lifecycle`
 - L0 base SHA: `e4ea5b1fd3e8397b1897ae6adf89958f59cd6266`
-- Worktree: `/private/tmp/moru-ios-l0.4wP3Fn`
+- L0 Worktree: `/private/tmp/moru-ios-l0.4wP3Fn`
+- L1 Worktree: `/private/tmp/moru-ios-l1.lOeClO`
 - 원본 dirty worktree는 읽기만 하고 변경하지 않는다.
 - SwiftData schema·migration, Local Repository, routine Domain 계약은 변경하지 않는다.
 - 로그인은 선택 기능이며 SwiftData/Local Repository가 계속 Source of Truth다.
@@ -68,6 +69,79 @@
   - `AppCapabilities` master kill switch
   - 회전 토큰을 반환하는 `AccessTokenRefreshResult`
   - Draft PR 생성·CI 확인·OPEN 동결 후 L1을 시작할 것
+
+## L1 Ledger
+
+- Issue: https://github.com/Team-Moru/moru-iOS/issues/103
+- PR: https://github.com/Team-Moru/moru-iOS/pull/104 (`OPEN`, `DRAFT`)
+- Branch: `feat/#103-apple-login-readiness`
+- Base branch: `feat/#101-social-login-foundation`
+- Base SHA: `88b5ae3921f6556925c1075897e64744869da537`
+- 구현 Head SHA: `bc7d113271f392327ae9bdfd14b824ec6ca855f5`
+- 최종 PR Head: 이 ledger 문서 commit(정확한 SHA는 PR #104 기준)
+- Merge SHA: 없음
+- 구현 기능:
+  - `SecRandomCopyBytes` 32자 raw nonce와 SHA-256 Apple request challenge
+  - identity token·authorization code·raw nonce·Apple user identifier의 요청 단위
+    binding과 공통 `SocialLoginCoordinator` 연결
+  - 이름·이메일 scope 미요청
+  - Apple user identifier의 Keychain/session 저장과 token rotation 보존
+  - credential state 확인과 `credentialRevokedNotification` 재확인
+  - revoked/notFound/transferred 시 local account session 무효화
+- 주요 계약 변경:
+  - Apple authorization은 raw nonce와 user identifier가 없으면 server 호출 전에 거부
+  - `AccountCredentials`와 `SignedInAccount`에 optional provider user identifier 추가
+  - L0 이전 credential은 provider를 Apple로 복원하고 user identifier는 `nil`로
+    하위 호환
+  - token, authorization code, raw nonce, provider user identifier description redaction
+- 서버 계약 확인(2026-07-27):
+  - 실제 `/v3/api-docs`의 `SocialLoginRequest`는 `token`,
+    `authorizationCode`만 지원
+  - raw nonce와 Apple user identifier는 OpenAPI 미지원이므로 request body에 추정
+    추가하지 않음
+  - `DELETE /auth/withdrawal` 성공 응답은 MORU 회원 탈퇴 message만 제공하며 Apple
+    token revoke 완료 증거가 없음
+  - 상세 blocker: `Moru/docs/AppleLoginReadiness.md`
+- SwiftData/schema·migration 변경: 없음(고정)
+- Local Repository·routine Domain 계약 변경: 없음(고정)
+- 테스트:
+  - 관련 XCTest 68/68 성공, failed/skipped 0
+  - 전체 XCTest 363/363 성공, failed/skipped 0
+- 빌드:
+  - MORU Release iPhone 16 Simulator Debug 성공
+  - generic iPhone Debug 성공
+  - generic iPhone Release 성공
+- 정적 검증:
+  - iPhone functional gate 성공
+  - SwiftData boundary gate 성공
+  - Info.plist/entitlement `plutil` 성공
+  - `git diff --check` 성공
+  - client secret·admin key·private key·`.p8` 저장소 노출 없음
+- 실제 iPhone: 미검증
+  - Apple 로그인 성공·취소·재실행
+  - credential state와 revoked notification
+  - Keychain session 복원과 회원 탈퇴
+- 리뷰:
+  - 로컬 자체 리뷰 완료
+  - 구현 Head 기준 GitHub inline review thread 0개, review decision 없음
+  - CodeRabbit 성공(Draft review 정책)
+- CI(구현 Head 기준, ledger 작성 시점):
+  - Foundation Checks 진행 중
+  - SwiftData Boundary 진행 중
+  - Discord PR notification 성공
+- 남은 위험·release blocker:
+  - 서버 raw nonce 검증 계약과 실패 응답이 없어 nonce E2E 미완성
+  - 회원 탈퇴 응답으로 Apple provider token revoke 완료를 검증할 수 없음
+  - L0 이전 Apple credential은 user identifier가 없어 다음 재인증 전 credential
+    state 자동 검증 불가
+  - Apple Team provisioning과 실제 서버·실제 iPhone E2E 미검증
+- L2 입력:
+  - provider payload를 보존하는 `SocialAuthorization`과 공통 coordinator
+  - provider user identifier를 하위 호환 저장하는 credential/session
+  - provider별 adapter 경계와 root `AuthCallbackRouter`
+  - `AppCapabilities` account/server master kill switch
+  - Apple credential monitor는 Apple session만 처리하므로 Google session과 분리
+  - L1 Draft PR #104의 CI 확인·OPEN 동결 후 GoogleSignIn-iOS 9.1.x를 고정할 것
 
 ## L0 고정 범위
 

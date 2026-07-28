@@ -13,8 +13,18 @@ nonisolated protocol SocialAuthorizationAdapting {
 }
 
 nonisolated struct AppleAuthorizationAdapter {
+  typealias Callback = (
+    result: Result<ASAuthorization, Error>,
+    rawNonce: String
+  )
+
+  func outcome(for callback: Callback) -> SocialAuthorizationOutcome {
+    outcome(for: callback.result, rawNonce: callback.rawNonce)
+  }
+
   func outcome(
-    for result: Result<ASAuthorization, Error>
+    for result: Result<ASAuthorization, Error>,
+    rawNonce: String
   ) -> SocialAuthorizationOutcome {
     switch result {
     case .success(let authorization):
@@ -25,7 +35,9 @@ nonisolated struct AppleAuthorizationAdapter {
 
       return outcome(
         identityToken: credential.identityToken,
-        authorizationCode: credential.authorizationCode
+        authorizationCode: credential.authorizationCode,
+        userIdentifier: credential.user,
+        rawNonce: rawNonce
       )
     case .failure(let error):
       let nsError = error as NSError
@@ -40,10 +52,14 @@ nonisolated struct AppleAuthorizationAdapter {
 
   func outcome(
     identityToken: Data?,
-    authorizationCode: Data?
+    authorizationCode: Data?,
+    userIdentifier: String?,
+    rawNonce: String?
   ) -> SocialAuthorizationOutcome {
     guard let identityToken = string(from: identityToken),
-          let authorizationCode = string(from: authorizationCode) else {
+          let authorizationCode = string(from: authorizationCode),
+          let userIdentifier = normalized(userIdentifier),
+          let rawNonce = normalized(rawNonce) else {
       return .failed
     }
 
@@ -51,7 +67,9 @@ nonisolated struct AppleAuthorizationAdapter {
       SocialAuthorization(
         provider: .apple,
         token: identityToken,
-        authorizationCode: authorizationCode
+        authorizationCode: authorizationCode,
+        rawNonce: rawNonce,
+        providerUserIdentifier: userIdentifier
       )
     )
   }
@@ -65,6 +83,17 @@ nonisolated struct AppleAuthorizationAdapter {
     }
 
     return value
+  }
+
+  private func normalized(_ value: String?) -> String? {
+    guard let value else {
+      return nil
+    }
+
+    let normalizedValue = value.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    return normalizedValue.isEmpty ? nil : normalizedValue
   }
 }
 

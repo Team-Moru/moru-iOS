@@ -9,15 +9,21 @@ nonisolated struct SocialAuthorization: Equatable, Sendable {
   let provider: AuthProvider
   let token: String
   let authorizationCode: String?
+  let rawNonce: String?
+  let providerUserIdentifier: String?
 
   init(
     provider: AuthProvider,
     token: String,
-    authorizationCode: String? = nil
+    authorizationCode: String? = nil,
+    rawNonce: String? = nil,
+    providerUserIdentifier: String? = nil
   ) {
     self.provider = provider
     self.token = token
     self.authorizationCode = authorizationCode
+    self.rawNonce = rawNonce
+    self.providerUserIdentifier = providerUserIdentifier
   }
 }
 nonisolated extension SocialAuthorization:
@@ -28,7 +34,9 @@ nonisolated extension SocialAuthorization:
     SocialAuthorization(\
     provider: \(provider.serverValue), \
     token: <redacted>, \
-    authorizationCode: \(authorizationCode == nil ? "nil" : "<redacted>")\
+    authorizationCode: \(authorizationCode == nil ? "nil" : "<redacted>"), \
+    rawNonce: \(rawNonce == nil ? "nil" : "<redacted>"), \
+    providerUserIdentifier: \(providerUserIdentifier == nil ? "nil" : "<redacted>")\
     )
     """
   }
@@ -78,7 +86,18 @@ final class SocialLoginCoordinator: SocialLoginCoordinating {
       .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw SocialLoginError.invalidAuthorization
     }
+    if authorization.provider == .apple {
+      guard Self.hasValue(authorization.authorizationCode),
+            Self.hasValue(authorization.rawNonce),
+            Self.hasValue(authorization.providerUserIdentifier) else {
+        throw SocialLoginError.invalidAuthorization
+      }
+    }
 
+    // The 2026-07-27 OpenAPI contract accepts only token and
+    // authorizationCode. Keep the locally bound raw nonce and Apple user
+    // identifier out of the request until the server explicitly declares
+    // those fields.
     let response = try await authRemoteDataSource.login(
       provider: authorization.provider,
       request: SocialLoginRequestDTO(
@@ -91,7 +110,8 @@ final class SocialLoginCoordinator: SocialLoginCoordinating {
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
       onboardingCompleted: response.onboardingCompleted,
-      provider: authorization.provider
+      provider: authorization.provider,
+      providerUserIdentifier: authorization.providerUserIdentifier
     )
 
     try accountSessionStore.establishSession(credentials: credentials)
@@ -104,6 +124,14 @@ final class SocialLoginCoordinator: SocialLoginCoordinating {
     case .unknown:
       false
     }
+  }
+
+  nonisolated private static func hasValue(_ value: String?) -> Bool {
+    guard let value else {
+      return false
+    }
+
+    return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
 }
 

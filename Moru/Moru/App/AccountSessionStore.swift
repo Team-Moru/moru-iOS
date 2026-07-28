@@ -10,15 +10,18 @@ nonisolated struct SignedInAccount: Equatable, Sendable {
   let memberID: Int64
   let onboardingCompleted: Bool
   let provider: AuthProvider
+  let providerUserIdentifier: String?
 
   init(
     memberID: Int64,
     onboardingCompleted: Bool,
-    provider: AuthProvider = .apple
+    provider: AuthProvider = .apple,
+    providerUserIdentifier: String? = nil
   ) {
     self.memberID = memberID
     self.onboardingCompleted = onboardingCompleted
     self.provider = provider
+    self.providerUserIdentifier = providerUserIdentifier
   }
 }
 
@@ -110,7 +113,8 @@ final class AccountSessionStore: ObservableObject {
         SignedInAccount(
           memberID: credentials.memberID,
           onboardingCompleted: credentials.onboardingCompleted,
-          provider: credentials.provider
+          provider: credentials.provider,
+          providerUserIdentifier: credentials.providerUserIdentifier
         )
       )
     } catch CredentialStoreError.invalidCredentials,
@@ -137,7 +141,8 @@ final class AccountSessionStore: ObservableObject {
       SignedInAccount(
         memberID: credentials.memberID,
         onboardingCompleted: credentials.onboardingCompleted,
-        provider: credentials.provider
+        provider: credentials.provider,
+        providerUserIdentifier: credentials.providerUserIdentifier
       )
     )
   }
@@ -172,7 +177,8 @@ final class AccountSessionStore: ObservableObject {
       SignedInAccount(
         memberID: credentials.memberID,
         onboardingCompleted: credentials.onboardingCompleted,
-        provider: credentials.provider
+        provider: credentials.provider,
+        providerUserIdentifier: credentials.providerUserIdentifier
       )
     )
   }

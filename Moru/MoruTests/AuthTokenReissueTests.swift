@@ -107,7 +107,8 @@ final class AuthTokenReissueTests: XCTestCase {
         accessToken: "access-token",
         refreshToken: "stale-refresh-token",
         onboardingCompleted: true,
-        provider: .google
+        provider: .google,
+        providerUserIdentifier: "provider-user-id"
       )
     )
     let remoteDataSource = TokenRefreshRemoteDataSource(
@@ -143,6 +144,10 @@ final class AuthTokenReissueTests: XCTestCase {
       ["Bearer access-token", "Bearer refreshed-access-token"]
     )
     XCTAssertEqual(credentialStore.credentials?.provider, .google)
+    XCTAssertEqual(
+      credentialStore.credentials?.providerUserIdentifier,
+      "provider-user-id"
+    )
   }
 
   func testStaleUnauthorizedTokenUsesCurrentSnapshotWithoutRefresh() async throws {

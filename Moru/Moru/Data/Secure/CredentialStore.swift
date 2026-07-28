@@ -11,19 +11,22 @@ nonisolated struct AccountCredentials: Codable, Equatable, Sendable {
   let refreshToken: String
   let onboardingCompleted: Bool
   let provider: AuthProvider
+  let providerUserIdentifier: String?
 
   init(
     memberID: Int64,
     accessToken: String,
     refreshToken: String,
     onboardingCompleted: Bool,
-    provider: AuthProvider = .apple
+    provider: AuthProvider = .apple,
+    providerUserIdentifier: String? = nil
   ) {
     self.memberID = memberID
     self.accessToken = accessToken
     self.refreshToken = refreshToken
     self.onboardingCompleted = onboardingCompleted
     self.provider = provider
+    self.providerUserIdentifier = providerUserIdentifier
   }
 
   init(from decoder: Decoder) throws {
@@ -40,6 +43,10 @@ nonisolated struct AccountCredentials: Codable, Equatable, Sendable {
       AuthProvider.self,
       forKey: .provider
     ) ?? .apple
+    providerUserIdentifier = try container.decodeIfPresent(
+      String.self,
+      forKey: .providerUserIdentifier
+    )
   }
 
   var isValid: Bool {
@@ -59,7 +66,8 @@ nonisolated extension AccountCredentials:
     accessToken: <redacted>, \
     refreshToken: <redacted>, \
     onboardingCompleted: \(onboardingCompleted), \
-    provider: \(provider.serverValue)\
+    provider: \(provider.serverValue), \
+    providerUserIdentifier: \(providerUserIdentifier == nil ? "nil" : "<redacted>")\
     )
     """
   }
