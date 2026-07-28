@@ -200,7 +200,6 @@ jobs:
   ios-visual-tests:
     name: Xcode 26.5 visual simulator tests (baseline debt)
     if: github.event_name == 'pull_request'
-    continue-on-error: true
     runs-on: macos-26
     timeout-minutes: 60
     steps:
@@ -225,6 +224,8 @@ jobs:
             -onlyUsePackageVersionsFromResolvedFile
 
       - name: Run nonblocking visual simulator tests
+        id: visual-tests
+        continue-on-error: true
         run: |
           test_arguments=()
           while IFS= read -r test_name; do
@@ -253,3 +254,15 @@ jobs:
           path: ${{ runner.temp }}/MoruVisualTests.xcresult
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Report visual baseline debt
+        if: always() && steps.visual-tests.outcome != 'success'
+        run: |
+          echo "::warning::Visual baseline drift remains; inspect MoruVisualTests-xcresult."
+          {
+            echo "## Visual baseline debt"
+            echo
+            echo "The visual partition detected known perceptual-hash drift."
+            echo "This result is observable but does not block functional changes."
+            echo "Inspect the uploaded \`MoruVisualTests-xcresult\` artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
