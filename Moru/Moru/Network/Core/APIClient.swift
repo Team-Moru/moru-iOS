@@ -19,7 +19,15 @@ nonisolated protocol APIClient: AnyObject, Sendable {
   func requestData<Target: MoruTargetType>(_ target: Target) async throws -> Data
 }
 
-actor DefaultAPIClient: APIClient {
+nonisolated protocol AccountBoundAPIClient: APIClient {
+  func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    authorizedForMemberID memberID: Int64
+  ) async throws -> Payload
+}
+
+actor DefaultAPIClient: AccountBoundAPIClient {
   private let provider: MoyaProvider<MultiTarget>
   private let configuration: NetworkConfiguration
   private let tokenProvider: any AccessTokenProviding
@@ -50,27 +58,49 @@ actor DefaultAPIClient: APIClient {
     as payloadType: Payload.Type
   ) async throws -> Payload {
     try ensureServerRequestsEnabled()
-    let response = try await perform(target)
+    let response = try await perform(
+      target,
+      accessToken: try accessToken(for: target)
+    )
     try validateStatus(response)
 
-    let envelope = try decodeSuccessfulEnvelope(
-      payloadType,
-      from: response
-    )
+    return try successfulPayload(payloadType, from: response)
+  }
 
-    guard let result = envelope.result else {
-      throw APIError.missingResult(
-        code: envelope.code,
-        message: envelope.message
+  func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    authorizedForMemberID memberID: Int64
+  ) async throws -> Payload {
+    try ensureServerRequestsEnabled()
+    let authorizationContext = try authorizationContext(
+      for: target,
+      memberID: memberID
+    )
+    let response: HTTPResponseSnapshot
+
+    do {
+      response = try await perform(
+        target,
+        accessToken: authorizationContext.accessToken
       )
+    } catch {
+      try validateAuthorizationContext(authorizationContext)
+      throw error
     }
 
-    return result
+    try validateAuthorizationContext(authorizationContext)
+    try validateStatus(response)
+
+    return try successfulPayload(payloadType, from: response)
   }
 
   func requestVoid<Target: MoruTargetType>(_ target: Target) async throws {
     try ensureServerRequestsEnabled()
-    let response = try await perform(target)
+    let response = try await perform(
+      target,
+      accessToken: try accessToken(for: target)
+    )
     try validateStatus(response)
 
     guard response.statusCode != 204,
@@ -86,7 +116,10 @@ actor DefaultAPIClient: APIClient {
 
   func requestData<Target: MoruTargetType>(_ target: Target) async throws -> Data {
     try ensureServerRequestsEnabled()
-    let response = try await perform(target)
+    let response = try await perform(
+      target,
+      accessToken: try accessToken(for: target)
+    )
     try validateStatus(response)
     return response.data
   }
@@ -98,9 +131,9 @@ actor DefaultAPIClient: APIClient {
   }
 
   private func perform<Target: MoruTargetType>(
-    _ target: Target
+    _ target: Target,
+    accessToken: String?
   ) async throws -> HTTPResponseSnapshot {
-    let accessToken = try accessToken(for: target)
     let response = try await send(
       target,
       accessToken: accessToken
@@ -130,6 +163,25 @@ actor DefaultAPIClient: APIClient {
       retryTarget,
       accessToken: refreshResult.accessToken
     )
+  }
+
+  private func successfulPayload<Payload: Decodable & Sendable>(
+    _ payloadType: Payload.Type,
+    from response: HTTPResponseSnapshot
+  ) throws -> Payload {
+    let envelope = try decodeSuccessfulEnvelope(
+      payloadType,
+      from: response
+    )
+
+    guard let result = envelope.result else {
+      throw APIError.missingResult(
+        code: envelope.code,
+        message: envelope.message
+      )
+    }
+
+    return result
   }
 
   private func send<Target: MoruTargetType>(
@@ -179,6 +231,38 @@ actor DefaultAPIClient: APIClient {
     }
 
     return token
+  }
+
+  private func authorizationContext<Target: MoruTargetType>(
+    for target: Target,
+    memberID: Int64
+  ) throws -> AccountAuthorizationContext {
+    guard target.authenticationRequirement == .bearer,
+          memberID > 0,
+          let accountTokenProvider = tokenProvider
+            as? any AccountBoundAccessTokenProviding,
+          let context = accountTokenProvider.authorizationContext(
+            forMemberID: memberID
+          ),
+          !context.accessToken.trimmingCharacters(
+            in: .whitespacesAndNewlines
+          ).isEmpty else {
+      throw AccountAuthorizationContextError.memberMismatch
+    }
+
+    return context
+  }
+
+  private func validateAuthorizationContext(
+    _ expected: AccountAuthorizationContext
+  ) throws {
+    guard let accountTokenProvider = tokenProvider
+      as? any AccountBoundAccessTokenProviding,
+      accountTokenProvider.authorizationContext(
+        forMemberID: expected.memberID
+      )?.sessionID == expected.sessionID else {
+      throw AccountAuthorizationContextError.memberMismatch
+    }
   }
 
   private func validateStatus(_ response: HTTPResponseSnapshot) throws {

@@ -399,7 +399,7 @@ struct ProfileView: View {
         profileMessage(fallbackNotice, color: AppColor.moruTextSecondary)
       }
 
-      if let voiceErrorMessage = viewModel.voiceErrorMessage {
+      if let voiceErrorMessage = viewModel.voiceSelection.errorMessage {
         profileMessage(voiceErrorMessage, color: AppColor.coral300)
       }
     }
@@ -592,11 +592,24 @@ struct ProfileView: View {
   private var voiceSelectionView: some View {
     NavigationStack {
       List {
-        ForEach(VoiceProfile.localVoices) { voice in
-          voiceRow(voice)
+        if viewModel.voiceSelection.isLoading,
+           viewModel.voiceSelection.catalogue.options.isEmpty {
+          HStack {
+            Spacer()
+            ProgressView("음성 목록을 불러오는 중")
+            Spacer()
+          }
+        } else {
+          ForEach(viewModel.voiceSelection.catalogue.options) { option in
+            accountVoiceRow(option)
+          }
         }
 
-        if let message = viewModel.voiceErrorMessage {
+        if let notice = viewModel.voiceSelection.catalogue.notice {
+          profileMessage(notice, color: AppColor.moruTextSecondary)
+        }
+
+        if let message = viewModel.voiceSelection.errorMessage {
           profileMessage(message, color: AppColor.coral300)
         }
       }
@@ -607,10 +620,65 @@ struct ProfileView: View {
           Button("닫기") {
             isVoiceSelectionPresented = false
           }
+          .disabled(viewModel.voiceSelection.isSelecting)
         }
       }
     }
-    .onDisappear(perform: viewModel.voiceSelectionViewDidDisappear)
+    .task {
+      await viewModel.voiceSelection.viewDidAppear()
+    }
+    .confirmationDialog(
+      "서버와 기기의 음성 선택이 달라요.",
+      isPresented: Binding(
+        get: { viewModel.voiceSelection.catalogue.mismatch != nil },
+        set: { isPresented in
+          if !isPresented {
+            viewModel.voiceSelection.mismatchDialogDidDismiss()
+          }
+        }
+      ),
+      titleVisibility: .visible
+    ) {
+      if let mismatch = viewModel.voiceSelection.catalogue.mismatch {
+        Button("기기 음성 유지 · \(mismatch.localVoice.displayName)") {
+          viewModel.voiceSelection.mismatchResolutionWillBegin()
+          Task {
+            await viewModel.voiceSelection.resolveMismatch(
+              mismatch,
+              .keepDevice
+            )
+          }
+        }
+        .disabled(viewModel.voiceSelection.isSelecting)
+        if mismatch.serverVoice.availability.isSelectable {
+          Button("서버 음성 사용 · \(mismatch.serverVoice.displayName)") {
+            viewModel.voiceSelection.mismatchResolutionWillBegin()
+            Task {
+              await viewModel.voiceSelection.resolveMismatch(
+                mismatch,
+                .useServer
+              )
+            }
+          }
+          .disabled(viewModel.voiceSelection.isSelecting)
+        }
+      }
+      Button("나중에 선택", role: .cancel) {
+        viewModel.voiceSelection.mismatchDialogDidDismiss()
+      }
+    } message: {
+      if let mismatch = viewModel.voiceSelection.catalogue.mismatch,
+         !mismatch.serverVoice.availability.isSelectable {
+        Text(
+          "서버가 이 앱에서 사용할 수 없는 음성을 선택했어요. "
+            + "기기 음성을 유지하거나 나중에 다시 선택해 주세요."
+        )
+      } else {
+        Text("자동으로 덮어쓰지 않아요. 사용할 음성을 직접 선택해 주세요.")
+      }
+    }
+    .interactiveDismissDisabled(viewModel.voiceSelection.isSelecting)
+    .onDisappear(perform: viewModel.voiceSelection.viewDidDisappear)
   }
 
   private var appleSignInSheet: some View {
@@ -724,17 +792,17 @@ struct ProfileView: View {
     .accessibilityIdentifier("profile.account.sheet")
   }
 
-  private func voiceRow(_ voice: VoiceProfile) -> some View {
-    let isAvailable = viewModel.isVoiceAvailable(voice)
-    let isSelected = selectedVoiceID == voice.id
+  private func accountVoiceRow(_ option: AccountVoiceOption) -> some View {
+    let isAvailable = option.availability.isSelectable
+    let isSelected = selectedVoiceID == option.localVoice?.id
 
     return VStack(alignment: .leading, spacing: AppSpacing.sm) {
       HStack(spacing: AppSpacing.sm) {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-          Text(voice.displayName)
+          Text(option.displayName)
             .font(AppFont.label1NormalSemiBold)
             .foregroundStyle(AppColor.moruTextPrimary)
-          Text(isAvailable ? "앱 내장 음성" : "음성 파일 없음")
+          Text(option.detail)
             .font(AppFont.caption1Medium)
             .foregroundStyle(AppColor.moruTextSecondary)
         }
@@ -750,43 +818,61 @@ struct ProfileView: View {
 
       ViewThatFits(in: .horizontal) {
         HStack(spacing: AppSpacing.sm) {
-          voiceSelectionButton(voice, isAvailable: isAvailable, isSelected: isSelected)
-          voicePreviewButton(voice, isAvailable: isAvailable)
+          accountVoiceSelectionButton(
+            option,
+            isAvailable: isAvailable,
+            isSelected: isSelected
+          )
+          accountVoicePreviewButton(option, isAvailable: isAvailable)
         }
         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-          voiceSelectionButton(voice, isAvailable: isAvailable, isSelected: isSelected)
-          voicePreviewButton(voice, isAvailable: isAvailable)
+          accountVoiceSelectionButton(
+            option,
+            isAvailable: isAvailable,
+            isSelected: isSelected
+          )
+          accountVoicePreviewButton(option, isAvailable: isAvailable)
         }
       }
     }
     .padding(.vertical, AppSpacing.xxs)
   }
 
-  private func voiceSelectionButton(
-    _ voice: VoiceProfile,
+  private func accountVoiceSelectionButton(
+    _ option: AccountVoiceOption,
     isAvailable: Bool,
     isSelected: Bool
   ) -> some View {
-    Button(isSelected ? "선택됨" : "선택") {
-      if viewModel.voiceSelectionButtonDidTap(voice) {
-        isVoiceSelectionPresented = false
+    Button(
+      viewModel.voiceSelection.isSelecting
+        ? "저장 중"
+        : (isSelected ? "선택됨" : "선택")
+    ) {
+      Task {
+        if await viewModel.voiceSelection.select(option) {
+          isVoiceSelectionPresented = false
+        }
       }
     }
     .buttonStyle(.borderedProminent)
     .tint(AppColor.moruBlue)
-    .disabled(!isAvailable || isSelected)
+    .disabled(
+      !isAvailable
+        || isSelected
+        || viewModel.voiceSelection.isSelecting
+    )
   }
 
-  private func voicePreviewButton(
-    _ voice: VoiceProfile,
+  private func accountVoicePreviewButton(
+    _ option: AccountVoiceOption,
     isAvailable: Bool
   ) -> some View {
     Button("미리 듣기") {
-      viewModel.voicePreviewButtonDidTap(voice)
+      viewModel.voiceSelection.preview(option)
     }
     .buttonStyle(.bordered)
-    .disabled(!isAvailable)
-    .accessibilityIdentifier("voice.preview.\(voice.id)")
+    .disabled(!isAvailable || viewModel.voiceSelection.isSelecting)
+    .accessibilityIdentifier("voice.preview.\(option.id)")
   }
 
   private var selectedVoiceID: String? {

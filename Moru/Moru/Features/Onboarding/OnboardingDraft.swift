@@ -13,6 +13,7 @@ struct OnboardingDraft: Equatable {
   var selectedKeywords: Set<String> = []
   var freeformText: String = ""
   var previewRoutine: Routine?
+  var suggestionSource: RoutineSuggestionSource?
   var alarmHour: Int = 7
   var alarmMinute: Int = 0
   var selectedWeekdays: Set<Weekday> = Set(Weekday.onboardingDisplayOrder.prefix(5))

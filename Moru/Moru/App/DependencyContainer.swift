@@ -7,15 +7,25 @@
 
 import SwiftData
 
+struct ServerPreferenceDependencies {
+  let mutationRepository: any ServerMutationRepository
+  let voiceCatalogRepository: any ServerVoiceCatalogRepository
+  let voiceRemoteService: (any AccountVoiceRemoteServing)?
+  let synchronizer: any ServerSynchronizing
+  let accountScopedDataCleaner: any AccountScopedDataCleaning
+}
+
 struct DependencyContainer {
   let routineRepository: any RoutineRepository
   let routineRunRepository: any RoutineRunRepository
   let localProfileRepository: any LocalProfileRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
+  let routineSuggestionCoordinator: any RoutineSuggestionCoordinating
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
+  let serverPreferences: ServerPreferenceDependencies?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -31,9 +41,11 @@ struct DependencyContainer {
     localProfileRepository: any LocalProfileRepository,
     onboardingRepository: any OnboardingRepository,
     routineSuggestionService: any RoutineSuggestionService,
+    routineSuggestionCoordinator: (any RoutineSuggestionCoordinating)? = nil,
     homeWeatherRepository: (any HomeWeatherRepository)? = nil,
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
+    serverPreferences: ServerPreferenceDependencies? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -49,9 +61,16 @@ struct DependencyContainer {
     self.localProfileRepository = localProfileRepository
     self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
+    self.routineSuggestionCoordinator = routineSuggestionCoordinator
+      ?? RoutineSuggestionCoordinator(
+        serverService: nil,
+        localService: routineSuggestionService,
+        accountProvider: nil
+      )
     self.homeWeatherRepository = homeWeatherRepository
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
+    self.serverPreferences = serverPreferences
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -63,7 +82,13 @@ struct DependencyContainer {
   }
 
   @MainActor
-  static func local(modelContext: ModelContext) -> DependencyContainer {
+  static func local(
+    modelContext: ModelContext,
+    voiceRemoteService: (any AccountVoiceRemoteServing)? = nil,
+    routineSuggestionRemoteDataSource:
+      (any RoutineSuggestionRemoteDataSource)? = nil,
+    accountSessionStore: AccountSessionStore? = nil
+  ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
     let guidancePlayer = BundledRoutineGuidancePlayer(
@@ -77,6 +102,22 @@ struct DependencyContainer {
       resourceLoader: audioResourceLoader
     )
     let routineRepository = SwiftDataRoutineRepository(modelContext: modelContext)
+    let serverPreferenceRepository = SwiftDataServerPreferenceRepository(
+      modelContext: modelContext
+    )
+    let mutationExecutor: any ServerMutationExecuting
+    if let voiceRemoteService {
+      mutationExecutor = VoiceSelectionMutationExecutor(
+        remoteService: voiceRemoteService,
+        catalogueRepository: serverPreferenceRepository
+      )
+    } else {
+      mutationExecutor = DeferredServerMutationExecutor()
+    }
+    let syncCoordinator = SyncCoordinator(
+      mutationRepository: serverPreferenceRepository,
+      executor: mutationExecutor
+    )
     let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
       modelContext: modelContext
     )
@@ -99,6 +140,15 @@ struct DependencyContainer {
       stateRepository: alarmStateRepository,
       mutationCoordinator: alarmScheduleMutator
     )
+    let localSuggestionService = LocalTemplateSuggestionService.shared
+    let serverSuggestionService = routineSuggestionRemoteDataSource.map {
+      ServerRoutineSuggestionService(remoteDataSource: $0)
+    }
+    let routineSuggestionCoordinator = RoutineSuggestionCoordinator(
+      serverService: serverSuggestionService,
+      localService: localSuggestionService,
+      accountProvider: accountSessionStore
+    )
     let alarmRuntimeHandler = DefaultAlarmRuntimeCoordinator(
       routineRepository: routineRepository,
       stateRepository: alarmStateRepository,
@@ -112,11 +162,21 @@ struct DependencyContainer {
       routineRunRepository: swiftDataRoutineRunRepository,
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
-      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      routineSuggestionService: localSuggestionService,
+      routineSuggestionCoordinator: routineSuggestionCoordinator,
       homeWeatherRepository: SwiftDataHomeWeatherRepository(modelContext: modelContext),
       homeWeatherService: CoreLocationWeatherService(),
       localDataResetRepository: SwiftDataLocalDataResetRepository(
         modelContext: modelContext
+      ),
+      serverPreferences: ServerPreferenceDependencies(
+        mutationRepository: serverPreferenceRepository,
+        voiceCatalogRepository: serverPreferenceRepository,
+        voiceRemoteService: voiceRemoteService,
+        synchronizer: syncCoordinator,
+        accountScopedDataCleaner: SwiftDataAccountScopedDataCleaner(
+          repository: serverPreferenceRepository
+        )
       ),
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
@@ -127,6 +187,27 @@ struct DependencyContainer {
       routineGuidancePlaybackState: guidancePlaybackState,
       routineAudioSessionCoordinator: audioSessionCoordinator
     )
+  }
+
+  var serverMutationRepository: (any ServerMutationRepository)? {
+    serverPreferences?.mutationRepository
+  }
+
+  var serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)? {
+    serverPreferences?.voiceCatalogRepository
+  }
+
+  var voiceRemoteService: (any AccountVoiceRemoteServing)? {
+    serverPreferences?.voiceRemoteService
+  }
+
+  var serverSynchronizer: (any ServerSynchronizing)? {
+    serverPreferences?.synchronizer
+  }
+
+  var accountScopedDataCleaner: any AccountScopedDataCleaning {
+    serverPreferences?.accountScopedDataCleaner
+      ?? NoAccountScopedDataCleaner()
   }
 
   @MainActor
@@ -146,6 +227,7 @@ struct DependencyContainer {
 
     return DefaultOnboardingFlowBuilder(
       routineSuggestionService: routineSuggestionService,
+      routineSuggestionCoordinator: routineSuggestionCoordinator,
       completeOnboardingUseCase: completeOnboardingUseCase,
       voicePreviewPlayer: makeVoicePreviewPlayer()
     )

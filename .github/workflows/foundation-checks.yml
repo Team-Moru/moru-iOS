@@ -8,6 +8,40 @@ on:
       - develop
       - 'feat/**'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: foundation-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PROJECT_PATH: Moru/Moru.xcodeproj
+  SCHEME: Moru
+  XCODE_PATH: /Applications/Xcode_26.5.app
+  SIMULATOR_DESTINATION: platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5
+  VISUAL_TESTS: |
+    MoruTests/FigmaPilotFoundationTests/testPilotComponentBoardRendersDeterministicallyAtReferenceVariants
+    MoruTests/FigmaPilotFoundationTests/testPilotTabBarBackgroundContinuesThroughBottomSafeArea
+    MoruTests/FinalScreenVisualTests/testMainScreensRenderAtReferenceAccessibilitySizes
+    MoruTests/FinalScreenVisualTests/testActiveRoutineSectionRendersAtReferenceAccessibilitySizes
+    MoruTests/FinalScreenVisualTests/testAlarmRingRendersAtReferenceAccessibilitySizes
+    MoruTests/FinalScreenVisualTests/testBundledVoiceOnboardingRendersAtReferenceAccessibilitySizes
+    MoruTests/FinalScreenVisualTests/testSessionEmptyStatesRenderAtReferenceAccessibilitySizes
+    MoruTests/FinalScreenVisualTests/testHistoryAndCompletionStreakSurfacesRenderAtReferenceAccessibilitySizes
+    MoruTests/HistoryDetailFigmaVisualTests/testHistoryDetailStatesRenderDeterministicallyAtReferenceVariants
+    MoruTests/HistoryOverviewFigmaVisualTests/testHistoryOverviewStatesRenderDeterministicallyAtReferenceVariants
+    MoruTests/HistoryRunReportingTests/testHistoryMetricsRenderAtReferenceAccessibilitySizes
+    MoruTests/HomeProfileFigmaVisualTests/testHomeAndProfileStatesRenderDeterministicallyAtReferenceVariants
+    MoruTests/HomeRoutineIntegrationTests/testHomeBusyFeedbackRendersInNativeHomeSurface
+    MoruTests/OnboardingFigmaVisualTests/testAlarmSoundGuidanceCopyAndVisualContract
+    MoruTests/OnboardingFigmaVisualTests/testOnboardingStatesRenderDeterministicallyAtReferenceVariants
+    MoruTests/OptionalLoginEntryVisualTests/testAccountEntryStatesRenderDeterministicallyAtMediumAndAX3
+    MoruTests/RoutineFinishedFigmaVisualTests/testRoutineFinishedStatesRenderDeterministicallyAtReferenceVariants
+    MoruTests/RoutineListFigmaVisualTests/testRoutineListStatesRenderDeterministicallyAtReferenceVariants
+    MoruTests/RoutineManagementFigmaVisualTests/testRoutineManagementStatesRenderDeterministicallyAtReferenceVariants
+    MoruTests/RoutinePlayerFigmaVisualTests/testRoutinePlayerStatesRenderDeterministicallyAtReferenceVariants
+
 jobs:
   iphone-functional-gate:
     name: iPhone portrait functional gate
@@ -39,3 +73,196 @@ jobs:
 
       - name: Check SwiftData boundary
         run: bash Scripts/check-swiftdata-boundary.sh
+
+  social-login-release-config:
+    name: Social login release configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check social login release configuration
+        run: bash Scripts/check-social-login-release-config.sh
+
+  domain-dependency-boundary:
+    name: Domain dependency boundary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check Domain dependency boundary
+        run: bash Scripts/check-domain-dependency-boundary.sh
+
+  server-integration-privacy:
+    name: Server integration privacy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install ripgrep
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - name: Audit server integration privacy
+        run: bash Scripts/audit-server-integration-privacy.sh
+
+  ios-build-and-test:
+    name: Xcode 26.5 build and nonvisual simulator tests
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 26.5
+        run: |
+          test -d "$XCODE_PATH"
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          test "$(xcodebuild -version | awk 'NR == 1 { print $2 }')" = "26.5"
+
+      - name: Resolve pinned Swift packages
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project "$PROJECT_PATH" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            -onlyUsePackageVersionsFromResolvedFile
+
+      - name: Build Debug for generic iOS
+        run: |
+          xcodebuild build \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-Debug" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build Release for generic iOS
+        run: |
+          xcodebuild build \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-Release" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Run blocking nonvisual simulator tests
+        run: |
+          test_arguments=()
+          while IFS= read -r test_name; do
+            if [[ -n "$test_name" ]]; then
+              test_arguments+=("-skip-testing:$test_name")
+            fi
+          done <<< "$VISUAL_TESTS"
+
+          xcodebuild test \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "$SIMULATOR_DESTINATION" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-Tests" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/MoruNonvisualTests.xcresult" \
+            "${test_arguments[@]}"
+
+      - name: Upload nonvisual test result bundle on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoruNonvisualTests-xcresult
+          path: ${{ runner.temp }}/MoruNonvisualTests.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ios-visual-tests:
+    name: Xcode 26.5 visual simulator tests (baseline debt)
+    if: github.event_name == 'pull_request'
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Select Xcode 26.5
+        run: |
+          test -d "$XCODE_PATH"
+          sudo xcode-select --switch "$XCODE_PATH/Contents/Developer"
+          xcodebuild -version
+          test "$(xcodebuild -version | awk 'NR == 1 { print $2 }')" = "26.5"
+
+      - name: Resolve pinned Swift packages
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project "$PROJECT_PATH" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            -onlyUsePackageVersionsFromResolvedFile
+
+      - name: Run nonblocking visual simulator tests
+        id: visual-tests
+        continue-on-error: true
+        run: |
+          test_arguments=()
+          while IFS= read -r test_name; do
+            if [[ -n "$test_name" ]]; then
+              test_arguments+=("-only-testing:$test_name")
+            fi
+          done <<< "$VISUAL_TESTS"
+
+          xcodebuild test \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -destination "$SIMULATOR_DESTINATION" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData-VisualTests" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RUNNER_TEMP/MoruVisualTests.xcresult" \
+            "${test_arguments[@]}"
+
+      - name: Upload visual test result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoruVisualTests-xcresult
+          path: ${{ runner.temp }}/MoruVisualTests.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Report visual baseline debt
+        if: always() && steps.visual-tests.outcome != 'success'
+        run: |
+          echo "::warning::Visual baseline drift remains; inspect MoruVisualTests-xcresult."
+          {
+            echo "## Visual baseline debt"
+            echo
+            echo "The visual partition detected known perceptual-hash drift."
+            echo "This result is observable but does not block functional changes."
+            echo "Inspect the uploaded \`MoruVisualTests-xcresult\` artifact."
+          } >> "$GITHUB_STEP_SUMMARY"

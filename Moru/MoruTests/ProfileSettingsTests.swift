@@ -197,8 +197,21 @@ final class ProfileSettingsTests: XCTestCase {
       alarmService: alarmService
     )
 
-    viewModel.voicePreviewButtonDidTap(.aoede)
-    viewModel.voiceSelectionViewDidDisappear()
+    viewModel.voiceSelection.preview(
+      AccountVoiceOption(
+        id: "bundled.\(VoiceProfile.aoede.id)",
+        serverMemberID: nil,
+        serverVoiceCode: nil,
+        serverTtsID: nil,
+        displayName: VoiceProfile.aoede.displayName,
+        detail: "앱 내장 음성",
+        localVoice: .aoede,
+        availability: .selectable,
+        source: .bundledFallback,
+        isAuthoritativeServerSelection: false
+      )
+    )
+    viewModel.voiceSelection.viewDidDisappear()
     await viewModel.alarmAuthorizationButtonDidTap()
 
     XCTAssertEqual(previewPlayer.previewedVoices, [.aoede])

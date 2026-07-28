@@ -195,6 +195,13 @@ struct AppRouter: View {
       Task {
         await consumePendingAlarmIngress()
         await dependencies.alarmScheduleMutator?.reconcile()
+        if appCapabilities.shouldAllowServerRequests,
+           case .signedIn(let account) = accountSessionStore.state {
+          await dependencies.serverSynchronizer?.synchronize(
+            memberID: account.memberID,
+            trigger: .appActive
+          )
+        }
       }
     }
     .onChange(of: sessionStore.phase) { _, newPhase in
@@ -363,6 +370,26 @@ struct AppRouter: View {
     )
     let profileAlarmService = dependencies.profileAlarmService
       ?? UnavailableProfileAlarmService()
+    let accountVoiceSelectionUseCase: any AccountVoiceSelectionUseCaseProtocol
+    if let remoteService = dependencies.voiceRemoteService,
+       let catalogueRepository = dependencies.serverVoiceCatalogRepository,
+       let mutationRepository = dependencies.serverMutationRepository,
+       let serverSynchronizer = dependencies.serverSynchronizer {
+      accountVoiceSelectionUseCase = AccountVoiceSelectionUseCase(
+        profileSettingsUseCase: profileSettingsUseCase,
+        voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe,
+        remoteService: remoteService,
+        catalogueRepository: catalogueRepository,
+        mutationRepository: mutationRepository,
+        serverSynchronizer: serverSynchronizer,
+        signedInMemberProvider: accountSessionStore
+      )
+    } else {
+      accountVoiceSelectionUseCase = UnavailableAccountVoiceSelectionUseCase(
+        profileSettingsUseCase: profileSettingsUseCase,
+        voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
+      )
+    }
     let resetUseCase = dependencies.localDataResetRepository.map {
       ResetLocalDataUseCase(
         localDataResetRepository: $0,
@@ -371,6 +398,7 @@ struct AppRouter: View {
     }
     let profileBuilder = DefaultProfileFlowBuilder(
       profileSettingsUseCase: profileSettingsUseCase,
+      accountVoiceSelectionUseCase: accountVoiceSelectionUseCase,
       voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
       accountSessionStore: accountSessionStore,

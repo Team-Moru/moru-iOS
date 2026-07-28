@@ -10,7 +10,7 @@ import Foundation
 enum OnboardingCopy {
   static let experienceSubtitle = "맞춤 루틴을 설정해드릴게요"
   static let freeformSubtitle =
-    "자연어로 편하게 입력하면 로컬 템플릿으로 정리해드려요"
+    "자연어로 편하게 입력하면 맞춤 초안으로 정리해드려요"
   static let organizingTitle = "루틴을 정리하고 있어요"
   static let organizingSubtitle = "잠시만 기다려주세요 ∙∙∙"
   static let reviewTitle = "정리된\n루틴이에요"

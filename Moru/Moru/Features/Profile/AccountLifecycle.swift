@@ -9,8 +9,7 @@ nonisolated protocol AccountScopedDataCleaning: Sendable {
   func removeAccountScopedData(memberID: Int64) async throws
 }
 
-/// P5 has no account-scoped SwiftData models. P6 replaces this boundary with its
-/// Outbox and server preference cleanup implementation.
+/// Used by previews and tests that intentionally do not construct account-scoped storage.
 nonisolated struct NoAccountScopedDataCleaner: AccountScopedDataCleaning {
   func removeAccountScopedData(memberID: Int64) async throws {}
 }
@@ -71,24 +70,32 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
   private let accountSessionStore: AccountSessionStore
   private let accountScopedDataCleaner: any AccountScopedDataCleaning
   private let providerSessionSignOut: any SocialProviderSessionSigningOut
+  private let serverSynchronizer: (any ServerSynchronizing)?
 
   init(
     authRemoteDataSource: any AuthRemoteDataSource,
     accountSessionStore: AccountSessionStore,
     accountScopedDataCleaner: any AccountScopedDataCleaning,
     providerSessionSignOut: any SocialProviderSessionSigningOut =
-      NoopSocialProviderSessionSignOut()
+      NoopSocialProviderSessionSignOut(),
+    serverSynchronizer: (any ServerSynchronizing)? = nil
   ) {
     self.authRemoteDataSource = authRemoteDataSource
     self.accountSessionStore = accountSessionStore
     self.accountScopedDataCleaner = accountScopedDataCleaner
     self.providerSessionSignOut = providerSessionSignOut
+    self.serverSynchronizer = serverSynchronizer
   }
 
   func logout() async throws {
     let credentials = try? accountSessionStore.credentialsForAccountLifecycle()
+    let memberID = credentials?.memberID
+      ?? accountSessionStore.signedInMemberID
     let provider = credentials?.provider ?? accountSessionStore.signedInProvider
 
+    if let memberID {
+      await serverSynchronizer?.suspendSynchronization(memberID: memberID)
+    }
     if let refreshToken = credentials?.refreshToken {
       try? await authRemoteDataSource.logout(refreshToken: refreshToken)
     }
@@ -97,6 +104,9 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
         provider: provider,
         reason: .logout
       )
+    }
+    if let memberID {
+      await serverSynchronizer?.suspendSynchronization(memberID: memberID)
     }
 
     do {
@@ -115,7 +125,17 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
       throw AccountLifecycleError.sessionUnavailable
     }
 
-    _ = try await authRemoteDataSource.withdraw()
+    await serverSynchronizer?.suspendSynchronization(
+      memberID: credentials.memberID
+    )
+    do {
+      _ = try await authRemoteDataSource.withdraw()
+    } catch {
+      serverSynchronizer?.resumeSynchronization(
+        memberID: credentials.memberID
+      )
+      throw error
+    }
     var cleanupFailed = false
 
     do {
@@ -127,6 +147,9 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
       cleanupFailed = true
     }
 
+    await serverSynchronizer?.suspendSynchronization(
+      memberID: credentials.memberID
+    )
     do {
       try await accountScopedDataCleaner.removeAccountScopedData(
         memberID: credentials.memberID

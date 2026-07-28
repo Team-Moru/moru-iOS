@@ -19,7 +19,6 @@ enum ProfileViewState: Equatable {
 @Observable
 final class ProfileViewModel {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
-  private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
   private let socialLoginCoordinator: any SocialLoginCoordinating
   private let accountLifecycleService: any AccountLifecycleManaging
@@ -31,13 +30,13 @@ final class ProfileViewModel {
   private(set) var state: ProfileViewState = .loading
   private(set) var alarmStatus: ProfileAlarmStatus = .unavailable
   private(set) var displayNameErrorMessage: String?
-  private(set) var voiceErrorMessage: String?
   private(set) var resetErrorMessage: String?
   private(set) var accountErrorMessage: String?
   private(set) var isAlarmRequestInProgress = false
   private(set) var isResetInProgress = false
   private(set) var isAccountLinkInProgress = false
   private(set) var accountLifecycleAction: AccountLifecycleAction?
+  let voiceSelection: AccountVoiceSelectionViewModel
 
   var isResetAvailable: Bool {
     resetUseCase != nil && resetAvailability() && !isResetInProgress
@@ -60,6 +59,7 @@ final class ProfileViewModel {
 
   init(
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
+    accountVoiceSelectionUseCase: (any AccountVoiceSelectionUseCaseProtocol)? = nil,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
     socialLoginCoordinator: any SocialLoginCoordinating =
@@ -72,7 +72,15 @@ final class ProfileViewModel {
     onResetSucceeded: @escaping @MainActor () -> Void
   ) {
     self.profileSettingsUseCase = profileSettingsUseCase
-    self.voicePreviewPlayer = voicePreviewPlayer
+    let resolvedVoiceSelectionUseCase = accountVoiceSelectionUseCase
+      ?? UnavailableAccountVoiceSelectionUseCase(
+        profileSettingsUseCase: profileSettingsUseCase,
+        voiceAvailabilityProbe: UnavailableVoiceAvailabilityProbe()
+      )
+    self.voiceSelection = AccountVoiceSelectionViewModel(
+      useCase: resolvedVoiceSelectionUseCase,
+      previewPlayer: voicePreviewPlayer
+    )
     self.alarmService = alarmService
     self.socialLoginCoordinator = socialLoginCoordinator
     self.accountLifecycleService = accountLifecycleService
@@ -80,6 +88,9 @@ final class ProfileViewModel {
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
     self.onResetSucceeded = onResetSucceeded
+    self.voiceSelection.setProfileUpdatedHandler { [weak self] result in
+      self?.state = .content(result)
+    }
   }
 
   func loadProfileSettings() {
@@ -113,36 +124,6 @@ final class ProfileViewModel {
       reportDisplayNameError("이름을 저장하지 못했어요. 다시 시도해 주세요.")
       return false
     }
-  }
-
-  func voiceSelectionButtonDidTap(_ voice: VoiceProfile) -> Bool {
-    voiceErrorMessage = nil
-
-    do {
-      state = .content(try profileSettingsUseCase.selectVoice(voice))
-      voicePreviewPlayer.stopVoicePreview()
-      return true
-    } catch {
-      reportVoiceError("이 목소리는 기기에서 사용할 수 없어요.")
-      return false
-    }
-  }
-
-  func voicePreviewButtonDidTap(_ voice: VoiceProfile) {
-    voiceErrorMessage = nil
-
-    guard voicePreviewPlayer.previewVoice(voice) else {
-      reportVoiceError("이 목소리를 미리 들을 수 없어요.")
-      return
-    }
-  }
-
-  func voiceSelectionViewDidDisappear() {
-    voicePreviewPlayer.stopVoicePreview()
-  }
-
-  func isVoiceAvailable(_ voice: VoiceProfile) -> Bool {
-    profileSettingsUseCase.isVoiceAvailable(voice)
   }
 
   func refreshAlarmStatus() async {
@@ -342,11 +323,6 @@ final class ProfileViewModel {
 
   private func reportDisplayNameError(_ message: String) {
     displayNameErrorMessage = message
-    announce(message)
-  }
-
-  private func reportVoiceError(_ message: String) {
-    voiceErrorMessage = message
     announce(message)
   }
 

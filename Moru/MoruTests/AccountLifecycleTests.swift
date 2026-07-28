@@ -24,6 +24,8 @@ final class AccountLifecycleTests: XCTestCase {
     let logoutRefreshTokens = await fixture.remote.logoutRefreshTokens
     XCTAssertEqual(logoutRefreshTokens, ["refresh-token"])
     XCTAssertEqual(fixture.cleaner.memberIDs, [])
+    XCTAssertEqual(fixture.synchronizer.suspendedMemberIDs, [92, 92])
+    XCTAssertTrue(fixture.synchronizer.resumedMemberIDs.isEmpty)
     XCTAssertNil(fixture.credentialStore.credentials)
     XCTAssertNil(fixture.tokenProvider.accessToken)
     XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
@@ -122,6 +124,8 @@ final class AccountLifecycleTests: XCTestCase {
 
     XCTAssertEqual(fixture.events.values, ["remote withdrawal"])
     XCTAssertEqual(fixture.cleaner.memberIDs, [])
+    XCTAssertEqual(fixture.synchronizer.suspendedMemberIDs, [92])
+    XCTAssertEqual(fixture.synchronizer.resumedMemberIDs, [92])
     XCTAssertEqual(fixture.credentialStore.removeCallCount, 0)
     XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
     XCTAssertEqual(fixture.tokenProvider.accessToken, "access-token")
@@ -142,6 +146,8 @@ final class AccountLifecycleTests: XCTestCase {
       ["remote withdrawal", "account cleanup 92", "credential remove"]
     )
     XCTAssertEqual(fixture.cleaner.memberIDs, [92])
+    XCTAssertEqual(fixture.synchronizer.suspendedMemberIDs, [92, 92])
+    XCTAssertTrue(fixture.synchronizer.resumedMemberIDs.isEmpty)
     XCTAssertNil(fixture.credentialStore.credentials)
     XCTAssertNil(fixture.tokenProvider.accessToken)
     XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
@@ -374,17 +380,20 @@ final class AccountLifecycleTests: XCTestCase {
       events: events,
       error: cleanupError
     )
+    let synchronizer = AccountLifecycleSynchronizerSpy()
     let service = DefaultAccountLifecycleService(
       authRemoteDataSource: remote,
       accountSessionStore: accountSessionStore,
       accountScopedDataCleaner: cleaner,
-      providerSessionSignOut: providerSessionSignOut
+      providerSessionSignOut: providerSessionSignOut,
+      serverSynchronizer: synchronizer
     )
 
     return AccountLifecycleFixture(
       service: service,
       remote: remote,
       cleaner: cleaner,
+      synchronizer: synchronizer,
       credentialStore: credentialStore,
       tokenProvider: tokenProvider,
       accountSessionStore: accountSessionStore,
@@ -493,6 +502,7 @@ private struct AccountLifecycleFixture {
   let service: DefaultAccountLifecycleService
   let remote: AccountLifecycleAuthRemoteDataSource
   let cleaner: AccountLifecycleDataCleaner
+  let synchronizer: AccountLifecycleSynchronizerSpy
   let credentialStore: AccountLifecycleCredentialStore
   let tokenProvider: MemoryAccessTokenProvider
   let accountSessionStore: AccountSessionStore
@@ -661,6 +671,22 @@ nonisolated private final class AccountLifecycleDataCleaner:
     if let error {
       throw error
     }
+  }
+}
+
+@MainActor
+private final class AccountLifecycleSynchronizerSpy: ServerSynchronizing {
+  private(set) var suspendedMemberIDs: [Int64] = []
+  private(set) var resumedMemberIDs: [Int64] = []
+
+  func synchronize(memberID: Int64, trigger: SyncTrigger) async {}
+
+  func suspendSynchronization(memberID: Int64) async {
+    suspendedMemberIDs.append(memberID)
+  }
+
+  func resumeSynchronization(memberID: Int64) {
+    resumedMemberIDs.append(memberID)
   }
 }
 

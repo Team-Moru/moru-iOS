@@ -84,9 +84,6 @@ final class AppBootstrapper: ObservableObject {
 
     do {
       let modelContainer = try modelContainerFactory()
-      let dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
-      let sessionStore = dependencies.makeSessionStore()
-      sessionStore.load()
       let accountSessionStore = accountSessionStoreFactory()
       let tokenRefreshRemoteDataSource = DefaultAuthRemoteDataSource(
         apiClient: DefaultAPIClient(
@@ -97,13 +94,82 @@ final class AppBootstrapper: ObservableObject {
         authRemoteDataSource: tokenRefreshRemoteDataSource,
         accountSessionStore: accountSessionStore
       )
-      let authRemoteDataSource = DefaultAuthRemoteDataSource(
-        apiClient: DefaultAPIClient(
-          tokenProvider: accountSessionStore.accessTokenProvider,
-          accessTokenRefresher: tokenRefreshCoordinator,
-          serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
-        )
+      let authenticatedAPIClient = DefaultAPIClient(
+        tokenProvider: accountSessionStore.accessTokenProvider,
+        accessTokenRefresher: tokenRefreshCoordinator,
+        serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
       )
+      let authRemoteDataSource = DefaultAuthRemoteDataSource(
+        apiClient: authenticatedAPIClient
+      )
+      let voiceRemoteService: (any AccountVoiceRemoteServing)?
+      let routineSuggestionRemoteDataSource:
+        (any RoutineSuggestionRemoteDataSource)?
+      if appCapabilities.shouldAllowServerRequests {
+        voiceRemoteService = DefaultVoiceRemoteDataSource(
+          apiClient: authenticatedAPIClient
+        )
+        routineSuggestionRemoteDataSource =
+          DefaultRoutineSuggestionRemoteDataSource(
+            apiClient: authenticatedAPIClient
+          )
+      } else {
+        voiceRemoteService = nil
+        routineSuggestionRemoteDataSource = nil
+      }
+      let dependencies = DependencyContainer.local(
+        modelContext: modelContainer.mainContext,
+        voiceRemoteService: voiceRemoteService,
+        routineSuggestionRemoteDataSource:
+          routineSuggestionRemoteDataSource,
+        accountSessionStore: accountSessionStore
+      )
+      let sessionStore = dependencies.makeSessionStore()
+      sessionStore.load()
+      if appCapabilities.shouldAllowServerRequests {
+        accountSessionStore.setLoginSucceededHandler {
+          [weak accountSessionStore] memberID in
+          guard let accountSessionStore else {
+            return
+          }
+          guard let synchronizer = dependencies.serverSynchronizer else {
+            return
+          }
+
+          synchronizer.resumeSynchronization(memberID: memberID)
+          Task { @MainActor in
+            guard accountSessionStore.signedInMemberID == memberID else {
+              return
+            }
+
+            await synchronizer.synchronize(
+              memberID: memberID,
+              trigger: .loginSucceeded
+            )
+          }
+        }
+        accountSessionStore.setSessionRestoredHandler {
+          [weak accountSessionStore] memberID in
+          guard let accountSessionStore else {
+            return
+          }
+          guard let synchronizer = dependencies.serverSynchronizer else {
+            return
+          }
+
+          synchronizer.resumeSynchronization(memberID: memberID)
+          Task { @MainActor in
+            guard accountSessionStore.signedInMemberID == memberID else {
+              return
+            }
+
+            await synchronizer.synchronize(
+              memberID: memberID,
+              trigger: .sessionRestored
+            )
+          }
+        }
+      }
       let socialLoginCoordinator = SocialLoginCoordinator(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore
@@ -128,8 +194,9 @@ final class AppBootstrapper: ObservableObject {
       let accountLifecycleService = DefaultAccountLifecycleService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
-        accountScopedDataCleaner: NoAccountScopedDataCleaner(),
-        providerSessionSignOut: providerSessionSignOut
+        accountScopedDataCleaner: dependencies.accountScopedDataCleaner,
+        providerSessionSignOut: providerSessionSignOut,
+        serverSynchronizer: dependencies.serverSynchronizer
       )
       let navigationCoordinator = AppNavigationCoordinator()
       let authCallbackRouter = AuthCallbackRouter(
