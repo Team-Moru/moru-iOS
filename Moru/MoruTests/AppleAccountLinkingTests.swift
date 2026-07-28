@@ -11,31 +11,34 @@ import XCTest
 final class AppleAccountLinkingTests: XCTestCase {
   func testAuthorizationCallbackRequiresBothUTF8Credentials() {
     XCTAssertEqual(
-      AppleAuthorizationCallback.outcome(
+      AppleAuthorizationAdapter().outcome(
         identityToken: Data(" identity-token ".utf8),
         authorizationCode: Data(" authorization-code ".utf8)
       ),
       .authorized(
-        identityToken: "identity-token",
-        authorizationCode: "authorization-code"
+        SocialAuthorization(
+          provider: .apple,
+          token: "identity-token",
+          authorizationCode: "authorization-code"
+        )
       )
     )
     XCTAssertEqual(
-      AppleAuthorizationCallback.outcome(
+      AppleAuthorizationAdapter().outcome(
         identityToken: Data(),
         authorizationCode: Data("authorization-code".utf8)
       ),
       .failed
     )
     XCTAssertEqual(
-      AppleAuthorizationCallback.outcome(
+      AppleAuthorizationAdapter().outcome(
         identityToken: Data([0xFF]),
         authorizationCode: Data("authorization-code".utf8)
       ),
       .failed
     )
     XCTAssertEqual(
-      AppleAuthorizationCallback.outcome(
+      AppleAuthorizationAdapter().outcome(
         identityToken: Data("identity-token".utf8),
         authorizationCode: nil
       ),
@@ -54,11 +57,11 @@ final class AppleAccountLinkingTests: XCTestCase {
     )
 
     XCTAssertEqual(
-      AppleAuthorizationCallback.outcome(for: .failure(cancellation)),
+      AppleAuthorizationAdapter().outcome(for: .failure(cancellation)),
       .cancelled
     )
     XCTAssertEqual(
-      AppleAuthorizationCallback.outcome(for: .failure(unknownFailure)),
+      AppleAuthorizationAdapter().outcome(for: .failure(unknownFailure)),
       .failed
     )
   }
@@ -72,14 +75,17 @@ final class AppleAccountLinkingTests: XCTestCase {
       credentialStore: credentialStore,
       accessTokenProvider: tokenProvider
     )
-    let service = DefaultAppleAccountLinkingService(
+    let service = SocialLoginCoordinator(
       authRemoteDataSource: remoteDataSource,
       accountSessionStore: accountSessionStore
     )
 
-    try await service.link(
-      identityToken: "identity-token",
-      authorizationCode: "authorization-code"
+    try await service.login(
+      with: SocialAuthorization(
+        provider: .apple,
+        token: "identity-token",
+        authorizationCode: "authorization-code"
+      )
     )
 
     let loginRequests = await remoteDataSource.loginRequests
@@ -98,7 +104,8 @@ final class AppleAccountLinkingTests: XCTestCase {
         memberID: 90,
         accessToken: "access-token",
         refreshToken: "refresh-token",
-        onboardingCompleted: true
+        onboardingCompleted: true,
+        provider: .apple
       )
     )
     XCTAssertEqual(tokenProvider.accessToken, "access-token")
@@ -120,7 +127,7 @@ final class AppleAccountLinkingTests: XCTestCase {
       credentialStore: credentialStore,
       accessTokenProvider: MemoryAccessTokenProvider()
     )
-    let service = DefaultAppleAccountLinkingService(
+    let service = SocialLoginCoordinator(
       authRemoteDataSource: remoteDataSource,
       accountSessionStore: accountSessionStore
     )
@@ -129,8 +136,11 @@ final class AppleAccountLinkingTests: XCTestCase {
 
     await viewModel.appleAuthorizationDidComplete(
       .authorized(
-        identityToken: "identity-token",
-        authorizationCode: "authorization-code"
+        SocialAuthorization(
+          provider: .apple,
+          token: "identity-token",
+          authorizationCode: "authorization-code"
+        )
       )
     )
 
@@ -150,7 +160,7 @@ final class AppleAccountLinkingTests: XCTestCase {
 
   @MainActor
   func testCancellationDoesNotCallRemoteOrPublishError() async {
-    let linkingService = AppleAccountLinkingServiceSpy()
+    let linkingService = SocialLoginCoordinatorSpy()
     let viewModel = makeViewModel(linkingService: linkingService)
 
     await viewModel.appleAuthorizationDidComplete(.cancelled)
@@ -162,7 +172,7 @@ final class AppleAccountLinkingTests: XCTestCase {
 
   @MainActor
   func testInvalidAuthorizationDoesNotCallRemoteAndKeepsRetryAvailable() async {
-    let linkingService = AppleAccountLinkingServiceSpy()
+    let linkingService = SocialLoginCoordinatorSpy()
     let viewModel = makeViewModel(linkingService: linkingService)
 
     await viewModel.appleAuthorizationDidComplete(.failed)
@@ -192,13 +202,13 @@ final class AppleAccountLinkingTests: XCTestCase {
 
   @MainActor
   private func makeViewModel(
-    linkingService: any AppleAccountLinking
+    linkingService: any SocialLoginCoordinating
   ) -> ProfileViewModel {
     ProfileViewModel(
       profileSettingsUseCase: AppleLinkingProfileSettingsUseCase(),
       voicePreviewPlayer: AppleLinkingVoicePreviewPlayer(),
       alarmService: UnavailableProfileAlarmService(),
-      appleAccountLinkingService: linkingService,
+      socialLoginCoordinator: linkingService,
       resetUseCase: nil,
       resetAvailability: { true },
       onOpenSettings: {},
@@ -242,17 +252,17 @@ private actor AppleLinkingAuthRemoteDataSourceStub: AuthRemoteDataSource {
 
   func reissue(refreshToken: String) async throws -> TokenReissueResponseDTO {
     totalNonLoginCallCount += 1
-    throw AppleAccountLinkingError.unavailable
+    throw SocialLoginError.unavailable
   }
 
   func logout(refreshToken: String) async throws {
     totalNonLoginCallCount += 1
-    throw AppleAccountLinkingError.unavailable
+    throw SocialLoginError.unavailable
   }
 
   func withdraw() async throws -> WithdrawalResponseDTO {
     totalNonLoginCallCount += 1
-    throw AppleAccountLinkingError.unavailable
+    throw SocialLoginError.unavailable
   }
 }
 
@@ -286,13 +296,10 @@ nonisolated private final class AppleLinkingCredentialStore:
 }
 
 @MainActor
-private final class AppleAccountLinkingServiceSpy: AppleAccountLinking {
+private final class SocialLoginCoordinatorSpy: SocialLoginCoordinating {
   private(set) var callCount = 0
 
-  func link(
-    identityToken: String,
-    authorizationCode: String
-  ) async throws {
+  func login(with authorization: SocialAuthorization) async throws {
     callCount += 1
   }
 }

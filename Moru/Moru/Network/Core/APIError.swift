@@ -8,6 +8,7 @@ import Foundation
 nonisolated enum APIError: Error, Equatable, Sendable {
   case invalidRequest(String)
   case authenticationRequired
+  case capabilityDisabled
   case transport(code: Int, message: String)
   case server(statusCode: Int, code: String?, message: String)
   case decoding(String)
@@ -24,6 +25,7 @@ nonisolated extension APIError {
       statusCode == 408 || statusCode == 429 || (500..<600).contains(statusCode)
     case .invalidRequest,
          .authenticationRequired,
+         .capabilityDisabled,
          .decoding,
          .missingResult,
          .cancelled:

@@ -53,8 +53,9 @@ struct AppRouter: View {
   @StateObject private var state: AppRouterState
 
   private let dependencies: DependencyContainer
-  private let appleAccountLinkingService: any AppleAccountLinking
+  private let socialLoginCoordinator: any SocialLoginCoordinating
   private let accountLifecycleService: any AccountLifecycleManaging
+  private let appCapabilities: AppCapabilities
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
   private let homeBuilder: any HomeFlowBuilding
@@ -64,9 +65,10 @@ struct AppRouter: View {
     dependencies: DependencyContainer,
     sessionStore: SessionStore,
     accountSessionStore: AccountSessionStore,
-    appleAccountLinkingService: any AppleAccountLinking,
+    socialLoginCoordinator: any SocialLoginCoordinating,
     accountLifecycleService: any AccountLifecycleManaging =
       UnavailableAccountLifecycleService(),
+    appCapabilities: AppCapabilities = .production,
     coordinator: AppNavigationCoordinator,
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
@@ -77,8 +79,9 @@ struct AppRouter: View {
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
     _coordinator = ObservedObject(wrappedValue: coordinator)
     self.dependencies = dependencies
-    self.appleAccountLinkingService = appleAccountLinkingService
+    self.socialLoginCoordinator = socialLoginCoordinator
     self.accountLifecycleService = accountLifecycleService
+    self.appCapabilities = appCapabilities
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
     _state = StateObject(wrappedValue: state ?? AppRouterState())
@@ -299,8 +302,9 @@ struct AppRouter: View {
       voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
       accountSessionStore: accountSessionStore,
-      appleAccountLinkingService: appleAccountLinkingService,
+      socialLoginCoordinator: socialLoginCoordinator,
       accountLifecycleService: accountLifecycleService,
+      appCapabilities: appCapabilities,
       resetUseCase: resetUseCase,
       resetAvailability: {
         coordinator.presentation == nil && coordinator.pendingDismissalToken == nil

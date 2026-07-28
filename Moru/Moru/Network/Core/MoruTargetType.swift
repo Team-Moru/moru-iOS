@@ -16,6 +16,12 @@ nonisolated protocol MoruTargetType: Sendable {
   var authenticationRequirement: AuthenticationRequirement { get }
 }
 
+nonisolated protocol AuthenticationRetryTargetProviding: MoruTargetType {
+  func targetForAuthenticationRetry(
+    using result: AccessTokenRefreshResult
+  ) -> any MoruTargetType
+}
+
 nonisolated extension MoruTargetType {
   var sampleData: Data {
     Data()

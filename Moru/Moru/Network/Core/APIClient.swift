@@ -24,18 +24,21 @@ actor DefaultAPIClient: APIClient {
   private let configuration: NetworkConfiguration
   private let tokenProvider: any AccessTokenProviding
   private let accessTokenRefresher: (any AccessTokenRefreshing)?
+  private let serverRequestsEnabled: Bool
   private let decoder: JSONDecoder
 
   init(
     configuration: NetworkConfiguration = .production,
     tokenProvider: any AccessTokenProviding = EmptyAccessTokenProvider(),
     accessTokenRefresher: (any AccessTokenRefreshing)? = nil,
+    serverRequestsEnabled: Bool = true,
     decoder: sending JSONDecoder = JSONDecoder(),
     providerFactory: MoyaProviderFactory = MoyaProviderFactory()
   ) {
     self.configuration = configuration
     self.tokenProvider = tokenProvider
     self.accessTokenRefresher = accessTokenRefresher
+    self.serverRequestsEnabled = serverRequestsEnabled
     self.decoder = decoder
     self.provider = providerFactory.makeProvider(
       configuration: configuration
@@ -46,6 +49,7 @@ actor DefaultAPIClient: APIClient {
     _ target: Target,
     as payloadType: Payload.Type
   ) async throws -> Payload {
+    try ensureServerRequestsEnabled()
     let response = try await perform(target)
     try validateStatus(response)
 
@@ -65,6 +69,7 @@ actor DefaultAPIClient: APIClient {
   }
 
   func requestVoid<Target: MoruTargetType>(_ target: Target) async throws {
+    try ensureServerRequestsEnabled()
     let response = try await perform(target)
     try validateStatus(response)
 
@@ -80,9 +85,16 @@ actor DefaultAPIClient: APIClient {
   }
 
   func requestData<Target: MoruTargetType>(_ target: Target) async throws -> Data {
+    try ensureServerRequestsEnabled()
     let response = try await perform(target)
     try validateStatus(response)
     return response.data
+  }
+
+  private func ensureServerRequestsEnabled() throws {
+    guard serverRequestsEnabled else {
+      throw APIError.capabilityDisabled
+    }
   }
 
   private func perform<Target: MoruTargetType>(
@@ -101,12 +113,22 @@ actor DefaultAPIClient: APIClient {
       return response
     }
 
-    let refreshedAccessToken = try await accessTokenRefresher
+    let refreshResult = try await accessTokenRefresher
       .refreshAccessToken(afterUnauthorized: failedAccessToken)
+    let retryTarget: any MoruTargetType
+
+    if let targetProvider = target
+      as? any AuthenticationRetryTargetProviding {
+      retryTarget = targetProvider.targetForAuthenticationRetry(
+        using: refreshResult
+      )
+    } else {
+      retryTarget = target
+    }
 
     return try await send(
-      target,
-      accessToken: refreshedAccessToken
+      retryTarget,
+      accessToken: refreshResult.accessToken
     )
   }
 

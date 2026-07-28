@@ -133,3 +133,18 @@ nonisolated enum AuthTarget: MoruTargetType {
     }
   }
 }
+
+extension AuthTarget: AuthenticationRetryTargetProviding {
+  func targetForAuthenticationRetry(
+    using result: AccessTokenRefreshResult
+  ) -> any MoruTargetType {
+    switch self {
+    case .logout:
+      AuthTarget.logout(
+        request: LogoutRequestDTO(refreshToken: result.refreshToken)
+      )
+    case .login, .reissue, .withdrawal:
+      self
+    }
+  }
+}

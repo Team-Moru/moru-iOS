@@ -94,6 +94,57 @@ final class AuthTokenReissueTests: XCTestCase {
     )
   }
 
+  func testLogout401RetryRebuildsBodyWithRotatedRefreshToken() async throws {
+    let credentialStore = TokenRefreshCredentialStore()
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    try sessionStore.establishSession(
+      credentials: AccountCredentials(
+        memberID: 7,
+        accessToken: "access-token",
+        refreshToken: "stale-refresh-token",
+        onboardingCompleted: true,
+        provider: .google
+      )
+    )
+    let remoteDataSource = TokenRefreshRemoteDataSource(
+      result: .success(makeReissueResponse())
+    )
+    let coordinator = TokenRefreshCoordinator(
+      authRemoteDataSource: remoteDataSource,
+      accountSessionStore: sessionStore
+    )
+    let responseScript = UnauthorizedThenSuccessScript(
+      unauthorizedRequestCount: 1
+    )
+    let requestCapture = TokenRefreshRequestCapturePlugin()
+    let client = makeClient(
+      tokenProvider: tokenProvider,
+      accessTokenRefresher: coordinator,
+      responseScript: responseScript,
+      requestCapture: requestCapture
+    )
+
+    _ = try await client.requestData(
+      AuthTarget.logout(
+        request: LogoutRequestDTO(refreshToken: "stale-refresh-token")
+      )
+    )
+
+    XCTAssertEqual(
+      requestCapture.refreshTokens,
+      ["stale-refresh-token", "refreshed-refresh-token"]
+    )
+    XCTAssertEqual(
+      requestCapture.authorizationHeaders,
+      ["Bearer access-token", "Bearer refreshed-access-token"]
+    )
+    XCTAssertEqual(credentialStore.credentials?.provider, .google)
+  }
+
   func testStaleUnauthorizedTokenUsesCurrentSnapshotWithoutRefresh() async throws {
     let credentialStore = TokenRefreshCredentialStore()
     let tokenProvider = MemoryAccessTokenProvider()
@@ -117,8 +168,14 @@ final class AuthTokenReissueTests: XCTestCase {
       afterUnauthorized: "access-token"
     )
 
-    XCTAssertEqual(refreshedToken, "refreshed-access-token")
-    XCTAssertEqual(token, "refreshed-access-token")
+    XCTAssertEqual(
+      refreshedToken,
+      AccessTokenRefreshResult(
+        accessToken: "refreshed-access-token",
+        refreshToken: "refreshed-refresh-token"
+      )
+    )
+    XCTAssertEqual(token, refreshedToken)
     XCTAssertEqual(remoteDataSource.reissueCount, 1)
     XCTAssertEqual(tokenProvider.accessToken, "refreshed-access-token")
   }
@@ -643,11 +700,18 @@ nonisolated private final class TokenRefreshRequestCapturePlugin:
   @unchecked Sendable {
   private let lock = NSLock()
   private var storedAuthorizationHeaders: [String] = []
+  private var storedRefreshTokens: [String] = []
 
   var authorizationHeaders: [String] {
     lock.lock()
     defer { lock.unlock() }
     return storedAuthorizationHeaders
+  }
+
+  var refreshTokens: [String] {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedRefreshTokens
   }
 
   func prepare(_ request: URLRequest, target: TargetType) -> URLRequest {
@@ -656,6 +720,15 @@ nonisolated private final class TokenRefreshRequestCapturePlugin:
     ) {
       lock.lock()
       storedAuthorizationHeaders.append(authorization)
+      lock.unlock()
+    }
+
+    if let body = request.httpBody,
+       let object = try? JSONSerialization.jsonObject(with: body)
+        as? [String: String],
+       let refreshToken = object["refreshToken"] {
+      lock.lock()
+      storedRefreshTokens.append(refreshToken)
       lock.unlock()
     }
 
@@ -816,11 +889,16 @@ nonisolated private final class TokenRefreshCountingRefresher:
   AccessTokenRefreshing,
   @unchecked Sendable {
   private let lock = NSLock()
-  private let result: Result<String, Error>
+  private let result: Result<AccessTokenRefreshResult, Error>
   private var storedCallCount = 0
 
   init(result: Result<String, Error>) {
-    self.result = result
+    self.result = result.map {
+      AccessTokenRefreshResult(
+        accessToken: $0,
+        refreshToken: "unused-refresh-token"
+      )
+    }
   }
 
   var callCount: Int {
@@ -831,7 +909,7 @@ nonisolated private final class TokenRefreshCountingRefresher:
 
   func refreshAccessToken(
     afterUnauthorized failedAccessToken: String
-  ) async throws -> String {
+  ) async throws -> AccessTokenRefreshResult {
     recordCall()
     return try result.get()
   }

@@ -341,7 +341,7 @@ final class RouterRuntimeContractTests: XCTestCase {
         dependencies: dependencies,
         sessionStore: sessionStore,
         accountSessionStore: accountSessionStore,
-        appleAccountLinkingService: UnavailableAppleAccountLinkingService(),
+        socialLoginCoordinator: UnavailableSocialLoginCoordinator(),
         coordinator: coordinator,
         onboardingBuilder: EmptyOnboardingFlowBuilder(),
         routinePlayerBuilder: routinePlayerBuilder,

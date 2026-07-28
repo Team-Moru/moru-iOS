@@ -13,12 +13,12 @@ nonisolated enum TokenRefreshCoordinatorError: Error, Equatable, Sendable {
 actor TokenRefreshCoordinator: AccessTokenRefreshing {
   private struct Flight {
     let id: UUID
-    let task: Task<String, Error>
+    let task: Task<AccessTokenRefreshResult, Error>
   }
 
   private struct TokenRotation {
     let previousAccessToken: String
-    let refreshedAccessToken: String
+    let result: AccessTokenRefreshResult
   }
 
   private let authRemoteDataSource: any AuthRemoteDataSource
@@ -36,7 +36,7 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
 
   func refreshAccessToken(
     afterUnauthorized failedAccessToken: String
-  ) async throws -> String {
+  ) async throws -> AccessTokenRefreshResult {
     let normalizedToken = failedAccessToken.trimmingCharacters(
       in: .whitespacesAndNewlines
     )
@@ -48,22 +48,26 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
     }
 
     if let flight = flights[normalizedToken] {
-      let refreshedAccessToken = try await flight.task.value
+      let result = try await flight.task.value
       recordSuccessfulRotation(
         from: normalizedToken,
-        to: refreshedAccessToken
+        result: result
       )
-      return refreshedAccessToken
+      return result
     }
 
     guard currentAccessToken == normalizedToken else {
       guard lastSuccessfulRotation?.previousAccessToken == normalizedToken,
-            lastSuccessfulRotation?.refreshedAccessToken
+            lastSuccessfulRotation?.result.accessToken
               == currentAccessToken else {
         throw TokenRefreshCoordinatorError.sessionUnavailable
       }
 
-      return currentAccessToken
+      guard let result = lastSuccessfulRotation?.result else {
+        throw TokenRefreshCoordinatorError.sessionUnavailable
+      }
+
+      return result
     }
 
     let flightID = UUID()
@@ -71,13 +75,13 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
     flights[normalizedToken] = Flight(id: flightID, task: task)
 
     do {
-      let accessToken = try await task.value
+      let result = try await task.value
       recordSuccessfulRotation(
         from: normalizedToken,
-        to: accessToken
+        result: result
       )
       clearFlight(for: normalizedToken, matching: flightID)
-      return accessToken
+      return result
     } catch {
       clearFlight(for: normalizedToken, matching: flightID)
       throw error
@@ -86,7 +90,7 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
 
   private func makeRefreshTask(
     failedAccessToken: String
-  ) -> Task<String, Error> {
+  ) -> Task<AccessTokenRefreshResult, Error> {
     Task {
       do {
         let previousCredentials = try await accountSessionStore
@@ -104,7 +108,10 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
           replacing: failedAccessToken
         )
 
-        return refreshedCredentials.accessToken
+        return AccessTokenRefreshResult(
+          accessToken: refreshedCredentials.accessToken,
+          refreshToken: refreshedCredentials.refreshToken
+        )
       } catch {
         await accountSessionStore.invalidateAfterTokenRefreshFailure(
           matching: failedAccessToken
@@ -127,11 +134,11 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
 
   private func recordSuccessfulRotation(
     from previousAccessToken: String,
-    to refreshedAccessToken: String
+    result: AccessTokenRefreshResult
   ) {
     lastSuccessfulRotation = TokenRotation(
       previousAccessToken: previousAccessToken,
-      refreshedAccessToken: refreshedAccessToken
+      result: result
     )
   }
 
@@ -148,7 +155,8 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
       memberID: response.memberId,
       accessToken: response.accessToken,
       refreshToken: response.refreshToken,
-      onboardingCompleted: response.onboardingCompleted
+      onboardingCompleted: response.onboardingCompleted,
+      provider: previousCredentials.provider
     )
 
     guard credentials.isValid else {

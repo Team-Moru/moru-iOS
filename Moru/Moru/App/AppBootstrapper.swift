@@ -14,9 +14,10 @@ struct BootstrappedApp {
   let dependencies: DependencyContainer
   let sessionStore: SessionStore
   let accountSessionStore: AccountSessionStore
-  let appleAccountLinkingService: any AppleAccountLinking
+  let socialLoginCoordinator: any SocialLoginCoordinating
   let accountLifecycleService: any AccountLifecycleManaging
   let appCapabilities: AppCapabilities
+  let authCallbackRouter: AuthCallbackRouter
   let navigationCoordinator: AppNavigationCoordinator
   let onboardingBuilder: any OnboardingFlowBuilding
   let routinePlayerBuilder: any RoutinePlayerBuilding
@@ -84,12 +85,23 @@ final class AppBootstrapper: ObservableObject {
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
       let accountSessionStore = accountSessionStoreFactory()
-      let authRemoteDataSource = DefaultAuthRemoteDataSource(
+      let tokenRefreshRemoteDataSource = DefaultAuthRemoteDataSource(
         apiClient: DefaultAPIClient(
-          tokenProvider: accountSessionStore.accessTokenProvider
+          serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
         )
       )
-      let appleAccountLinkingService = DefaultAppleAccountLinkingService(
+      let tokenRefreshCoordinator = TokenRefreshCoordinator(
+        authRemoteDataSource: tokenRefreshRemoteDataSource,
+        accountSessionStore: accountSessionStore
+      )
+      let authRemoteDataSource = DefaultAuthRemoteDataSource(
+        apiClient: DefaultAPIClient(
+          tokenProvider: accountSessionStore.accessTokenProvider,
+          accessTokenRefresher: tokenRefreshCoordinator,
+          serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
+        )
+      )
+      let socialLoginCoordinator = SocialLoginCoordinator(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore
       )
@@ -99,6 +111,9 @@ final class AppBootstrapper: ObservableObject {
         accountScopedDataCleaner: NoAccountScopedDataCleaner()
       )
       let navigationCoordinator = AppNavigationCoordinator()
+      let authCallbackRouter = AuthCallbackRouter(
+        configuration: .mainBundle
+      )
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
       let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
 
@@ -108,9 +123,10 @@ final class AppBootstrapper: ObservableObject {
           dependencies: dependencies,
           sessionStore: sessionStore,
           accountSessionStore: accountSessionStore,
-          appleAccountLinkingService: appleAccountLinkingService,
+          socialLoginCoordinator: socialLoginCoordinator,
           accountLifecycleService: accountLifecycleService,
           appCapabilities: appCapabilities,
+          authCallbackRouter: authCallbackRouter,
           navigationCoordinator: navigationCoordinator,
           onboardingBuilder: onboardingBuilder,
           routinePlayerBuilder: routinePlayerBuilder
