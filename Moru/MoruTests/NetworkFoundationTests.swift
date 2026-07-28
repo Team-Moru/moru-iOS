@@ -77,6 +77,30 @@ final class NetworkFoundationTests: XCTestCase {
     }
   }
 
+  func testDisabledServerCapabilityBlocksPublicAndBearerRequestsBeforeTransport() async {
+    let requestCapture = RequestCapturePlugin()
+    let tokenProvider = StubAccessTokenProvider(accessToken: "access-token")
+    let client = DefaultAPIClient(
+      tokenProvider: tokenProvider,
+      serverRequestsEnabled: false,
+      providerFactory: MoyaProviderFactory(
+        stubBuilder: { _ in .immediate },
+        additionalPlugins: [requestCapture]
+      )
+    )
+
+    await assertAPIError(.capabilityDisabled) {
+      _ = try await client.requestData(HealthTarget.status)
+    }
+    await assertAPIError(.capabilityDisabled) {
+      _ = try await client.requestData(
+        StubTarget(authenticationRequirement: .bearer)
+      )
+    }
+
+    XCTAssertNil(requestCapture.request)
+  }
+
   func testSuccessfulEnvelopeReturnsResult() async throws {
     let client: any APIClient = makeClient(
       statusCode: 200,
@@ -376,6 +400,7 @@ final class NetworkFoundationTests: XCTestCase {
       ).isRetryable
     )
     XCTAssertFalse(APIError.authenticationRequired.isRetryable)
+    XCTAssertFalse(APIError.capabilityDisabled.isRetryable)
     XCTAssertFalse(APIError.cancelled.isRetryable)
   }
 

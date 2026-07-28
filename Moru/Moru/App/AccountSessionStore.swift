@@ -9,6 +9,17 @@ import Foundation
 nonisolated struct SignedInAccount: Equatable, Sendable {
   let memberID: Int64
   let onboardingCompleted: Bool
+  let provider: AuthProvider
+
+  init(
+    memberID: Int64,
+    onboardingCompleted: Bool,
+    provider: AuthProvider = .apple
+  ) {
+    self.memberID = memberID
+    self.onboardingCompleted = onboardingCompleted
+    self.provider = provider
+  }
 }
 
 nonisolated struct AccountLifecycleCredentials: Equatable, Sendable {
@@ -98,7 +109,8 @@ final class AccountSessionStore: ObservableObject {
       state = .signedIn(
         SignedInAccount(
           memberID: credentials.memberID,
-          onboardingCompleted: credentials.onboardingCompleted
+          onboardingCompleted: credentials.onboardingCompleted,
+          provider: credentials.provider
         )
       )
     } catch CredentialStoreError.invalidCredentials,
@@ -124,7 +136,8 @@ final class AccountSessionStore: ObservableObject {
     state = .signedIn(
       SignedInAccount(
         memberID: credentials.memberID,
-        onboardingCompleted: credentials.onboardingCompleted
+        onboardingCompleted: credentials.onboardingCompleted,
+        provider: credentials.provider
       )
     )
   }
@@ -158,7 +171,8 @@ final class AccountSessionStore: ObservableObject {
     state = .signedIn(
       SignedInAccount(
         memberID: credentials.memberID,
-        onboardingCompleted: credentials.onboardingCompleted
+        onboardingCompleted: credentials.onboardingCompleted,
+        provider: credentials.provider
       )
     )
   }

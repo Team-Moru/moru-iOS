@@ -18,8 +18,9 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
   private let accountSessionStore: AccountSessionStore
-  private let appleAccountLinkingService: any AppleAccountLinking
+  private let socialLoginCoordinator: any SocialLoginCoordinating
   private let accountLifecycleService: any AccountLifecycleManaging
+  private let appCapabilities: AppCapabilities
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
   private let resetAvailability: @MainActor () -> Bool
   private let onOpenSettings: @MainActor () -> Void
@@ -30,8 +31,9 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
     accountSessionStore: AccountSessionStore,
-    appleAccountLinkingService: any AppleAccountLinking,
+    socialLoginCoordinator: any SocialLoginCoordinating,
     accountLifecycleService: any AccountLifecycleManaging,
+    appCapabilities: AppCapabilities,
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
     resetAvailability: @escaping @MainActor () -> Bool,
     onOpenSettings: @escaping @MainActor () -> Void,
@@ -41,8 +43,9 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
     self.accountSessionStore = accountSessionStore
-    self.appleAccountLinkingService = appleAccountLinkingService
+    self.socialLoginCoordinator = socialLoginCoordinator
     self.accountLifecycleService = accountLifecycleService
+    self.appCapabilities = appCapabilities
     self.resetUseCase = resetUseCase
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
@@ -56,14 +59,15 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
           profileSettingsUseCase: profileSettingsUseCase,
           voicePreviewPlayer: voicePreviewPlayer,
           alarmService: alarmService,
-          appleAccountLinkingService: appleAccountLinkingService,
+          socialLoginCoordinator: socialLoginCoordinator,
           accountLifecycleService: accountLifecycleService,
           resetUseCase: resetUseCase,
           resetAvailability: resetAvailability,
           onOpenSettings: onOpenSettings,
           onResetSucceeded: onResetSucceeded
         ),
-        accountSessionStore: accountSessionStore
+        accountSessionStore: accountSessionStore,
+        appCapabilities: appCapabilities
       )
     )
   }

@@ -26,15 +26,18 @@ struct ProfileView: View {
   @State private var isResetConfirmationPresented = false
   @State private var isAppleSignInPresented = false
   @State private var isWithdrawalConfirmationPresented = false
+  private let appCapabilities: AppCapabilities
   private let automaticallyLoads: Bool
 
   init(
     viewModel: ProfileViewModel,
     accountSessionStore: AccountSessionStore,
+    appCapabilities: AppCapabilities = .production,
     automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
+    self.appCapabilities = appCapabilities
     self.automaticallyLoads = automaticallyLoads
   }
 
@@ -121,10 +124,12 @@ struct ProfileView: View {
         displayNameCard(content.profile)
           .padding(.top, MoruPilotSpacing.twelve)
 
-        settingsSection(title: "계정") {
-          accountCard
+        if appCapabilities.shouldShowAccountUI {
+          settingsSection(title: "계정") {
+            accountCard
+          }
+          .padding(.top, MoruPilotSpacing.twentyEight)
         }
-        .padding(.top, MoruPilotSpacing.twentyEight)
 
         settingsSection(title: ProfileCopy.voiceSettings) {
           voiceCard(content)
@@ -232,8 +237,8 @@ struct ProfileView: View {
             .padding(.trailing, MoruPilotSpacing.sixteen)
             .accessibilityLabel("계정 연결 확인 중")
         }
-      case .signedIn:
-        signedInAccountActions
+      case .signedIn(let account):
+        signedInAccountActions(account)
       case .failure:
         accountConnectButton(
           detail: "계정 정보를 복구하지 못했어요. "
@@ -271,15 +276,17 @@ struct ProfileView: View {
     .accessibilityIdentifier(Self.accountCardAccessibilityIdentifier)
   }
 
-  private var signedInAccountActions: some View {
+  private func signedInAccountActions(
+    _ account: SignedInAccount
+  ) -> some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
       settingsRow(
-        title: "Apple 계정 연결됨",
+        title: "\(providerDisplayName(account.provider)) 계정 연결됨",
         detail: "계정 연결은 선택형 서버 기능에만 사용돼요.",
         systemImage: "person.crop.circle.badge.checkmark",
         showsChevron: false
       )
-      .accessibilityLabel("Apple 계정 연결됨")
+      .accessibilityLabel("\(providerDisplayName(account.provider)) 계정 연결됨")
       .accessibilityHint("로컬 루틴과 기록은 기기에 계속 저장됩니다.")
 
       Button {
@@ -313,6 +320,19 @@ struct ProfileView: View {
       .disabled(viewModel.isAccountLifecycleInProgress)
       .accessibilityHint("확인 후 서버 계정을 영구 삭제합니다.")
       .accessibilityIdentifier(Self.accountWithdrawalAccessibilityIdentifier)
+    }
+  }
+
+  private func providerDisplayName(_ provider: AuthProvider) -> String {
+    switch provider {
+    case .apple:
+      "Apple"
+    case .google:
+      "Google"
+    case .kakao:
+      "Kakao"
+    case .unknown:
+      "MORU"
     }
   }
 
@@ -596,7 +616,7 @@ struct ProfileView: View {
         SignInWithAppleButton(.continue) { request in
           request.requestedScopes = []
         } onCompletion: { result in
-          let outcome = AppleAuthorizationCallback.outcome(for: result)
+          let outcome = AppleAuthorizationAdapter().outcome(for: result)
           isAppleSignInPresented = false
 
           Task {

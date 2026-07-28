@@ -21,7 +21,7 @@ final class ProfileViewModel {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
-  private let appleAccountLinkingService: any AppleAccountLinking
+  private let socialLoginCoordinator: any SocialLoginCoordinating
   private let accountLifecycleService: any AccountLifecycleManaging
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
   private let resetAvailability: @MainActor () -> Bool
@@ -62,8 +62,8 @@ final class ProfileViewModel {
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
-    appleAccountLinkingService: any AppleAccountLinking =
-      UnavailableAppleAccountLinkingService(),
+    socialLoginCoordinator: any SocialLoginCoordinating =
+      UnavailableSocialLoginCoordinator(),
     accountLifecycleService: any AccountLifecycleManaging =
       UnavailableAccountLifecycleService(),
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
@@ -74,7 +74,7 @@ final class ProfileViewModel {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
-    self.appleAccountLinkingService = appleAccountLinkingService
+    self.socialLoginCoordinator = socialLoginCoordinator
     self.accountLifecycleService = accountLifecycleService
     self.resetUseCase = resetUseCase
     self.resetAvailability = resetAvailability
@@ -174,7 +174,7 @@ final class ProfileViewModel {
   }
 
   func appleAuthorizationDidComplete(
-    _ outcome: AppleAuthorizationOutcome
+    _ outcome: SocialAuthorizationOutcome
   ) async {
     guard !isAccountLinkInProgress,
           !isAccountLifecycleInProgress else {
@@ -191,15 +191,12 @@ final class ProfileViewModel {
         "Apple 인증 정보를 확인하지 못했어요. "
           + "로컬 데이터는 그대로 사용할 수 있어요."
       )
-    case .authorized(let identityToken, let authorizationCode):
+    case .authorized(let authorization):
       isAccountLinkInProgress = true
       defer { isAccountLinkInProgress = false }
 
       do {
-        try await appleAccountLinkingService.link(
-          identityToken: identityToken,
-          authorizationCode: authorizationCode
-        )
+        try await socialLoginCoordinator.login(with: authorization)
         announce("Apple 계정이 연결되었어요.")
       } catch {
         reportAccountError(

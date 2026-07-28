@@ -46,12 +46,16 @@ struct MoruApp: App {
             dependencies: app.dependencies,
             sessionStore: app.sessionStore,
             accountSessionStore: app.accountSessionStore,
-            appleAccountLinkingService: app.appleAccountLinkingService,
+            socialLoginCoordinator: app.socialLoginCoordinator,
             accountLifecycleService: app.accountLifecycleService,
+            appCapabilities: app.appCapabilities,
             coordinator: app.navigationCoordinator,
             onboardingBuilder: app.onboardingBuilder,
             routinePlayerBuilder: app.routinePlayerBuilder
           )
+          .onOpenURL { url in
+            app.authCallbackRouter.route(url)
+          }
         case .failed(let failure):
           BootstrapFailureView(
             message: failure.message,
