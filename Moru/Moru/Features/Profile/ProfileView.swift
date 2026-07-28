@@ -294,12 +294,14 @@ struct ProfileView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
       settingsRow(
-        title: "\(providerDisplayName(account.provider)) 계정 연결됨",
+        title: "\(Self.providerDisplayName(account.provider)) 계정 연결됨",
         detail: "계정 연결은 선택형 서버 기능에만 사용돼요.",
         systemImage: "person.crop.circle.badge.checkmark",
         showsChevron: false
       )
-      .accessibilityLabel("\(providerDisplayName(account.provider)) 계정 연결됨")
+      .accessibilityLabel(
+        "\(Self.providerDisplayName(account.provider)) 계정 연결됨"
+      )
       .accessibilityHint("로컬 루틴과 기록은 기기에 계속 저장됩니다.")
 
       Button {
@@ -336,7 +338,7 @@ struct ProfileView: View {
     }
   }
 
-  private func providerDisplayName(_ provider: AuthProvider) -> String {
+  static func providerDisplayName(_ provider: AuthProvider) -> String {
     switch provider {
     case .apple:
       "Apple"

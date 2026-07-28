@@ -251,7 +251,7 @@ final class AccountSessionFoundationTests: XCTestCase {
     XCTAssertFalse(AppCapabilities.localOnly.shouldAllowServerRequests)
   }
 
-  func testBootstrapPublishesLoadedLocalSessionBeforeOptionalAccountRestore() async throws {
+  func testBootstrapPublishesRestoringStateBeforeOptionalAccountRestore() async throws {
     let credentials = makeCredentials()
     let credentialStore = StubCredentialStore(loadResult: .success(credentials))
     let tokenProvider = MemoryAccessTokenProvider()
@@ -275,7 +275,7 @@ final class AccountSessionFoundationTests: XCTestCase {
       return XCTFail("Local app graph should be ready before account restoration.")
     }
     XCTAssertEqual(app.sessionStore.phase, .onboardingRequired)
-    XCTAssertEqual(app.accountSessionStore.state, .signedOut)
+    XCTAssertEqual(app.accountSessionStore.state, .restoring)
     XCTAssertEqual(credentialStore.loadCount, 0)
 
     try await waitUntil {

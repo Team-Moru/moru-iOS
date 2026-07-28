@@ -1,7 +1,7 @@
 # MORU iOS v2 Social Login 실행 Context
 
 - 마지막 갱신: 2026-07-27
-- 상태: `L3_OPEN_DRAFT`
+- 상태: `L4_OPEN_DRAFT`
 - 고정 계획: `mydocs/moru-ios-v2-social-login-plan.md`
 - 원본 계획: `/Users/minhyeok/Downloads/PLAN (5).md`
 - v2 context:
@@ -316,6 +316,100 @@
   - 로그아웃·토큰 만료·탈퇴 뒤에도 로컬 프로필과 루틴이 있으면 Main을 유지할 것
   - 공식 provider 버튼, `로그인 없이 시작하기`, local-first 안내, 정책 링크를 제공할 것
   - L3 Draft PR #108의 CI 확인·OPEN 동결 후 선택형 로그인 진입 화면을 구현할 것
+
+## L4 Ledger
+
+- Issue: https://github.com/Team-Moru/moru-iOS/issues/109
+- PR: https://github.com/Team-Moru/moru-iOS/pull/110 (`OPEN`, `DRAFT`)
+- Branch: `feat/#109-optional-login-entry`
+- Base branch: `feat/#107-kakao-login`
+- Base SHA: `36153d844047d8ed6f8d8990ab861237862116ae`
+- Worktree: `/private/tmp/moru-ios-l4.Ysq7LY`
+- 구현 Head SHA: `72782b1706ced97313c9854e809325e718eaec40`
+- 최종 PR Head: 이 ledger 문서 commit(정확한 SHA는 PR #110 기준)
+- Merge SHA: 없음
+- 구현 기능:
+  - bootstrap·계정 복원 로딩 전용 Splash와 별도 `AccountEntryView`
+  - LocalProfile이 있으면 signed-out·restoring·signed-in·복원 실패와 관계없이 Main
+  - LocalProfile이 없으면 restoring은 Splash, signed-out·복원 실패는 선택형 진입,
+    signed-in·로그인 성공·건너뛰기는 기존 로컬 온보딩
+  - Apple·Google 공식 SDK 버튼과 저장소의 공식 Kakao 한국어 medium-wide asset
+  - `로그인 없이 시작하기`, local-first·타 기기 데이터 자동 복원/교체 없음 안내,
+    개인정보처리방침·이용약관 링크
+  - loading·cancel·offline·401·5xx·Keychain·invalid stored credential 상태와
+    중복 요청 방지
+- 주요 계약 변경:
+  - 앱 root routing을 테스트 가능한 `AppRootDestination`으로 명시하고 LocalProfile을
+    계정 세션보다 우선
+  - bootstrap이 ready graph를 공개하기 전에 account state를 restoring으로 바꿔
+    미로그인 화면의 일시 노출을 방지
+  - provider credential/provisioning gate와 공개 정책 HTTPS URL 두 개가 모두
+    준비된 경우에만 provider 인증을 활성화
+  - provider 인증이 비활성화되어도 guest 로컬 온보딩은 항상 유지
+  - 로그인 성공 여부와 무관하게 서버 데이터로 로컬 프로필·루틴·기록을 교체하지 않음
+  - SwiftData schema·migration, Local Repository, routine Domain 계약 변경 없음
+- 공개 configuration safe gate:
+  - Debug/Release `MORU_APPLE_SIGN_IN_ENABLED=NO`
+  - Google/Kakao placeholder configuration은 기존 provider gate로 로그인 차단
+  - 공개 개인정보처리방침·이용약관 운영 URL이 없어 placeholder를 링크로 인정하지
+    않고 모든 provider 인증을 차단
+  - client secret·Apple `.p8`·Kakao admin key·실제 credential 저장소 추가 없음
+  - 상세 준비 항목: `Moru/docs/OptionalLoginEntryReadiness.md`
+- 테스트:
+  - 관련 signed XCTest 15/15 성공, failed/skipped/expected failure 0
+    (`/private/tmp/moru-ios-l4-related4.xcresult`)
+  - 최종 전체 signed XCTest 394/394 성공, failed/skipped/expected failure 0
+    (`/private/tmp/moru-ios-l4-full-final.xcresult`)
+- 빌드:
+  - MORU Release iPhone 16, iOS 26.5 Simulator Debug 성공
+  - generic iPhone Debug 성공
+  - generic iPhone Release 성공
+- 정적 검증:
+  - iPhone functional gate 성공
+  - SwiftData boundary gate 성공
+  - source Info.plist·entitlement와 Debug/Release built Info.plist `plutil` 성공
+  - Debug/Release built Info.plist의 Apple gate `NO`, policy URL placeholder 확인
+  - `git diff --check` 성공
+- visual·accessibility:
+  - idle·loading·cancel·offline·401·5xx·Keychain·긴 한국어 8상태를 Medium·AX3에서
+    각 2회 렌더링해 32개 PNG가 byte-identical임을 확인
+  - capture: `/private/tmp/moru-optional-login-after`
+  - idle Medium·idle AX3·긴 한국어 AX3 대표 산출물 수동 확인
+  - 고유 accessibility identifier와 title → local-first 안내 → 상태 → Apple →
+    Google → Kakao → guest → 정책 링크 VoiceOver 순서 계약 테스트 성공
+  - 이전에 같은 화면이 없고 정확한 Figma node가 없어 동환경 before capture와
+    pixel-match 승인 결과는 없음
+- 실제 iPhone: 미검증
+  - Apple·Google·Kakao 성공·취소·callback 복귀
+  - 비행기 모드·네트워크 단절과 실제 backend 401/5xx
+  - Keychain 읽기·저장 실패와 앱 재실행 session 복원
+  - 로그아웃·토큰 만료·회원 탈퇴 뒤 기존 LocalProfile/Main 유지
+  - Medium·AX3·긴 한국어와 공식 버튼의 실제 VoiceOver 순서·레이블
+- Figma·provider·policy release blocker:
+  - 정확한 로그인 Figma node ID·계측 asset이 없어 기존 MORU token 기반 구조만
+    구현했으며 exact pixel match를 주장하지 않음
+  - Google Cloud iOS/Web OAuth client ID·reversed scheme·backend audience 필요
+  - Kakao Native app key·bundle/Login/consent 설정과 backend token 검증 필요
+  - Apple Team provisioning·server raw nonce 검증·provider token revoke 증거 필요
+  - 공개 개인정보처리방침·이용약관·지원 URL 필요
+  - 실제 provider console·MORU backend·실제 iPhone E2E 필요
+- 리뷰:
+  - 로컬 자체 리뷰 완료
+  - GitHub review·inline thread와 CI는 최종 ledger head push 후 확인
+- CI(ledger 작성 시점):
+  - 최종 ledger head push 후 확인
+- 전체 stack 최종 검토 입력:
+  - L0 #102 → L1 #104 → L2 #106 → L3 #108 → L4 #110은 모두 Draft + OPEN
+  - 각 PR의 base branch·구현 Head·ledger·CI와 secret 비노출을 순서대로 확인
+  - Apple raw nonce/revoke, Google audience, Kakao token 검증과 provider별 실제
+    console 설정을 하나의 release readiness checklist로 검토
+  - LocalProfile 우선 Main, local-first Source of Truth, 서버 데이터 자동 교체 없음,
+    guest 경로, account/server kill switch를 stack 공통 회귀 계약으로 확인
+  - 실제 공개 정책 URL과 provider credential/provisioning이 준비되기 전에는
+    provider gate를 활성화하지 않음
+  - 실제 iPhone 3-provider·callback·Keychain·logout/withdrawal·VoiceOver E2E와
+    정확한 Figma node visual 승인이 끝나기 전 merge하지 않음
+  - `DO NOT MERGE — 소셜 로그인 stack 일괄 검토 대기`
 
 ## L0 고정 범위
 

@@ -9,6 +9,14 @@ import Combine
 import SwiftUI
 import UIKit
 
+nonisolated enum AppRootDestination: Equatable, Sendable {
+  case splash
+  case accountEntry(AccountSessionFailure?)
+  case onboarding
+  case main
+  case sessionFailure(title: String, message: String)
+}
+
 @MainActor
 final class AppRouterState: ObservableObject {
   @Published private(set) var homeRefreshToken = 0
@@ -50,6 +58,7 @@ struct AppRouter: View {
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
+  @State private var didCompleteAccountEntry = false
   @StateObject private var state: AppRouterState
 
   private let dependencies: DependencyContainer
@@ -121,31 +130,40 @@ struct AppRouter: View {
 
   var body: some View {
     Group {
-      switch sessionStore.phase {
-      case .loading:
+      switch Self.rootDestination(
+        sessionPhase: sessionStore.phase,
+        hasLocalProfile: sessionStore.profile != nil,
+        accountState: accountSessionStore.state,
+        accountFeaturesEnabled: appCapabilities.shouldShowAccountUI,
+        didCompleteAccountEntry: didCompleteAccountEntry
+      ) {
+      case .splash:
         SplashScreenView()
 
-      case .onboardingRequired:
+      case .accountEntry(let restorationFailure):
+        AccountEntryView(
+          viewModel: AccountEntryViewModel(
+            socialLoginCoordinator: socialLoginCoordinator
+          ),
+          googleAuthorizationSession: googleAuthorizationSession,
+          kakaoAuthorizationSession: kakaoAuthorizationSession,
+          restorationFailure: restorationFailure,
+          onContinueWithoutLogin: {
+            didCompleteAccountEntry = true
+          }
+        )
+
+      case .onboarding:
         onboardingBuilder.make(
           onCompleted: handleOnboardingCompleted
         )
 
-      case .ready:
-        if sessionStore.profile != nil {
-          mainTabView
-        } else {
-          SessionFailureView(
-            title: "프로필 정보를 확인할 수 없어요",
-            message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요.",
-            onRetry: { @MainActor in
-              sessionStore.load()
-            }
-          )
-        }
+      case .main:
+        mainTabView
 
-      case .failed(let message):
+      case .sessionFailure(let title, let message):
         SessionFailureView(
-          title: "저장소를 열 수 없어요",
+          title: title,
           message: message,
           onRetry: { @MainActor in
             sessionStore.load()
@@ -196,6 +214,52 @@ struct AppRouter: View {
       Task {
         await consumePendingAlarmIngress()
       }
+    }
+  }
+
+  nonisolated static func rootDestination(
+    sessionPhase: SessionStore.Phase,
+    hasLocalProfile: Bool,
+    accountState: AccountSessionState,
+    accountFeaturesEnabled: Bool,
+    didCompleteAccountEntry: Bool
+  ) -> AppRootDestination {
+    switch sessionPhase {
+    case .loading:
+      return .splash
+    case .failed(let message):
+      return .sessionFailure(
+        title: "저장소를 열 수 없어요",
+        message: message
+      )
+    case .ready, .onboardingRequired:
+      break
+    }
+
+    if hasLocalProfile {
+      return .main
+    }
+
+    guard sessionPhase == .onboardingRequired else {
+      return .sessionFailure(
+        title: "프로필 정보를 확인할 수 없어요",
+        message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요."
+      )
+    }
+
+    guard accountFeaturesEnabled, !didCompleteAccountEntry else {
+      return .onboarding
+    }
+
+    switch accountState {
+    case .restoring:
+      return .splash
+    case .signedIn:
+      return .onboarding
+    case .signedOut:
+      return .accountEntry(nil)
+    case .failure(let failure):
+      return .accountEntry(failure)
     }
   }
 

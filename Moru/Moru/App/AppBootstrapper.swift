@@ -140,6 +140,10 @@ final class AppBootstrapper: ObservableObject {
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
       let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
 
+      if appCapabilities.shouldRestoreAccountSession {
+        accountSessionStore.prepareForRestoration()
+      }
+
       state = .ready(
         BootstrappedApp(
           modelContainer: modelContainer,
