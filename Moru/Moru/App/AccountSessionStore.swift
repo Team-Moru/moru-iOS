@@ -89,6 +89,14 @@ final class AccountSessionStore: ObservableObject {
     self.restorationGuard = restorationGuard
   }
 
+  func prepareForRestoration() {
+    guard state == .signedOut else {
+      return
+    }
+
+    state = .restoring
+  }
+
   func restore() {
     state = .restoring
 
