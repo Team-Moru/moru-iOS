@@ -17,6 +17,7 @@ struct BootstrappedApp {
   let appleCredentialMonitor: AppleCredentialMonitor
   let socialLoginCoordinator: any SocialLoginCoordinating
   let googleAuthorizationSession: GoogleSignInSession
+  let kakaoAuthorizationSession: KakaoSignInSession
   let accountLifecycleService: any AccountLifecycleManaging
   let appCapabilities: AppCapabilities
   let authCallbackRouter: AuthCallbackRouter
@@ -115,17 +116,27 @@ final class AppBootstrapper: ObservableObject {
       let googleAuthorizationSession = GoogleSignInSession(
         configuration: publicLoginConfiguration
       )
+      let kakaoAuthorizationSession = KakaoSignInSession(
+        configuration: publicLoginConfiguration
+      )
+      let providerSessionSignOut = SocialProviderSessionSignOutRouter(
+        handlers: [
+          .google: googleAuthorizationSession,
+          .kakao: kakaoAuthorizationSession,
+        ]
+      )
       let accountLifecycleService = DefaultAccountLifecycleService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
         accountScopedDataCleaner: NoAccountScopedDataCleaner(),
-        providerSessionSignOut: googleAuthorizationSession
+        providerSessionSignOut: providerSessionSignOut
       )
       let navigationCoordinator = AppNavigationCoordinator()
       let authCallbackRouter = AuthCallbackRouter(
         configuration: publicLoginConfiguration
       )
       authCallbackRouter.register(googleAuthorizationSession, for: .google)
+      authCallbackRouter.register(kakaoAuthorizationSession, for: .kakao)
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
       let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
 
@@ -138,6 +149,7 @@ final class AppBootstrapper: ObservableObject {
           appleCredentialMonitor: appleCredentialMonitor,
           socialLoginCoordinator: socialLoginCoordinator,
           googleAuthorizationSession: googleAuthorizationSession,
+          kakaoAuthorizationSession: kakaoAuthorizationSession,
           accountLifecycleService: accountLifecycleService,
           appCapabilities: appCapabilities,
           authCallbackRouter: authCallbackRouter,

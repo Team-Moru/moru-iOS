@@ -347,6 +347,7 @@ final class AppleAccountLinkingTests: XCTestCase {
       ProfileView.accountConnectAccessibilityIdentifier,
       ProfileView.appleSignInAccessibilityIdentifier,
       ProfileView.googleSignInAccessibilityIdentifier,
+      ProfileView.kakaoSignInAccessibilityIdentifier,
       ProfileView.accountLogoutAccessibilityIdentifier,
       ProfileView.accountWithdrawalAccessibilityIdentifier,
     ]

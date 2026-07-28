@@ -20,15 +20,43 @@ nonisolated enum AccountLifecycleError: Error, Equatable, Sendable {
   case localCleanupFailed
 }
 
+nonisolated enum SocialProviderSessionSignOutReason: Equatable, Sendable {
+  case logout
+  case withdrawal
+}
+
 @MainActor
 protocol SocialProviderSessionSigningOut: AnyObject {
-  func signOut(provider: AuthProvider)
+  func signOut(
+    provider: AuthProvider,
+    reason: SocialProviderSessionSignOutReason
+  ) async throws
 }
 
 @MainActor
 final class NoopSocialProviderSessionSignOut:
   SocialProviderSessionSigningOut {
-  func signOut(provider: AuthProvider) {}
+  func signOut(
+    provider: AuthProvider,
+    reason: SocialProviderSessionSignOutReason
+  ) async throws {}
+}
+
+@MainActor
+final class SocialProviderSessionSignOutRouter:
+  SocialProviderSessionSigningOut {
+  private let handlers: [AuthProvider: any SocialProviderSessionSigningOut]
+
+  init(handlers: [AuthProvider: any SocialProviderSessionSigningOut]) {
+    self.handlers = handlers
+  }
+
+  func signOut(
+    provider: AuthProvider,
+    reason: SocialProviderSessionSignOutReason
+  ) async throws {
+    try await handlers[provider]?.signOut(provider: provider, reason: reason)
+  }
 }
 
 @MainActor
@@ -65,7 +93,10 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
       try? await authRemoteDataSource.logout(refreshToken: refreshToken)
     }
     if let provider {
-      providerSessionSignOut.signOut(provider: provider)
+      try? await providerSessionSignOut.signOut(
+        provider: provider,
+        reason: .logout
+      )
     }
 
     do {
@@ -85,9 +116,16 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
     }
 
     _ = try await authRemoteDataSource.withdraw()
-    providerSessionSignOut.signOut(provider: credentials.provider)
-
     var cleanupFailed = false
+
+    do {
+      try await providerSessionSignOut.signOut(
+        provider: credentials.provider,
+        reason: .withdrawal
+      )
+    } catch {
+      cleanupFailed = true
+    }
 
     do {
       try await accountScopedDataCleaner.removeAccountScopedData(

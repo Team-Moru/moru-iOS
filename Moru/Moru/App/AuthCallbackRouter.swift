@@ -10,27 +10,35 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
   static let googleServerClientIDInfoKey = "MoruGoogleServerClientID"
   static let googleReversedClientIDInfoKey = "MoruGoogleReversedClientID"
   static let kakaoNativeAppKeyInfoKey = "MoruKakaoNativeAppKey"
+  static let kakaoURLSchemeInfoKey = "MoruKakaoURLScheme"
   static let googleClientIDPlaceholder = "MORU_GOOGLE_IOS_CLIENT_ID_REQUIRED"
   static let googleServerClientIDPlaceholder =
     "MORU_GOOGLE_SERVER_CLIENT_ID_REQUIRED"
   static let googleReversedClientIDPlaceholder =
     "moru-google-reversed-client-id-required"
+  static let kakaoNativeAppKeyPlaceholder =
+    "MORU_KAKAO_NATIVE_APP_KEY_REQUIRED"
+  static let kakaoURLSchemePlaceholder =
+    "moru-kakao-url-scheme-required"
 
   let googleClientID: String?
   let googleServerClientID: String?
   let googleReversedClientID: String?
   let kakaoNativeAppKey: String?
+  let kakaoURLScheme: String?
 
   init(
     googleClientID: String? = nil,
     googleServerClientID: String? = nil,
     googleReversedClientID: String? = nil,
-    kakaoNativeAppKey: String? = nil
+    kakaoNativeAppKey: String? = nil,
+    kakaoURLScheme: String? = nil
   ) {
     self.googleClientID = Self.normalized(googleClientID)
     self.googleServerClientID = Self.normalized(googleServerClientID)
     self.googleReversedClientID = Self.normalized(googleReversedClientID)
     self.kakaoNativeAppKey = Self.normalized(kakaoNativeAppKey)
+    self.kakaoURLScheme = Self.normalized(kakaoURLScheme)
   }
 
   init(infoDictionary: [String: Any]) {
@@ -41,7 +49,9 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
       googleReversedClientID:
         infoDictionary[Self.googleReversedClientIDInfoKey] as? String,
       kakaoNativeAppKey:
-        infoDictionary[Self.kakaoNativeAppKeyInfoKey] as? String
+        infoDictionary[Self.kakaoNativeAppKeyInfoKey] as? String,
+      kakaoURLScheme:
+        infoDictionary[Self.kakaoURLSchemeInfoKey] as? String
     )
   }
 
@@ -57,6 +67,13 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
     )
   }
 
+  var kakaoSignInConfiguration: KakaoSignInPublicConfiguration? {
+    KakaoSignInPublicConfiguration(
+      nativeAppKey: kakaoNativeAppKey,
+      urlScheme: kakaoURLScheme
+    )
+  }
+
   func provider(forCallbackURL url: URL) -> AuthProvider? {
     guard let scheme = Self.normalized(url.scheme) else {
       return nil
@@ -67,8 +84,9 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
       return .google
     }
 
-    if let kakaoNativeAppKey,
-       scheme.caseInsensitiveCompare("kakao\(kakaoNativeAppKey)") == .orderedSame {
+    if let kakaoSignInConfiguration,
+       scheme.caseInsensitiveCompare(kakaoSignInConfiguration.urlScheme)
+        == .orderedSame {
       return .kakao
     }
 
@@ -84,6 +102,8 @@ nonisolated struct SocialLoginPublicConfiguration: Equatable, Sendable {
         googleClientIDPlaceholder,
         googleServerClientIDPlaceholder,
         googleReversedClientIDPlaceholder,
+        kakaoNativeAppKeyPlaceholder,
+        kakaoURLSchemePlaceholder,
       ].contains(normalized) else {
       return nil
     }

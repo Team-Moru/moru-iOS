@@ -56,6 +56,7 @@ final class AccountLifecycleTests: XCTestCase {
     try await fixture.service.logout()
 
     XCTAssertEqual(providerSignOut.providers, [.google])
+    XCTAssertEqual(providerSignOut.reasons, [.logout])
     XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
   }
 
@@ -94,6 +95,7 @@ final class AccountLifecycleTests: XCTestCase {
     try await fixture.service.logout()
 
     XCTAssertEqual(providerSignOut.providers, [.google])
+    XCTAssertEqual(providerSignOut.reasons, [.logout])
     XCTAssertEqual(
       fixture.events.values,
       ["remote logout", "credential remove"]
@@ -459,13 +461,18 @@ private final class AccountLifecycleProviderSignOut:
   SocialProviderSessionSigningOut {
   private let events: AccountLifecycleEventRecorder?
   private(set) var providers: [AuthProvider] = []
+  private(set) var reasons: [SocialProviderSessionSignOutReason] = []
 
   init(events: AccountLifecycleEventRecorder? = nil) {
     self.events = events
   }
 
-  func signOut(provider: AuthProvider) {
+  func signOut(
+    provider: AuthProvider,
+    reason: SocialProviderSessionSignOutReason
+  ) async throws {
     providers.append(provider)
+    reasons.append(reason)
     events?.record("provider sign out \(provider.serverValue)")
   }
 }

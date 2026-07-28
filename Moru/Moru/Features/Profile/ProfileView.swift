@@ -16,6 +16,7 @@ struct ProfileView: View {
   static let accountConnectAccessibilityIdentifier = "profile.account.connect"
   static let appleSignInAccessibilityIdentifier = "profile.account.apple-sign-in"
   static let googleSignInAccessibilityIdentifier = "profile.account.google-sign-in"
+  static let kakaoSignInAccessibilityIdentifier = "profile.account.kakao-sign-in"
   static let accountLogoutAccessibilityIdentifier = "profile.account.logout"
   static let accountWithdrawalAccessibilityIdentifier = "profile.account.withdrawal"
 
@@ -31,6 +32,7 @@ struct ProfileView: View {
   @State private var isWithdrawalConfirmationPresented = false
   @State private var appleAuthorizationSession = AppleAuthorizationSession()
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
+  private let kakaoAuthorizationSession: any KakaoAuthorizationStarting
   private let appCapabilities: AppCapabilities
   private let automaticallyLoads: Bool
 
@@ -39,12 +41,15 @@ struct ProfileView: View {
     accountSessionStore: AccountSessionStore,
     googleAuthorizationSession: any GoogleAuthorizationStarting =
       UnavailableGoogleAuthorizationSession(),
+    kakaoAuthorizationSession: any KakaoAuthorizationStarting =
+      UnavailableKakaoAuthorizationSession(),
     appCapabilities: AppCapabilities = .production,
     automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
     self.googleAuthorizationSession = googleAuthorizationSession
+    self.kakaoAuthorizationSession = kakaoAuthorizationSession
     self.appCapabilities = appCapabilities
     self.automaticallyLoads = automaticallyLoads
   }
@@ -250,7 +255,7 @@ struct ProfileView: View {
       case .failure:
         accountConnectButton(
           detail: "계정 정보를 복구하지 못했어요. "
-            + "Apple 또는 Google로 다시 연결할 수 있어요."
+            + "Apple, Google 또는 Kakao로 다시 연결할 수 있어요."
         )
       }
 
@@ -664,6 +669,38 @@ struct ProfileView: View {
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
           .accessibilityIdentifier("profile.account.google-config-required")
+        }
+
+        Button {
+          Task {
+            let outcome = await kakaoAuthorizationSession.authorize()
+            isAppleSignInPresented = false
+            await viewModel.kakaoAuthorizationDidComplete(outcome)
+          }
+        } label: {
+          Image("KakaoLoginButton")
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity, minHeight: 50, maxHeight: 50)
+        }
+        .buttonStyle(.plain)
+        .disabled(
+          viewModel.isAccountLinkInProgress
+            || !kakaoAuthorizationSession.isConfigured
+        )
+        .accessibilityLabel("Kakao로 계속하기")
+        .accessibilityHint("Kakao 인증을 시작합니다.")
+        .accessibilityIdentifier(Self.kakaoSignInAccessibilityIdentifier)
+
+        if !kakaoAuthorizationSession.isConfigured {
+          Text(
+            "Kakao 로그인 설정이 준비되지 않았어요. "
+              + "공개 Native app key와 URL scheme 구성이 필요합니다."
+          )
+          .profileFigmaTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .accessibilityIdentifier("profile.account.kakao-config-required")
         }
 
         Spacer(minLength: 0)
