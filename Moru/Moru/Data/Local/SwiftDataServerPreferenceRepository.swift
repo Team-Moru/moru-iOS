@@ -178,7 +178,7 @@ final class SwiftDataServerPreferenceRepository:
     }
   }
 
-  func upsertCatalog(
+  func replaceCatalog(
     _ entries: [ServerVoiceCatalogEntry],
     memberID: Int64
   ) throws {
@@ -211,10 +211,18 @@ final class SwiftDataServerPreferenceRepository:
       )
     }
 
+    let voiceCodes = Set(normalized.map(\.voiceCode))
+    guard voiceCodes.count == normalized.count else {
+      throw ServerPreferenceRepositoryError.invalidVoiceCode
+    }
+
     do {
+      let accountEntries = try persistedVoiceEntries().filter {
+        $0.memberID == memberID
+      }
       for entry in normalized {
-        let matching = try persistedVoiceEntries().filter {
-          $0.memberID == memberID && $0.voiceCode == entry.voiceCode
+        let matching = accountEntries.filter {
+          $0.voiceCode == entry.voiceCode
         }
         if let newest = matching.max(by: { $0.fetchedAt < $1.fetchedAt }) {
           newest.displayName = entry.displayName
@@ -238,6 +246,9 @@ final class SwiftDataServerPreferenceRepository:
           )
         }
       }
+      accountEntries
+        .filter { !voiceCodes.contains($0.voiceCode) }
+        .forEach(modelContext.delete)
       try modelContext.save()
     } catch {
       modelContext.rollback()
@@ -280,11 +291,17 @@ final class SwiftDataServerPreferenceRepository:
 
         let isSelection = entry.voiceCode == voiceCode
           && metadata.ttsID == selection.ttsID
+        if !metadata.isListedInCatalogue, !isSelection {
+          modelContext.delete(entry)
+          continue
+        }
+
         entry.tierRawValue = try VoiceCatalogMetadata(
           ttsID: metadata.ttsID,
           proOnly: metadata.proOnly,
           description: metadata.description,
-          isAuthoritativeSelection: isSelection
+          isAuthoritativeSelection: isSelection,
+          isCatalogueListed: metadata.isListedInCatalogue
         ).encodedRawValue()
         foundSelection = foundSelection || isSelection
       }
@@ -300,12 +317,48 @@ final class SwiftDataServerPreferenceRepository:
               ttsID: selection.ttsID,
               proOnly: false,
               description: nil,
-              isAuthoritativeSelection: true
+              isAuthoritativeSelection: true,
+              isCatalogueListed: false
             ).encodedRawValue(),
             isLocallyPlayable: false,
             fetchedAt: Date()
           )
         )
+      }
+
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
+  }
+
+  func clearAuthoritativeSelection(memberID: Int64) throws {
+    guard memberID > 0 else {
+      throw ServerPreferenceRepositoryError.invalidMemberID
+    }
+
+    do {
+      for entry in try persistedVoiceEntries()
+        where entry.memberID == memberID {
+        guard let metadata = VoiceCatalogMetadata.decode(
+          rawValue: entry.tierRawValue
+        ), metadata.isAuthoritativeSelection else {
+          continue
+        }
+
+        guard metadata.isListedInCatalogue else {
+          modelContext.delete(entry)
+          continue
+        }
+
+        entry.tierRawValue = try VoiceCatalogMetadata(
+          ttsID: metadata.ttsID,
+          proOnly: metadata.proOnly,
+          description: metadata.description,
+          isAuthoritativeSelection: false,
+          isCatalogueListed: true
+        ).encodedRawValue()
       }
 
       try modelContext.save()

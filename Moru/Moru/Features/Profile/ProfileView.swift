@@ -399,7 +399,7 @@ struct ProfileView: View {
         profileMessage(fallbackNotice, color: AppColor.moruTextSecondary)
       }
 
-      if let voiceErrorMessage = viewModel.voiceErrorMessage {
+      if let voiceErrorMessage = viewModel.voiceSelection.errorMessage {
         profileMessage(voiceErrorMessage, color: AppColor.coral300)
       }
     }
@@ -592,24 +592,24 @@ struct ProfileView: View {
   private var voiceSelectionView: some View {
     NavigationStack {
       List {
-        if viewModel.isVoiceCatalogueLoading,
-           viewModel.voiceCatalogue.options.isEmpty {
+        if viewModel.voiceSelection.isLoading,
+           viewModel.voiceSelection.catalogue.options.isEmpty {
           HStack {
             Spacer()
             ProgressView("음성 목록을 불러오는 중")
             Spacer()
           }
         } else {
-          ForEach(viewModel.voiceCatalogue.options) { option in
+          ForEach(viewModel.voiceSelection.catalogue.options) { option in
             accountVoiceRow(option)
           }
         }
 
-        if let notice = viewModel.voiceCatalogue.notice {
+        if let notice = viewModel.voiceSelection.catalogue.notice {
           profileMessage(notice, color: AppColor.moruTextSecondary)
         }
 
-        if let message = viewModel.voiceErrorMessage {
+        if let message = viewModel.voiceSelection.errorMessage {
           profileMessage(message, color: AppColor.coral300)
         }
       }
@@ -620,43 +620,65 @@ struct ProfileView: View {
           Button("닫기") {
             isVoiceSelectionPresented = false
           }
+          .disabled(viewModel.voiceSelection.isSelecting)
         }
       }
     }
     .task {
-      await viewModel.voiceSelectionViewDidAppear()
+      await viewModel.voiceSelection.viewDidAppear()
     }
     .confirmationDialog(
       "서버와 기기의 음성 선택이 달라요.",
       isPresented: Binding(
-        get: { viewModel.voiceCatalogue.mismatch != nil },
+        get: { viewModel.voiceSelection.catalogue.mismatch != nil },
         set: { isPresented in
           if !isPresented {
-            viewModel.voiceMismatchDialogDidDismiss()
+            viewModel.voiceSelection.mismatchDialogDidDismiss()
           }
         }
       ),
       titleVisibility: .visible
     ) {
-      if let mismatch = viewModel.voiceCatalogue.mismatch {
+      if let mismatch = viewModel.voiceSelection.catalogue.mismatch {
         Button("기기 음성 유지 · \(mismatch.localVoice.displayName)") {
+          viewModel.voiceSelection.mismatchResolutionWillBegin()
           Task {
-            await viewModel.voiceMismatchChoiceDidTap(.keepDevice)
+            await viewModel.voiceSelection.resolveMismatch(
+              mismatch,
+              .keepDevice
+            )
           }
         }
-        Button("서버 음성 사용 · \(mismatch.serverVoice.displayName)") {
-          Task {
-            await viewModel.voiceMismatchChoiceDidTap(.useServer)
+        .disabled(viewModel.voiceSelection.isSelecting)
+        if mismatch.serverVoice.availability.isSelectable {
+          Button("서버 음성 사용 · \(mismatch.serverVoice.displayName)") {
+            viewModel.voiceSelection.mismatchResolutionWillBegin()
+            Task {
+              await viewModel.voiceSelection.resolveMismatch(
+                mismatch,
+                .useServer
+              )
+            }
           }
+          .disabled(viewModel.voiceSelection.isSelecting)
         }
       }
       Button("나중에 선택", role: .cancel) {
-        viewModel.voiceMismatchDialogDidDismiss()
+        viewModel.voiceSelection.mismatchDialogDidDismiss()
       }
     } message: {
-      Text("자동으로 덮어쓰지 않아요. 사용할 음성을 직접 선택해 주세요.")
+      if let mismatch = viewModel.voiceSelection.catalogue.mismatch,
+         !mismatch.serverVoice.availability.isSelectable {
+        Text(
+          "서버가 이 앱에서 사용할 수 없는 음성을 선택했어요. "
+            + "기기 음성을 유지하거나 나중에 다시 선택해 주세요."
+        )
+      } else {
+        Text("자동으로 덮어쓰지 않아요. 사용할 음성을 직접 선택해 주세요.")
+      }
     }
-    .onDisappear(perform: viewModel.voiceSelectionViewDidDisappear)
+    .interactiveDismissDisabled(viewModel.voiceSelection.isSelecting)
+    .onDisappear(perform: viewModel.voiceSelection.viewDidDisappear)
   }
 
   private var appleSignInSheet: some View {
@@ -821,16 +843,24 @@ struct ProfileView: View {
     isAvailable: Bool,
     isSelected: Bool
   ) -> some View {
-    Button(isSelected ? "선택됨" : "선택") {
+    Button(
+      viewModel.voiceSelection.isSelecting
+        ? "저장 중"
+        : (isSelected ? "선택됨" : "선택")
+    ) {
       Task {
-        if await viewModel.accountVoiceSelectionButtonDidTap(option) {
+        if await viewModel.voiceSelection.select(option) {
           isVoiceSelectionPresented = false
         }
       }
     }
     .buttonStyle(.borderedProminent)
     .tint(AppColor.moruBlue)
-    .disabled(!isAvailable || isSelected)
+    .disabled(
+      !isAvailable
+        || isSelected
+        || viewModel.voiceSelection.isSelecting
+    )
   }
 
   private func accountVoicePreviewButton(
@@ -838,10 +868,10 @@ struct ProfileView: View {
     isAvailable: Bool
   ) -> some View {
     Button("미리 듣기") {
-      viewModel.accountVoicePreviewButtonDidTap(option)
+      viewModel.voiceSelection.preview(option)
     }
     .buttonStyle(.bordered)
-    .disabled(!isAvailable)
+    .disabled(!isAvailable || viewModel.voiceSelection.isSelecting)
     .accessibilityIdentifier("voice.preview.\(option.id)")
   }
 

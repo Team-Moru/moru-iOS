@@ -102,11 +102,11 @@ final class AppBootstrapper: ObservableObject {
       let authRemoteDataSource = DefaultAuthRemoteDataSource(
         apiClient: authenticatedAPIClient
       )
-      let voiceRemoteDataSource: (any VoiceRemoteDataSource)?
+      let voiceRemoteService: (any AccountVoiceRemoteServing)?
       let routineSuggestionRemoteDataSource:
         (any RoutineSuggestionRemoteDataSource)?
       if appCapabilities.shouldAllowServerRequests {
-        voiceRemoteDataSource = DefaultVoiceRemoteDataSource(
+        voiceRemoteService = DefaultVoiceRemoteDataSource(
           apiClient: authenticatedAPIClient
         )
         routineSuggestionRemoteDataSource =
@@ -114,12 +114,12 @@ final class AppBootstrapper: ObservableObject {
             apiClient: authenticatedAPIClient
           )
       } else {
-        voiceRemoteDataSource = nil
+        voiceRemoteService = nil
         routineSuggestionRemoteDataSource = nil
       }
       let dependencies = DependencyContainer.local(
         modelContext: modelContainer.mainContext,
-        voiceRemoteDataSource: voiceRemoteDataSource,
+        voiceRemoteService: voiceRemoteService,
         routineSuggestionRemoteDataSource:
           routineSuggestionRemoteDataSource,
         accountSessionStore: accountSessionStore
@@ -127,15 +127,45 @@ final class AppBootstrapper: ObservableObject {
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
       if appCapabilities.shouldAllowServerRequests {
-        accountSessionStore.setLoginSucceededHandler { memberID in
-          guard let syncCoordinator = dependencies.syncCoordinator else {
+        accountSessionStore.setLoginSucceededHandler {
+          [weak accountSessionStore] memberID in
+          guard let accountSessionStore else {
+            return
+          }
+          guard let synchronizer = dependencies.serverSynchronizer else {
             return
           }
 
+          synchronizer.resumeSynchronization(memberID: memberID)
           Task { @MainActor in
-            await syncCoordinator.synchronize(
+            guard accountSessionStore.signedInMemberID == memberID else {
+              return
+            }
+
+            await synchronizer.synchronize(
               memberID: memberID,
               trigger: .loginSucceeded
+            )
+          }
+        }
+        accountSessionStore.setSessionRestoredHandler {
+          [weak accountSessionStore] memberID in
+          guard let accountSessionStore else {
+            return
+          }
+          guard let synchronizer = dependencies.serverSynchronizer else {
+            return
+          }
+
+          synchronizer.resumeSynchronization(memberID: memberID)
+          Task { @MainActor in
+            guard accountSessionStore.signedInMemberID == memberID else {
+              return
+            }
+
+            await synchronizer.synchronize(
+              memberID: memberID,
+              trigger: .sessionRestored
             )
           }
         }
@@ -165,7 +195,8 @@ final class AppBootstrapper: ObservableObject {
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
         accountScopedDataCleaner: dependencies.accountScopedDataCleaner,
-        providerSessionSignOut: providerSessionSignOut
+        providerSessionSignOut: providerSessionSignOut,
+        serverSynchronizer: dependencies.serverSynchronizer
       )
       let navigationCoordinator = AppNavigationCoordinator()
       let authCallbackRouter = AuthCallbackRouter(

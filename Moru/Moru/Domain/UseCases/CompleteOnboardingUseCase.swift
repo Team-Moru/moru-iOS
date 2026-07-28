@@ -126,17 +126,7 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
     }
 
     if let routine = request.previewRoutine {
-      let hasInvalidStep = routine.steps.contains {
-        $0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-          || !ServerRoutineSuggestionService.validDuration(
-            $0.estimatedSeconds
-          )
-      }
-      guard !routine.name.trimmingCharacters(
-        in: .whitespacesAndNewlines
-      ).isEmpty,
-      !routine.steps.isEmpty,
-      !hasInvalidStep else {
+      guard RoutineSuggestionDraftValidation.isValidDraft(routine) else {
         throw CompleteOnboardingError.invalidRoutine
       }
     }

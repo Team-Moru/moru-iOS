@@ -7,6 +7,14 @@
 
 import SwiftData
 
+struct ServerPreferenceDependencies {
+  let mutationRepository: any ServerMutationRepository
+  let voiceCatalogRepository: any ServerVoiceCatalogRepository
+  let voiceRemoteService: (any AccountVoiceRemoteServing)?
+  let synchronizer: any ServerSynchronizing
+  let accountScopedDataCleaner: any AccountScopedDataCleaning
+}
+
 struct DependencyContainer {
   let routineRepository: any RoutineRepository
   let routineRunRepository: any RoutineRunRepository
@@ -17,11 +25,7 @@ struct DependencyContainer {
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
-  let serverMutationRepository: (any ServerMutationRepository)?
-  let serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)?
-  let voiceRemoteDataSource: (any VoiceRemoteDataSource)?
-  let syncCoordinator: SyncCoordinator?
-  let accountScopedDataCleaner: any AccountScopedDataCleaning
+  let serverPreferences: ServerPreferenceDependencies?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -41,12 +45,7 @@ struct DependencyContainer {
     homeWeatherRepository: (any HomeWeatherRepository)? = nil,
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
-    serverMutationRepository: (any ServerMutationRepository)? = nil,
-    serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)? = nil,
-    voiceRemoteDataSource: (any VoiceRemoteDataSource)? = nil,
-    syncCoordinator: SyncCoordinator? = nil,
-    accountScopedDataCleaner: any AccountScopedDataCleaning =
-      NoAccountScopedDataCleaner(),
+    serverPreferences: ServerPreferenceDependencies? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -71,11 +70,7 @@ struct DependencyContainer {
     self.homeWeatherRepository = homeWeatherRepository
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
-    self.serverMutationRepository = serverMutationRepository
-    self.serverVoiceCatalogRepository = serverVoiceCatalogRepository
-    self.voiceRemoteDataSource = voiceRemoteDataSource
-    self.syncCoordinator = syncCoordinator
-    self.accountScopedDataCleaner = accountScopedDataCleaner
+    self.serverPreferences = serverPreferences
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -89,7 +84,7 @@ struct DependencyContainer {
   @MainActor
   static func local(
     modelContext: ModelContext,
-    voiceRemoteDataSource: (any VoiceRemoteDataSource)? = nil,
+    voiceRemoteService: (any AccountVoiceRemoteServing)? = nil,
     routineSuggestionRemoteDataSource:
       (any RoutineSuggestionRemoteDataSource)? = nil,
     accountSessionStore: AccountSessionStore? = nil
@@ -111,9 +106,9 @@ struct DependencyContainer {
       modelContext: modelContext
     )
     let mutationExecutor: any ServerMutationExecuting
-    if let voiceRemoteDataSource {
+    if let voiceRemoteService {
       mutationExecutor = VoiceSelectionMutationExecutor(
-        remoteDataSource: voiceRemoteDataSource,
+        remoteService: voiceRemoteService,
         catalogueRepository: serverPreferenceRepository
       )
     } else {
@@ -174,12 +169,14 @@ struct DependencyContainer {
       localDataResetRepository: SwiftDataLocalDataResetRepository(
         modelContext: modelContext
       ),
-      serverMutationRepository: serverPreferenceRepository,
-      serverVoiceCatalogRepository: serverPreferenceRepository,
-      voiceRemoteDataSource: voiceRemoteDataSource,
-      syncCoordinator: syncCoordinator,
-      accountScopedDataCleaner: SwiftDataAccountScopedDataCleaner(
-        repository: serverPreferenceRepository
+      serverPreferences: ServerPreferenceDependencies(
+        mutationRepository: serverPreferenceRepository,
+        voiceCatalogRepository: serverPreferenceRepository,
+        voiceRemoteService: voiceRemoteService,
+        synchronizer: syncCoordinator,
+        accountScopedDataCleaner: SwiftDataAccountScopedDataCleaner(
+          repository: serverPreferenceRepository
+        )
       ),
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
@@ -190,6 +187,27 @@ struct DependencyContainer {
       routineGuidancePlaybackState: guidancePlaybackState,
       routineAudioSessionCoordinator: audioSessionCoordinator
     )
+  }
+
+  var serverMutationRepository: (any ServerMutationRepository)? {
+    serverPreferences?.mutationRepository
+  }
+
+  var serverVoiceCatalogRepository: (any ServerVoiceCatalogRepository)? {
+    serverPreferences?.voiceCatalogRepository
+  }
+
+  var voiceRemoteService: (any AccountVoiceRemoteServing)? {
+    serverPreferences?.voiceRemoteService
+  }
+
+  var serverSynchronizer: (any ServerSynchronizing)? {
+    serverPreferences?.synchronizer
+  }
+
+  var accountScopedDataCleaner: any AccountScopedDataCleaning {
+    serverPreferences?.accountScopedDataCleaner
+      ?? NoAccountScopedDataCleaner()
   }
 
   @MainActor

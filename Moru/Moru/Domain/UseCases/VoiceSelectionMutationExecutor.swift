@@ -8,16 +8,16 @@ import Foundation
 nonisolated final class VoiceSelectionMutationExecutor:
   ServerMutationExecuting,
   @unchecked Sendable {
-  private let remoteDataSource: any VoiceRemoteDataSource
+  private let remoteService: any AccountVoiceRemoteServing
   private let catalogueRepository: any ServerVoiceCatalogRepository
   private let compatibilityTable: VoiceCompatibilityTable
 
   init(
-    remoteDataSource: any VoiceRemoteDataSource,
+    remoteService: any AccountVoiceRemoteServing,
     catalogueRepository: any ServerVoiceCatalogRepository,
     compatibilityTable: VoiceCompatibilityTable = .production
   ) {
-    self.remoteDataSource = remoteDataSource
+    self.remoteService = remoteService
     self.catalogueRepository = catalogueRepository
     self.compatibilityTable = compatibilityTable
   }
@@ -43,26 +43,40 @@ nonisolated final class VoiceSelectionMutationExecutor:
       throw ServerPreferenceRepositoryError.invalidPayload
     }
 
-    let response = try await remoteDataSource.updateSelection(
-      ttsID: payload.ttsID
-    )
+    let response: AuthoritativeServerVoiceSelection
+    do {
+      response = try await remoteService.updateSelection(
+        ttsID: payload.ttsID,
+        memberID: mutation.memberID
+      )
+    } catch AccountVoiceRemoteError.accountAuthorizationChanged {
+      return .deferred
+    }
+    try Task.checkCancellation()
     let responseVoiceCode = VoiceCompatibilityTable.normalizedServerVoiceCode(
       response.voiceCode
     )
-    guard response.memberId == mutation.memberID,
-          response.ttsId == payload.ttsID,
-          responseVoiceCode == payloadVoiceCode else {
-      throw VoiceRemoteDataSourceError.authoritativeMismatch
+    guard response.memberID == mutation.memberID else {
+      throw AccountVoiceRemoteError.authoritativeMismatch
     }
 
-    try await catalogueRepository.recordAuthoritativeSelection(
-      AuthoritativeServerVoiceSelection(
-        memberID: response.memberId,
-        ttsID: response.ttsId,
-        voiceCode: responseVoiceCode,
-        displayName: response.displayName
-      )
+    try Task.checkCancellation()
+    let authoritativeSelection = AuthoritativeServerVoiceSelection(
+      memberID: response.memberID,
+      ttsID: response.ttsID,
+      voiceCode: responseVoiceCode,
+      displayName: response.displayName
     )
+    try await catalogueRepository.recordAuthoritativeSelection(
+      authoritativeSelection
+    )
+
+    guard compatibilityTable.localVoiceID(
+      forServerVoiceCode: responseVoiceCode
+    ) == payload.localVoiceID else {
+      throw AccountVoiceRemoteError.authoritativeMismatch
+    }
+
     return .sent
   }
 }

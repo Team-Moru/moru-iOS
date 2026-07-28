@@ -8,12 +8,13 @@ import Foundation
 nonisolated enum SyncTrigger: Equatable, Sendable {
   case appActive
   case loginSucceeded
+  case sessionRestored
   case manual
 }
 
 nonisolated enum ServerMutationExecutionResult: Equatable, Sendable {
   case sent
-  /// P6 has no server Target. The queued operation stays untouched until P7 installs an executor.
+  /// The queued operation remains untouched until an executor can handle it.
   case deferred
 }
 
@@ -29,28 +30,11 @@ nonisolated struct DeferredServerMutationExecutor: ServerMutationExecuting {
 
 nonisolated enum ServerMutationRetryClassifier {
   static func classify(_ error: Error) -> ServerMutationFailure {
-    guard let apiError = error as? APIError else {
+    guard let failureProvider = error as? any ServerMutationFailureProviding else {
       return .nonRetryable
     }
 
-    switch apiError {
-    case .transport:
-      return .transport
-    case .server(let statusCode, _, _) where statusCode == 408:
-      return .requestTimeout
-    case .server(let statusCode, _, _) where statusCode == 429:
-      return .rateLimited
-    case .server(let statusCode, _, _) where (500..<600).contains(statusCode):
-      return .serverUnavailable
-    case .invalidRequest,
-         .authenticationRequired,
-         .capabilityDisabled,
-         .server,
-         .decoding,
-         .missingResult,
-         .cancelled:
-      return .nonRetryable
-    }
+    return failureProvider.serverMutationFailure
   }
 }
 
@@ -69,11 +53,18 @@ nonisolated enum ServerMutationBackoff {
 }
 
 @MainActor
-final class SyncCoordinator {
+final class SyncCoordinator: ServerSynchronizing {
+  private struct Flight {
+    let id: UUID
+    let task: Task<Void, Never>
+  }
+
   private let mutationRepository: any ServerMutationRepository
   private let executor: any ServerMutationExecuting
   private let now: @Sendable () -> Date
-  private var syncingMemberIDs: Set<Int64> = []
+  private var flights: [Int64: Flight] = [:]
+  private var cancellationGenerations: [Int64: Int] = [:]
+  private var suspendedMemberIDs: Set<Int64> = []
 
   init(
     mutationRepository: any ServerMutationRepository,
@@ -86,10 +77,68 @@ final class SyncCoordinator {
   }
 
   func synchronize(memberID: Int64, trigger: SyncTrigger) async {
-    guard memberID > 0, syncingMemberIDs.insert(memberID).inserted else {
+    guard memberID > 0,
+          !suspendedMemberIDs.contains(memberID) else {
       return
     }
-    defer { syncingMemberIDs.remove(memberID) }
+
+    let cancellationGeneration = cancellationGenerations[
+      memberID,
+      default: 0
+    ]
+    if let flight = flights[memberID] {
+      await flight.task.value
+      clearFlight(memberID: memberID, matching: flight.id)
+      guard !Task.isCancelled,
+            cancellationGenerations[memberID, default: 0]
+              == cancellationGeneration else {
+        return
+      }
+      await synchronize(memberID: memberID, trigger: trigger)
+      return
+    }
+
+    let flightID = UUID()
+    let task = Task { @MainActor [weak self] in
+      guard let self else {
+        return
+      }
+
+      await runSynchronization(memberID: memberID, trigger: trigger)
+    }
+    flights[memberID] = Flight(id: flightID, task: task)
+
+    await withTaskCancellationHandler {
+      await task.value
+    } onCancel: {
+      task.cancel()
+    }
+    clearFlight(memberID: memberID, matching: flightID)
+  }
+
+  func suspendSynchronization(memberID: Int64) async {
+    suspendedMemberIDs.insert(memberID)
+    cancellationGenerations[memberID, default: 0] += 1
+    guard let flight = flights[memberID] else {
+      return
+    }
+
+    flight.task.cancel()
+    await flight.task.value
+    clearFlight(memberID: memberID, matching: flight.id)
+  }
+
+  func resumeSynchronization(memberID: Int64) {
+    suspendedMemberIDs.remove(memberID)
+  }
+
+  private func runSynchronization(
+    memberID: Int64,
+    trigger: SyncTrigger
+  ) async {
+    guard !Task.isCancelled else {
+      return
+    }
 
     let currentDate = now()
     let mutations: [ServerMutation]
@@ -119,6 +168,9 @@ final class SyncCoordinator {
       } catch is CancellationError {
         return
       } catch {
+        guard !Task.isCancelled else {
+          return
+        }
         try? mutationRepository.recordFailure(
           ServerMutationRetryClassifier.classify(error),
           for: mutation,
@@ -126,5 +178,16 @@ final class SyncCoordinator {
         )
       }
     }
+  }
+
+  private func clearFlight(
+    memberID: Int64,
+    matching flightID: UUID
+  ) {
+    guard flights[memberID]?.id == flightID else {
+      return
+    }
+
+    flights[memberID] = nil
   }
 }

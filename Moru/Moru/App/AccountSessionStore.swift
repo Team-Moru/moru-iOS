@@ -70,6 +70,7 @@ final class AccountSessionStore: ObservableObject {
   private let credentialStore: any CredentialStore
   private let restorationGuard: any AccountSessionRestorationGuarding
   private var loginSucceededHandler: (@MainActor (Int64) -> Void)?
+  private var sessionRestoredHandler: (@MainActor (Int64) -> Void)?
 
   var signedInProvider: AuthProvider? {
     guard case .signedIn(let account) = state else {
@@ -127,7 +128,10 @@ final class AccountSessionStore: ObservableObject {
         return
       }
 
-      accessTokenProvider.replace(with: credentials.accessToken)
+      accessTokenProvider.establishAccountSession(
+        with: credentials.accessToken,
+        memberID: credentials.memberID
+      )
       state = .signedIn(
         SignedInAccount(
           memberID: credentials.memberID,
@@ -136,6 +140,7 @@ final class AccountSessionStore: ObservableObject {
           providerUserIdentifier: credentials.providerUserIdentifier
         )
       )
+      sessionRestoredHandler?(credentials.memberID)
     } catch CredentialStoreError.invalidCredentials,
             CredentialStoreError.invalidStoredData {
       accessTokenProvider.remove()
@@ -155,7 +160,10 @@ final class AccountSessionStore: ObservableObject {
 
     try credentialStore.save(credentials)
     restorationGuard.allowRestoration()
-    accessTokenProvider.replace(with: credentials.accessToken)
+    accessTokenProvider.establishAccountSession(
+      with: credentials.accessToken,
+      memberID: credentials.memberID
+    )
     state = .signedIn(
       SignedInAccount(
         memberID: credentials.memberID,
@@ -171,6 +179,12 @@ final class AccountSessionStore: ObservableObject {
     _ handler: (@MainActor (Int64) -> Void)?
   ) {
     loginSucceededHandler = handler
+  }
+
+  func setSessionRestoredHandler(
+    _ handler: (@MainActor (Int64) -> Void)?
+  ) {
+    sessionRestoredHandler = handler
   }
 
   func credentialsForTokenRefresh(
@@ -192,13 +206,19 @@ final class AccountSessionStore: ObservableObject {
     replacing accessToken: String
   ) throws {
     guard credentials.isValid,
-          case .signedIn = state,
+          case .signedIn(let account) = state,
+          account.memberID == credentials.memberID,
           accessTokenProvider.accessToken == accessToken else {
       throw CredentialStoreError.invalidCredentials
     }
 
     try credentialStore.save(credentials)
-    accessTokenProvider.replace(with: credentials.accessToken)
+    guard accessTokenProvider.replaceAccountSessionToken(
+      with: credentials.accessToken,
+      memberID: credentials.memberID
+    ) else {
+      throw CredentialStoreError.invalidCredentials
+    }
     state = .signedIn(
       SignedInAccount(
         memberID: credentials.memberID,

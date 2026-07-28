@@ -54,6 +54,7 @@ struct OnboardingFlowView: View {
         weekdayConflictDialogOverlay(weekdayConflict)
       }
     }
+    .onDisappear(perform: viewModel.viewDidDisappear)
   }
 
   @ViewBuilder

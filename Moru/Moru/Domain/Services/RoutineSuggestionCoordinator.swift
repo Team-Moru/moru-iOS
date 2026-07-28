@@ -85,7 +85,10 @@ final class RoutineSuggestionCoordinator: RoutineSuggestionCoordinating {
     }
 
     do {
-      let routine = try await serverService.makeRoutine(from: input)
+      let routine = try await serverService.makeRoutine(
+        from: input,
+        memberID: memberID
+      )
 
       guard accountProvider?.routineSuggestionMemberID == memberID else {
         return try localResult(from: input, reason: .accountChanged)
@@ -94,7 +97,7 @@ final class RoutineSuggestionCoordinator: RoutineSuggestionCoordinating {
       return RoutineSuggestionResult(routine: routine, source: .server)
     } catch is CancellationError {
       throw CancellationError()
-    } catch APIError.cancelled {
+    } catch RoutineSuggestionRemoteFailure.cancelled {
       throw CancellationError()
     } catch {
       guard accountProvider?.routineSuggestionMemberID == memberID else {
@@ -121,53 +124,25 @@ final class RoutineSuggestionCoordinator: RoutineSuggestionCoordinating {
   private static func fallbackReason(
     for error: Error
   ) -> RoutineSuggestionFallbackReason {
-    if error is ServerRoutineSuggestionError
-      || error is RoutineSuggestionRemoteDataSourceError {
+    if error is ServerRoutineSuggestionError {
       return .invalidResponse
     }
 
-    guard let apiError = error as? APIError else {
+    guard let failure = error as? RoutineSuggestionRemoteFailure else {
       return .unavailable
     }
 
-    switch apiError {
-    case .transport(let code, _):
-      if code == URLError.timedOut.rawValue {
-        return .timeout
-      }
-      if [
-        URLError.notConnectedToInternet.rawValue,
-        URLError.networkConnectionLost.rawValue,
-        URLError.cannotConnectToHost.rawValue,
-        URLError.cannotFindHost.rawValue,
-      ].contains(code) {
-        return .offline
-      }
-      return .unavailable
-    case .server(let statusCode, _, _)
-      where statusCode == 408:
+    switch failure {
+    case .offline:
+      return .offline
+    case .timeout:
       return .timeout
-    case .server(let statusCode, _, _)
-      where (500..<600).contains(statusCode):
+    case .serverUnavailable:
       return .serverUnavailable
-    case .decoding, .missingResult:
+    case .invalidResponse:
       return .invalidResponse
-    case .authenticationRequired,
-         .capabilityDisabled,
-         .invalidRequest,
-         .server,
-         .cancelled:
+    case .unavailable, .cancelled:
       return .unavailable
     }
-  }
-}
-
-extension AccountSessionStore: RoutineSuggestionAccountProviding {
-  var routineSuggestionMemberID: Int64? {
-    guard case .signedIn(let account) = state else {
-      return nil
-    }
-
-    return account.memberID
   }
 }

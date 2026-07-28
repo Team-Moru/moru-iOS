@@ -5,6 +5,28 @@
 
 import Foundation
 
+nonisolated protocol AccountVoiceRemoteServing: Sendable {
+  func fetchVoices(
+    memberID: Int64
+  ) async throws -> [ServerVoiceCatalogueItem]
+  func updateSelection(
+    ttsID: Int64,
+    memberID: Int64
+  ) async throws -> AuthoritativeServerVoiceSelection
+}
+
+@MainActor
+protocol SignedInMemberProviding: AnyObject {
+  var signedInMemberID: Int64? { get }
+}
+
+@MainActor
+protocol ServerSynchronizing: AnyObject {
+  func synchronize(memberID: Int64, trigger: SyncTrigger) async
+  func suspendSynchronization(memberID: Int64) async
+  func resumeSynchronization(memberID: Int64)
+}
+
 @MainActor
 protocol ServerMutationRepository: AnyObject {
   @discardableResult
@@ -25,11 +47,12 @@ protocol ServerMutationRepository: AnyObject {
 @MainActor
 protocol ServerVoiceCatalogRepository: AnyObject {
   func catalog(memberID: Int64) throws -> [ServerVoiceCatalogEntry]
-  func upsertCatalog(
+  func replaceCatalog(
     _ entries: [ServerVoiceCatalogEntry],
     memberID: Int64
   ) throws
   func recordAuthoritativeSelection(
     _ selection: AuthoritativeServerVoiceSelection
   ) throws
+  func clearAuthoritativeSelection(memberID: Int64) throws
 }

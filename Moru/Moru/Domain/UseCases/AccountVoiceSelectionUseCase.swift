@@ -35,72 +35,70 @@ protocol AccountVoiceSelectionUseCaseProtocol: AnyObject {
 final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
   private let voiceAvailabilityProbe: any VoiceAvailabilityProbing
-  private let remoteDataSource: any VoiceRemoteDataSource
+  private let remoteService: any AccountVoiceRemoteServing
   private let catalogueRepository: any ServerVoiceCatalogRepository
   private let mutationRepository: any ServerMutationRepository
-  private let syncCoordinator: SyncCoordinator
-  private let accountSessionStore: AccountSessionStore
+  private let serverSynchronizer: any ServerSynchronizing
+  private let signedInMemberProvider: any SignedInMemberProviding
   private let compatibilityTable: VoiceCompatibilityTable
   private let now: () -> Date
 
   init(
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
     voiceAvailabilityProbe: any VoiceAvailabilityProbing,
-    remoteDataSource: any VoiceRemoteDataSource,
+    remoteService: any AccountVoiceRemoteServing,
     catalogueRepository: any ServerVoiceCatalogRepository,
     mutationRepository: any ServerMutationRepository,
-    syncCoordinator: SyncCoordinator,
-    accountSessionStore: AccountSessionStore,
+    serverSynchronizer: any ServerSynchronizing,
+    signedInMemberProvider: any SignedInMemberProviding,
     compatibilityTable: VoiceCompatibilityTable = .production,
     now: @escaping () -> Date = Date.init
   ) {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voiceAvailabilityProbe = voiceAvailabilityProbe
-    self.remoteDataSource = remoteDataSource
+    self.remoteService = remoteService
     self.catalogueRepository = catalogueRepository
     self.mutationRepository = mutationRepository
-    self.syncCoordinator = syncCoordinator
-    self.accountSessionStore = accountSessionStore
+    self.serverSynchronizer = serverSynchronizer
+    self.signedInMemberProvider = signedInMemberProvider
     self.compatibilityTable = compatibilityTable
     self.now = now
   }
 
   func loadCatalogue() async -> AccountVoiceCatalogueSnapshot {
-    guard case .signedIn(let account) = accountSessionStore.state else {
+    guard let memberID = signedInMemberProvider.signedInMemberID else {
       return bundledFallbackSnapshot(notice: nil)
     }
 
     var notice: String?
 
     do {
-      let voices = try await remoteDataSource.fetchVoices()
-      if !voices.isEmpty {
-        try catalogueRepository.upsertCatalog(
-          try makeCatalogEntries(voices, memberID: account.memberID),
-          memberID: account.memberID
-        )
-      }
+      let voices = try await remoteService.fetchVoices(memberID: memberID)
+      try catalogueRepository.replaceCatalog(
+        try makeCatalogEntries(voices, memberID: memberID),
+        memberID: memberID
+      )
     } catch {
       notice = "서버 음성 목록을 불러오지 못해 저장된 목록을 사용해요."
     }
 
-    guard case .signedIn(let currentAccount) = accountSessionStore.state,
-          currentAccount.memberID == account.memberID else {
+    guard signedInMemberProvider.signedInMemberID == memberID else {
       return bundledFallbackSnapshot(notice: nil)
     }
 
-    let entries = (try? catalogueRepository.catalog(memberID: account.memberID)) ?? []
+    let entries = (try? catalogueRepository.catalog(memberID: memberID)) ?? []
     guard !entries.isEmpty else {
       return bundledFallbackSnapshot(
         notice: "서버 음성 목록을 사용할 수 없어 앱 내장 음성을 표시해요."
       )
     }
 
-    let options = entries.map(makeServerOption)
+    let serverOptions = entries.map(makeServerOption)
+    let options = mergedOptions(serverOptions: serverOptions)
     let localVoice = try? profileSettingsUseCase.loadProfileSettings().profile.selectedVoice
-    let authoritative = options.first {
-      $0.isAuthoritativeServerSelection && $0.availability.isSelectable
-    }
+    let authoritative = serverOptions.first(
+      where: \.isAuthoritativeServerSelection
+    )
     let mismatch: AccountVoiceMismatch?
     if let localVoice,
        let authoritative,
@@ -127,15 +125,15 @@ final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
     }
 
     if option.source == .serverCatalogue,
-       case .signedIn(let account) = accountSessionStore.state,
-       option.serverMemberID != account.memberID {
+       let memberID = signedInMemberProvider.signedInMemberID,
+       option.serverMemberID != memberID {
       throw ProfileSettingsUseCaseError.unavailableVoice(option.id)
     }
 
     let localResult = try profileSettingsUseCase.selectVoice(localVoice)
-    guard case .signedIn(let account) = accountSessionStore.state,
+    guard let memberID = signedInMemberProvider.signedInMemberID,
           option.source == .serverCatalogue,
-          option.serverMemberID == account.memberID,
+          option.serverMemberID == memberID,
           let ttsID = option.serverTtsID,
           let voiceCode = option.serverVoiceCode else {
       return VoiceSelectionCommitResult(
@@ -146,14 +144,14 @@ final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
 
     do {
       let payload = VoiceSelectionMutationPayload(
-        memberID: account.memberID,
+        memberID: memberID,
         ttsID: ttsID,
         voiceCode: VoiceCompatibilityTable.normalizedServerVoiceCode(voiceCode),
         localVoiceID: localVoice.id
       )
       _ = try mutationRepository.enqueue(
         EnqueuedServerMutation(
-          memberID: account.memberID,
+          memberID: memberID,
           operation: .replaceVoiceSelection,
           operationKey: VoiceSelectionMutationPayload.operationKey,
           payload: try payload.encoded()
@@ -166,8 +164,8 @@ final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
       )
     }
 
-    await syncCoordinator.synchronize(
-      memberID: account.memberID,
+    await serverSynchronizer.synchronize(
+      memberID: memberID,
       trigger: .manual
     )
     return VoiceSelectionCommitResult(
@@ -193,12 +191,26 @@ final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
           mismatch.localVoice.id
         )
       }
-      return try await select(deviceOption)
+      let result = try await select(deviceOption)
+      guard deviceOption.source == .bundledFallback else {
+        return result
+      }
+      guard let memberID = mismatch.serverVoice.serverMemberID,
+            signedInMemberProvider.signedInMemberID == memberID else {
+        throw ProfileSettingsUseCaseError.unavailableVoice(
+          mismatch.serverVoice.id
+        )
+      }
+
+      try catalogueRepository.clearAuthoritativeSelection(
+        memberID: memberID
+      )
+      return result
     }
   }
 
   private func makeCatalogEntries(
-    _ voices: [VoiceResponseDTO],
+    _ voices: [ServerVoiceCatalogueItem],
     memberID: Int64
   ) throws -> [ServerVoiceCatalogEntry] {
     let existing = (try? catalogueRepository.catalog(memberID: memberID)) ?? []
@@ -206,40 +218,62 @@ final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
       VoiceCatalogMetadata.decode(rawValue: $0.tierRawValue)?
         .isAuthoritativeSelection == true
     }
-    let selectedTtsID = selectedEntry.flatMap {
-      VoiceCatalogMetadata.decode(rawValue: $0.tierRawValue)?.ttsID
+    let selectedMetadata = selectedEntry.flatMap {
+      VoiceCatalogMetadata.decode(rawValue: $0.tierRawValue)
     }
     let selectedVoiceCode = selectedEntry.map {
       VoiceCompatibilityTable.normalizedServerVoiceCode($0.voiceCode)
     }
     let fetchedAt = now()
 
-    return try voices.map { voice in
+    var entries = try voices.map { voice in
       let voiceCode = VoiceCompatibilityTable.normalizedServerVoiceCode(
         voice.voiceCode
       )
       let localVoice = localVoice(forServerVoiceCode: voiceCode)
-      let description = voice.description?
-        .trimmingCharacters(in: .whitespacesAndNewlines)
       let metadata = VoiceCatalogMetadata(
-        ttsID: voice.ttsId,
+        ttsID: voice.ttsID,
         proOnly: voice.proOnly,
-        description: description?.isEmpty == true ? nil : description,
-        isAuthoritativeSelection: selectedTtsID == voice.ttsId
-          && selectedVoiceCode == voiceCode
+        description: voice.description,
+        isAuthoritativeSelection: selectedVoiceCode == voiceCode
       )
 
       return ServerVoiceCatalogEntry(
         memberID: memberID,
         voiceCode: voiceCode,
-        displayName: voice.displayName.trimmingCharacters(
-          in: .whitespacesAndNewlines
-        ),
+        displayName: voice.displayName,
         tierRawValue: try metadata.encodedRawValue(),
         isLocallyPlayable: localVoice.map(voiceAvailabilityProbe.isAvailable) ?? false,
         fetchedAt: fetchedAt
       )
     }
+
+    if let selectedEntry,
+       let selectedMetadata,
+       let selectedVoiceCode,
+       !entries.contains(where: {
+         $0.voiceCode == selectedVoiceCode
+       }) {
+      entries.append(
+        ServerVoiceCatalogEntry(
+          id: selectedEntry.id,
+          memberID: memberID,
+          voiceCode: selectedEntry.voiceCode,
+          displayName: selectedEntry.displayName,
+          tierRawValue: try VoiceCatalogMetadata(
+            ttsID: selectedMetadata.ttsID,
+            proOnly: selectedMetadata.proOnly,
+            description: selectedMetadata.description,
+            isAuthoritativeSelection: true,
+            isCatalogueListed: false
+          ).encodedRawValue(),
+          isLocallyPlayable: false,
+          fetchedAt: fetchedAt
+        )
+      )
+    }
+
+    return entries
   }
 
   private func makeServerOption(
@@ -265,7 +299,10 @@ final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
     let localVoice = localVoice(forServerVoiceCode: entry.voiceCode)
     let availability: AccountVoiceAvailability
     let detail: String
-    if metadata.proOnly {
+    if !metadata.isListedInCatalogue {
+      availability = .notInCatalogue
+      detail = "현재 서버 음성 목록에서 제공되지 않아요"
+    } else if metadata.proOnly {
       availability = .proOnly
       detail = "PRO 전용 · 아직 선택할 수 없어요"
     } else if localVoice == nil {
@@ -297,24 +334,52 @@ final class AccountVoiceSelectionUseCase: AccountVoiceSelectionUseCaseProtocol {
     notice: String?
   ) -> AccountVoiceCatalogueSnapshot {
     AccountVoiceCatalogueSnapshot(
-      options: VoiceProfile.localVoices.map { voice in
-        let isAvailable = voiceAvailabilityProbe.isAvailable(voice)
-        return AccountVoiceOption(
-          id: "bundled.\(voice.id)",
-          serverMemberID: nil,
-          serverVoiceCode: nil,
-          serverTtsID: nil,
-          displayName: voice.displayName,
-          detail: isAvailable ? "앱 내장 음성" : "음성 파일 없음",
-          localVoice: voice,
-          availability: isAvailable ? .selectable : .missingBundledAudio,
-          source: .bundledFallback,
-          isAuthoritativeServerSelection: false
-        )
-      },
+      options: bundledOptions(),
       mismatch: nil,
       notice: notice
     )
+  }
+
+  private func mergedOptions(
+    serverOptions: [AccountVoiceOption]
+  ) -> [AccountVoiceOption] {
+    let selectableServerOptions = serverOptions.filter {
+      $0.availability.isSelectable
+    }
+    let representedLocalVoiceIDs = Set(
+      selectableServerOptions.compactMap(\.localVoice?.id)
+    )
+    let unrepresentedBundledOptions = bundledOptions().filter {
+      guard let localVoiceID = $0.localVoice?.id else {
+        return true
+      }
+      return !representedLocalVoiceIDs.contains(localVoiceID)
+    }
+    let unavailableServerOptions = serverOptions.filter {
+      !$0.availability.isSelectable
+    }
+
+    return selectableServerOptions
+      + unrepresentedBundledOptions
+      + unavailableServerOptions
+  }
+
+  private func bundledOptions() -> [AccountVoiceOption] {
+    VoiceProfile.localVoices.map { voice in
+      let isAvailable = voiceAvailabilityProbe.isAvailable(voice)
+      return AccountVoiceOption(
+        id: "bundled.\(voice.id)",
+        serverMemberID: nil,
+        serverVoiceCode: nil,
+        serverTtsID: nil,
+        displayName: voice.displayName,
+        detail: isAvailable ? "앱 내장 음성" : "음성 파일 없음",
+        localVoice: voice,
+        availability: isAvailable ? .selectable : .missingBundledAudio,
+        source: .bundledFallback,
+        isAuthoritativeServerSelection: false
+      )
+    }
   }
 
   private func localVoice(forServerVoiceCode voiceCode: String) -> VoiceProfile? {

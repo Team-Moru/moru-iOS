@@ -62,6 +62,7 @@ final class OnboardingViewModel: ObservableObject {
   private let onCancelled: @MainActor () -> Void
   private var didComplete = false
   private var suggestionRequestID: UUID?
+  private var suggestionTask: Task<RoutineSuggestionResult, Error>?
 
   init(
     flowMode: RoutineCreationFlowMode = .onboarding,
@@ -269,12 +270,7 @@ final class OnboardingViewModel: ObservableObject {
     switch step {
     case .goals:
       if routineSuggestionCoordinator != nil {
-        Task {
-          guard await refreshPreviewAsync() else {
-            return
-          }
-          step = .suggestedRoutine
-        }
+        startSuggestion(advancingTo: .suggestedRoutine)
       } else {
         guard refreshPreview() else {
           return
@@ -283,12 +279,7 @@ final class OnboardingViewModel: ObservableObject {
       }
     case .freeform:
       if routineSuggestionCoordinator != nil {
-        Task {
-          guard await refreshPreviewAsync() else {
-            return
-          }
-          step = .organizing
-        }
+        startSuggestion(advancingTo: .organizing)
       } else {
         guard refreshPreview() else {
           return
@@ -311,10 +302,11 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   func backButtonDidTap() {
-    guard !isSaving, !isSuggesting, let previous = step.previous else {
+    guard !isSaving, let previous = step.previous else {
       return
     }
 
+    cancelSuggestion()
     errorMessage = nil
     step = previous
   }
@@ -324,7 +316,12 @@ final class OnboardingViewModel: ObservableObject {
       return
     }
 
+    cancelSuggestion()
     onCancelled()
+  }
+
+  func viewDidDisappear() {
+    cancelSuggestion()
   }
 
   func keepExistingWeekdayScheduleButtonDidTap() {
@@ -351,7 +348,7 @@ final class OnboardingViewModel: ObservableObject {
 
   @discardableResult
   func refreshPreview() -> Bool {
-    suggestionRequestID = nil
+    cancelSuggestion()
     draft.previewRoutine = nil
     draft.suggestionSource = nil
 
@@ -375,33 +372,42 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   @discardableResult
-  func refreshPreviewAsync() async -> Bool {
+  func refreshPreviewAsync() async throws -> Bool {
     guard let routineSuggestionCoordinator else {
       return refreshPreview()
     }
 
+    cancelSuggestion()
     let input = draft.suggestionInput
     let requestID = UUID()
+    let requestTask = Task {
+      try await routineSuggestionCoordinator.suggest(from: input)
+    }
     suggestionRequestID = requestID
+    suggestionTask = requestTask
     isSuggesting = true
     draft.previewRoutine = nil
     draft.suggestionSource = nil
     errorMessage = nil
 
     do {
-      let result = try await routineSuggestionCoordinator.suggest(from: input)
+      let result = try await withTaskCancellationHandler {
+        try await requestTask.value
+      } onCancel: {
+        requestTask.cancel()
+      }
 
       guard suggestionRequestID == requestID,
             draft.suggestionInput == input else {
         if suggestionRequestID == requestID {
-          isSuggesting = false
+          finishSuggestion(requestID: requestID)
         }
         return false
       }
 
       draft.previewRoutine = result.routine
       draft.suggestionSource = result.source
-      isSuggesting = false
+      finishSuggestion(requestID: requestID)
 
       guard hasValidatedPreviewRoutine else {
         draft.previewRoutine = nil
@@ -412,16 +418,13 @@ final class OnboardingViewModel: ObservableObject {
 
       return true
     } catch is CancellationError {
-      guard suggestionRequestID == requestID else {
-        return false
-      }
-      isSuggesting = false
-      return false
+      finishSuggestion(requestID: requestID)
+      throw CancellationError()
     } catch {
       guard suggestionRequestID == requestID else {
         return false
       }
-      isSuggesting = false
+      finishSuggestion(requestID: requestID)
       errorMessage = "루틴 추천을 불러올 수 없어요."
       return false
     }
@@ -548,5 +551,41 @@ final class OnboardingViewModel: ObservableObject {
       isSaving = false
       errorMessage = error.localizedDescription
     }
+  }
+
+  private func startSuggestion(advancingTo nextStep: OnboardingStep) {
+    Task { @MainActor [weak self] in
+      guard let self else {
+        return
+      }
+
+      do {
+        guard try await refreshPreviewAsync() else {
+          return
+        }
+        step = nextStep
+      } catch is CancellationError {
+        return
+      } catch {
+        errorMessage = "루틴 추천을 불러올 수 없어요."
+      }
+    }
+  }
+
+  private func cancelSuggestion() {
+    suggestionTask?.cancel()
+    suggestionTask = nil
+    suggestionRequestID = nil
+    isSuggesting = false
+  }
+
+  private func finishSuggestion(requestID: UUID) {
+    guard suggestionRequestID == requestID else {
+      return
+    }
+
+    suggestionTask = nil
+    suggestionRequestID = nil
+    isSuggesting = false
   }
 }

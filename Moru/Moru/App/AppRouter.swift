@@ -197,7 +197,7 @@ struct AppRouter: View {
         await dependencies.alarmScheduleMutator?.reconcile()
         if appCapabilities.shouldAllowServerRequests,
            case .signedIn(let account) = accountSessionStore.state {
-          await dependencies.syncCoordinator?.synchronize(
+          await dependencies.serverSynchronizer?.synchronize(
             memberID: account.memberID,
             trigger: .appActive
           )
@@ -371,18 +371,18 @@ struct AppRouter: View {
     let profileAlarmService = dependencies.profileAlarmService
       ?? UnavailableProfileAlarmService()
     let accountVoiceSelectionUseCase: any AccountVoiceSelectionUseCaseProtocol
-    if let remoteDataSource = dependencies.voiceRemoteDataSource,
+    if let remoteService = dependencies.voiceRemoteService,
        let catalogueRepository = dependencies.serverVoiceCatalogRepository,
        let mutationRepository = dependencies.serverMutationRepository,
-       let syncCoordinator = dependencies.syncCoordinator {
+       let serverSynchronizer = dependencies.serverSynchronizer {
       accountVoiceSelectionUseCase = AccountVoiceSelectionUseCase(
         profileSettingsUseCase: profileSettingsUseCase,
         voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe,
-        remoteDataSource: remoteDataSource,
+        remoteService: remoteService,
         catalogueRepository: catalogueRepository,
         mutationRepository: mutationRepository,
-        syncCoordinator: syncCoordinator,
-        accountSessionStore: accountSessionStore
+        serverSynchronizer: serverSynchronizer,
+        signedInMemberProvider: accountSessionStore
       )
     } else {
       accountVoiceSelectionUseCase = UnavailableAccountVoiceSelectionUseCase(

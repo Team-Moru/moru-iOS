@@ -103,13 +103,41 @@ final class AccountSessionFoundationTests: XCTestCase {
 
     provider.replace(with: "  access-token  ")
     XCTAssertEqual(provider.accessToken, "access-token")
+    XCTAssertNil(provider.authorizationContext(forMemberID: 7))
 
     provider.replace(with: "\n ")
     XCTAssertNil(provider.accessToken)
 
-    provider.replace(with: "next-token")
+    provider.establishAccountSession(
+      with: "account-token",
+      memberID: 7
+    )
+    let firstContext = provider.authorizationContext(forMemberID: 7)
+    XCTAssertEqual(firstContext?.accessToken, "account-token")
+    XCTAssertNil(provider.authorizationContext(forMemberID: 8))
+
+    XCTAssertTrue(
+      provider.replaceAccountSessionToken(
+        with: "rotated-token",
+        memberID: 7
+      )
+    )
+    let rotatedContext = provider.authorizationContext(forMemberID: 7)
+    XCTAssertEqual(rotatedContext?.accessToken, "rotated-token")
+    XCTAssertEqual(rotatedContext?.sessionID, firstContext?.sessionID)
+
+    provider.establishAccountSession(
+      with: "new-session-token",
+      memberID: 7
+    )
+    XCTAssertNotEqual(
+      provider.authorizationContext(forMemberID: 7)?.sessionID,
+      firstContext?.sessionID
+    )
+
     provider.remove()
     XCTAssertNil(provider.accessToken)
+    XCTAssertNil(provider.authorizationContext(forMemberID: 7))
   }
 
   func testCredentialDescriptionRedactsTokens() {
@@ -132,6 +160,10 @@ final class AccountSessionFoundationTests: XCTestCase {
       credentialStore: credentialStore,
       accessTokenProvider: tokenProvider
     )
+    var restoredMemberIDs: [Int64] = []
+    sessionStore.setSessionRestoredHandler { memberID in
+      restoredMemberIDs.append(memberID)
+    }
 
     sessionStore.restore()
 
@@ -145,6 +177,13 @@ final class AccountSessionFoundationTests: XCTestCase {
       )
     )
     XCTAssertEqual(tokenProvider.accessToken, credentials.accessToken)
+    XCTAssertEqual(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )?.accessToken,
+      credentials.accessToken
+    )
+    XCTAssertEqual(restoredMemberIDs, [credentials.memberID])
     XCTAssertEqual(credentialStore.loadCount, 1)
   }
 

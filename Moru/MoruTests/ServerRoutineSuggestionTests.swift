@@ -48,11 +48,12 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     let input = String(repeating: "가", count: 200)
 
     let response = try await source.generate(
-      request: RoutineGroupAiGenerateRequestDTO(userInput: input)
+      userInput: input,
+      memberID: 98
     )
 
     XCTAssertEqual(response.title, "서버 활력 루틴")
-    XCTAssertEqual(response.routines.map(\.type), ["CHECK", "TIMER", "INPUT"])
+    XCTAssertEqual(response.steps.map(\.kind), [.check, .timer, .input])
 
     let urlRequest = try XCTUnwrap(capture.request)
     XCTAssertEqual(urlRequest.httpMethod, "POST")
@@ -68,6 +69,31 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     XCTAssertNil(body["transcript"])
     XCTAssertNil(body["alarmTime"])
     XCTAssertNil(body["weekdays"])
+  }
+
+  func testRemoteDataSourceRejectsAnotherMemberBeforeSendingPrivateInput()
+    async {
+    let capture = RoutineSuggestionRequestCapturePlugin()
+    let source = DefaultRoutineSuggestionRemoteDataSource(
+      apiClient: makeClient(
+        data: validResponseData(),
+        additionalPlugins: [capture]
+      )
+    )
+
+    do {
+      _ = try await source.generate(
+        userInput: "다른 계정에 보내면 안 되는 입력",
+        memberID: 99
+      )
+      XCTFail("Expected the account-bound request to be rejected.")
+    } catch let failure as RoutineSuggestionRemoteFailure {
+      XCTAssertEqual(failure, .unavailable)
+    } catch {
+      XCTFail("Expected RoutineSuggestionRemoteFailure, got \(error)")
+    }
+
+    XCTAssertNil(capture.request)
   }
 
   func testServerServiceValidatesAndCreatesFreshEditableLocalDrafts()
@@ -91,8 +117,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       weekdays: [.tuesday, .thursday]
     )
 
-    let first = try await service.makeRoutine(from: input)
-    let second = try await service.makeRoutine(from: input)
+    let first = try await service.makeRoutine(from: input, memberID: 98)
+    let second = try await service.makeRoutine(from: input, memberID: 98)
 
     XCTAssertEqual(first.name, "서버 활력 루틴")
     XCTAssertEqual(first.summary, "서버가 만든 설명")
@@ -139,10 +165,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       (
         RoutineSuggestionServerStub(
           result: .failure(
-            APIError.transport(
-              code: URLError.notConnectedToInternet.rawValue,
-              message: "offline"
-            )
+            RoutineSuggestionRemoteFailure.offline
           )
         ),
         .offline
@@ -150,10 +173,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       (
         RoutineSuggestionServerStub(
           result: .failure(
-            APIError.transport(
-              code: URLError.timedOut.rawValue,
-              message: "timeout"
-            )
+            RoutineSuggestionRemoteFailure.timeout
           )
         ),
         .timeout
@@ -161,11 +181,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       (
         RoutineSuggestionServerStub(
           result: .failure(
-            APIError.server(
-              statusCode: 503,
-              code: "COMMON500",
-              message: "unavailable"
-            )
+            RoutineSuggestionRemoteFailure.serverUnavailable
           )
         ),
         .serverUnavailable
@@ -215,6 +231,27 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       XCTAssertEqual(result.routine.name, "로컬 fallback")
       XCTAssertEqual(local.callCount, 1)
     }
+  }
+
+  func testDisabledServerCapabilityUsesLocalFallbackWithoutTransport()
+    async throws {
+    let local = RoutineSuggestionLocalStub()
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: ServerRoutineSuggestionService(
+        remoteDataSource: DefaultRoutineSuggestionRemoteDataSource(
+          apiClient: DefaultAPIClient(serverRequestsEnabled: false)
+        )
+      ),
+      localService: local,
+      accountProvider: account
+    )
+
+    let result = try await coordinator.suggest(from: input())
+
+    XCTAssertEqual(result.source, .localFallback(.unavailable))
+    XCTAssertEqual(result.routine.name, "로컬 fallback")
+    XCTAssertEqual(local.callCount, 1)
   }
 
   func testInvalidTitleDurationAndStepCountAreRejected() async {
@@ -267,7 +304,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       )
 
       do {
-        _ = try await service.makeRoutine(from: input())
+        _ = try await service.makeRoutine(from: input(), memberID: 98)
         XCTFail("Expected server validation failure")
       } catch is ServerRoutineSuggestionError {
         continue
@@ -342,7 +379,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     )
   }
 
-  func testViewModelPreservesLocalInputAndExposesSuggestionSource() async {
+  func testViewModelPreservesLocalInputAndExposesSuggestionSource()
+    async throws {
     let originalDraft = OnboardingDraft(
       selectedGoalTags: ["mind"],
       selectedKeywords: ["명상"],
@@ -372,7 +410,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       routineSuggestionCoordinator: coordinator
     )
 
-    let refreshed = await viewModel.refreshPreviewAsync()
+    let refreshed = try await viewModel.refreshPreviewAsync()
     XCTAssertTrue(refreshed)
 
     XCTAssertEqual(viewModel.draft.selectedGoalTags, originalDraft.selectedGoalTags)
@@ -386,6 +424,46 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       viewModel.draft.previewRoutine?.alarmSchedule?.weekdays,
       originalDraft.orderedWeekdays
     )
+  }
+
+  func testViewModelCancelsReplacedAndDisappearingSuggestionTasks()
+    async throws {
+    let coordinator = SequencedRoutineSuggestionCoordinator(
+      result: RoutineSuggestionResult(
+        routine: makeRoutine(name: "교체된 서버 초안"),
+        source: .server
+      )
+    )
+    let viewModel = OnboardingViewModel(
+      draft: OnboardingDraft(selectedGoalTags: ["health"]),
+      routineSuggestionService: RoutineSuggestionLocalStub(),
+      routineSuggestionCoordinator: coordinator
+    )
+
+    let first = _Concurrency.Task {
+      try await viewModel.refreshPreviewAsync()
+    }
+    try await waitUntil {
+      coordinator.callCount == 1 && viewModel.isSuggesting
+    }
+
+    let replacementSucceeded = try await viewModel.refreshPreviewAsync()
+    XCTAssertTrue(replacementSucceeded)
+    await assertCancellation(first)
+    XCTAssertEqual(coordinator.cancellationCount, 1)
+    XCTAssertEqual(viewModel.draft.previewRoutine?.name, "교체된 서버 초안")
+
+    let disappearing = _Concurrency.Task {
+      try await viewModel.refreshPreviewAsync()
+    }
+    try await waitUntil {
+      coordinator.callCount == 3 && viewModel.isSuggesting
+    }
+
+    viewModel.viewDidDisappear()
+    await assertCancellation(disappearing)
+    XCTAssertEqual(coordinator.cancellationCount, 2)
+    XCTAssertFalse(viewModel.isSuggesting)
   }
 
   private func input(
@@ -507,6 +585,37 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       JSONSerialization.jsonObject(with: data) as? [String: Any]
     )
   }
+
+  private func waitUntil(
+    timeout: Duration = .seconds(1),
+    condition: @escaping @MainActor () -> Bool
+  ) async throws {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+
+    while !condition() {
+      guard clock.now < deadline else {
+        return XCTFail("Timed out waiting for routine suggestion state.")
+      }
+
+      try await _Concurrency.Task<Never, Never>.sleep(
+        for: .milliseconds(10)
+      )
+    }
+  }
+
+  private func assertCancellation(
+    _ task: _Concurrency.Task<Bool, Error>
+  ) async {
+    do {
+      _ = try await task.value
+      XCTFail("Expected suggestion cancellation.")
+    } catch is CancellationError {
+      return
+    } catch {
+      XCTFail("Expected CancellationError, got \(error)")
+    }
+  }
 }
 
 @MainActor
@@ -558,7 +667,10 @@ private final class RoutineSuggestionServerStub:
     self.result = result
   }
 
-  func makeRoutine(from input: RoutineSuggestionInput) async throws -> Routine {
+  func makeRoutine(
+    from input: RoutineSuggestionInput,
+    memberID: Int64
+  ) async throws -> Routine {
     try result.get()
   }
 }
@@ -573,7 +685,8 @@ nonisolated private final class RoutineSuggestionRemoteStub:
   }
 
   func generate(
-    request: RoutineGroupAiGenerateRequestDTO
+    request: RoutineGroupAiGenerateRequestDTO,
+    memberID: Int64
   ) async throws -> RoutineGroupAiGenerateResponseDTO {
     try result.get()
   }
@@ -628,14 +741,62 @@ private final class GatedRoutineSuggestionServer:
     self.gate = gate
   }
 
-  func makeRoutine(from input: RoutineSuggestionInput) async throws -> Routine {
+  func makeRoutine(
+    from input: RoutineSuggestionInput,
+    memberID: Int64
+  ) async throws -> Routine {
     await gate.waitForResult()
   }
 }
 
+@MainActor
+private final class SequencedRoutineSuggestionCoordinator:
+  RoutineSuggestionCoordinating {
+  private let result: RoutineSuggestionResult
+  private(set) var callCount = 0
+  private(set) var cancellationCount = 0
+
+  init(result: RoutineSuggestionResult) {
+    self.result = result
+  }
+
+  func suggest(
+    from input: RoutineSuggestionInput
+  ) async throws -> RoutineSuggestionResult {
+    callCount += 1
+
+    guard callCount.isMultiple(of: 2) else {
+      do {
+        try await _Concurrency.Task<Never, Never>.sleep(for: .seconds(60))
+      } catch is CancellationError {
+        cancellationCount += 1
+        throw CancellationError()
+      }
+
+      throw CancellationError()
+    }
+
+    return result
+  }
+}
+
 nonisolated private final class RoutineSuggestionAccessTokenProvider:
-  AccessTokenProviding {
-  let accessToken: String? = "access-token"
+  AccountBoundAccessTokenProviding {
+  private let context = AccountAuthorizationContext(
+    memberID: 98,
+    accessToken: "access-token",
+    sessionID: UUID()
+  )
+
+  var accessToken: String? {
+    context.accessToken
+  }
+
+  func authorizationContext(
+    forMemberID memberID: Int64
+  ) -> AccountAuthorizationContext? {
+    context.memberID == memberID ? context : nil
+  }
 }
 
 nonisolated private final class RoutineSuggestionRequestCapturePlugin:

@@ -396,6 +396,165 @@ final class ServerPreferenceFoundationTests: XCTestCase {
     XCTAssertEqual(pending, [replacement])
   }
 
+  func testCoalescedSynchronizationWaitsForFlightAndDrainsReplacement() async throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataServerPreferenceRepository(
+      modelContext: container.mainContext
+    )
+    let original = try repository.enqueue(
+      makeEnqueuedMutation(memberID: 94, operationKey: "voice", payload: "AOEDE")
+    )
+    let executor = ControlledFirstServerPreferenceExecutor()
+    let coordinator = SyncCoordinator(
+      mutationRepository: repository,
+      executor: executor
+    )
+    let firstSynchronization = Task { @MainActor in
+      await coordinator.synchronize(memberID: 94, trigger: .manual)
+    }
+    await executor.waitUntilFirstStarted()
+
+    let replacement = try repository.enqueue(
+      makeEnqueuedMutation(memberID: 94, operationKey: "voice", payload: "KORE")
+    )
+    XCTAssertEqual(original.id, replacement.id)
+    XCTAssertNotEqual(original.idempotencyKey, replacement.idempotencyKey)
+
+    let coalescedCallEntered = expectation(
+      description: "coalesced synchronize call entered"
+    )
+    let coalescedSynchronization = Task { @MainActor in
+      coalescedCallEntered.fulfill()
+      await coordinator.synchronize(memberID: 94, trigger: .manual)
+    }
+    await fulfillment(of: [coalescedCallEntered], timeout: 1)
+    await Task.yield()
+    let callCountWhileFirstFlightIsSuspended = await executor.recordedCallCount()
+    XCTAssertEqual(callCountWhileFirstFlightIsSuspended, 1)
+
+    await executor.finishFirst(with: .sent)
+    await firstSynchronization.value
+    await coalescedSynchronization.value
+
+    let recordedPayloads = await executor.recordedPayloads()
+    XCTAssertEqual(
+      recordedPayloads,
+      [Data("AOEDE".utf8), Data("KORE".utf8)]
+    )
+    XCTAssertTrue(
+      try repository.mutations(
+        memberID: 94,
+        dueAt: .distantFuture,
+        includeBlocked: true
+      ).isEmpty
+    )
+  }
+
+  func testSuspensionRejectsNewSynchronizationAdmissionUntilResume() async throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataServerPreferenceRepository(
+      modelContext: container.mainContext
+    )
+    _ = try repository.enqueue(
+      makeEnqueuedMutation(memberID: 94, operationKey: "voice", payload: "AOEDE")
+    )
+    let executor = ControlledFirstServerPreferenceExecutor()
+    let coordinator = SyncCoordinator(
+      mutationRepository: repository,
+      executor: executor
+    )
+    let inFlightSynchronization = Task { @MainActor in
+      await coordinator.synchronize(memberID: 94, trigger: .manual)
+    }
+    await executor.waitUntilFirstStarted()
+
+    let suspension = Task { @MainActor in
+      await coordinator.suspendSynchronization(memberID: 94)
+    }
+    await executor.waitUntilFirstCancellation()
+
+    let rejectedAdmissionFinished = expectation(
+      description: "suspended member rejects new synchronization"
+    )
+    let rejectedAdmission = Task { @MainActor in
+      await coordinator.synchronize(memberID: 94, trigger: .manual)
+      rejectedAdmissionFinished.fulfill()
+    }
+    await fulfillment(of: [rejectedAdmissionFinished], timeout: 1)
+    let callCountWhileSuspended = await executor.recordedCallCount()
+    XCTAssertEqual(callCountWhileSuspended, 1)
+
+    await executor.finishFirst(with: .cancellation)
+    await suspension.value
+    await inFlightSynchronization.value
+    await rejectedAdmission.value
+
+    let pendingWhileSuspended = try repository.mutations(
+      memberID: 94,
+      dueAt: .distantFuture,
+      includeBlocked: true
+    )
+    XCTAssertEqual(pendingWhileSuspended.count, 1)
+    XCTAssertEqual(pendingWhileSuspended.first?.attemptCount, 0)
+
+    coordinator.resumeSynchronization(memberID: 94)
+    await coordinator.synchronize(memberID: 94, trigger: .manual)
+
+    let callCountAfterResume = await executor.recordedCallCount()
+    XCTAssertEqual(callCountAfterResume, 2)
+    XCTAssertTrue(
+      try repository.mutations(
+        memberID: 94,
+        dueAt: .distantFuture,
+        includeBlocked: true
+      ).isEmpty
+    )
+  }
+
+  func testSuspendingInFlightFailureDoesNotRecordBackoff() async throws {
+    let now = Date(timeIntervalSince1970: 30_000)
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataServerPreferenceRepository(
+      modelContext: container.mainContext
+    )
+    let queued = try repository.enqueue(
+      makeEnqueuedMutation(memberID: 94, operationKey: "voice", payload: "AOEDE")
+    )
+    let executor = ControlledFirstServerPreferenceExecutor()
+    let coordinator = SyncCoordinator(
+      mutationRepository: repository,
+      executor: executor,
+      now: { now }
+    )
+    let inFlightSynchronization = Task { @MainActor in
+      await coordinator.synchronize(memberID: 94, trigger: .manual)
+    }
+    await executor.waitUntilFirstStarted()
+
+    let suspension = Task { @MainActor in
+      await coordinator.suspendSynchronization(memberID: 94)
+    }
+    await executor.waitUntilFirstCancellation()
+    await executor.finishFirst(with: .transportFailure)
+    await suspension.value
+    await inFlightSynchronization.value
+
+    let persisted = try XCTUnwrap(
+      repository.mutations(
+        memberID: 94,
+        dueAt: .distantFuture,
+        includeBlocked: true
+      ).first
+    )
+    XCTAssertEqual(persisted.id, queued.id)
+    XCTAssertEqual(persisted.idempotencyKey, queued.idempotencyKey)
+    XCTAssertEqual(persisted.attemptCount, 0)
+    XCTAssertNil(persisted.lastFailure)
+    XCTAssertNil(persisted.nextAttemptAt)
+    let callCount = await executor.recordedCallCount()
+    XCTAssertEqual(callCount, 1)
+  }
+
   func testStaleFailureCannotBackoffANewerCoalescedMutation() throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let repository = SwiftDataServerPreferenceRepository(
@@ -479,11 +638,11 @@ final class ServerPreferenceFoundationTests: XCTestCase {
     _ = try repository.enqueue(
       makeEnqueuedMutation(memberID: 95, operationKey: "voice", payload: "PUCK")
     )
-    try repository.upsertCatalog(
+    try repository.replaceCatalog(
       [makeVoiceEntry(memberID: 94, voiceCode: "AOEDE")],
       memberID: 94
     )
-    try repository.upsertCatalog(
+    try repository.replaceCatalog(
       [makeVoiceEntry(memberID: 95, voiceCode: "PUCK")],
       memberID: 95
     )
@@ -528,7 +687,7 @@ final class ServerPreferenceFoundationTests: XCTestCase {
     _ = try mutationRepository.enqueue(
       makeEnqueuedMutation(memberID: 94, operationKey: "voice", payload: "AOEDE")
     )
-    try voiceRepository.upsertCatalog(
+    try voiceRepository.replaceCatalog(
       [makeVoiceEntry(memberID: 94, voiceCode: "AOEDE")],
       memberID: 94
     )
@@ -545,7 +704,7 @@ final class ServerPreferenceFoundationTests: XCTestCase {
       ).isEmpty
     )
     XCTAssertTrue(try voiceRepository.catalog(memberID: 94).isEmpty)
-    XCTAssertNotNil(dependencies.syncCoordinator)
+    XCTAssertNotNil(dependencies.serverSynchronizer)
   }
 
   func testSuccessfulLoginInvokesOnlyTheLoginSuccessHook() throws {
@@ -924,6 +1083,107 @@ private actor SuspendedServerPreferenceExecutor: ServerMutationExecuting {
   func finish(with result: ServerMutationExecutionResult) {
     continuation?.resume(returning: result)
     continuation = nil
+  }
+}
+
+private enum ControlledFirstExecutionCompletion: Sendable {
+  case sent
+  case cancellation
+  case transportFailure
+}
+
+private actor ControlledFirstServerPreferenceExecutor:
+  ServerMutationExecuting {
+  private var mutations: [ServerMutation] = []
+  private var firstContinuation:
+    CheckedContinuation<ServerMutationExecutionResult, Error>?
+  private var pendingFirstCompletion: ControlledFirstExecutionCompletion?
+  private var firstStartedContinuation: CheckedContinuation<Void, Never>?
+  private var firstCancellationContinuation: CheckedContinuation<Void, Never>?
+  private var didObserveFirstCancellation = false
+
+  func execute(
+    _ mutation: ServerMutation
+  ) async throws -> ServerMutationExecutionResult {
+    mutations.append(mutation)
+    guard mutations.count == 1 else {
+      return .sent
+    }
+
+    firstStartedContinuation?.resume()
+    firstStartedContinuation = nil
+
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        firstContinuation = continuation
+        resumeFirstIfPossible()
+      }
+    } onCancel: {
+      Task {
+        await self.recordFirstCancellation()
+      }
+    }
+  }
+
+  func waitUntilFirstStarted() async {
+    guard mutations.isEmpty else {
+      return
+    }
+
+    await withCheckedContinuation { continuation in
+      firstStartedContinuation = continuation
+    }
+  }
+
+  func waitUntilFirstCancellation() async {
+    guard !didObserveFirstCancellation else {
+      return
+    }
+
+    await withCheckedContinuation { continuation in
+      firstCancellationContinuation = continuation
+    }
+  }
+
+  func finishFirst(
+    with completion: ControlledFirstExecutionCompletion
+  ) {
+    pendingFirstCompletion = completion
+    resumeFirstIfPossible()
+  }
+
+  func recordedCallCount() -> Int {
+    mutations.count
+  }
+
+  func recordedPayloads() -> [Data] {
+    mutations.map(\.payload)
+  }
+
+  private func recordFirstCancellation() {
+    didObserveFirstCancellation = true
+    firstCancellationContinuation?.resume()
+    firstCancellationContinuation = nil
+  }
+
+  private func resumeFirstIfPossible() {
+    guard let completion = pendingFirstCompletion,
+          let continuation = firstContinuation else {
+      return
+    }
+
+    pendingFirstCompletion = nil
+    firstContinuation = nil
+    switch completion {
+    case .sent:
+      continuation.resume(returning: .sent)
+    case .cancellation:
+      continuation.resume(throwing: CancellationError())
+    case .transportFailure:
+      continuation.resume(
+        throwing: APIError.transport(code: -1009, message: "offline")
+      )
+    }
   }
 }
 

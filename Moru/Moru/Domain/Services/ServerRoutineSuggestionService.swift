@@ -5,6 +5,94 @@
 
 import Foundation
 
+nonisolated enum ServerRoutineSuggestionStepKind: Equatable, Sendable {
+  case check
+  case timer
+  case input
+  case unsupported(String)
+}
+
+nonisolated struct ServerRoutineSuggestionStep: Equatable, Sendable {
+  let title: String
+  let kind: ServerRoutineSuggestionStepKind
+  let durationSeconds: Int
+}
+
+nonisolated struct ServerRoutineSuggestionResponse: Equatable, Sendable {
+  let title: String
+  let description: String?
+  let steps: [ServerRoutineSuggestionStep]
+}
+
+nonisolated enum RoutineSuggestionRemoteFailure:
+  Error,
+  Equatable,
+  Sendable {
+  case offline
+  case timeout
+  case serverUnavailable
+  case invalidResponse
+  case unavailable
+  case cancelled
+}
+
+/// Domain-owned port for fetching an already mapped server suggestion.
+nonisolated protocol ServerRoutineSuggestionFetching: Sendable {
+  func generate(
+    userInput: String,
+    memberID: Int64
+  ) async throws
+    -> ServerRoutineSuggestionResponse
+}
+
+nonisolated enum RoutineSuggestionDraftValidation {
+  static let maximumRoutineTitleLength = 80
+  static let maximumRoutineDescriptionLength = 500
+  static let maximumStepTitleLength = 100
+  static let maximumStepCount = 30
+  static let validStepDuration = 1...3_600
+  static let maximumUserInputLength = 200
+
+  static func isValidRoutineTitle(_ title: String) -> Bool {
+    let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    return !normalized.isEmpty
+      && normalized.count <= maximumRoutineTitleLength
+  }
+
+  static func isValidRoutineDescription(_ description: String) -> Bool {
+    description.trimmingCharacters(in: .whitespacesAndNewlines).count
+      <= maximumRoutineDescriptionLength
+  }
+
+  static func isValidStepCount(_ count: Int) -> Bool {
+    (1...maximumStepCount).contains(count)
+  }
+
+  static func isValidStepTitle(_ title: String) -> Bool {
+    let normalized = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    return !normalized.isEmpty
+      && normalized.count <= maximumStepTitleLength
+  }
+
+  static func isValidStepDuration(_ seconds: Int?) -> Bool {
+    guard let seconds else {
+      return false
+    }
+
+    return validStepDuration.contains(seconds)
+  }
+
+  static func isValidDraft(_ routine: Routine) -> Bool {
+    isValidRoutineTitle(routine.name)
+      && isValidRoutineDescription(routine.summary)
+      && isValidStepCount(routine.steps.count)
+      && routine.steps.allSatisfy {
+        isValidStepTitle($0.title)
+          && isValidStepDuration($0.estimatedSeconds)
+      }
+  }
+}
+
 enum ServerRoutineSuggestionError: Error, Equatable, LocalizedError {
   case invalidRoutineTitle
   case invalidRoutineDescription
@@ -20,66 +108,70 @@ enum ServerRoutineSuggestionError: Error, Equatable, LocalizedError {
 
 @MainActor
 protocol ServerRoutineSuggestionServing: AnyObject {
-  func makeRoutine(from input: RoutineSuggestionInput) async throws -> Routine
+  func makeRoutine(
+    from input: RoutineSuggestionInput,
+    memberID: Int64
+  ) async throws -> Routine
 }
 
 @MainActor
 final class ServerRoutineSuggestionService: ServerRoutineSuggestionServing {
-  private enum Limit {
-    static let routineTitle = 80
-    static let routineDescription = 500
-    static let stepTitle = 100
-    static let stepCount = 30
-    static let stepDuration = 1...3_600
-    static let userInput = 200
-  }
-
-  private let remoteDataSource: any RoutineSuggestionRemoteDataSource
+  private let remoteFetcher: any ServerRoutineSuggestionFetching
   private let now: () -> Date
 
   init(
-    remoteDataSource: any RoutineSuggestionRemoteDataSource,
+    remoteDataSource: any ServerRoutineSuggestionFetching,
     now: @escaping () -> Date = Date.init
   ) {
-    self.remoteDataSource = remoteDataSource
+    self.remoteFetcher = remoteDataSource
     self.now = now
   }
 
-  func makeRoutine(from input: RoutineSuggestionInput) async throws -> Routine {
-    let response = try await remoteDataSource.generate(
-      request: RoutineGroupAiGenerateRequestDTO(
-        userInput: Self.serverInput(from: input)
-      )
+  func makeRoutine(
+    from input: RoutineSuggestionInput,
+    memberID: Int64
+  ) async throws -> Routine {
+    let response = try await remoteFetcher.generate(
+      userInput: Self.serverInput(from: input),
+      memberID: memberID
     )
     let title = response.title.trimmingCharacters(in: .whitespacesAndNewlines)
     let description = (response.description ?? "")
       .trimmingCharacters(in: .whitespacesAndNewlines)
 
-    guard !title.isEmpty, title.count <= Limit.routineTitle else {
+    guard RoutineSuggestionDraftValidation.isValidRoutineTitle(title) else {
       throw ServerRoutineSuggestionError.invalidRoutineTitle
     }
-    guard description.count <= Limit.routineDescription else {
+    guard RoutineSuggestionDraftValidation.isValidRoutineDescription(
+      description
+    ) else {
       throw ServerRoutineSuggestionError.invalidRoutineDescription
     }
-    guard (1...Limit.stepCount).contains(response.routines.count) else {
+    guard RoutineSuggestionDraftValidation.isValidStepCount(
+      response.steps.count
+    ) else {
       throw ServerRoutineSuggestionError.invalidStepCount
     }
 
-    let steps = try response.routines.enumerated().map { index, step in
+    let steps = try response.steps.enumerated().map { index, step in
       let stepTitle = step.title.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !stepTitle.isEmpty, stepTitle.count <= Limit.stepTitle else {
+      guard RoutineSuggestionDraftValidation.isValidStepTitle(
+        stepTitle
+      ) else {
         throw ServerRoutineSuggestionError.invalidStepTitle(index: index)
       }
-      guard let type = Self.stepType(from: step.type) else {
+      guard let type = Self.stepType(from: step.kind) else {
         throw ServerRoutineSuggestionError.invalidStepType(
           index: index,
-          value: step.type
+          value: step.kind.unsupportedValue ?? "UNKNOWN"
         )
       }
-      guard Limit.stepDuration.contains(step.durationSecond) else {
+      guard RoutineSuggestionDraftValidation.isValidStepDuration(
+        step.durationSeconds
+      ) else {
         throw ServerRoutineSuggestionError.invalidStepDuration(
           index: index,
-          seconds: step.durationSecond
+          seconds: step.durationSeconds
         )
       }
 
@@ -90,7 +182,7 @@ final class ServerRoutineSuggestionService: ServerRoutineSuggestionServing {
         title: stepTitle,
         instruction: "",
         order: index,
-        estimatedSeconds: step.durationSecond,
+        estimatedSeconds: step.durationSeconds,
         isRequired: true
       )
     }
@@ -126,27 +218,35 @@ final class ServerRoutineSuggestionService: ServerRoutineSuggestionServing {
       ? "아침 루틴을 추천해 주세요."
       : components.joined(separator: " / ")
 
-    return String(value.prefix(Limit.userInput))
+    return String(
+      value.prefix(
+        RoutineSuggestionDraftValidation.maximumUserInputLength
+      )
+    )
   }
 
-  static func validDuration(_ seconds: Int?) -> Bool {
-    guard let seconds else {
-      return false
-    }
-
-    return Limit.stepDuration.contains(seconds)
-  }
-
-  private static func stepType(from value: String) -> RoutineStepType? {
-    switch value {
-    case "CHECK":
+  private static func stepType(
+    from kind: ServerRoutineSuggestionStepKind
+  ) -> RoutineStepType? {
+    switch kind {
+    case .check:
       .confirm
-    case "TIMER":
+    case .timer:
       .timer
-    case "INPUT":
+    case .input:
       .input
-    default:
+    case .unsupported:
       nil
     }
+  }
+}
+
+nonisolated private extension ServerRoutineSuggestionStepKind {
+  var unsupportedValue: String? {
+    guard case .unsupported(let value) = self else {
+      return nil
+    }
+
+    return value
   }
 }

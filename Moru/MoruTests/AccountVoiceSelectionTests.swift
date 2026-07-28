@@ -43,13 +43,13 @@ final class AccountVoiceSelectionTests: XCTestCase {
       )
     )
 
-    let voices = try await catalogueSource.fetchVoices()
+    let voices = try await catalogueSource.fetchVoices(memberID: 96)
 
     XCTAssertEqual(
       voices,
       [
-        VoiceResponseDTO(
-          ttsId: 1,
+        ServerVoiceCatalogueItem(
+          ttsID: 1,
           voiceCode: "MINSEO",
           displayName: "민서",
           description: "따뜻한 친구",
@@ -73,10 +73,13 @@ final class AccountVoiceSelectionTests: XCTestCase {
         additionalPlugins: [updateCapture]
       )
     )
-    let update = try await updateSource.updateSelection(ttsID: 1)
+    let update = try await updateSource.updateSelection(
+      ttsID: 1,
+      memberID: 96
+    )
 
-    XCTAssertEqual(update.memberId, 96)
-    XCTAssertEqual(update.ttsId, 1)
+    XCTAssertEqual(update.memberID, 96)
+    XCTAssertEqual(update.ttsID, 1)
     XCTAssertEqual(update.voiceCode, "MINSEO")
     let updateRequest = try XCTUnwrap(updateCapture.request)
     XCTAssertEqual(updateRequest.httpMethod, "PATCH")
@@ -84,6 +87,44 @@ final class AccountVoiceSelectionTests: XCTestCase {
     XCTAssertEqual(
       try jsonBody(updateRequest)["ttsId"] as? Int,
       1
+    )
+  }
+
+  func testAccountBoundGetAndPatchRejectWrongMemberBeforeNetworkRequest()
+    async {
+    let catalogueCapture = VoiceRequestCapturePlugin()
+    let catalogueSource = DefaultVoiceRemoteDataSource(
+      apiClient: makeClient(
+        data: catalogueData(),
+        additionalPlugins: [catalogueCapture]
+      )
+    )
+
+    await assertAccountAuthorizationChanged {
+      _ = try await catalogueSource.fetchVoices(memberID: 97)
+    }
+    XCTAssertNil(
+      catalogueCapture.request,
+      "A catalogue request for another member must fail before transport."
+    )
+
+    let updateCapture = VoiceRequestCapturePlugin()
+    let updateSource = DefaultVoiceRemoteDataSource(
+      apiClient: makeClient(
+        data: updateData(),
+        additionalPlugins: [updateCapture]
+      )
+    )
+
+    await assertAccountAuthorizationChanged {
+      _ = try await updateSource.updateSelection(
+        ttsID: 1,
+        memberID: 97
+      )
+    }
+    XCTAssertNil(
+      updateCapture.request,
+      "A selection update for another member must fail before transport."
     )
   }
 
@@ -109,7 +150,7 @@ final class AccountVoiceSelectionTests: XCTestCase {
     )
 
     await assertError(APIError.self) {
-      _ = try await malformedSource.fetchVoices()
+      _ = try await malformedSource.fetchVoices(memberID: 96)
     }
 
     let duplicate = Data(
@@ -143,8 +184,8 @@ final class AccountVoiceSelectionTests: XCTestCase {
       apiClient: makeClient(data: duplicate)
     )
 
-    await assertError(VoiceRemoteDataSourceError.self) {
-      _ = try await duplicateSource.fetchVoices()
+    await assertError(AccountVoiceRemoteError.self) {
+      _ = try await duplicateSource.fetchVoices(memberID: 96)
     }
   }
 
@@ -179,7 +220,7 @@ final class AccountVoiceSelectionTests: XCTestCase {
       ),
       signedIn: true
     )
-    try fixture.repository.upsertCatalog(
+    try fixture.repository.replaceCatalog(
       [
         try catalogEntry(
           memberID: Self.memberID,
@@ -190,7 +231,7 @@ final class AccountVoiceSelectionTests: XCTestCase {
       ],
       memberID: Self.memberID
     )
-    try fixture.repository.upsertCatalog(
+    try fixture.repository.replaceCatalog(
       [
         try catalogEntry(
           memberID: 97,
@@ -204,25 +245,79 @@ final class AccountVoiceSelectionTests: XCTestCase {
 
     let snapshot = await fixture.useCase.loadCatalogue()
 
-    XCTAssertEqual(snapshot.options.map(\.serverVoiceCode), ["CACHED"])
+    XCTAssertEqual(
+      snapshot.options
+        .filter { $0.source == .serverCatalogue }
+        .compactMap(\.serverVoiceCode),
+      ["CACHED"]
+    )
+    XCTAssertEqual(
+      snapshot.options
+        .filter { $0.source == .bundledFallback }
+        .compactMap(\.localVoice?.id),
+      VoiceProfile.localVoices.map(\.id)
+    )
     XCTAssertFalse(snapshot.options.contains { $0.serverVoiceCode == "OTHER_ACCOUNT" })
     XCTAssertNotNil(snapshot.notice)
   }
 
-  func testProductionCompatibilityTableDoesNotInferFromMatchingDisplayName() async throws {
+  func testSuccessfulGetReplacesStaleAccountCatalogue() async throws {
     let fixture = try makeFixture(
       remoteDataSource: VoiceRemoteStub(
         fetchResult: .success(
           [
-            VoiceResponseDTO(
-              ttsId: 1,
+            serverVoice(
+              ttsID: 8,
+              code: "FRESH",
+              name: "최신 서버 음성"
+            )
+          ]
+        )
+      ),
+      signedIn: true
+    )
+    try fixture.repository.replaceCatalog(
+      [
+        try catalogEntry(
+          memberID: Self.memberID,
+          ttsID: 3,
+          voiceCode: "STALE",
+          displayName: "오래된 캐시"
+        )
+      ],
+      memberID: Self.memberID
+    )
+
+    let snapshot = await fixture.useCase.loadCatalogue()
+    let persisted = try fixture.repository.catalog(memberID: Self.memberID)
+
+    XCTAssertNil(snapshot.notice)
+    XCTAssertEqual(persisted.map(\.voiceCode), ["FRESH"])
+    XCTAssertEqual(persisted.map(\.displayName), ["최신 서버 음성"])
+    XCTAssertEqual(
+      snapshot.options
+        .filter { $0.source == .serverCatalogue }
+        .compactMap(\.serverVoiceCode),
+      ["FRESH"]
+    )
+    XCTAssertFalse(snapshot.options.contains { $0.serverVoiceCode == "STALE" })
+  }
+
+  func testProductionCompatibilityTableDoesNotInferAndKeepsBundledVoices()
+    async throws {
+    let fixture = try makeFixture(
+      remoteDataSource: VoiceRemoteStub(
+        fetchResult: .success(
+          [
+            ServerVoiceCatalogueItem(
+              ttsID: 1,
               voiceCode: "MINSEO",
               displayName: VoiceProfile.aoede.displayName,
               description: "Swagger example",
               proOnly: false
             ),
-            VoiceResponseDTO(
-              ttsId: 2,
+            ServerVoiceCatalogueItem(
+              ttsID: 2,
               voiceCode: "FUTURE_PRO",
               displayName: "새 음성",
               description: nil,
@@ -236,8 +331,18 @@ final class AccountVoiceSelectionTests: XCTestCase {
     )
 
     let snapshot = await fixture.useCase.loadCatalogue()
+    let bundledOptions = snapshot.options.filter {
+      $0.source == .bundledFallback
+    }
 
-    XCTAssertEqual(snapshot.options.count, 2)
+    XCTAssertEqual(
+      bundledOptions.compactMap(\.localVoice?.id),
+      VoiceProfile.localVoices.map(\.id)
+    )
+    XCTAssertEqual(
+      snapshot.options.count,
+      VoiceProfile.localVoices.count + 2
+    )
     XCTAssertEqual(
       snapshot.options.first { $0.serverVoiceCode == "MINSEO" }?.availability,
       .incompatible
@@ -252,16 +357,118 @@ final class AccountVoiceSelectionTests: XCTestCase {
     )
   }
 
+  func testUnavailableAuthoritativeMismatchCanKeepBundledDeviceVoice()
+    async throws {
+    let scenarios: [
+      (
+        voiceCode: String,
+        proOnly: Bool,
+        compatibility: VoiceCompatibilityTable,
+        expectedAvailability: AccountVoiceAvailability
+      )
+    ] = [
+      (
+        voiceCode: "PRO_CHARON",
+        proOnly: true,
+        compatibility: VoiceCompatibilityTable(
+          entries: ["PRO_CHARON": VoiceProfile.charon.id]
+        ),
+        expectedAvailability: .proOnly
+      ),
+      (
+        voiceCode: "NOT_MAPPED",
+        proOnly: false,
+        compatibility: VoiceCompatibilityTable(entries: [:]),
+        expectedAvailability: .incompatible
+      ),
+    ]
+
+    for scenario in scenarios {
+      let fixture = try makeFixture(
+        remoteDataSource: VoiceRemoteStub(
+          fetchResult: .failure(
+            APIError.transport(code: -1009, message: "offline")
+          )
+        ),
+        signedIn: true,
+        compatibilityTable: scenario.compatibility,
+        selectedVoice: .aoede
+      )
+      try fixture.repository.replaceCatalog(
+        [
+          try catalogEntry(
+            memberID: Self.memberID,
+            ttsID: 21,
+            voiceCode: scenario.voiceCode,
+            displayName: "서버 선택 음성",
+            proOnly: scenario.proOnly,
+            isAuthoritativeSelection: true
+          )
+        ],
+        memberID: Self.memberID
+      )
+
+      let snapshot = await fixture.useCase.loadCatalogue()
+      let mismatch = try XCTUnwrap(snapshot.mismatch)
+
+      XCTAssertEqual(mismatch.localVoice, .aoede)
+      XCTAssertEqual(
+        mismatch.serverVoice.serverVoiceCode,
+        scenario.voiceCode
+      )
+      XCTAssertEqual(
+        mismatch.serverVoice.availability,
+        scenario.expectedAvailability
+      )
+      XCTAssertTrue(mismatch.serverVoice.isAuthoritativeServerSelection)
+
+      let result = try await fixture.useCase.resolveMismatch(
+        mismatch,
+        choice: .keepDevice
+      )
+
+      XCTAssertEqual(result.profileResult.profile.selectedVoice, .aoede)
+      XCTAssertEqual(result.serverDisposition, .notApplicable)
+      XCTAssertEqual(
+        try fixture.localProfileRepository.fetchProfile()?.selectedVoice,
+        .aoede
+      )
+      XCTAssertTrue(
+        try fixture.repository.mutations(
+          memberID: Self.memberID,
+          dueAt: .distantFuture,
+          includeBlocked: true
+        ).isEmpty
+      )
+      XCTAssertTrue(fixture.serverSynchronizer.calls.isEmpty)
+      XCTAssertTrue(
+        try fixture.repository
+          .catalog(memberID: Self.memberID)
+          .allSatisfy {
+            VoiceCatalogMetadata.decode(rawValue: $0.tierRawValue)?
+              .isAuthoritativeSelection == false
+          }
+      )
+
+      let reloaded = await fixture.useCase.loadCatalogue()
+      XCTAssertNil(reloaded.mismatch)
+    }
+  }
+
   func testUnknownProIncompatibleAndMissingBundleOptionsAreDisabled() async throws {
     let compatibility = VoiceCompatibilityTable(
       entries: ["KNOWN_NO_AUDIO": VoiceProfile.aoede.id]
     )
     let fixture = try makeFixture(
-      remoteDataSource: VoiceRemoteStub(fetchResult: .success([])),
+      remoteDataSource: VoiceRemoteStub(
+        fetchResult: .failure(
+          APIError.transport(code: -1009, message: "offline")
+        )
+      ),
       signedIn: true,
       compatibilityTable: compatibility
     )
-    try fixture.repository.upsertCatalog(
+    try fixture.repository.replaceCatalog(
       [
         ServerVoiceCatalogEntry(
           memberID: Self.memberID,
@@ -296,8 +503,11 @@ final class AccountVoiceSelectionTests: XCTestCase {
     )
 
     let snapshot = await fixture.useCase.loadCatalogue()
+    let serverOptions = snapshot.options.filter {
+      $0.source == .serverCatalogue
+    }
     let availability = Dictionary(
-      uniqueKeysWithValues: snapshot.options.compactMap { option in
+      uniqueKeysWithValues: serverOptions.compactMap { option in
         option.serverVoiceCode.map { ($0, option.availability) }
       }
     )
@@ -306,7 +516,12 @@ final class AccountVoiceSelectionTests: XCTestCase {
     XCTAssertEqual(availability["PRO"], .proOnly)
     XCTAssertEqual(availability["NOT_MAPPED"], .incompatible)
     XCTAssertEqual(availability["KNOWN_NO_AUDIO"], .missingBundledAudio)
-    XCTAssertTrue(snapshot.options.allSatisfy { !$0.availability.isSelectable })
+    XCTAssertTrue(serverOptions.allSatisfy { !$0.availability.isSelectable })
+    XCTAssertEqual(
+      snapshot.options.filter { $0.source == .bundledFallback }.count,
+      VoiceProfile.localVoices.count
+    )
+    XCTAssertNotNil(snapshot.notice)
   }
 
   func testLocalSelectionIsSavedBeforeVersionedOutboxAndLatestValueCoalesces() async throws {
@@ -320,8 +535,8 @@ final class AccountVoiceSelectionTests: XCTestCase {
       remoteDataSource: VoiceRemoteStub(
         fetchResult: .success(
           [
-            voiceDTO(ttsID: 11, code: "TEST_AOEDE", name: "테스트 A"),
-            voiceDTO(ttsID: 12, code: "TEST_CHARON", name: "테스트 B"),
+            serverVoice(ttsID: 11, code: "TEST_AOEDE", name: "테스트 A"),
+            serverVoice(ttsID: 12, code: "TEST_CHARON", name: "테스트 B"),
           ]
         )
       ),
@@ -355,6 +570,15 @@ final class AccountVoiceSelectionTests: XCTestCase {
     XCTAssertEqual(firstPayload.version, VoiceSelectionMutationPayload.currentVersion)
     XCTAssertEqual(firstPayload.ttsID, 11)
     XCTAssertEqual(firstPayload.localVoiceID, VoiceProfile.aoede.id)
+    XCTAssertEqual(fixture.serverSynchronizer.calls.count, 1)
+    XCTAssertEqual(
+      fixture.serverSynchronizer.calls.first?.memberID,
+      Self.memberID
+    )
+    XCTAssertEqual(
+      fixture.serverSynchronizer.calls.first?.trigger,
+      .manual
+    )
 
     _ = try await fixture.useCase.select(charon)
     let mutations = try fixture.repository.mutations(
@@ -369,24 +593,36 @@ final class AccountVoiceSelectionTests: XCTestCase {
     XCTAssertNotEqual(latest.idempotencyKey, firstMutation.idempotencyKey)
     XCTAssertEqual(latestPayload.ttsID, 12)
     XCTAssertEqual(latestPayload.localVoiceID, VoiceProfile.charon.id)
+    XCTAssertEqual(fixture.serverSynchronizer.calls.count, 2)
   }
 
-  func testExecutorReturnsSentOnlyForExactAuthoritativeResponse() async throws {
+  func testExecutorAcceptsEquivalentCanonicalVoiceAndRejectsDifferentVoice()
+    async throws {
     let compatibility = VoiceCompatibilityTable(
-      entries: ["TEST_AOEDE": VoiceProfile.aoede.id]
+      entries: [
+        "TEST_AOEDE": VoiceProfile.aoede.id,
+        "TEST_CHARON": VoiceProfile.charon.id,
+      ]
     )
     let fixture = try makeFixture(
       remoteDataSource: VoiceRemoteStub(fetchResult: .success([])),
       signedIn: true,
       compatibilityTable: compatibility
     )
-    try fixture.repository.upsertCatalog(
+    try fixture.repository.replaceCatalog(
       [
         try catalogEntry(
           memberID: Self.memberID,
           ttsID: 11,
           voiceCode: "TEST_AOEDE",
           displayName: "테스트"
+        ),
+        try catalogEntry(
+          memberID: Self.memberID,
+          ttsID: 12,
+          voiceCode: "TEST_CHARON",
+          displayName: "이전 서버 선택",
+          isAuthoritativeSelection: true
         )
       ],
       memberID: Self.memberID
@@ -407,51 +643,263 @@ final class AccountVoiceSelectionTests: XCTestCase {
     let successRemote = VoiceRemoteStub(
       fetchResult: .success([]),
       updateResult: .success(
-        TtsUpdateResponseDTO(
-          memberId: Self.memberID,
-          ttsId: 11,
+        AuthoritativeServerVoiceSelection(
+          memberID: Self.memberID,
+          ttsID: 11,
           voiceCode: "TEST_AOEDE",
           displayName: "서버 표시 이름"
         )
       )
     )
     let successExecutor = VoiceSelectionMutationExecutor(
-      remoteDataSource: successRemote,
+      remoteService: successRemote,
       catalogueRepository: fixture.repository,
       compatibilityTable: compatibility
     )
 
     let executionResult = try await successExecutor.execute(mutation)
     XCTAssertEqual(executionResult, .sent)
-    let metadata = try XCTUnwrap(
-      try fixture.repository.catalog(memberID: Self.memberID).first
+    let metadataByVoiceCode = try Dictionary(
+      uniqueKeysWithValues: fixture.repository
+        .catalog(memberID: Self.memberID)
+        .map { entry in
+          (
+            entry.voiceCode,
+            try XCTUnwrap(
+              VoiceCatalogMetadata.decode(rawValue: entry.tierRawValue)
+            )
+          )
+        }
     )
     XCTAssertTrue(
       try XCTUnwrap(
-        VoiceCatalogMetadata.decode(rawValue: metadata.tierRawValue)
+        metadataByVoiceCode["TEST_AOEDE"]
       ).isAuthoritativeSelection
+    )
+    XCTAssertFalse(
+      try XCTUnwrap(
+        metadataByVoiceCode["TEST_CHARON"]
+      ).isAuthoritativeSelection,
+      "The latest authoritative response must replace the previous selection."
+    )
+
+    let canonicalExecutor = VoiceSelectionMutationExecutor(
+      remoteService: VoiceRemoteStub(
+        fetchResult: .success([]),
+        updateResult: .success(
+          AuthoritativeServerVoiceSelection(
+            memberID: Self.memberID,
+            ttsID: 111,
+            voiceCode: "TEST_AOEDE",
+            displayName: "서버 canonical ID"
+          )
+        )
+      ),
+      catalogueRepository: fixture.repository,
+      compatibilityTable: compatibility
+    )
+
+    let canonicalResult = try await canonicalExecutor.execute(mutation)
+    XCTAssertEqual(
+      canonicalResult,
+      .sent,
+      "A canonical ID change for the same local voice satisfies user intent."
+    )
+    let canonicalEntry = try XCTUnwrap(
+      fixture.repository
+        .catalog(memberID: Self.memberID)
+        .first { $0.voiceCode == "TEST_AOEDE" }
+    )
+    XCTAssertEqual(
+      VoiceCatalogMetadata.decode(
+        rawValue: canonicalEntry.tierRawValue
+      )?.ttsID,
+      111
+    )
+
+    let divergentRemote = VoiceRemoteStub(
+      fetchResult: .success([]),
+      updateResult: .success(
+        AuthoritativeServerVoiceSelection(
+          memberID: Self.memberID,
+          ttsID: 12,
+          voiceCode: "TEST_CHARON",
+          displayName: "서버가 확정한 다른 음성"
+        )
+      )
+    )
+    let divergentExecutor = VoiceSelectionMutationExecutor(
+      remoteService: divergentRemote,
+      catalogueRepository: fixture.repository,
+      compatibilityTable: compatibility
+    )
+
+    do {
+      _ = try await divergentExecutor.execute(mutation)
+      XCTFail("Expected the divergent authoritative response to be rejected.")
+    } catch let error as AccountVoiceRemoteError {
+      XCTAssertEqual(error, .authoritativeMismatch)
+    } catch {
+      XCTFail("Expected authoritativeMismatch, got \(error)")
+    }
+    XCTAssertEqual(
+      try fixture.repository
+        .catalog(memberID: Self.memberID)
+        .filter {
+          VoiceCatalogMetadata.decode(rawValue: $0.tierRawValue)?
+            .isAuthoritativeSelection == true
+        }
+        .map(\.voiceCode),
+      ["TEST_CHARON"],
+      "The latest same-account server state must be cached before mismatch."
     )
 
     let mismatchRemote = VoiceRemoteStub(
       fetchResult: .success([]),
       updateResult: .success(
-        TtsUpdateResponseDTO(
-          memberId: 999,
-          ttsId: 11,
+        AuthoritativeServerVoiceSelection(
+          memberID: 999,
+          ttsID: 11,
           voiceCode: "TEST_AOEDE",
           displayName: "다른 계정"
         )
       )
     )
     let mismatchExecutor = VoiceSelectionMutationExecutor(
-      remoteDataSource: mismatchRemote,
+      remoteService: mismatchRemote,
       catalogueRepository: fixture.repository,
       compatibilityTable: compatibility
     )
 
-    await assertError(VoiceRemoteDataSourceError.self) {
+    await assertError(AccountVoiceRemoteError.self) {
       _ = try await mismatchExecutor.execute(mutation)
     }
+  }
+
+  func testPatchConflictMissingFromSuccessfulGetRemainsVisibleForResolution()
+    async throws {
+    let compatibility = VoiceCompatibilityTable(
+      entries: ["TEST_AOEDE": VoiceProfile.aoede.id]
+    )
+    let fixture = try makeFixture(
+      remoteDataSource: VoiceRemoteStub(
+        fetchResult: .success(
+          [
+            serverVoice(
+              ttsID: 11,
+              code: "TEST_AOEDE",
+              name: "요청한 음성"
+            )
+          ]
+        )
+      ),
+      signedIn: true,
+      compatibilityTable: compatibility,
+      selectedVoice: .aoede
+    )
+    let mutation = try fixture.repository.enqueue(
+      EnqueuedServerMutation(
+        memberID: Self.memberID,
+        operation: .replaceVoiceSelection,
+        operationKey: VoiceSelectionMutationPayload.operationKey,
+        payload: try VoiceSelectionMutationPayload(
+          memberID: Self.memberID,
+          ttsID: 11,
+          voiceCode: "TEST_AOEDE",
+          localVoiceID: VoiceProfile.aoede.id
+        ).encoded()
+      )
+    )
+    let executor = VoiceSelectionMutationExecutor(
+      remoteService: VoiceRemoteStub(
+        fetchResult: .success([]),
+        updateResult: .success(
+          AuthoritativeServerVoiceSelection(
+            memberID: Self.memberID,
+            ttsID: 99,
+            voiceCode: "SERVER_UNKNOWN",
+            displayName: "목록에 없는 서버 선택"
+          )
+        )
+      ),
+      catalogueRepository: fixture.repository,
+      compatibilityTable: compatibility
+    )
+
+    do {
+      _ = try await executor.execute(mutation)
+      XCTFail("Expected the divergent PATCH response to remain unresolved.")
+    } catch let error as AccountVoiceRemoteError {
+      XCTAssertEqual(error, .authoritativeMismatch)
+    } catch {
+      XCTFail("Expected authoritativeMismatch, got \(error)")
+    }
+
+    let snapshot = await fixture.useCase.loadCatalogue()
+    let mismatch = try XCTUnwrap(snapshot.mismatch)
+
+    XCTAssertEqual(mismatch.serverVoice.serverVoiceCode, "SERVER_UNKNOWN")
+    XCTAssertEqual(mismatch.serverVoice.availability, .notInCatalogue)
+    XCTAssertTrue(mismatch.serverVoice.isAuthoritativeServerSelection)
+    XCTAssertEqual(
+      try fixture.repository
+        .catalog(memberID: Self.memberID)
+        .map(\.voiceCode)
+        .sorted(),
+      ["SERVER_UNKNOWN", "TEST_AOEDE"]
+    )
+  }
+
+  func testSuccessfulGetReconcilesRotatedTtsIDForSameAuthoritativeVoiceCode()
+    async throws {
+    let compatibility = VoiceCompatibilityTable(
+      entries: ["TEST_AOEDE": VoiceProfile.aoede.id]
+    )
+    let fixture = try makeFixture(
+      remoteDataSource: VoiceRemoteStub(
+        fetchResult: .success(
+          [
+            serverVoice(
+              ttsID: 100,
+              code: "TEST_AOEDE",
+              name: "재발급된 음성"
+            )
+          ]
+        )
+      ),
+      signedIn: true,
+      compatibilityTable: compatibility,
+      selectedVoice: .charon
+    )
+    try fixture.repository.recordAuthoritativeSelection(
+      AuthoritativeServerVoiceSelection(
+        memberID: Self.memberID,
+        ttsID: 99,
+        voiceCode: "TEST_AOEDE",
+        displayName: "이전 ID의 같은 음성"
+      )
+    )
+
+    let snapshot = await fixture.useCase.loadCatalogue()
+    let mismatch = try XCTUnwrap(snapshot.mismatch)
+    let persisted = try XCTUnwrap(
+      fixture.repository.catalog(memberID: Self.memberID).first
+    )
+    let metadata = try XCTUnwrap(
+      VoiceCatalogMetadata.decode(rawValue: persisted.tierRawValue)
+    )
+
+    XCTAssertNil(snapshot.notice)
+    XCTAssertEqual(
+      snapshot.options.filter { $0.source == .serverCatalogue }.count,
+      1
+    )
+    XCTAssertEqual(mismatch.localVoice, .charon)
+    XCTAssertEqual(mismatch.serverVoice.localVoice, .aoede)
+    XCTAssertEqual(mismatch.serverVoice.serverTtsID, 100)
+    XCTAssertEqual(metadata.ttsID, 100)
+    XCTAssertTrue(metadata.isAuthoritativeSelection)
+    XCTAssertTrue(metadata.isListedInCatalogue)
   }
 
   func testMismatchRequiresExplicitChoiceAndNeverOverwritesLocalOnLoad() async throws {
@@ -462,12 +910,16 @@ final class AccountVoiceSelectionTests: XCTestCase {
       ]
     )
     let fixture = try makeFixture(
-      remoteDataSource: VoiceRemoteStub(fetchResult: .success([])),
+      remoteDataSource: VoiceRemoteStub(
+        fetchResult: .failure(
+          APIError.transport(code: -1009, message: "offline")
+        )
+      ),
       signedIn: true,
       compatibilityTable: compatibility,
       selectedVoice: .aoede
     )
-    try fixture.repository.upsertCatalog(
+    try fixture.repository.replaceCatalog(
       [
         try catalogEntry(
           memberID: Self.memberID,
@@ -539,7 +991,7 @@ final class AccountVoiceSelectionTests: XCTestCase {
     let fixture = try makeFixture(
       remoteDataSource: VoiceRemoteStub(
         fetchResult: .success(
-          [voiceDTO(ttsID: 11, code: "TEST_AOEDE", name: "테스트")]
+          [serverVoice(ttsID: 11, code: "TEST_AOEDE", name: "테스트")]
         )
       ),
       signedIn: true,
@@ -548,14 +1000,7 @@ final class AccountVoiceSelectionTests: XCTestCase {
     )
     let snapshot = await fixture.useCase.loadCatalogue()
     let staleOption = try XCTUnwrap(snapshot.options.first)
-    try fixture.accountSessionStore.establishSession(
-      credentials: AccountCredentials(
-        memberID: 97,
-        accessToken: "other-access-token",
-        refreshToken: "other-refresh-token",
-        onboardingCompleted: true
-      )
-    )
+    fixture.memberProvider.signedInMemberID = 97
 
     await assertError(ProfileSettingsUseCaseError.self) {
       _ = try await fixture.useCase.select(staleOption)
@@ -577,7 +1022,7 @@ final class AccountVoiceSelectionTests: XCTestCase {
   private static let memberID: Int64 = 96
 
   private func makeFixture(
-    remoteDataSource: any VoiceRemoteDataSource,
+    remoteDataSource remoteService: any AccountVoiceRemoteServing,
     signedIn: Bool,
     compatibilityTable: VoiceCompatibilityTable = .production,
     selectedVoice: VoiceProfile = .aoede
@@ -597,39 +1042,26 @@ final class AccountVoiceSelectionTests: XCTestCase {
       localProfileRepository: localProfileRepository,
       voiceAvailabilityProbe: probe
     )
-    let accountSessionStore = AccountSessionStore(
-      credentialStore: VoiceCredentialStore(),
-      accessTokenProvider: MemoryAccessTokenProvider()
+    let memberProvider = SignedInMemberStub(
+      signedInMemberID: signedIn ? Self.memberID : nil
     )
-    if signedIn {
-      try accountSessionStore.establishSession(
-        credentials: AccountCredentials(
-          memberID: Self.memberID,
-          accessToken: "access-token",
-          refreshToken: "refresh-token",
-          onboardingCompleted: true
-        )
-      )
-    }
-    let syncCoordinator = SyncCoordinator(
-      mutationRepository: repository,
-      executor: DeferredServerMutationExecutor()
-    )
+    let serverSynchronizer = ServerSynchronizerSpy()
     let useCase = AccountVoiceSelectionUseCase(
       profileSettingsUseCase: profileUseCase,
       voiceAvailabilityProbe: probe,
-      remoteDataSource: remoteDataSource,
+      remoteService: remoteService,
       catalogueRepository: repository,
       mutationRepository: repository,
-      syncCoordinator: syncCoordinator,
-      accountSessionStore: accountSessionStore,
+      serverSynchronizer: serverSynchronizer,
+      signedInMemberProvider: memberProvider,
       compatibilityTable: compatibilityTable
     )
     return VoiceFixture(
       container: container,
       repository: repository,
       localProfileRepository: localProfileRepository,
-      accountSessionStore: accountSessionStore,
+      memberProvider: memberProvider,
+      serverSynchronizer: serverSynchronizer,
       useCase: useCase
     )
   }
@@ -658,13 +1090,13 @@ final class AccountVoiceSelectionTests: XCTestCase {
     )
   }
 
-  private func voiceDTO(
+  private func serverVoice(
     ttsID: Int64,
     code: String,
     name: String
-  ) -> VoiceResponseDTO {
-    VoiceResponseDTO(
-      ttsId: ttsID,
+  ) -> ServerVoiceCatalogueItem {
+    ServerVoiceCatalogueItem(
+      ttsID: ttsID,
       voiceCode: code,
       displayName: name,
       description: nil,
@@ -683,6 +1115,22 @@ final class AccountVoiceSelectionTests: XCTestCase {
       return
     } catch {
       XCTFail("Expected \(expectedType), got \(error)")
+    }
+  }
+
+  private func assertAccountAuthorizationChanged(
+    operation: () async throws -> Void
+  ) async {
+    do {
+      try await operation()
+      XCTFail("Expected account authorization to reject the request.")
+    } catch let error as AccountVoiceRemoteError {
+      XCTAssertEqual(error, .accountAuthorizationChanged)
+    } catch {
+      XCTFail(
+        "Expected AccountVoiceRemoteError.accountAuthorizationChanged, "
+          + "got \(error)"
+      )
     }
   }
 
@@ -763,8 +1211,37 @@ private struct VoiceFixture {
   let container: ModelContainer
   let repository: SwiftDataServerPreferenceRepository
   let localProfileRepository: SwiftDataLocalProfileRepository
-  let accountSessionStore: AccountSessionStore
+  let memberProvider: SignedInMemberStub
+  let serverSynchronizer: ServerSynchronizerSpy
   let useCase: AccountVoiceSelectionUseCase
+}
+
+@MainActor
+private final class SignedInMemberStub: SignedInMemberProviding {
+  var signedInMemberID: Int64?
+
+  init(signedInMemberID: Int64?) {
+    self.signedInMemberID = signedInMemberID
+  }
+}
+
+@MainActor
+private final class ServerSynchronizerSpy: ServerSynchronizing {
+  private(set) var calls: [(memberID: Int64, trigger: SyncTrigger)] = []
+  private(set) var suspendedMemberIDs: [Int64] = []
+  private(set) var resumedMemberIDs: [Int64] = []
+
+  func synchronize(memberID: Int64, trigger: SyncTrigger) async {
+    calls.append((memberID, trigger))
+  }
+
+  func suspendSynchronization(memberID: Int64) async {
+    suspendedMemberIDs.append(memberID)
+  }
+
+  func resumeSynchronization(memberID: Int64) {
+    resumedMemberIDs.append(memberID)
+  }
 }
 
 private struct VoiceAlwaysAvailableProbe: VoiceAvailabilityProbing {
@@ -774,16 +1251,16 @@ private struct VoiceAlwaysAvailableProbe: VoiceAvailabilityProbing {
 }
 
 nonisolated private final class VoiceRemoteStub:
-  VoiceRemoteDataSource,
+  AccountVoiceRemoteServing,
   @unchecked Sendable {
   private let lock = NSLock()
-  private let fetchResult: Result<[VoiceResponseDTO], Error>
-  private let updateResult: Result<TtsUpdateResponseDTO, Error>
+  private let fetchResult: Result<[ServerVoiceCatalogueItem], Error>
+  private let updateResult: Result<AuthoritativeServerVoiceSelection, Error>
   private var updatedTtsIDs: [Int64] = []
 
   init(
-    fetchResult: Result<[VoiceResponseDTO], Error>,
-    updateResult: Result<TtsUpdateResponseDTO, Error> = .failure(
+    fetchResult: Result<[ServerVoiceCatalogueItem], Error>,
+    updateResult: Result<AuthoritativeServerVoiceSelection, Error> = .failure(
       APIError.transport(code: -1009, message: "offline")
     )
   ) {
@@ -791,11 +1268,16 @@ nonisolated private final class VoiceRemoteStub:
     self.updateResult = updateResult
   }
 
-  func fetchVoices() async throws -> [VoiceResponseDTO] {
+  func fetchVoices(
+    memberID: Int64
+  ) async throws -> [ServerVoiceCatalogueItem] {
     try fetchResult.get()
   }
 
-  func updateSelection(ttsID: Int64) async throws -> TtsUpdateResponseDTO {
+  func updateSelection(
+    ttsID: Int64,
+    memberID: Int64
+  ) async throws -> AuthoritativeServerVoiceSelection {
     recordUpdatedTtsID(ttsID)
     return try updateResult.get()
   }
@@ -807,26 +1289,23 @@ nonisolated private final class VoiceRemoteStub:
   }
 }
 
-nonisolated private final class VoiceCredentialStore:
-  CredentialStore,
-  @unchecked Sendable {
-  private var credentials: AccountCredentials?
+nonisolated private final class VoiceAccessTokenProvider:
+  AccountBoundAccessTokenProviding {
+  private let context = AccountAuthorizationContext(
+    memberID: 96,
+    accessToken: "access-token",
+    sessionID: UUID()
+  )
 
-  func save(_ credentials: AccountCredentials) throws {
-    self.credentials = credentials
+  var accessToken: String? {
+    context.accessToken
   }
 
-  func load() throws -> AccountCredentials? {
-    credentials
+  func authorizationContext(
+    forMemberID memberID: Int64
+  ) -> AccountAuthorizationContext? {
+    context.memberID == memberID ? context : nil
   }
-
-  func remove() throws {
-    credentials = nil
-  }
-}
-
-nonisolated private final class VoiceAccessTokenProvider: AccessTokenProviding {
-  let accessToken: String? = "access-token"
 }
 
 nonisolated private final class VoiceRequestCapturePlugin:

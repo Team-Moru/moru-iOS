@@ -59,6 +59,10 @@ nonisolated enum ServerMutationFailure: String, Equatable, Sendable {
   }
 }
 
+nonisolated protocol ServerMutationFailureProviding: Error, Sendable {
+  var serverMutationFailure: ServerMutationFailure { get }
+}
+
 nonisolated struct ServerVoiceCatalogEntry: Equatable, Sendable {
   let id: UUID
   let memberID: Int64
@@ -88,6 +92,14 @@ nonisolated struct ServerVoiceCatalogEntry: Equatable, Sendable {
   }
 }
 
+nonisolated struct ServerVoiceCatalogueItem: Equatable, Sendable {
+  let ttsID: Int64
+  let voiceCode: String
+  let displayName: String
+  let description: String?
+  let proOnly: Bool
+}
+
 nonisolated struct VoiceCatalogMetadata: Codable, Equatable, Sendable {
   static let currentVersion = 1
   static let prefix = "moru.voice-catalog.v1:"
@@ -97,18 +109,26 @@ nonisolated struct VoiceCatalogMetadata: Codable, Equatable, Sendable {
   let proOnly: Bool
   let description: String?
   let isAuthoritativeSelection: Bool
+  /// Missing in legacy v1 rows, which represented a listed catalogue item.
+  let isCatalogueListed: Bool?
+
+  var isListedInCatalogue: Bool {
+    isCatalogueListed ?? true
+  }
 
   init(
     ttsID: Int64,
     proOnly: Bool,
     description: String?,
-    isAuthoritativeSelection: Bool
+    isAuthoritativeSelection: Bool,
+    isCatalogueListed: Bool = true
   ) {
     self.version = Self.currentVersion
     self.ttsID = ttsID
     self.proOnly = proOnly
     self.description = description
     self.isAuthoritativeSelection = isAuthoritativeSelection
+    self.isCatalogueListed = isCatalogueListed
   }
 
   func encodedRawValue() throws -> String {
@@ -138,6 +158,7 @@ nonisolated enum AccountVoiceAvailability: Equatable, Sendable {
   case incompatible
   case missingBundledAudio
   case unknownMetadata
+  case notInCatalogue
 
   var isSelectable: Bool {
     self == .selectable
@@ -220,6 +241,14 @@ nonisolated struct AuthoritativeServerVoiceSelection: Equatable, Sendable {
   let ttsID: Int64
   let voiceCode: String
   let displayName: String
+}
+
+nonisolated enum AccountVoiceRemoteError: Error, Equatable, Sendable {
+  case invalidCatalogue
+  case invalidTtsID
+  case invalidUpdateResponse
+  case authoritativeMismatch
+  case accountAuthorizationChanged
 }
 
 nonisolated enum ServerPreferenceRepositoryError: Error, Equatable, Sendable {

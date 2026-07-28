@@ -385,6 +385,89 @@ final class NetworkFoundationTests: XCTestCase {
     XCTAssertEqual(tokenProvider.readCount, 1)
   }
 
+  func testAccountBoundRequestRejectsSuccessAfterAccountSessionChanges() async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "first-session-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      stubBehavior: .delayed(seconds: 0.1),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+    let request = _Concurrency.Task<StubResult, Error> {
+      try await client.request(
+        StubTarget(authenticationRequirement: .bearer),
+        as: StubResult.self,
+        authorizedForMemberID: 96
+      )
+    }
+    try await waitUntil {
+      requestCapture.request != nil
+    }
+
+    tokenProvider.establishAccountSession(
+      with: "second-session-token",
+      memberID: 96
+    )
+
+    do {
+      _ = try await request.value
+      XCTFail("Expected the stale account response to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+  }
+
+  func testAccountBoundRequestPrioritizesSessionChangeOverTransportFailure() async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "first-session-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let underlying = NSError(
+      domain: NSURLErrorDomain,
+      code: URLError.notConnectedToInternet.rawValue
+    )
+    let client = makeErrorClient(
+      underlying,
+      stubBehavior: .delayed(seconds: 0.1),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+    let request = _Concurrency.Task<StubResult, Error> {
+      try await client.request(
+        StubTarget(authenticationRequirement: .bearer),
+        as: StubResult.self,
+        authorizedForMemberID: 96
+      )
+    }
+    try await waitUntil {
+      requestCapture.request != nil
+    }
+
+    tokenProvider.establishAccountSession(
+      with: "second-session-token",
+      memberID: 96
+    )
+
+    do {
+      _ = try await request.value
+      XCTFail("Expected the stale account failure to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+  }
+
   func testRetryabilityClassification() {
     XCTAssertTrue(
       APIError.transport(
@@ -465,9 +548,13 @@ final class NetworkFoundationTests: XCTestCase {
   }
 
   nonisolated private func makeErrorClient(
-    _ error: NSError
+    _ error: NSError,
+    stubBehavior: TestStubBehavior = .immediate,
+    tokenProvider: any AccessTokenProviding = EmptyAccessTokenProvider(),
+    additionalPlugins: [any PluginType & Sendable] = []
   ) -> DefaultAPIClient {
     return DefaultAPIClient(
+      tokenProvider: tokenProvider,
       providerFactory: MoyaProviderFactory(
         endpointBuilder: { target in
           let endpoint = MoyaProvider<MultiTarget>.defaultEndpointMapping(
@@ -484,9 +571,26 @@ final class NetworkFoundationTests: XCTestCase {
             httpHeaderFields: endpoint.httpHeaderFields
           )
         },
-        stubBuilder: { _ in .immediate }
+        stubBuilder: { _ in stubBehavior.moyaValue },
+        additionalPlugins: additionalPlugins
       )
     )
+  }
+
+  private func waitUntil(
+    timeout: TimeInterval = 1,
+    condition: @escaping @Sendable () -> Bool
+  ) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+
+    while !condition() {
+      guard Date() < deadline else {
+        XCTFail("Timed out waiting for the request to start.")
+        return
+      }
+
+      try await _Concurrency.Task.sleep(for: .milliseconds(5))
+    }
   }
 
   nonisolated private func successData() -> Data {
