@@ -329,11 +329,19 @@ final class RouterRuntimeContractTests: XCTestCase {
     let sessionStore = SessionStore(
       localProfileRepository: localProfileRepository
     )
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: KeychainCredentialStore(
+        service: "com.teammoru.MoruTests.router-runtime"
+      ),
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
 
     return (
       AppRouter(
         dependencies: dependencies,
         sessionStore: sessionStore,
+        accountSessionStore: accountSessionStore,
+        appleAccountLinkingService: UnavailableAppleAccountLinkingService(),
         coordinator: coordinator,
         onboardingBuilder: EmptyOnboardingFlowBuilder(),
         routinePlayerBuilder: routinePlayerBuilder,

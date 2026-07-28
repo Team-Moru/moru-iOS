@@ -17,6 +17,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
+  private let accountSessionStore: AccountSessionStore
+  private let appleAccountLinkingService: any AppleAccountLinking
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
   private let resetAvailability: @MainActor () -> Bool
   private let onOpenSettings: @MainActor () -> Void
@@ -26,6 +28,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
+    accountSessionStore: AccountSessionStore,
+    appleAccountLinkingService: any AppleAccountLinking,
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
     resetAvailability: @escaping @MainActor () -> Bool,
     onOpenSettings: @escaping @MainActor () -> Void,
@@ -34,6 +38,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
+    self.accountSessionStore = accountSessionStore
+    self.appleAccountLinkingService = appleAccountLinkingService
     self.resetUseCase = resetUseCase
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
@@ -47,11 +53,13 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
           profileSettingsUseCase: profileSettingsUseCase,
           voicePreviewPlayer: voicePreviewPlayer,
           alarmService: alarmService,
+          appleAccountLinkingService: appleAccountLinkingService,
           resetUseCase: resetUseCase,
           resetAvailability: resetAvailability,
           onOpenSettings: onOpenSettings,
           onResetSucceeded: onResetSucceeded
-        )
+        ),
+        accountSessionStore: accountSessionStore
       )
     )
   }

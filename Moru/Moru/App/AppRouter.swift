@@ -46,12 +46,14 @@ final class AppRouterState: ObservableObject {
 struct AppRouter: View {
   @Environment(\.scenePhase) private var scenePhase
   @ObservedObject private var sessionStore: SessionStore
+  @ObservedObject private var accountSessionStore: AccountSessionStore
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
   @StateObject private var state: AppRouterState
 
   private let dependencies: DependencyContainer
+  private let appleAccountLinkingService: any AppleAccountLinking
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
   private let homeBuilder: any HomeFlowBuilding
@@ -60,6 +62,8 @@ struct AppRouter: View {
   init(
     dependencies: DependencyContainer,
     sessionStore: SessionStore,
+    accountSessionStore: AccountSessionStore,
+    appleAccountLinkingService: any AppleAccountLinking,
     coordinator: AppNavigationCoordinator,
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
@@ -67,8 +71,10 @@ struct AppRouter: View {
     state: AppRouterState? = nil
   ) {
     _sessionStore = ObservedObject(wrappedValue: sessionStore)
+    _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
     _coordinator = ObservedObject(wrappedValue: coordinator)
     self.dependencies = dependencies
+    self.appleAccountLinkingService = appleAccountLinkingService
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
     _state = StateObject(wrappedValue: state ?? AppRouterState())
@@ -288,6 +294,8 @@ struct AppRouter: View {
       profileSettingsUseCase: profileSettingsUseCase,
       voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
+      accountSessionStore: accountSessionStore,
+      appleAccountLinkingService: appleAccountLinkingService,
       resetUseCase: resetUseCase,
       resetAvailability: {
         coordinator.presentation == nil && coordinator.pendingDismissalToken == nil
