@@ -182,6 +182,8 @@ final class AppleAccountLinkingTests: XCTestCase {
       ProfileView.accountCardAccessibilityIdentifier,
       ProfileView.accountConnectAccessibilityIdentifier,
       ProfileView.appleSignInAccessibilityIdentifier,
+      ProfileView.accountLogoutAccessibilityIdentifier,
+      ProfileView.accountWithdrawalAccessibilityIdentifier,
     ]
 
     XCTAssertEqual(Set(identifiers).count, identifiers.count)
