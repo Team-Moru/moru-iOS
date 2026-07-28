@@ -144,6 +144,12 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       profile: AnyView(
         ProfileView(
           viewModel: viewModel,
+          accountSessionStore: AccountSessionStore(
+            credentialStore: KeychainCredentialStore(
+              service: "com.teammoru.MoruTests.profile-visual"
+            ),
+            accessTokenProvider: MemoryAccessTokenProvider()
+          ),
           automaticallyLoads: false
         )
       ),

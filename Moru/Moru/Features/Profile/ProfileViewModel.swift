@@ -21,6 +21,7 @@ final class ProfileViewModel {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
+  private let appleAccountLinkingService: any AppleAccountLinking
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
   private let resetAvailability: @MainActor () -> Bool
   private let onOpenSettings: @MainActor () -> Void
@@ -31,8 +32,10 @@ final class ProfileViewModel {
   private(set) var displayNameErrorMessage: String?
   private(set) var voiceErrorMessage: String?
   private(set) var resetErrorMessage: String?
+  private(set) var accountErrorMessage: String?
   private(set) var isAlarmRequestInProgress = false
   private(set) var isResetInProgress = false
+  private(set) var isAccountLinkInProgress = false
 
   var isResetAvailable: Bool {
     resetUseCase != nil && resetAvailability() && !isResetInProgress
@@ -53,6 +56,8 @@ final class ProfileViewModel {
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
+    appleAccountLinkingService: any AppleAccountLinking =
+      UnavailableAppleAccountLinkingService(),
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
     resetAvailability: @escaping @MainActor () -> Bool,
     onOpenSettings: @escaping @MainActor () -> Void,
@@ -61,6 +66,7 @@ final class ProfileViewModel {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
+    self.appleAccountLinkingService = appleAccountLinkingService
     self.resetUseCase = resetUseCase
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
@@ -158,6 +164,42 @@ final class ProfileViewModel {
     onOpenSettings()
   }
 
+  func appleAuthorizationDidComplete(
+    _ outcome: AppleAuthorizationOutcome
+  ) async {
+    guard !isAccountLinkInProgress else {
+      return
+    }
+
+    accountErrorMessage = nil
+
+    switch outcome {
+    case .cancelled:
+      return
+    case .failed:
+      reportAccountError(
+        "Apple 인증 정보를 확인하지 못했어요. "
+          + "로컬 데이터는 그대로 사용할 수 있어요."
+      )
+    case .authorized(let identityToken, let authorizationCode):
+      isAccountLinkInProgress = true
+      defer { isAccountLinkInProgress = false }
+
+      do {
+        try await appleAccountLinkingService.link(
+          identityToken: identityToken,
+          authorizationCode: authorizationCode
+        )
+        announce("Apple 계정이 연결되었어요.")
+      } catch {
+        reportAccountError(
+          "Apple 계정을 연결하지 못했어요. "
+            + "로컬 데이터는 그대로 사용할 수 있어요."
+        )
+      }
+    }
+  }
+
   func resetConfirmationButtonDidTap() async {
     guard isResetAvailable, let resetUseCase else {
       reportResetError(resetAvailabilityMessage ?? "지금은 초기화할 수 없어요.")
@@ -189,6 +231,11 @@ final class ProfileViewModel {
 
   private func reportResetError(_ message: String) {
     resetErrorMessage = message
+    announce(message)
+  }
+
+  private func reportAccountError(_ message: String) {
+    accountErrorMessage = message
     announce(message)
   }
 

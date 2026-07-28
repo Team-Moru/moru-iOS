@@ -5,25 +5,33 @@
 //  Created by Codex on 7/22/26.
 //
 
+import AuthenticationServices
 import SwiftUI
 
 struct ProfileView: View {
   static let rootAccessibilityIdentifier = "profile.root"
+  static let accountCardAccessibilityIdentifier = "profile.account.card"
+  static let accountConnectAccessibilityIdentifier = "profile.account.connect"
+  static let appleSignInAccessibilityIdentifier = "profile.account.apple-sign-in"
 
   @State private var viewModel: ProfileViewModel
+  @ObservedObject private var accountSessionStore: AccountSessionStore
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.scenePhase) private var scenePhase
   @State private var displayNameDraft = ""
   @State private var isDisplayNameEditorPresented = false
   @State private var isVoiceSelectionPresented = false
   @State private var isResetConfirmationPresented = false
+  @State private var isAppleSignInPresented = false
   private let automaticallyLoads: Bool
 
   init(
     viewModel: ProfileViewModel,
+    accountSessionStore: AccountSessionStore,
     automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
+    _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
     self.automaticallyLoads = automaticallyLoads
   }
 
@@ -66,6 +74,9 @@ struct ProfileView: View {
     .sheet(isPresented: $isVoiceSelectionPresented) {
       voiceSelectionView
     }
+    .sheet(isPresented: $isAppleSignInPresented) {
+      appleSignInSheet
+    }
     .confirmationDialog(
       "이 기기의 로컬 데이터를 초기화할까요?",
       isPresented: $isResetConfirmationPresented,
@@ -89,6 +100,11 @@ struct ProfileView: View {
 
         displayNameCard(content.profile)
           .padding(.top, MoruPilotSpacing.twelve)
+
+        settingsSection(title: "계정") {
+          accountCard
+        }
+        .padding(.top, MoruPilotSpacing.twentyEight)
 
         settingsSection(title: ProfileCopy.voiceSettings) {
           voiceCard(content)
@@ -173,6 +189,79 @@ struct ProfileView: View {
 
   private func profileInitial(for displayName: String) -> String {
     String(displayName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1))
+  }
+
+  @ViewBuilder
+  private var accountCard: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      switch accountSessionStore.state {
+      case .signedOut:
+        accountConnectButton(
+          detail: "로그인 없이도 모든 로컬 루틴과 기록을 "
+            + "계속 사용할 수 있어요."
+        )
+      case .restoring:
+        settingsRow(
+          title: "계정 확인 중",
+          detail: "저장된 계정 연결을 확인하고 있어요.",
+          systemImage: "person.crop.circle.badge.clock",
+          showsChevron: false
+        )
+        .overlay(alignment: .trailing) {
+          ProgressView()
+            .padding(.trailing, MoruPilotSpacing.sixteen)
+            .accessibilityLabel("계정 연결 확인 중")
+        }
+      case .signedIn:
+        settingsRow(
+          title: "Apple 계정 연결됨",
+          detail: "계정 연결은 선택형 서버 기능에만 사용돼요.",
+          systemImage: "person.crop.circle.badge.checkmark",
+          showsChevron: false
+        )
+        .accessibilityLabel("Apple 계정 연결됨")
+        .accessibilityHint("로컬 루틴과 기록은 기기에 계속 저장됩니다.")
+      case .failure:
+        accountConnectButton(
+          detail: "계정 정보를 복구하지 못했어요. "
+            + "Apple로 다시 연결할 수 있어요."
+        )
+      }
+
+      if viewModel.isAccountLinkInProgress {
+        HStack(spacing: AppSpacing.xs) {
+          ProgressView()
+          Text("Apple 계정을 연결하고 있어요.")
+            .profileFigmaTextStyle(.c1)
+            .foregroundStyle(MoruPilotColor.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Apple 계정을 연결하고 있어요.")
+      }
+
+      if let message = viewModel.accountErrorMessage {
+        profileMessage(message, color: AppColor.coral300)
+          .accessibilityIdentifier("profile.account.error")
+      }
+    }
+    .accessibilityIdentifier(Self.accountCardAccessibilityIdentifier)
+  }
+
+  private func accountConnectButton(detail: String) -> some View {
+    Button {
+      isAppleSignInPresented = true
+    } label: {
+      settingsRow(
+        title: "Apple 계정 연결",
+        detail: detail,
+        systemImage: "apple.logo"
+      )
+    }
+    .buttonStyle(.plain)
+    .disabled(viewModel.isAccountLinkInProgress)
+    .accessibilityLabel("Apple 계정 연결")
+    .accessibilityHint("선택 사항입니다. Apple 로그인 화면을 엽니다.")
+    .accessibilityIdentifier(Self.accountConnectAccessibilityIdentifier)
   }
 
   private func voiceCard(_ content: ProfileSettingsLoadResult) -> some View {
@@ -409,6 +498,58 @@ struct ProfileView: View {
       }
     }
     .onDisappear(perform: viewModel.voiceSelectionViewDidDisappear)
+  }
+
+  private var appleSignInSheet: some View {
+    NavigationStack {
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+        Text("Apple 계정 연결")
+          .profileFigmaTextStyle(.b2.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
+
+        Text(
+          "계정 연결은 선택 사항이에요. 취소하거나 연결에 실패해도 "
+            + "기존 루틴과 기록은 그대로 사용할 수 있어요."
+        )
+        .profileFigmaTextStyle(.b4)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+        SignInWithAppleButton(.continue) { request in
+          request.requestedScopes = []
+        } onCompletion: { result in
+          let outcome = AppleAuthorizationCallback.outcome(for: result)
+          isAppleSignInPresented = false
+
+          Task {
+            await viewModel.appleAuthorizationDidComplete(outcome)
+          }
+        }
+        .signInWithAppleButtonStyle(.black)
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
+        .disabled(viewModel.isAccountLinkInProgress)
+        .accessibilityLabel("Apple로 계속하기")
+        .accessibilityHint("Apple 인증을 시작합니다.")
+        .accessibilityIdentifier(Self.appleSignInAccessibilityIdentifier)
+
+        Spacer(minLength: 0)
+      }
+      .padding(MoruPilotSpacing.twenty)
+      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .navigationTitle("계정 연결")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("닫기") {
+            isAppleSignInPresented = false
+          }
+        }
+      }
+    }
+    .presentationDetents([.medium])
+    .presentationDragIndicator(.visible)
+    .accessibilityIdentifier("profile.account.sheet")
   }
 
   private func voiceRow(_ voice: VoiceProfile) -> some View {
