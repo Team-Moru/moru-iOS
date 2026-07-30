@@ -31,6 +31,11 @@ nonisolated struct AccountLifecycleCredentials: Equatable, Sendable {
   let provider: AuthProvider
 }
 
+nonisolated struct AccountTokenRefreshContext: Equatable, Sendable {
+  let credentials: AccountCredentials
+  let authorizationContext: AccountAuthorizationContext
+}
+
 nonisolated extension AccountLifecycleCredentials:
   CustomDebugStringConvertible,
   CustomStringConvertible {
@@ -126,7 +131,10 @@ final class AccountSessionStore: ObservableObject {
         return
       }
 
-      accessTokenProvider.replace(with: credentials.accessToken)
+      accessTokenProvider.establishAccountSession(
+        with: credentials.accessToken,
+        memberID: credentials.memberID
+      )
       state = .signedIn(
         SignedInAccount(
           memberID: credentials.memberID,
@@ -154,7 +162,10 @@ final class AccountSessionStore: ObservableObject {
 
     try credentialStore.save(credentials)
     restorationGuard.allowRestoration()
-    accessTokenProvider.replace(with: credentials.accessToken)
+    accessTokenProvider.establishAccountSession(
+      with: credentials.accessToken,
+      memberID: credentials.memberID
+    )
     state = .signedIn(
       SignedInAccount(
         memberID: credentials.memberID,
@@ -165,32 +176,62 @@ final class AccountSessionStore: ObservableObject {
     )
   }
 
+  func currentAuthorizationContext() -> AccountAuthorizationContext? {
+    guard case .signedIn(let account) = state,
+          let authorizationContext = accessTokenProvider
+            .authorizationContext(forMemberID: account.memberID) else {
+      return nil
+    }
+
+    return authorizationContext
+  }
+
   func credentialsForTokenRefresh(
-    matching accessToken: String
-  ) throws -> AccountCredentials {
-    guard case .signedIn = state,
-          accessTokenProvider.accessToken == accessToken,
+    matching authorizationContext: AccountAuthorizationContext
+  ) throws -> AccountTokenRefreshContext {
+    guard case .signedIn(let account) = state,
+          account.memberID == authorizationContext.memberID,
+          accessTokenProvider.authorizationContext(
+            forMemberID: account.memberID
+          ) == authorizationContext,
           let credentials = try credentialStore.load(),
           credentials.isValid,
-          credentials.accessToken == accessToken else {
+          credentials.memberID == account.memberID,
+          credentials.accessToken
+            == authorizationContext.accessToken else {
       throw CredentialStoreError.invalidCredentials
     }
 
-    return credentials
+    return AccountTokenRefreshContext(
+      credentials: credentials,
+      authorizationContext: authorizationContext
+    )
   }
 
   func replaceCredentialsAfterTokenRefresh(
     _ credentials: AccountCredentials,
-    replacing accessToken: String
+    replacing refreshContext: AccountTokenRefreshContext
   ) throws {
     guard credentials.isValid,
-          case .signedIn = state,
-          accessTokenProvider.accessToken == accessToken else {
+          case .signedIn(let account) = state,
+          account.memberID == credentials.memberID,
+          refreshContext.credentials.memberID == account.memberID,
+          refreshContext.authorizationContext.memberID == account.memberID,
+          refreshContext.authorizationContext.accessToken
+            == refreshContext.credentials.accessToken,
+          accessTokenProvider.authorizationContext(
+            forMemberID: account.memberID
+          ) == refreshContext.authorizationContext else {
       throw CredentialStoreError.invalidCredentials
     }
 
     try credentialStore.save(credentials)
-    accessTokenProvider.replace(with: credentials.accessToken)
+    guard accessTokenProvider.replaceAccountSessionToken(
+      with: credentials.accessToken,
+      replacing: refreshContext.authorizationContext
+    ) else {
+      throw CredentialStoreError.invalidCredentials
+    }
     state = .signedIn(
       SignedInAccount(
         memberID: credentials.memberID,
@@ -240,9 +281,11 @@ final class AccountSessionStore: ObservableObject {
   }
 
   func invalidateAfterTokenRefreshFailure(
-    matching accessToken: String
+    matching authorizationContext: AccountAuthorizationContext
   ) {
-    guard accessTokenProvider.accessToken == accessToken else {
+    guard accessTokenProvider.authorizationContext(
+      forMemberID: authorizationContext.memberID
+    ) == authorizationContext else {
       return
     }
 

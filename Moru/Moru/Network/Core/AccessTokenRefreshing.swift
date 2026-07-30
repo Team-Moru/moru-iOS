@@ -27,3 +27,11 @@ nonisolated protocol AccessTokenRefreshing: Sendable {
     afterUnauthorized failedAccessToken: String
   ) async throws -> AccessTokenRefreshResult
 }
+
+nonisolated protocol AccountBoundAccessTokenRefreshing:
+  AccessTokenRefreshing {
+  func refreshAccessToken(
+    afterUnauthorized failedAccessToken: String,
+    matching authorizationContext: AccountAuthorizationContext
+  ) async throws -> AccessTokenRefreshResult
+}

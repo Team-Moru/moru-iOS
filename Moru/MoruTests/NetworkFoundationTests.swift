@@ -385,6 +385,245 @@ final class NetworkFoundationTests: XCTestCase {
     XCTAssertEqual(tokenProvider.readCount, 1)
   }
 
+  func testAccountBoundRequestUsesMatchingMemberToken() async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "member-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+
+    let result = try await client.request(
+      StubTarget(authenticationRequirement: .bearer),
+      as: StubResult.self,
+      authorizedForMemberID: 96
+    )
+
+    XCTAssertEqual(result, StubResult(value: "ready"))
+    XCTAssertEqual(
+      requestCapture.request?.value(
+        forHTTPHeaderField: "Authorization"
+      ),
+      "Bearer member-token"
+    )
+  }
+
+  func testAccountBoundRequestRejectsAnotherMemberBeforeTransport() async {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "member-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+
+    do {
+      let _: StubResult = try await client.request(
+        StubTarget(authenticationRequirement: .bearer),
+        as: StubResult.self,
+        authorizedForMemberID: 97
+      )
+      XCTFail("Expected another member to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+
+    XCTAssertNil(requestCapture.request)
+  }
+
+  func testAccountBound401DoesNotRefreshOrRetryAfterSessionChanges() async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "shared-token",
+      memberID: 96
+    )
+    let refresher = AccountBoundRefreshSpy()
+    let requestCapture = RequestCapturePlugin()
+    let unauthorizedData = Data(
+      """
+      {
+        "isSuccess": false,
+        "code": "COMMON401",
+        "message": "인증이 필요합니다."
+      }
+      """.utf8
+    )
+    let client = makeClient(
+      statusCode: 401,
+      data: unauthorizedData,
+      stubBehavior: .delayed(seconds: 0.1),
+      tokenProvider: tokenProvider,
+      accessTokenRefresher: refresher,
+      additionalPlugins: [requestCapture]
+    )
+    let request = _Concurrency.Task<StubResult, Error> {
+      try await client.request(
+        StubTarget(authenticationRequirement: .bearer),
+        as: StubResult.self,
+        authorizedForMemberID: 96
+      )
+    }
+    try await waitUntil {
+      requestCapture.requestCount == 1
+    }
+
+    tokenProvider.establishAccountSession(
+      with: "shared-token",
+      memberID: 96
+    )
+
+    do {
+      _ = try await request.value
+      XCTFail("Expected the stale 401 response to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+
+    XCTAssertEqual(refresher.callCount, 0)
+    XCTAssertEqual(requestCapture.requestCount, 1)
+  }
+
+  func testAccountBound401RejectsUnpublishedRefreshToken() async {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "member-token",
+      memberID: 96
+    )
+    let refresher = AccountBoundRefreshSpy()
+    let requestCapture = RequestCapturePlugin()
+    let unauthorizedData = Data(
+      """
+      {
+        "isSuccess": false,
+        "code": "COMMON401",
+        "message": "인증이 필요합니다."
+      }
+      """.utf8
+    )
+    let client = makeClient(
+      statusCode: 401,
+      data: unauthorizedData,
+      tokenProvider: tokenProvider,
+      accessTokenRefresher: refresher,
+      additionalPlugins: [requestCapture]
+    )
+
+    do {
+      let _: StubResult = try await client.request(
+        StubTarget(authenticationRequirement: .bearer),
+        as: StubResult.self,
+        authorizedForMemberID: 96
+      )
+      XCTFail("Expected the unpublished refresh token to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+
+    XCTAssertEqual(refresher.callCount, 1)
+    XCTAssertEqual(requestCapture.requestCount, 1)
+    XCTAssertEqual(tokenProvider.accessToken, "member-token")
+  }
+
+  func testAccountBoundRequestRejectsSuccessAfterAccountSessionChanges() async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "first-session-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      stubBehavior: .delayed(seconds: 0.1),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+    let request = _Concurrency.Task<StubResult, Error> {
+      try await client.request(
+        StubTarget(authenticationRequirement: .bearer),
+        as: StubResult.self,
+        authorizedForMemberID: 96
+      )
+    }
+    try await waitUntil {
+      requestCapture.request != nil
+    }
+
+    tokenProvider.establishAccountSession(
+      with: "second-session-token",
+      memberID: 96
+    )
+
+    do {
+      _ = try await request.value
+      XCTFail("Expected the stale account response to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+  }
+
+  func testAccountBoundRequestPrioritizesSessionChangeOverTransportFailure() async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "first-session-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let underlying = NSError(
+      domain: NSURLErrorDomain,
+      code: URLError.notConnectedToInternet.rawValue
+    )
+    let client = makeErrorClient(
+      underlying,
+      stubBehavior: .delayed(seconds: 0.1),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+    let request = _Concurrency.Task<StubResult, Error> {
+      try await client.request(
+        StubTarget(authenticationRequirement: .bearer),
+        as: StubResult.self,
+        authorizedForMemberID: 96
+      )
+    }
+    try await waitUntil {
+      requestCapture.request != nil
+    }
+
+    tokenProvider.establishAccountSession(
+      with: "second-session-token",
+      memberID: 96
+    )
+
+    do {
+      _ = try await request.value
+      XCTFail("Expected the stale account failure to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+  }
+
   func testRetryabilityClassification() {
     XCTAssertTrue(
       APIError.transport(
@@ -437,11 +676,13 @@ final class NetworkFoundationTests: XCTestCase {
     stubBehavior: TestStubBehavior = .immediate,
     configuration: NetworkConfiguration = .production,
     tokenProvider: any AccessTokenProviding = EmptyAccessTokenProvider(),
+    accessTokenRefresher: (any AccessTokenRefreshing)? = nil,
     additionalPlugins: [any PluginType & Sendable] = []
   ) -> DefaultAPIClient {
     return DefaultAPIClient(
       configuration: configuration,
       tokenProvider: tokenProvider,
+      accessTokenRefresher: accessTokenRefresher,
       providerFactory: MoyaProviderFactory(
         endpointBuilder: { target in
           let endpoint = MoyaProvider<MultiTarget>.defaultEndpointMapping(
@@ -465,9 +706,13 @@ final class NetworkFoundationTests: XCTestCase {
   }
 
   nonisolated private func makeErrorClient(
-    _ error: NSError
+    _ error: NSError,
+    stubBehavior: TestStubBehavior = .immediate,
+    tokenProvider: any AccessTokenProviding = EmptyAccessTokenProvider(),
+    additionalPlugins: [any PluginType & Sendable] = []
   ) -> DefaultAPIClient {
     return DefaultAPIClient(
+      tokenProvider: tokenProvider,
       providerFactory: MoyaProviderFactory(
         endpointBuilder: { target in
           let endpoint = MoyaProvider<MultiTarget>.defaultEndpointMapping(
@@ -484,9 +729,26 @@ final class NetworkFoundationTests: XCTestCase {
             httpHeaderFields: endpoint.httpHeaderFields
           )
         },
-        stubBuilder: { _ in .immediate }
+        stubBuilder: { _ in stubBehavior.moyaValue },
+        additionalPlugins: additionalPlugins
       )
     )
+  }
+
+  private func waitUntil(
+    timeout: TimeInterval = 1,
+    condition: @escaping @Sendable () -> Bool
+  ) async throws {
+    let deadline = Date().addingTimeInterval(timeout)
+
+    while !condition() {
+      guard Date() < deadline else {
+        XCTFail("Timed out waiting for the request to start.")
+        return
+      }
+
+      try await _Concurrency.Task.sleep(for: .milliseconds(5))
+    }
   }
 
   nonisolated private func successData() -> Data {
@@ -600,6 +862,7 @@ nonisolated private final class RequestCapturePlugin:
   @unchecked Sendable {
   private let lock = NSLock()
   private var capturedRequest: URLRequest?
+  private var storedRequestCount = 0
 
   var request: URLRequest? {
     lock.lock()
@@ -607,10 +870,58 @@ nonisolated private final class RequestCapturePlugin:
     return capturedRequest
   }
 
+  var requestCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedRequestCount
+  }
+
   func prepare(_ request: URLRequest, target: TargetType) -> URLRequest {
     lock.lock()
     capturedRequest = request
+    storedRequestCount += 1
     lock.unlock()
     return request
+  }
+}
+
+nonisolated private final class AccountBoundRefreshSpy:
+  AccountBoundAccessTokenRefreshing,
+  @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedCallCount = 0
+
+  var callCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedCallCount
+  }
+
+  func refreshAccessToken(
+    afterUnauthorized failedAccessToken: String
+  ) async throws -> AccessTokenRefreshResult {
+    recordCall()
+    return refreshResult
+  }
+
+  func refreshAccessToken(
+    afterUnauthorized failedAccessToken: String,
+    matching authorizationContext: AccountAuthorizationContext
+  ) async throws -> AccessTokenRefreshResult {
+    recordCall()
+    return refreshResult
+  }
+
+  private var refreshResult: AccessTokenRefreshResult {
+    AccessTokenRefreshResult(
+      accessToken: "refreshed-token",
+      refreshToken: "refreshed-refresh-token"
+    )
+  }
+
+  private func recordCall() {
+    lock.lock()
+    storedCallCount += 1
+    lock.unlock()
   }
 }
