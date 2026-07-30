@@ -84,9 +84,6 @@ final class AppBootstrapper: ObservableObject {
 
     do {
       let modelContainer = try modelContainerFactory()
-      let dependencies = DependencyContainer.local(modelContext: modelContainer.mainContext)
-      let sessionStore = dependencies.makeSessionStore()
-      sessionStore.load()
       let accountSessionStore = accountSessionStoreFactory()
       let tokenRefreshRemoteDataSource = DefaultAuthRemoteDataSource(
         apiClient: DefaultAPIClient(
@@ -97,13 +94,29 @@ final class AppBootstrapper: ObservableObject {
         authRemoteDataSource: tokenRefreshRemoteDataSource,
         accountSessionStore: accountSessionStore
       )
-      let authRemoteDataSource = DefaultAuthRemoteDataSource(
-        apiClient: DefaultAPIClient(
-          tokenProvider: accountSessionStore.accessTokenProvider,
-          accessTokenRefresher: tokenRefreshCoordinator,
-          serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
-        )
+      let authenticatedAPIClient = DefaultAPIClient(
+        tokenProvider: accountSessionStore.accessTokenProvider,
+        accessTokenRefresher: tokenRefreshCoordinator,
+        serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
       )
+      let authRemoteDataSource = DefaultAuthRemoteDataSource(
+        apiClient: authenticatedAPIClient
+      )
+      let accountHistoryRemoteService:
+        (any AccountHistoryRemoteServing)?
+      if appCapabilities.shouldAllowServerRequests {
+        accountHistoryRemoteService = DefaultAccountHistoryRemoteService(
+          apiClient: authenticatedAPIClient
+        )
+      } else {
+        accountHistoryRemoteService = nil
+      }
+      let dependencies = DependencyContainer.local(
+        modelContext: modelContainer.mainContext,
+        accountHistoryRemoteService: accountHistoryRemoteService
+      )
+      let sessionStore = dependencies.makeSessionStore()
+      sessionStore.load()
       let socialLoginCoordinator = SocialLoginCoordinator(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore

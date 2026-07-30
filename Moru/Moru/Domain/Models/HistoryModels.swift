@@ -23,6 +23,10 @@ extension HistoryRunStatus {
   }
 }
 
+enum HistorySummarySource: Sendable, Equatable {
+  case device
+  case account
+}
 
 struct HistoryOverview: Sendable, Equatable {
   let calendar: Calendar
@@ -31,6 +35,7 @@ struct HistoryOverview: Sendable, Equatable {
   let wakeMetrics: HistoryWakeMetrics
   let monthlyHeatmap: HistoryMonthlyHeatmap
   let streak: RoutineStreak
+  let summarySource: HistorySummarySource
 
   nonisolated init(
     calendar: Calendar,
@@ -38,7 +43,8 @@ struct HistoryOverview: Sendable, Equatable {
     week: HistoryWeekReport,
     wakeMetrics: HistoryWakeMetrics,
     monthlyHeatmap: HistoryMonthlyHeatmap,
-    streak: RoutineStreak = .empty
+    streak: RoutineStreak = .empty,
+    summarySource: HistorySummarySource = .device
   ) {
     self.calendar = calendar
     self.recentDays = recentDays
@@ -46,6 +52,11 @@ struct HistoryOverview: Sendable, Equatable {
     self.wakeMetrics = wakeMetrics
     self.monthlyHeatmap = monthlyHeatmap
     self.streak = streak
+    self.summarySource = summarySource
+  }
+
+  var hasDisplayableHistory: Bool {
+    !recentDays.isEmpty || summarySource == .account
   }
 }
 
@@ -201,6 +212,7 @@ struct HistoryWeekReport: Sendable, Equatable {
   let completionRate: Double
   let dailyCompletionRates: [HistoryDailyCompletion]
   let completionRateChangePercentagePoints: Int?
+  let summarySource: HistorySummarySource
 
   nonisolated init(
     weekStartDate: Date,
@@ -209,7 +221,8 @@ struct HistoryWeekReport: Sendable, Equatable {
     totalRunCount: Int,
     completionRate: Double,
     dailyCompletionRates: [HistoryDailyCompletion],
-    completionRateChangePercentagePoints: Int? = nil
+    completionRateChangePercentagePoints: Int? = nil,
+    summarySource: HistorySummarySource = .device
   ) {
     self.weekStartDate = weekStartDate
     self.weekEndDate = weekEndDate
@@ -218,10 +231,22 @@ struct HistoryWeekReport: Sendable, Equatable {
     self.completionRate = completionRate
     self.dailyCompletionRates = dailyCompletionRates
     self.completionRateChangePercentagePoints = completionRateChangePercentagePoints
+    self.summarySource = summarySource
   }
 }
 
 struct HistoryDailyCompletion: Sendable, Equatable {
   let date: Date
   let completionRate: Double
+  let hasData: Bool
+
+  nonisolated init(
+    date: Date,
+    completionRate: Double,
+    hasData: Bool = true
+  ) {
+    self.date = date
+    self.completionRate = completionRate
+    self.hasData = hasData
+  }
 }

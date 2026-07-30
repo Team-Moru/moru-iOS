@@ -43,6 +43,7 @@ struct HistoryWeeklySummaryCard: View {
     let completionRate: Double
     let completionRateChangePercentagePoints: Int?
     let averageDurationText: String
+    let runCountsAvailable: Bool
 
     init(
         title: String,
@@ -50,7 +51,8 @@ struct HistoryWeeklySummaryCard: View {
         totalRuns: Int,
         completionRate: Double,
         completionRateChangePercentagePoints: Int?,
-        averageDurationText: String
+        averageDurationText: String,
+        runCountsAvailable: Bool = true
     ) {
         self.title = title
         self.completedRuns = completedRuns
@@ -59,6 +61,7 @@ struct HistoryWeeklySummaryCard: View {
         self.completionRateChangePercentagePoints =
             completionRateChangePercentagePoints
         self.averageDurationText = averageDurationText
+        self.runCountsAvailable = runCountsAvailable
     }
 
     var body: some View {
@@ -80,11 +83,19 @@ struct HistoryWeeklySummaryCard: View {
             ]
         )
         .accessibilityLabel(
-            "\(title), \(completedRuns)/\(totalRuns)회 완료, "
+            "\(title), " + runCountAccessibilityText + ", "
               + "완수율 \(Int((completionRate * 100).rounded()))퍼센트, "
               + comparisonAccessibilityText
               + ", 평균 소요 시간 \(averageDurationText)"
         )
+    }
+
+    private var runCountAccessibilityText: String {
+        guard runCountsAvailable else {
+            return "계정 집계에는 실행 횟수 정보 없음"
+        }
+
+        return "\(completedRuns)/\(totalRuns)회 완료"
     }
 
     private var comparisonText: String {
@@ -473,7 +484,7 @@ private struct HistoryWeekBar: View {
 
     var body: some View {
         Button(action: {
-            guard completion.completionRate > 0 else {
+            guard completion.hasData else {
                 return
             }
 
@@ -494,13 +505,14 @@ private struct HistoryWeekBar: View {
                         )
                     )
                     .frame(height: max(4, 78 * completion.completionRate))
+                    .opacity(completion.hasData ? 1 : 0)
 
                 Text(historyWeekdayText(completion.date, calendar: calendar))
                     .historyOverviewTextStyle(.c1)
                     .foregroundStyle(MoruPilotColor.textTertiary)
 
                 Text(
-                    completion.completionRate > 0
+                    completion.hasData
                         ? "\(Int((completion.completionRate * 100).rounded()))%"
                         : "-"
                 )
@@ -511,16 +523,27 @@ private struct HistoryWeekBar: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(completion.completionRate <= 0 || action == nil)
+        .disabled(!completion.hasData || action == nil)
         .accessibilityLabel(
-            "\(historyWeekdayText(completion.date, calendar: calendar))요일 완수율 "
-            + "\(Int((completion.completionRate * 100).rounded()))퍼센트"
+            completionAccessibilityLabel
         )
         .accessibilityHint(
-            completion.completionRate > 0
+            completion.hasData && action != nil
                 ? "날짜별 상세 화면으로 이동합니다"
-                : "기록이 없습니다"
+                : completion.hasData
+                    ? "계정 요약에는 날짜별 상세 기록이 없습니다"
+                    : "기록이 없습니다"
         )
+    }
+
+    private var completionAccessibilityLabel: String {
+        let weekday = historyWeekdayText(completion.date, calendar: calendar)
+        guard completion.hasData else {
+            return "\(weekday)요일 기록 없음"
+        }
+
+        return "\(weekday)요일 완수율 "
+          + "\(Int((completion.completionRate * 100).rounded()))퍼센트"
     }
 }
 

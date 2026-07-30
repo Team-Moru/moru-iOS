@@ -352,10 +352,18 @@ struct AppRouter: View {
 
   @MainActor
   var mainTabView: MainTabView {
+    let historySummaryEnricher = dependencies.accountHistoryRemoteService.map {
+      AccountHistorySummaryEnricher(
+        remoteService: $0,
+        signedInMemberProvider: accountSessionStore
+      )
+    }
     let historyBuilder = DefaultHistoryFlowBuilder(
       loadHistoryUseCase: LoadHistoryUseCase(
         routineRunRepository: dependencies.routineRunRepository
-      )
+      ),
+      summaryEnricher: historySummaryEnricher,
+      accountIdentity: accountSessionStore.signedInMemberID
     )
     let profileSettingsUseCase = ProfileSettingsUseCase(
       localProfileRepository: dependencies.localProfileRepository,

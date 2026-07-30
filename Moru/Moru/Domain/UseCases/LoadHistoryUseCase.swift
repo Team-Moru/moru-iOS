@@ -74,7 +74,8 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
 
       return HistoryDailyCompletion(
         date: dayStart,
-        completionRate: averageCompletionRate(for: dayRuns)
+        completionRate: averageCompletionRate(for: dayRuns),
+        hasData: !dayRuns.isEmpty
       )
     }
 

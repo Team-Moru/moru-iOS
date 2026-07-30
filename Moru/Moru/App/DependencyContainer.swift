@@ -16,6 +16,7 @@ struct DependencyContainer {
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
+  let accountHistoryRemoteService: (any AccountHistoryRemoteServing)?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -34,6 +35,7 @@ struct DependencyContainer {
     homeWeatherRepository: (any HomeWeatherRepository)? = nil,
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
+    accountHistoryRemoteService: (any AccountHistoryRemoteServing)? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -52,6 +54,7 @@ struct DependencyContainer {
     self.homeWeatherRepository = homeWeatherRepository
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
+    self.accountHistoryRemoteService = accountHistoryRemoteService
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -63,7 +66,11 @@ struct DependencyContainer {
   }
 
   @MainActor
-  static func local(modelContext: ModelContext) -> DependencyContainer {
+  static func local(
+    modelContext: ModelContext,
+    accountHistoryRemoteService:
+      (any AccountHistoryRemoteServing)? = nil
+  ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
     let guidancePlayer = BundledRoutineGuidancePlayer(
@@ -118,6 +125,7 @@ struct DependencyContainer {
       localDataResetRepository: SwiftDataLocalDataResetRepository(
         modelContext: modelContext
       ),
+      accountHistoryRemoteService: accountHistoryRemoteService,
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
       alarmRuntimeHandler: alarmRuntimeHandler,
