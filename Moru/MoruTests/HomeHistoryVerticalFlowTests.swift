@@ -116,7 +116,7 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     XCTAssertEqual(historyRun.stepResults.map(\.stepTitle), [step.title])
   }
   @MainActor
-  func testHistoryViewModelTransitionsFromLoadingToFailed() {
+  func testHistoryViewModelTransitionsFromLoadingToFailed() async {
     let useCase = SequencedHistoryLoadUseCase(results: [.failure(.loadFailed)])
     let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
 
@@ -125,7 +125,7 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
       return
     }
 
-    viewModel.load()
+    await viewModel.load()
 
     guard case .failed(let message) = viewModel.state else {
       XCTFail("A failed History load should produce the failed state.")
@@ -136,13 +136,13 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
   }
 
   @MainActor
-  func testHistoryViewModelMapsEmptyOverviewToEmptyState() {
+  func testHistoryViewModelMapsEmptyOverviewToEmptyState() async {
     let useCase = SequencedHistoryLoadUseCase(
       results: [.success(makeHistoryOverview(recentDays: []))]
     )
     let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
 
-    viewModel.load()
+    await viewModel.load()
 
     guard case .empty = viewModel.state else {
       XCTFail("An overview without recent days should produce the empty state.")
@@ -153,7 +153,7 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
   }
 
   @MainActor
-  func testHistoryViewModelRetriesFromFailureToContent() {
+  func testHistoryViewModelRetriesFromFailureToContent() async {
     let expectedOverview = makeHistoryOverview(recentDays: [makeHistoryDaySummary()])
     let useCase = SequencedHistoryLoadUseCase(
       results: [
@@ -163,14 +163,14 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     )
     let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
 
-    viewModel.load()
+    await viewModel.load()
 
     guard case .failed = viewModel.state else {
       XCTFail("The first sequenced result should fail.")
       return
     }
 
-    viewModel.retryButtonDidTap()
+    await viewModel.retryButtonDidTap()
 
     guard case .content(let overview) = viewModel.state else {
       XCTFail("Retry should load the next successful result.")
@@ -182,7 +182,7 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
   }
 
   @MainActor
-  func testHistoryViewModelDoesNotLoadAlternateFallbackAfterFailure() {
+  func testHistoryViewModelDoesNotLoadAlternateFallbackAfterFailure() async {
     let useCase = SequencedHistoryLoadUseCase(
       results: [
         .failure(.loadFailed),
@@ -191,7 +191,7 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     )
     let viewModel = HistoryViewModel(loadHistoryUseCase: useCase)
 
-    viewModel.load()
+    await viewModel.load()
 
     guard case .failed = viewModel.state else {
       XCTFail("The first failure should remain visible until the user retries.")

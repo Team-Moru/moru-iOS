@@ -105,7 +105,11 @@ struct HistoryView: View {
         case .failed(let message):
           HistoryFailureView(
             message: message,
-            retryAction: viewModel.retryButtonDidTap
+            retryAction: {
+              Task {
+                await viewModel.retryButtonDidTap()
+              }
+            }
           )
         }
       }
@@ -135,7 +139,9 @@ struct HistoryView: View {
         return
       }
 
-      viewModel.load()
+      await viewModel.load()
+    }
+    .onChange(of: viewModel.state) { _, _ in
       resolveLoadedDestination()
     }
     .onChange(of: pendingDestination) { _, destination in
@@ -156,6 +162,10 @@ struct HistoryView: View {
           .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
 
         VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+          if overview.summarySource == .account {
+            HistoryAccountSummaryNotice()
+          }
+
           HistoryStreakWeeklyCard(
             streak: overview.streak,
             action: { isWeeklyReportPresented = true }
@@ -170,22 +180,30 @@ struct HistoryView: View {
           HistoryWeeklyCompletionChart(
             completions: overview.week.dailyCompletionRates,
             calendar: overview.calendar,
-            onSelect: { completion in
-              selectDay(for: completion.date, in: overview)
-            }
+            onSelect: overview.week.summarySource == .device
+              ? { completion in
+                selectDay(for: completion.date, in: overview)
+              }
+              : nil
           )
 
           VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
             HistorySectionHeader(title: "최근 기록", actionTitle: nil, action: nil)
 
-            LazyVStack(spacing: AppSpacing.sm) {
-              ForEach(overview.recentDays, id: \.date) { day in
-                NavigationLink {
-                  HistoryDailyDetailView(day: day, calendar: overview.calendar)
-                } label: {
-                  HistoryDaySummaryRow(day: day, calendar: overview.calendar)
+            if overview.recentDays.isEmpty {
+              HistoryInlineEmptyCard(
+                message: HistoryCopy.accountSummaryDetailNotice
+              )
+            } else {
+              LazyVStack(spacing: AppSpacing.sm) {
+                ForEach(overview.recentDays, id: \.date) { day in
+                  NavigationLink {
+                    HistoryDailyDetailView(day: day, calendar: overview.calendar)
+                  } label: {
+                    HistoryDaySummaryRow(day: day, calendar: overview.calendar)
+                  }
+                  .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
               }
             }
           }
@@ -263,13 +281,36 @@ struct HistoryView: View {
 
   private func retryPendingDestination() {
     isDestinationMissing = false
-    viewModel.load()
-    resolveLoadedDestination()
+    Task {
+      await viewModel.load()
+      resolveLoadedDestination()
+    }
   }
 
   private func dismissMissingDestination() {
     pendingDestination = nil
     isDestinationMissing = false
+  }
+}
+
+private struct HistoryAccountSummaryNotice: View {
+  var body: some View {
+    Label {
+      Text(HistoryCopy.accountSummaryNotice)
+        .historyOverviewTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+    } icon: {
+      Image(systemName: "icloud.and.arrow.down")
+        .foregroundStyle(MoruPilotColor.accent)
+        .accessibilityHidden(true)
+    }
+    .padding(MoruPilotSpacing.sixteen)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(AppColor.grayWhite.opacity(0.72))
+    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+    .accessibilityElement(children: .combine)
+    .accessibilityIdentifier("history.accountSummaryNotice")
   }
 }
 
@@ -984,6 +1025,10 @@ struct HistoryWeeklyReportView: View {
 
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+          if report.summarySource == .account {
+            HistoryAccountSummaryNotice()
+          }
+
           HistoryWeeklySummaryCard(
             title: weekRangeText,
             completedRuns: report.completedRunCount,
@@ -991,15 +1036,18 @@ struct HistoryWeeklyReportView: View {
             completionRate: report.completionRate,
             completionRateChangePercentagePoints:
               report.completionRateChangePercentagePoints,
-            averageDurationText: overview.weeklyAverageElapsedText
+            averageDurationText: overview.weeklyAverageElapsedText,
+            runCountsAvailable: report.summarySource == .device
           )
 
           HistoryWeeklyCompletionChart(
             completions: report.dailyCompletionRates,
             calendar: calendar,
-            onSelect: { completion in
-              selectedDay = overview.daySummary(for: completion.date)
-            }
+            onSelect: report.summarySource == .device
+              ? { completion in
+                selectedDay = overview.daySummary(for: completion.date)
+              }
+              : nil
           )
 
           HistoryWeeklyStepAnalysisView(items: overview.weeklyStepAnalysisItems)
@@ -1062,11 +1110,16 @@ private struct HistoryWeeklyDailyRateRow: View {
           Capsule()
             .fill(AppColor.orange350)
             .frame(width: proxy.size.width * completion.completionRate)
+            .opacity(completion.hasData ? 1 : 0)
         }
       }
       .frame(height: 8)
 
-      Text("\(Int((completion.completionRate * 100).rounded()))%")
+      Text(
+        completion.hasData
+          ? "\(Int((completion.completionRate * 100).rounded()))%"
+          : "-"
+      )
         .font(AppFont.caption1SemiBold)
         .foregroundStyle(AppColor.moruTextSecondary)
         .frame(width: 36, alignment: .trailing)
