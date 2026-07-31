@@ -94,6 +94,71 @@ final class AuthTokenReissueTests: XCTestCase {
     )
   }
 
+  func testAccountBound401RefreshesAndRetriesOnlyTheSameSession() async throws {
+    let credentials = makeCredentials()
+    let credentialStore = TokenRefreshCredentialStore()
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    try sessionStore.establishSession(credentials: credentials)
+    let originalAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 7)
+    )
+    let remoteDataSource = TokenRefreshRemoteDataSource(
+      result: .success(makeReissueResponse())
+    )
+    let coordinator = TokenRefreshCoordinator(
+      authRemoteDataSource: remoteDataSource,
+      accountSessionStore: sessionStore
+    )
+    let successData = Data(
+      """
+      {
+        "isSuccess": true,
+        "code": "COMMON200",
+        "message": "성공입니다.",
+        "result": {
+          "value": "ready"
+        }
+      }
+      """.utf8
+    )
+    let responseScript = UnauthorizedThenSuccessScript(
+      unauthorizedRequestCount: 1,
+      successData: successData
+    )
+    let requestCapture = TokenRefreshRequestCapturePlugin()
+    let client = makeClient(
+      tokenProvider: tokenProvider,
+      accessTokenRefresher: coordinator,
+      responseScript: responseScript,
+      requestCapture: requestCapture
+    )
+
+    let result = try await client.request(
+      TokenRefreshBearerTarget(),
+      as: TokenRefreshEnvelopeResult.self,
+      authorizedForMemberID: 7
+    )
+
+    XCTAssertEqual(result, TokenRefreshEnvelopeResult(value: "ready"))
+    XCTAssertEqual(
+      requestCapture.authorizationHeaders,
+      ["Bearer access-token", "Bearer refreshed-access-token"]
+    )
+    XCTAssertEqual(responseScript.requestCount, 2)
+    XCTAssertEqual(remoteDataSource.reissueCount, 1)
+    let refreshedAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 7)
+    )
+    XCTAssertEqual(
+      refreshedAuthorization.sessionID,
+      originalAuthorization.sessionID
+    )
+  }
+
   func testLogout401RetryRebuildsBodyWithRotatedRefreshToken() async throws {
     let credentialStore = TokenRefreshCredentialStore()
     let tokenProvider = MemoryAccessTokenProvider()
@@ -458,6 +523,156 @@ final class AuthTokenReissueTests: XCTestCase {
     XCTAssertEqual(credentialStore.removeCount, 0)
   }
 
+  func testStaleRefreshDoesNotInvalidateNewSameMemberSessionReusingToken() async throws {
+    let credentialStore = TokenRefreshCredentialStore()
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    try sessionStore.establishSession(credentials: makeCredentials())
+    let originalAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 7)
+    )
+    let gate = TokenRefreshGate()
+    let remoteDataSource = TokenRefreshRemoteDataSource(
+      result: .success(makeReissueResponse()),
+      gate: gate
+    )
+    let coordinator = TokenRefreshCoordinator(
+      authRemoteDataSource: remoteDataSource,
+      accountSessionStore: sessionStore
+    )
+    let refreshTask = _Concurrency.Task {
+      try await coordinator.refreshAccessToken(
+        afterUnauthorized: "access-token"
+      )
+    }
+
+    try await waitUntil {
+      remoteDataSource.reissueCount == 1
+    }
+    let replacementCredentials = AccountCredentials(
+      memberID: 7,
+      accessToken: "access-token",
+      refreshToken: "replacement-session-refresh-token",
+      onboardingCompleted: false
+    )
+    try sessionStore.establishSession(credentials: replacementCredentials)
+    let replacementAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 7)
+    )
+    XCTAssertNotEqual(
+      replacementAuthorization.sessionID,
+      originalAuthorization.sessionID
+    )
+    let replacementRefreshTask = _Concurrency.Task {
+      try await coordinator.refreshAccessToken(
+        afterUnauthorized: "access-token"
+      )
+    }
+    try await waitUntil {
+      remoteDataSource.reissueCount == 2
+    }
+    await gate.open()
+
+    do {
+      _ = try await refreshTask.value
+      XCTFail("Expected the stale refresh to be rejected.")
+    } catch let error as CredentialStoreError {
+      XCTAssertEqual(error, .invalidCredentials)
+    } catch {
+      XCTFail("Expected CredentialStoreError, got \(error)")
+    }
+
+    let replacementResult = try await replacementRefreshTask.value
+    XCTAssertEqual(
+      replacementResult,
+      AccessTokenRefreshResult(
+        accessToken: "refreshed-access-token",
+        refreshToken: "refreshed-refresh-token"
+      )
+    )
+    XCTAssertEqual(
+      remoteDataSource.refreshTokens,
+      ["refresh-token", "replacement-session-refresh-token"]
+    )
+    XCTAssertEqual(
+      credentialStore.credentials,
+      AccountCredentials(
+        memberID: 7,
+        accessToken: "refreshed-access-token",
+        refreshToken: "refreshed-refresh-token",
+        onboardingCompleted: false
+      )
+    )
+    let finalAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 7)
+    )
+    XCTAssertEqual(
+      finalAuthorization.sessionID,
+      replacementAuthorization.sessionID
+    )
+    XCTAssertEqual(finalAuthorization.accessToken, "refreshed-access-token")
+    XCTAssertEqual(
+      sessionStore.state,
+      .signedIn(
+        SignedInAccount(
+          memberID: 7,
+          onboardingCompleted: false
+        )
+      )
+    )
+    XCTAssertEqual(credentialStore.removeCount, 0)
+  }
+
+  func testRotationCacheDoesNotCrossNewSessionReusingRotatedToken() async throws {
+    let context = try makeRefreshContext(
+      result: .success(makeReissueResponse())
+    )
+
+    let result = try await context.coordinator.refreshAccessToken(
+      afterUnauthorized: "access-token"
+    )
+    XCTAssertEqual(result.accessToken, "refreshed-access-token")
+    let firstAuthorization = try XCTUnwrap(
+      context.tokenProvider.authorizationContext(forMemberID: 7)
+    )
+    let replacementCredentials = AccountCredentials(
+      memberID: 7,
+      accessToken: "refreshed-access-token",
+      refreshToken: "replacement-session-refresh-token",
+      onboardingCompleted: true
+    )
+    try context.sessionStore.establishSession(
+      credentials: replacementCredentials
+    )
+    let replacementAuthorization = try XCTUnwrap(
+      context.tokenProvider.authorizationContext(forMemberID: 7)
+    )
+    XCTAssertNotEqual(
+      replacementAuthorization.sessionID,
+      firstAuthorization.sessionID
+    )
+
+    do {
+      _ = try await context.coordinator.refreshAccessToken(
+        afterUnauthorized: "access-token"
+      )
+      XCTFail("Expected the previous session cache to be rejected.")
+    } catch let error as TokenRefreshCoordinatorError {
+      XCTAssertEqual(error, .sessionUnavailable)
+    } catch {
+      XCTFail("Expected TokenRefreshCoordinatorError, got \(error)")
+    }
+
+    XCTAssertEqual(context.credentialStore.credentials, replacementCredentials)
+    XCTAssertEqual(
+      context.tokenProvider.authorizationContext(forMemberID: 7),
+      replacementAuthorization
+    )
+  }
+
   private func makeRefreshContext(
     result: Result<TokenReissueResponseDTO, Error>
   ) throws -> TokenRefreshTestContext {
@@ -589,6 +804,13 @@ nonisolated private struct TokenRefreshBearerTarget: MoruTargetType {
   }
 }
 
+nonisolated private struct TokenRefreshEnvelopeResult:
+  Decodable,
+  Equatable,
+  Sendable {
+  let value: String
+}
+
 nonisolated private struct TokenRefreshTestContext {
   let credentialStore: TokenRefreshCredentialStore
   let tokenProvider: MemoryAccessTokenProvider
@@ -600,10 +822,15 @@ nonisolated private final class UnauthorizedThenSuccessScript:
   @unchecked Sendable {
   private let lock = NSLock()
   private let unauthorizedRequestCount: Int
+  private let successData: Data
   private var storedRequestCount = 0
 
-  init(unauthorizedRequestCount: Int) {
+  init(
+    unauthorizedRequestCount: Int,
+    successData: Data = Data("OK".utf8)
+  ) {
     self.unauthorizedRequestCount = unauthorizedRequestCount
+    self.successData = successData
   }
 
   var requestCount: Int {
@@ -634,7 +861,7 @@ nonisolated private final class UnauthorizedThenSuccessScript:
       )
     } else {
       statusCode = 200
-      data = Data("OK".utf8)
+      data = successData
     }
 
     let endpoint = MoyaProvider<MultiTarget>.defaultEndpointMapping(
@@ -871,7 +1098,7 @@ nonisolated private final class TokenRefreshRemoteDataSource:
 
 private actor TokenRefreshGate {
   private var isOpen = false
-  private var continuation: CheckedContinuation<Void, Never>?
+  private var continuations: [CheckedContinuation<Void, Never>] = []
 
   func wait() async {
     guard !isOpen else {
@@ -879,14 +1106,14 @@ private actor TokenRefreshGate {
     }
 
     await withCheckedContinuation {
-      continuation = $0
+      continuations.append($0)
     }
   }
 
   func open() {
     isOpen = true
-    continuation?.resume()
-    continuation = nil
+    continuations.forEach { $0.resume() }
+    continuations.removeAll()
   }
 }
 

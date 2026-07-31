@@ -98,18 +98,48 @@ final class AccountSessionFoundationTests: XCTestCase {
     try assertInvalidStoredData(Data())
   }
 
-  func testMemoryAccessTokenProviderNormalizesAndRemovesSnapshot() {
+  func testMemoryAccessTokenProviderNormalizesAndRemovesSnapshot() throws {
     let provider = MemoryAccessTokenProvider()
 
     provider.replace(with: "  access-token  ")
     XCTAssertEqual(provider.accessToken, "access-token")
+    XCTAssertNil(provider.authorizationContext(forMemberID: 7))
 
     provider.replace(with: "\n ")
     XCTAssertNil(provider.accessToken)
 
-    provider.replace(with: "next-token")
+    provider.establishAccountSession(
+      with: "account-token",
+      memberID: 7
+    )
+    let firstContext = try XCTUnwrap(
+      provider.authorizationContext(forMemberID: 7)
+    )
+    XCTAssertEqual(firstContext.accessToken, "account-token")
+    XCTAssertNil(provider.authorizationContext(forMemberID: 8))
+
+    XCTAssertTrue(
+      provider.replaceAccountSessionToken(
+        with: "rotated-token",
+        replacing: firstContext
+      )
+    )
+    let rotatedContext = provider.authorizationContext(forMemberID: 7)
+    XCTAssertEqual(rotatedContext?.accessToken, "rotated-token")
+    XCTAssertEqual(rotatedContext?.sessionID, firstContext.sessionID)
+
+    provider.establishAccountSession(
+      with: "new-session-token",
+      memberID: 7
+    )
+    XCTAssertNotEqual(
+      provider.authorizationContext(forMemberID: 7)?.sessionID,
+      firstContext.sessionID
+    )
+
     provider.remove()
     XCTAssertNil(provider.accessToken)
+    XCTAssertNil(provider.authorizationContext(forMemberID: 7))
   }
 
   func testCredentialDescriptionRedactsTokens() {
@@ -144,7 +174,14 @@ final class AccountSessionFoundationTests: XCTestCase {
         )
       )
     )
+    XCTAssertEqual(sessionStore.signedInMemberID, credentials.memberID)
     XCTAssertEqual(tokenProvider.accessToken, credentials.accessToken)
+    XCTAssertEqual(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )?.accessToken,
+      credentials.accessToken
+    )
     XCTAssertEqual(credentialStore.loadCount, 1)
   }
 
@@ -214,11 +251,156 @@ final class AccountSessionFoundationTests: XCTestCase {
     XCTAssertEqual(credentialStore.savedCredentials, credentials)
     XCTAssertEqual(tokenProvider.accessToken, credentials.accessToken)
     XCTAssertEqual(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )?.accessToken,
+      credentials.accessToken
+    )
+    XCTAssertEqual(
       sessionStore.state,
       .signedIn(
         SignedInAccount(
           memberID: credentials.memberID,
           onboardingCompleted: credentials.onboardingCompleted
+        )
+      )
+    )
+  }
+
+  func testTokenRefreshKeepsSessionIdentityAndRejectsAnotherMember() throws {
+    let credentials = makeCredentials()
+    let credentialStore = StubCredentialStore(loadResult: .success(credentials))
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    try sessionStore.establishSession(credentials: credentials)
+    let originalContext = try XCTUnwrap(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )
+    )
+    let refreshContext = AccountTokenRefreshContext(
+      credentials: credentials,
+      authorizationContext: originalContext
+    )
+    let rotatedCredentials = AccountCredentials(
+      memberID: credentials.memberID,
+      accessToken: "rotated-access-token",
+      refreshToken: "rotated-refresh-token",
+      onboardingCompleted: credentials.onboardingCompleted
+    )
+
+    try sessionStore.replaceCredentialsAfterTokenRefresh(
+      rotatedCredentials,
+      replacing: refreshContext
+    )
+
+    let rotatedContext = try XCTUnwrap(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )
+    )
+    XCTAssertEqual(rotatedContext.accessToken, "rotated-access-token")
+    XCTAssertEqual(rotatedContext.sessionID, originalContext.sessionID)
+
+    let anotherMember = AccountCredentials(
+      memberID: credentials.memberID + 1,
+      accessToken: "another-member-token",
+      refreshToken: "another-member-refresh-token",
+      onboardingCompleted: true
+    )
+    let rotatedRefreshContext = AccountTokenRefreshContext(
+      credentials: rotatedCredentials,
+      authorizationContext: rotatedContext
+    )
+    XCTAssertThrowsError(
+      try sessionStore.replaceCredentialsAfterTokenRefresh(
+        anotherMember,
+        replacing: rotatedRefreshContext
+      )
+    ) {
+      XCTAssertEqual($0 as? CredentialStoreError, .invalidCredentials)
+    }
+    XCTAssertEqual(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      ),
+      rotatedContext
+    )
+
+    try sessionStore.removeLocalAccountSession()
+    XCTAssertNil(sessionStore.signedInMemberID)
+    XCTAssertNil(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )
+    )
+  }
+
+  func testStaleRefreshCannotReplaceANewerSameMemberSession() throws {
+    let credentials = makeCredentials()
+    let credentialStore = StubCredentialStore(loadResult: .success(credentials))
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    try sessionStore.establishSession(credentials: credentials)
+    let originalAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )
+    )
+    let staleRefreshContext = AccountTokenRefreshContext(
+      credentials: credentials,
+      authorizationContext: originalAuthorization
+    )
+    let replacementSession = AccountCredentials(
+      memberID: credentials.memberID,
+      accessToken: credentials.accessToken,
+      refreshToken: "replacement-session-refresh-token",
+      onboardingCompleted: false
+    )
+    try sessionStore.establishSession(credentials: replacementSession)
+    let replacementAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      )
+    )
+    XCTAssertNotEqual(
+      replacementAuthorization.sessionID,
+      originalAuthorization.sessionID
+    )
+    let staleRefreshedCredentials = AccountCredentials(
+      memberID: credentials.memberID,
+      accessToken: "stale-refreshed-access-token",
+      refreshToken: "stale-refreshed-refresh-token",
+      onboardingCompleted: true
+    )
+
+    XCTAssertThrowsError(
+      try sessionStore.replaceCredentialsAfterTokenRefresh(
+        staleRefreshedCredentials,
+        replacing: staleRefreshContext
+      )
+    ) {
+      XCTAssertEqual($0 as? CredentialStoreError, .invalidCredentials)
+    }
+    XCTAssertEqual(credentialStore.savedCredentials, replacementSession)
+    XCTAssertEqual(
+      tokenProvider.authorizationContext(
+        forMemberID: credentials.memberID
+      ),
+      replacementAuthorization
+    )
+    XCTAssertEqual(
+      sessionStore.state,
+      .signedIn(
+        SignedInAccount(
+          memberID: replacementSession.memberID,
+          onboardingCompleted: replacementSession.onboardingCompleted
         )
       )
     )

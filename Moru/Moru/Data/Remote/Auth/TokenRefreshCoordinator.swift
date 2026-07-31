@@ -10,20 +10,26 @@ nonisolated enum TokenRefreshCoordinatorError: Error, Equatable, Sendable {
   case invalidResponse
 }
 
-actor TokenRefreshCoordinator: AccessTokenRefreshing {
+actor TokenRefreshCoordinator: AccountBoundAccessTokenRefreshing {
+  private struct RefreshKey: Hashable, Sendable {
+    let failedAccessToken: String
+    let memberID: Int64
+    let sessionID: UUID
+  }
+
   private struct Flight {
     let id: UUID
     let task: Task<AccessTokenRefreshResult, Error>
   }
 
   private struct TokenRotation {
-    let previousAccessToken: String
+    let key: RefreshKey
     let result: AccessTokenRefreshResult
   }
 
   private let authRemoteDataSource: any AuthRemoteDataSource
   private let accountSessionStore: AccountSessionStore
-  private var flights: [String: Flight] = [:]
+  private var flights: [RefreshKey: Flight] = [:]
   private var lastSuccessfulRotation: TokenRotation?
 
   init(
@@ -42,24 +48,70 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
     )
 
     guard !normalizedToken.isEmpty,
-          let currentAccessToken = accountSessionStore
-            .accessTokenProvider.accessToken else {
+          let currentContext = await accountSessionStore
+            .currentAuthorizationContext() else {
       throw TokenRefreshCoordinatorError.sessionUnavailable
     }
 
-    if let flight = flights[normalizedToken] {
+    return try await refreshAccessToken(
+      normalizedToken: normalizedToken,
+      authorizationContext: currentContext
+    )
+  }
+
+  func refreshAccessToken(
+    afterUnauthorized failedAccessToken: String,
+    matching authorizationContext: AccountAuthorizationContext
+  ) async throws -> AccessTokenRefreshResult {
+    let normalizedToken = failedAccessToken.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+
+    guard !normalizedToken.isEmpty,
+          authorizationContext.accessToken == normalizedToken else {
+      throw TokenRefreshCoordinatorError.sessionUnavailable
+    }
+
+    return try await refreshAccessToken(
+      normalizedToken: normalizedToken,
+      authorizationContext: authorizationContext
+    )
+  }
+
+  private func refreshAccessToken(
+    normalizedToken: String,
+    authorizationContext: AccountAuthorizationContext
+  ) async throws -> AccessTokenRefreshResult {
+    guard let currentContext = await accountSessionStore
+      .currentAuthorizationContext(),
+      currentContext.memberID == authorizationContext.memberID,
+      currentContext.sessionID == authorizationContext.sessionID else {
+      throw TokenRefreshCoordinatorError.sessionUnavailable
+    }
+
+    let key = RefreshKey(
+      failedAccessToken: normalizedToken,
+      memberID: authorizationContext.memberID,
+      sessionID: authorizationContext.sessionID
+    )
+
+    if let flight = flights[key] {
       let result = try await flight.task.value
+      try await validateRefreshCompletion(
+        result,
+        for: key
+      )
       recordSuccessfulRotation(
-        from: normalizedToken,
+        for: key,
         result: result
       )
       return result
     }
 
-    guard currentAccessToken == normalizedToken else {
-      guard lastSuccessfulRotation?.previousAccessToken == normalizedToken,
+    guard currentContext.accessToken == normalizedToken else {
+      guard lastSuccessfulRotation?.key == key,
             lastSuccessfulRotation?.result.accessToken
-              == currentAccessToken else {
+              == currentContext.accessToken else {
         throw TokenRefreshCoordinatorError.sessionUnavailable
       }
 
@@ -71,30 +123,39 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
     }
 
     let flightID = UUID()
-    let task = makeRefreshTask(failedAccessToken: normalizedToken)
-    flights[normalizedToken] = Flight(id: flightID, task: task)
+    let task = makeRefreshTask(
+      authorizationContext: authorizationContext
+    )
+    flights[key] = Flight(id: flightID, task: task)
 
     do {
       let result = try await task.value
+      try await validateRefreshCompletion(
+        result,
+        for: key
+      )
       recordSuccessfulRotation(
-        from: normalizedToken,
+        for: key,
         result: result
       )
-      clearFlight(for: normalizedToken, matching: flightID)
+      clearFlight(for: key, matching: flightID)
       return result
     } catch {
-      clearFlight(for: normalizedToken, matching: flightID)
+      clearFlight(for: key, matching: flightID)
       throw error
     }
   }
 
   private func makeRefreshTask(
-    failedAccessToken: String
+    authorizationContext: AccountAuthorizationContext
   ) -> Task<AccessTokenRefreshResult, Error> {
     Task {
       do {
-        let previousCredentials = try await accountSessionStore
-          .credentialsForTokenRefresh(matching: failedAccessToken)
+        let refreshContext = try await accountSessionStore
+          .credentialsForTokenRefresh(
+            matching: authorizationContext
+          )
+        let previousCredentials = refreshContext.credentials
         let response = try await authRemoteDataSource.reissue(
           refreshToken: previousCredentials.refreshToken
         )
@@ -105,7 +166,7 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
 
         try await accountSessionStore.replaceCredentialsAfterTokenRefresh(
           refreshedCredentials,
-          replacing: failedAccessToken
+          replacing: refreshContext
         )
 
         return AccessTokenRefreshResult(
@@ -114,7 +175,7 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
         )
       } catch {
         await accountSessionStore.invalidateAfterTokenRefreshFailure(
-          matching: failedAccessToken
+          matching: authorizationContext
         )
         throw error
       }
@@ -122,24 +183,37 @@ actor TokenRefreshCoordinator: AccessTokenRefreshing {
   }
 
   private func clearFlight(
-    for accessToken: String,
+    for key: RefreshKey,
     matching flightID: UUID
   ) {
-    guard flights[accessToken]?.id == flightID else {
+    guard flights[key]?.id == flightID else {
       return
     }
 
-    flights[accessToken] = nil
+    flights[key] = nil
   }
 
   private func recordSuccessfulRotation(
-    from previousAccessToken: String,
+    for key: RefreshKey,
     result: AccessTokenRefreshResult
   ) {
     lastSuccessfulRotation = TokenRotation(
-      previousAccessToken: previousAccessToken,
+      key: key,
       result: result
     )
+  }
+
+  private func validateRefreshCompletion(
+    _ result: AccessTokenRefreshResult,
+    for key: RefreshKey
+  ) async throws {
+    guard let currentContext = await accountSessionStore
+      .currentAuthorizationContext(),
+      currentContext.memberID == key.memberID,
+      currentContext.sessionID == key.sessionID,
+      currentContext.accessToken == result.accessToken else {
+      throw TokenRefreshCoordinatorError.sessionUnavailable
+    }
   }
 
   nonisolated private static func makeCredentials(
