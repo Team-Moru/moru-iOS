@@ -24,6 +24,21 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 `HTTP 2xx`여도 `isSuccess`가 `false`이면 서버 오류로 처리합니다.
 인증이 필요한 Target은 Access Token이 없을 때 요청을 보내지 않습니다.
 
+## 현재 연동 범위
+
+| 기능 | API | 앱 연결 상태 |
+| --- | --- | --- |
+| 소셜 로그인 | `POST /auth/login/{provider}` | 운영 경로 연결 |
+| 토큰 재발급 | `POST /auth/reissue` | single-flight 재시도와 세션 갱신 연결 |
+| 로그아웃 | `POST /auth/logout` | 운영 경로 연결 |
+| 회원 탈퇴 | `DELETE /auth/withdrawal` | 운영 경로 연결 |
+| AI 루틴 초안 | `POST /routine-groups/ai-generate` | 로그인 계정에 결합해 연결, 실패 시 로컬 추천 |
+| 서버 상태 | `GET /health` | Target과 계약 테스트만 존재 |
+
+홈, 루틴 관리, 실행 기록, 프로필의 기준 데이터는 아직 SwiftData입니다.
+서버 API가 존재하더라도 로컬 ID와 서버 ID의 매핑, 충돌, 시간대,
+멱등성 계약이 확정되지 않은 기능은 임의로 연결하지 않습니다.
+
 ## 계층과 의존성 방향
 
 ```text
@@ -180,24 +195,23 @@ v2.0은 사용자 선택형 백업/가져오기를 우선합니다.
 
 ## 인증과 세션
 
-현재 기반은 `AccessTokenProviding`에서 Access Token을 읽고
-Bearer 헤더를 붙이는 경계까지만 제공합니다.
-
-다음 인증 작업에서 아래 항목을 구현합니다.
+현재 인증 경로는 아래 항목을 구현합니다.
 
 - Keychain Access/Refresh Token 저장
 - `/auth/login/{provider}`
 - `/auth/reissue`
+- `/auth/logout`
+- `/auth/withdrawal`
 - 동시 401 요청의 single-flight 재발급
 - 재발급 후 원 요청 최대 1회 재시도
-- 재발급 실패 시 계정 세션 해제
+- 로그인 계정과 요청 계정을 결합하는 `AccountBoundAPIClient`
 
 APIClient actor는 요청마다 Access Token을 한 번 읽습니다.
 그 값을 `MoyaTargetAdapter`에 snapshot으로 넣고,
 Plugin은 같은 snapshot으로 Bearer 헤더를 만듭니다.
 
-향후 실제 Token Provider는 Keychain을 매 요청마다 읽지 않습니다.
-lock으로 보호된 메모리 snapshot을 제공하고,
+Token Provider는 Keychain을 매 요청마다 읽지 않습니다.
+lock으로 보호된 메모리 snapshot을 제공하며,
 로그인·재발급·로그아웃 시 Keychain과 함께 갱신합니다.
 
 기존 `SessionStore`는 LocalProfile과 온보딩 상태를 계속 담당합니다.
@@ -205,15 +219,35 @@ lock으로 보호된 메모리 snapshot을 제공하고,
 로그아웃은 토큰과 동기화만 중단하고
 로컬 루틴과 기록을 유지합니다.
 
+재발급의 `401`, 잘못된 성공 응답, 회전된 토큰 저장 실패처럼
+기존 자격 증명을 더 사용할 수 없는 경우에만 계정 세션을 해제합니다.
+timeout, 연결 끊김, `408`, `429`, `5xx` 같은 일시 장애에서는
+자격 증명을 보존해 다음 요청에서 다시 시도할 수 있게 합니다.
+
 ## v1 호환성
 
-현재 `DependencyContainer.local(modelContext:)`과
-앱 부트스트랩에는 APIClient를 연결하지 않습니다.
-따라서 앱 실행만으로 서버 요청이 발생하지 않습니다.
-기존 SwiftData와 번들 MP3 동작을 유지합니다.
+앱 부트스트랩은 인증과 AI 루틴 추천에 APIClient를 연결합니다.
+AI 추천은 로그인한 계정에서만 서버를 우선 사용하고,
+로그아웃 상태, 오프라인, timeout, 서버 오류, 잘못된 응답에서는
+기존 로컬 템플릿으로 즉시 대체합니다.
+추천 응답은 사용자가 확인하기 전 SwiftData에 저장하지 않습니다.
 
 서버 기능을 조립할 때도 Local Repository는 교체하지 않습니다. APIClient,
 AccountSessionStore, Remote Data Source, Sync Coordinator를 선택 기능으로 추가합니다.
+
+## 계약 확인 전 보류하는 연동
+
+- 루틴 그룹 생성·조회·활성화·삭제와 실행 결과 업로드
+  - 로컬 UUID와 서버 `Int64` ID의 영속 매핑이 없습니다.
+  - 수정·재정렬, client mutation ID, idempotency, revision,
+    tombstone, 증분 동기화 계약이 없습니다.
+- 프로필과 온보딩 상태
+  - 닉네임 변경과 온보딩 완료 mutation 계약이 없습니다.
+  - 서버와 로컬 중 어느 값을 기준으로 삼을지 정책이 필요합니다.
+- streak와 실행 기록 집계
+  - 날짜 경계, 현재 주의 기준, timezone 정책 확인이 필요합니다.
+- 서버 TTS 선택
+  - 서버 `voiceCode`와 번들 음성의 매핑 및 미리듣기 자산 계약이 없습니다.
 
 ## TTS 경계
 
