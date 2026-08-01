@@ -81,6 +81,8 @@ struct RoutineCreationSheet: View {
       viewModel: OnboardingViewModel(
         flowMode: .recommendedAddition,
         routineSuggestionService: dependencies.routineSuggestionService,
+        routineSuggestionCoordinator:
+          dependencies.routineSuggestionCoordinator,
         recommendedRoutineCreationUseCase:
           RecommendedRoutineCreationUseCase(
             routineRepository: dependencies.routineRepository,

@@ -13,6 +13,7 @@ struct DependencyContainer {
   let localProfileRepository: any LocalProfileRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
+  let routineSuggestionCoordinator: any RoutineSuggestionCoordinating
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
@@ -31,6 +32,7 @@ struct DependencyContainer {
     localProfileRepository: any LocalProfileRepository,
     onboardingRepository: any OnboardingRepository,
     routineSuggestionService: any RoutineSuggestionService,
+    routineSuggestionCoordinator: (any RoutineSuggestionCoordinating)? = nil,
     homeWeatherRepository: (any HomeWeatherRepository)? = nil,
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
@@ -49,6 +51,12 @@ struct DependencyContainer {
     self.localProfileRepository = localProfileRepository
     self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
+    self.routineSuggestionCoordinator = routineSuggestionCoordinator
+      ?? RoutineSuggestionCoordinator(
+        serverService: nil,
+        localService: routineSuggestionService,
+        signedInMemberProvider: nil
+      )
     self.homeWeatherRepository = homeWeatherRepository
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
@@ -63,7 +71,12 @@ struct DependencyContainer {
   }
 
   @MainActor
-  static func local(modelContext: ModelContext) -> DependencyContainer {
+  static func local(
+    modelContext: ModelContext,
+    routineSuggestionRemoteDataSource:
+      (any RoutineSuggestionRemoteDataSource)? = nil,
+    signedInMemberProvider: (any SignedInMemberProviding)? = nil
+  ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
     let guidancePlayer = BundledRoutineGuidancePlayer(
@@ -99,6 +112,15 @@ struct DependencyContainer {
       stateRepository: alarmStateRepository,
       mutationCoordinator: alarmScheduleMutator
     )
+    let localSuggestionService = LocalTemplateSuggestionService.shared
+    let serverSuggestionService = routineSuggestionRemoteDataSource.map {
+      ServerRoutineSuggestionService(remoteDataSource: $0)
+    }
+    let routineSuggestionCoordinator = RoutineSuggestionCoordinator(
+      serverService: serverSuggestionService,
+      localService: localSuggestionService,
+      signedInMemberProvider: signedInMemberProvider
+    )
     let alarmRuntimeHandler = DefaultAlarmRuntimeCoordinator(
       routineRepository: routineRepository,
       stateRepository: alarmStateRepository,
@@ -112,7 +134,8 @@ struct DependencyContainer {
       routineRunRepository: swiftDataRoutineRunRepository,
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
-      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      routineSuggestionService: localSuggestionService,
+      routineSuggestionCoordinator: routineSuggestionCoordinator,
       homeWeatherRepository: SwiftDataHomeWeatherRepository(modelContext: modelContext),
       homeWeatherService: CoreLocationWeatherService(),
       localDataResetRepository: SwiftDataLocalDataResetRepository(
@@ -146,6 +169,7 @@ struct DependencyContainer {
 
     return DefaultOnboardingFlowBuilder(
       routineSuggestionService: routineSuggestionService,
+      routineSuggestionCoordinator: routineSuggestionCoordinator,
       completeOnboardingUseCase: completeOnboardingUseCase,
       voicePreviewPlayer: makeVoicePreviewPlayer()
     )
