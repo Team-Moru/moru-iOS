@@ -376,7 +376,7 @@ final class AuthTokenReissueTests: XCTestCase {
     XCTAssertEqual(refresher.callCount, 0)
   }
 
-  func testTimeoutAndServerRefreshFailuresSignOutAndRemoveCredentials() async throws {
+  func testRetryableRefreshFailuresKeepCredentialsForLaterRetry() async throws {
     let failures: [APIError] = [
       .transport(
         code: URLError.timedOut.rawValue,
@@ -398,11 +398,40 @@ final class AuthTokenReissueTests: XCTestCase {
         )
       }
 
-      XCTAssertEqual(context.sessionStore.state, .signedOut)
-      XCTAssertNil(context.tokenProvider.accessToken)
-      XCTAssertNil(context.credentialStore.credentials)
-      XCTAssertEqual(context.credentialStore.removeCount, 1)
+      XCTAssertEqual(
+        context.sessionStore.state,
+        .signedIn(
+          SignedInAccount(
+            memberID: 7,
+            onboardingCompleted: true
+          )
+        )
+      )
+      XCTAssertEqual(context.tokenProvider.accessToken, "access-token")
+      XCTAssertEqual(context.credentialStore.credentials, makeCredentials())
+      XCTAssertEqual(context.credentialStore.removeCount, 0)
     }
+  }
+
+  func testUnauthorizedRefreshFailureSignsOutAndRemovesCredentials()
+    async throws {
+    let failure = APIError.server(
+      statusCode: 401,
+      code: "AUTH4002",
+      message: "로그인 정보가 만료되었습니다."
+    )
+    let context = try makeRefreshContext(result: .failure(failure))
+
+    await assertAPIError(failure) {
+      _ = try await context.coordinator.refreshAccessToken(
+        afterUnauthorized: "access-token"
+      )
+    }
+
+    XCTAssertEqual(context.sessionStore.state, .signedOut)
+    XCTAssertNil(context.tokenProvider.accessToken)
+    XCTAssertNil(context.credentialStore.credentials)
+    XCTAssertEqual(context.credentialStore.removeCount, 1)
   }
 
   func testMalformedRefreshResponseSignsOutWithoutSavingIt() async throws {

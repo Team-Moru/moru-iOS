@@ -150,15 +150,39 @@ actor TokenRefreshCoordinator: AccountBoundAccessTokenRefreshing {
     authorizationContext: AccountAuthorizationContext
   ) -> Task<AccessTokenRefreshResult, Error> {
     Task {
+      let refreshContext: AccountTokenRefreshContext
+
       do {
-        let refreshContext = try await accountSessionStore
+        refreshContext = try await accountSessionStore
           .credentialsForTokenRefresh(
             matching: authorizationContext
           )
-        let previousCredentials = refreshContext.credentials
-        let response = try await authRemoteDataSource.reissue(
+      } catch {
+        if Self.invalidatesSessionBeforeRefreshRequest(error) {
+          await accountSessionStore.invalidateAfterTokenRefreshFailure(
+            matching: authorizationContext
+          )
+        }
+        throw error
+      }
+
+      let previousCredentials = refreshContext.credentials
+      let response: TokenReissueResponseDTO
+
+      do {
+        response = try await authRemoteDataSource.reissue(
           refreshToken: previousCredentials.refreshToken
         )
+      } catch {
+        if Self.invalidatesSessionAfterRefreshRequest(error) {
+          await accountSessionStore.invalidateAfterTokenRefreshFailure(
+            matching: authorizationContext
+          )
+        }
+        throw error
+      }
+
+      do {
         let refreshedCredentials = try Self.makeCredentials(
           response: response,
           previousCredentials: previousCredentials
@@ -174,11 +198,54 @@ actor TokenRefreshCoordinator: AccountBoundAccessTokenRefreshing {
           refreshToken: refreshedCredentials.refreshToken
         )
       } catch {
+        // The server may already have rotated the refresh token. Keeping the
+        // old local credentials after a malformed success or save failure
+        // would create a retry loop with credentials that may no longer work.
         await accountSessionStore.invalidateAfterTokenRefreshFailure(
           matching: authorizationContext
         )
         throw error
       }
+    }
+  }
+
+  nonisolated private static func invalidatesSessionBeforeRefreshRequest(
+    _ error: Error
+  ) -> Bool {
+    guard let credentialError = error as? CredentialStoreError else {
+      return false
+    }
+
+    return switch credentialError {
+    case .invalidCredentials, .invalidStoredData:
+      true
+    case .keychain:
+      false
+    }
+  }
+
+  nonisolated private static func invalidatesSessionAfterRefreshRequest(
+    _ error: Error
+  ) -> Bool {
+    if error is AuthRemoteDataSourceError {
+      return true
+    }
+
+    guard let apiError = error as? APIError else {
+      return false
+    }
+
+    return switch apiError {
+    case .server(let statusCode, _, _):
+      statusCode == 401
+    case .decoding, .missingResult:
+      true
+    case .invalidRequest,
+         .authenticationRequired,
+         .capabilityDisabled,
+         .transport,
+         .cancelled:
+      false
     }
   }
 
