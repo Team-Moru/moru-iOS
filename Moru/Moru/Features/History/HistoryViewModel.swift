@@ -42,10 +42,14 @@ final class HistoryViewModel {
       guard generation == loadGeneration else {
         return
       }
-      state = state(for: localOverview)
 
       guard let summaryEnricher else {
+        state = state(for: localOverview)
         return
+      }
+
+      if localOverview.hasDisplayableHistory {
+        state = .content(localOverview)
       }
 
       do {
@@ -61,7 +65,9 @@ final class HistoryViewModel {
         guard generation == loadGeneration else {
           return
         }
-        state = state(for: localOverview)
+        state = localOverview.hasDisplayableHistory
+          ? .content(localOverview)
+          : .failed(message: "기록을 불러오지 못했어요.")
       }
     } catch {
       guard generation == loadGeneration else {

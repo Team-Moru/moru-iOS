@@ -19,6 +19,14 @@ final class HistoryServerEnrichmentTests: XCTestCase {
     let remote = makeServerSummary(
       weeklyRate: 0.75,
       dailyRates: [1, 0, nil, nil, nil, nil, nil],
+      totalDurationSeconds: 1_200,
+      routineStats: [
+        ServerHistoryRoutineStat(
+          routineID: 17,
+          title: "물 마시기",
+          completionRate: 0.8
+        ),
+      ],
       monthlyDays: []
     )
     let service = RecordingAccountHistoryRemoteService(result: .success(remote))
@@ -41,6 +49,17 @@ final class HistoryServerEnrichmentTests: XCTestCase {
     ])
     XCTAssertEqual(result.week.totalRunCount, 0)
     XCTAssertEqual(result.week.completedRunCount, 0)
+    XCTAssertEqual(result.week.totalDurationSeconds, 1_200)
+    XCTAssertEqual(
+      result.week.routineStats,
+      [
+        HistoryWeeklyRoutineStat(
+          routineID: 17,
+          title: "물 마시기",
+          completionRate: 0.8
+        ),
+      ]
+    )
     XCTAssertTrue(result.recentDays.isEmpty)
     let requestedMemberIDs = await service.requestedMemberIDs
     XCTAssertEqual(requestedMemberIDs, [41])
@@ -178,6 +197,69 @@ final class HistoryServerEnrichmentTests: XCTestCase {
       return
     }
     XCTAssertEqual(enrichedOverview, remote)
+  }
+
+  @MainActor
+  func testViewModelKeepsLoadingUntilEmptyLocalHistoryIsEnriched() async {
+    let local = makeOverview()
+    let remote = overviewWithAccountStreak(3, basedOn: local)
+    let enricher = DeferredHistorySummaryEnricher()
+    let viewModel = HistoryViewModel(
+      loadHistoryUseCase: StaticHistoryLoadUseCase(overview: local),
+      summaryEnricher: enricher
+    )
+    let loadTask = Task {
+      await viewModel.load()
+    }
+
+    await enricher.waitUntilRequested()
+    XCTAssertEqual(viewModel.state, .loading)
+
+    enricher.resume(returning: remote)
+    await loadTask.value
+
+    XCTAssertEqual(viewModel.state, .content(remote))
+  }
+
+  @MainActor
+  func testViewModelDistinguishesRemoteFailureFromEmptyHistory() async {
+    let local = makeOverview()
+    let enricher = DeferredHistorySummaryEnricher()
+    let viewModel = HistoryViewModel(
+      loadHistoryUseCase: StaticHistoryLoadUseCase(overview: local),
+      summaryEnricher: enricher
+    )
+    let loadTask = Task {
+      await viewModel.load()
+    }
+
+    await enricher.waitUntilRequested()
+    enricher.resume(throwing: HistoryServerEnrichmentTestError.unexpectedRequest)
+    await loadTask.value
+
+    XCTAssertEqual(
+      viewModel.state,
+      .failed(message: "기록을 불러오지 못했어요.")
+    )
+  }
+
+  @MainActor
+  func testViewModelPublishesEmptyOnlyAfterRemoteReturnsNoHistory() async {
+    let local = makeOverview()
+    let enricher = DeferredHistorySummaryEnricher()
+    let viewModel = HistoryViewModel(
+      loadHistoryUseCase: StaticHistoryLoadUseCase(overview: local),
+      summaryEnricher: enricher
+    )
+    let loadTask = Task {
+      await viewModel.load()
+    }
+
+    await enricher.waitUntilRequested()
+    enricher.resume(returning: local)
+    await loadTask.value
+
+    XCTAssertEqual(viewModel.state, .empty)
   }
 
   @MainActor
@@ -331,6 +413,11 @@ private final class DeferredHistorySummaryEnricher:
     continuation?.resume(returning: overview)
     continuation = nil
   }
+
+  func resume(throwing error: any Error) {
+    continuation?.resume(throwing: error)
+    continuation = nil
+  }
 }
 
 @MainActor
@@ -375,13 +462,15 @@ private enum HistoryServerEnrichmentTestError: Error, Sendable {
 private func makeServerSummary(
   weeklyRate: Double = 0,
   dailyRates: [Double?] = Array(repeating: nil, count: 7),
+  totalDurationSeconds: Int = 600,
+  routineStats: [ServerHistoryRoutineStat] = [],
   monthlyDays: [ServerHistoryMonthlyDay] = []
 ) -> ServerHistorySummary {
   ServerHistorySummary(
     weekly: ServerHistoryWeeklySummary(
       completionRate: weeklyRate,
       completionRateChangePercentagePoints: 10,
-      totalDurationSeconds: 600,
+      totalDurationSeconds: totalDurationSeconds,
       dailyCompletions: zip(
         ServerHistoryWeekday.allCases,
         dailyRates
@@ -391,7 +480,7 @@ private func makeServerSummary(
           completionRate: $0.1
         )
       },
-      routineStats: []
+      routineStats: routineStats
     ),
     monthlyDays: monthlyDays
   )

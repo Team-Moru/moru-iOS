@@ -427,6 +427,24 @@ private extension HistoryOverview {
   }
 
   var weeklyStepAnalysisItems: [HistoryStepAnalysisItem] {
+    if week.summarySource == .account {
+      return week.routineStats
+        .map {
+          HistoryStepAnalysisItem(
+            accountRoutineID: $0.routineID,
+            title: $0.title,
+            completionRate: $0.completionRate
+          )
+        }
+        .sorted {
+          if $0.completionRate != $1.completionRate {
+            return $0.completionRate > $1.completionRate
+          }
+
+          return $0.title < $1.title
+        }
+    }
+
     let weekRuns = runsInCurrentWeek
     let stepGroups = Dictionary(grouping: weekRuns.flatMap(\.stepResults)) { result in
       result.stepTitle
@@ -452,7 +470,22 @@ private extension HistoryOverview {
       }
   }
 
-  var weeklyAverageElapsedText: String {
+  var weeklyDurationTitle: String {
+    week.summarySource == .account
+      ? HistoryCopy.totalDuration
+      : HistoryCopy.averageDuration
+  }
+
+  var weeklyDurationText: String {
+    if week.summarySource == .account,
+       let totalDurationSeconds = week.totalDurationSeconds {
+      return String(
+        format: "%02d:%02d",
+        totalDurationSeconds / 60,
+        totalDurationSeconds % 60
+      )
+    }
+
     let durations = runsInCurrentWeek.compactMap { run -> Int? in
       guard let completedAt = run.completedAt else {
         return nil
@@ -1104,7 +1137,8 @@ struct HistoryWeeklyReportView: View {
             completionRate: report.completionRate,
             completionRateChangePercentagePoints:
               report.completionRateChangePercentagePoints,
-            averageDurationText: overview.weeklyAverageElapsedText,
+            averageDurationText: overview.weeklyDurationText,
+            durationTitle: overview.weeklyDurationTitle,
             runCountsAvailable: report.summarySource == .device
           )
 

@@ -43,6 +43,7 @@ struct HistoryWeeklySummaryCard: View {
     let completionRate: Double
     let completionRateChangePercentagePoints: Int?
     let averageDurationText: String
+    let durationTitle: String
     let runCountsAvailable: Bool
 
     init(
@@ -52,6 +53,7 @@ struct HistoryWeeklySummaryCard: View {
         completionRate: Double,
         completionRateChangePercentagePoints: Int?,
         averageDurationText: String,
+        durationTitle: String = HistoryCopy.averageDuration,
         runCountsAvailable: Bool = true
     ) {
         self.title = title
@@ -61,6 +63,7 @@ struct HistoryWeeklySummaryCard: View {
         self.completionRateChangePercentagePoints =
             completionRateChangePercentagePoints
         self.averageDurationText = averageDurationText
+        self.durationTitle = durationTitle
         self.runCountsAvailable = runCountsAvailable
     }
 
@@ -77,7 +80,7 @@ struct HistoryWeeklySummaryCard: View {
                     value: comparisonText
                 ),
                 HistoryReportMetric(
-                    title: HistoryCopy.averageDuration,
+                    title: durationTitle,
                     value: averageDurationText
                 ),
             ]
@@ -86,7 +89,7 @@ struct HistoryWeeklySummaryCard: View {
             "\(title), " + runCountAccessibilityText + ", "
               + "완수율 \(Int((completionRate * 100).rounded()))퍼센트, "
               + comparisonAccessibilityText
-              + ", 평균 소요 시간 \(averageDurationText)"
+              + ", \(durationTitle) \(averageDurationText)"
         )
     }
 
@@ -423,24 +426,35 @@ struct HistoryWeeklyCompletionChart: View {
 }
 
 struct HistoryStepAnalysisItem: Identifiable, Equatable {
+    let id: String
     let title: String
-    let completedCount: Int
-    let totalCount: Int
+    let completionRate: Double
+    let completionText: String
 
-    var id: String {
-        title
+    init(
+        title: String,
+        completedCount: Int,
+        totalCount: Int
+    ) {
+        id = "device-\(title)"
+        self.title = title
+        completionRate = totalCount > 0
+          ? Double(completedCount) / Double(totalCount)
+          : 0
+        completionText =
+          "완료 \(completedCount)회 / 미완료 "
+          + "\(max(totalCount - completedCount, 0))회"
     }
 
-    var completionRate: Double {
-        guard totalCount > 0 else {
-            return 0
-        }
-
-        return Double(completedCount) / Double(totalCount)
-    }
-
-    var completionText: String {
-        "완료 \(completedCount)회 / 미완료 \(max(totalCount - completedCount, 0))회"
+    init(
+        accountRoutineID: Int64,
+        title: String,
+        completionRate: Double
+    ) {
+        id = "account-\(accountRoutineID)"
+        self.title = title
+        self.completionRate = completionRate
+        completionText = "계정 집계 기준"
     }
 }
 

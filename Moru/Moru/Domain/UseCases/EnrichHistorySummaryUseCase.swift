@@ -133,7 +133,10 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
             == ServerHistoryWeekday.allCases.count,
           server.dailyCompletions.contains(where: {
             $0.completionRate != nil
-          }) || server.completionRate > 0 else {
+          })
+            || server.completionRate > 0
+            || server.totalDurationSeconds > 0
+            || !server.routineStats.isEmpty else {
       return local
     }
 
@@ -170,6 +173,14 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
       dailyCompletionRates: dailyCompletions,
       completionRateChangePercentagePoints:
         server.completionRateChangePercentagePoints,
+      totalDurationSeconds: server.totalDurationSeconds,
+      routineStats: server.routineStats.map {
+        HistoryWeeklyRoutineStat(
+          routineID: $0.routineID,
+          title: $0.title,
+          completionRate: $0.completionRate
+        )
+      },
       summarySource: .account
     )
   }

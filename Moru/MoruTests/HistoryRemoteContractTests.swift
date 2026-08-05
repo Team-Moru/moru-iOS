@@ -278,6 +278,83 @@ final class HistoryRemoteContractTests: XCTestCase {
     XCTAssertEqual(summary.monthlyDays.count, 2)
   }
 
+  func testWeeklySuccessIsKeptWhenMonthlyRequestFails()
+    async throws {
+    let summary = try await makeService(
+      monthlyData: Data("invalid monthly response".utf8)
+    ).fetchSummary(
+      year: 2026,
+      month: 4,
+      memberID: 98
+    )
+
+    XCTAssertEqual(summary.weekly.completionRate, 0.75)
+    XCTAssertEqual(summary.weekly.totalDurationSeconds, 3_600)
+    XCTAssertTrue(summary.monthlyDays.isEmpty)
+    XCTAssertEqual(summary.wakePattern?.regularityScore, 73)
+  }
+
+  func testMonthlySuccessIsKeptWhenWeeklyRequestFails()
+    async throws {
+    let summary = try await makeService(
+      weeklyData: Data("invalid weekly response".utf8)
+    ).fetchSummary(
+      year: 2026,
+      month: 4,
+      memberID: 98
+    )
+
+    XCTAssertEqual(summary.weekly.completionRate, 0)
+    XCTAssertTrue(
+      summary.weekly.dailyCompletions.allSatisfy {
+        $0.completionRate == nil
+      }
+    )
+    XCTAssertEqual(summary.monthlyDays.count, 2)
+    XCTAssertEqual(summary.monthlyDays.map(\.day), [1, 3])
+    XCTAssertEqual(summary.wakePattern?.regularityScore, 73)
+  }
+
+  func testNullWakeWithoutOtherValidSummaryPreservesEndpointFailure()
+    async {
+    do {
+      _ = try await makeService(
+        weeklyData: Data("invalid weekly response".utf8),
+        monthlyData: Data("invalid monthly response".utf8),
+        wakeData: Self.nullResultData()
+      ).fetchSummary(
+        year: 2026,
+        month: 4,
+        memberID: 98
+      )
+      XCTFail("Expected the aggregate request to fail.")
+    } catch is APIError {
+      return
+    } catch {
+      XCTFail("Expected the original APIError, got \(error).")
+    }
+  }
+
+  func testAllSummaryRequestsFailThrowsOriginalEndpointError()
+    async {
+    do {
+      _ = try await makeService(
+        weeklyData: Data("invalid weekly response".utf8),
+        monthlyData: Data("invalid monthly response".utf8),
+        wakeData: Data("invalid wake response".utf8)
+      ).fetchSummary(
+        year: 2026,
+        month: 4,
+        memberID: 98
+      )
+      XCTFail("Expected the aggregate request to fail.")
+    } catch is APIError {
+      return
+    } catch {
+      XCTFail("Expected the original APIError, got \(error).")
+    }
+  }
+
   func testRejectsInvalidDailyDateBeforeTransport() async {
     let client = HistoryCallCountingAPIClient()
     let service = DefaultAccountHistoryRemoteService(apiClient: client)
@@ -301,7 +378,7 @@ final class HistoryRemoteContractTests: XCTestCase {
     XCTAssertEqual(client.callCount, 0)
   }
 
-  func testRejectsMalformedWeeklyCoverageAndRates() async {
+  func testMalformedWeeklyCoverageAndRatesKeepOtherSummaryData() async {
     let invalidWeeklyResponses = [
       Self.weeklyData(
         days: """
@@ -338,17 +415,29 @@ final class HistoryRemoteContractTests: XCTestCase {
     ]
 
     for weekly in invalidWeeklyResponses {
-      await assertRemoteError(.invalidResponse) {
-        _ = try await makeService(weeklyData: weekly).fetchSummary(
+      do {
+        let summary = try await makeService(
+          weeklyData: weekly
+        ).fetchSummary(
           year: 2026,
           month: 4,
           memberID: 98
         )
+        XCTAssertEqual(summary.weekly.completionRate, 0)
+        XCTAssertTrue(
+          summary.weekly.dailyCompletions.allSatisfy {
+            $0.completionRate == nil
+          }
+        )
+        XCTAssertEqual(summary.monthlyDays.count, 2)
+        XCTAssertEqual(summary.wakePattern?.regularityScore, 73)
+      } catch {
+        XCTFail("Expected a partial summary, got \(error).")
       }
     }
   }
 
-  func testRejectsMalformedWrongMonthDuplicateAndOutOfRangeMonthlyDays()
+  func testMalformedWrongMonthDuplicateAndOutOfRangeMonthlyDaysKeepOtherData()
     async {
     let invalidMonthlyResponses = [
       Self.monthlyData(entries: [
@@ -370,12 +459,19 @@ final class HistoryRemoteContractTests: XCTestCase {
     ]
 
     for monthly in invalidMonthlyResponses {
-      await assertRemoteError(.invalidResponse) {
-        _ = try await makeService(monthlyData: monthly).fetchSummary(
+      do {
+        let summary = try await makeService(
+          monthlyData: monthly
+        ).fetchSummary(
           year: 2026,
           month: 4,
           memberID: 98
         )
+        XCTAssertEqual(summary.weekly.completionRate, 0.75)
+        XCTAssertTrue(summary.monthlyDays.isEmpty)
+        XCTAssertEqual(summary.wakePattern?.regularityScore, 73)
+      } catch {
+        XCTFail("Expected a partial summary, got \(error).")
       }
     }
   }

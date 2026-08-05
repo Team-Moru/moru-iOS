@@ -12,6 +12,7 @@ enum HistoryCopy {
   static let weeklyCompletionRate = "이번 주 완수율"
   static let comparedToLastWeek = "지난주 대비"
   static let averageDuration = "평균 소요 시간"
+  static let totalDuration = "총 소요 시간"
   static let weekdayCompletionRate = "요일별 완수율"
   static let itemAnalysis = "항목별 분석"
   static let todayRecords = "오늘의 기록"

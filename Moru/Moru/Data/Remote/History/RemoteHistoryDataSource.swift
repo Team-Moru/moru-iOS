@@ -5,10 +5,28 @@
 
 import Foundation
 
+nonisolated private enum HistoryEndpointResult<Value: Sendable>:
+  Sendable {
+  case success(Value)
+  case failure(any Error)
+}
+
 nonisolated final class DefaultAccountHistoryRemoteService:
   AccountHistoryRemoteServing {
   private static let validYearRange = 2000...9999
   private static let validMonthRange = 1...12
+  private static let unavailableWeeklySummary = ServerHistoryWeeklySummary(
+    completionRate: 0,
+    completionRateChangePercentagePoints: 0,
+    totalDurationSeconds: 0,
+    dailyCompletions: ServerHistoryWeekday.allCases.map {
+      ServerHistoryWeekdayCompletion(
+        weekday: $0,
+        completionRate: nil
+      )
+    },
+    routineStats: []
+  )
 
   private let apiClient: any AccountBoundAPIClient
 
@@ -28,33 +46,70 @@ nonisolated final class DefaultAccountHistoryRemoteService:
     }
 
     do {
-      async let weeklyResponse = apiClient.request(
-        HistoryTarget.weekly,
-        as: HistoryWeeklyResponseDTO.self,
-        authorizedForMemberID: memberID
+      async let weeklyResult = fetchWeekly(
+        memberID: memberID
       )
-      async let monthlyResponse = apiClient.request(
-        HistoryTarget.monthly(year: year, month: month),
-        as: [HistoryMonthlyDayDTO].self,
-        authorizedForMemberID: memberID
+      async let monthlyResult = fetchMonthly(
+        year: year,
+        month: month,
+        memberID: memberID
       )
       async let wakePatternResult = fetchWakePattern(
         memberID: memberID
       )
       let (weekly, monthly, wakePattern) = try await (
-        weeklyResponse,
-        monthlyResponse,
+        weeklyResult,
+        monthlyResult,
         wakePatternResult
       )
       try _Concurrency.Task<Never, Never>.checkCancellation()
 
+      let weeklySummary: ServerHistoryWeeklySummary?
+      let weeklyError: (any Error)?
+      switch weekly {
+      case .success(let summary):
+        weeklySummary = summary
+        weeklyError = nil
+      case .failure(let error):
+        weeklySummary = nil
+        weeklyError = error
+      }
+
+      let monthlyDays: [ServerHistoryMonthlyDay]?
+      let monthlyError: (any Error)?
+      switch monthly {
+      case .success(let days):
+        monthlyDays = days
+        monthlyError = nil
+      case .failure(let error):
+        monthlyDays = nil
+        monthlyError = error
+      }
+
+      let wakePatternSummary: ServerHistoryWakePattern?
+      let wakePatternError: (any Error)?
+      switch wakePattern {
+      case .success(let pattern):
+        wakePatternSummary = pattern
+        wakePatternError = nil
+      case .failure(let error):
+        wakePatternSummary = nil
+        wakePatternError = error
+      }
+
+      guard weeklySummary != nil
+              || monthlyDays != nil
+              || wakePatternSummary != nil else {
+        throw weeklyError
+          ?? monthlyError
+          ?? wakePatternError
+          ?? AccountHistoryRemoteError.invalidResponse
+      }
+
       return ServerHistorySummary(
-        weekly: try weekly.makeDomainModel(),
-        monthlyDays: try monthly.makeDomainModels(
-          requestedYear: year,
-          requestedMonth: month
-        ),
-        wakePattern: wakePattern
+        weekly: weeklySummary ?? Self.unavailableWeeklySummary,
+        monthlyDays: monthlyDays ?? [],
+        wakePattern: wakePatternSummary
       )
     } catch is CancellationError {
       throw CancellationError()
@@ -65,16 +120,16 @@ nonisolated final class DefaultAccountHistoryRemoteService:
     }
   }
 
-  private func fetchWakePattern(
+  private func fetchWeekly(
     memberID: Int64
-  ) async throws -> ServerHistoryWakePattern? {
+  ) async throws -> HistoryEndpointResult<ServerHistoryWeeklySummary> {
     do {
-      let response = try await apiClient.requestOptional(
-        HistoryTarget.wakePattern,
-        as: HistoryWakePatternResponseDTO.self,
+      let response = try await apiClient.request(
+        HistoryTarget.weekly,
+        as: HistoryWeeklyResponseDTO.self,
         authorizedForMemberID: memberID
       )
-      return try response?.makeDomainModel()
+      return .success(try response.makeDomainModel())
     } catch is CancellationError {
       throw CancellationError()
     } catch APIError.cancelled {
@@ -82,7 +137,56 @@ nonisolated final class DefaultAccountHistoryRemoteService:
     } catch is AccountAuthorizationContextError {
       throw AccountHistoryRemoteError.accountAuthorizationChanged
     } catch {
-      return nil
+      return .failure(error)
+    }
+  }
+
+  private func fetchMonthly(
+    year: Int,
+    month: Int,
+    memberID: Int64
+  ) async throws -> HistoryEndpointResult<[ServerHistoryMonthlyDay]> {
+    do {
+      let response = try await apiClient.request(
+        HistoryTarget.monthly(year: year, month: month),
+        as: [HistoryMonthlyDayDTO].self,
+        authorizedForMemberID: memberID
+      )
+      return .success(
+        try response.makeDomainModels(
+          requestedYear: year,
+          requestedMonth: month
+        )
+      )
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch APIError.cancelled {
+      throw CancellationError()
+    } catch is AccountAuthorizationContextError {
+      throw AccountHistoryRemoteError.accountAuthorizationChanged
+    } catch {
+      return .failure(error)
+    }
+  }
+
+  private func fetchWakePattern(
+    memberID: Int64
+  ) async throws -> HistoryEndpointResult<ServerHistoryWakePattern?> {
+    do {
+      let response = try await apiClient.requestOptional(
+        HistoryTarget.wakePattern,
+        as: HistoryWakePatternResponseDTO.self,
+        authorizedForMemberID: memberID
+      )
+      return .success(try response?.makeDomainModel())
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch APIError.cancelled {
+      throw CancellationError()
+    } catch is AccountAuthorizationContextError {
+      throw AccountHistoryRemoteError.accountAuthorizationChanged
+    } catch {
+      return .failure(error)
     }
   }
 

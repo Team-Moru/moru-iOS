@@ -236,6 +236,8 @@ struct HistoryWeekReport: Sendable, Equatable {
   let completionRate: Double
   let dailyCompletionRates: [HistoryDailyCompletion]
   let completionRateChangePercentagePoints: Int?
+  let totalDurationSeconds: Int?
+  let routineStats: [HistoryWeeklyRoutineStat]
   let summarySource: HistorySummarySource
 
   nonisolated init(
@@ -246,6 +248,8 @@ struct HistoryWeekReport: Sendable, Equatable {
     completionRate: Double,
     dailyCompletionRates: [HistoryDailyCompletion],
     completionRateChangePercentagePoints: Int? = nil,
+    totalDurationSeconds: Int? = nil,
+    routineStats: [HistoryWeeklyRoutineStat] = [],
     summarySource: HistorySummarySource = .device
   ) {
     self.weekStartDate = weekStartDate
@@ -255,8 +259,16 @@ struct HistoryWeekReport: Sendable, Equatable {
     self.completionRate = completionRate
     self.dailyCompletionRates = dailyCompletionRates
     self.completionRateChangePercentagePoints = completionRateChangePercentagePoints
+    self.totalDurationSeconds = totalDurationSeconds
+    self.routineStats = routineStats
     self.summarySource = summarySource
   }
+}
+
+struct HistoryWeeklyRoutineStat: Sendable, Equatable {
+  let routineID: Int64
+  let title: String
+  let completionRate: Double
 }
 
 struct HistoryDailyCompletion: Sendable, Equatable {
