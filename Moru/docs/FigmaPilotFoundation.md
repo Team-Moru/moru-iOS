@@ -79,6 +79,18 @@ xcrun swift Scripts/figma-visual-compare.swift \
   --mask-bottom-pixels 102
 ```
 
+Bottom sheet나 dialog처럼 배경 fixture가 다른 컴포넌트는 좌상단 기준 pixel
+ROI와 MAE gate를 함께 지정할 수 있습니다.
+
+```bash
+xcrun swift Scripts/figma-visual-compare.swift \
+  --reference /path/to/figma.png \
+  --candidate /path/to/after.png \
+  --output-dir /path/to/comparison \
+  --compare-rect-pixels 0,1500,1179,954 \
+  --maximum-mae 8
+```
+
 다음 결과를 생성합니다.
 
 - `side-by-side.png`
@@ -88,3 +100,7 @@ xcrun swift Scripts/figma-visual-compare.swift \
 
 마스크 값은 3× PNG의 pixel 단위입니다. 앱이 그리지 않는 상태바와
 home indicator 영역을 metric과 heatmap에서 제외할 때 사용합니다.
+`--compare-rect-pixels`는 지정한 영역 밖을 metric과 heatmap에서 제외하고,
+`--maximum-mae`는 결과를 쓴 뒤 기준 초과 시 non-zero로 종료합니다.
+마스크와 ROI가 비교 픽셀을 하나도 남기지 않으면 잘못된 통과 대신 오류로
+종료합니다.

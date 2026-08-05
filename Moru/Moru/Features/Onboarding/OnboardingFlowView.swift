@@ -15,6 +15,7 @@ struct OnboardingFlowView: View {
     "routine.creation.recommended.cancel"
 
   @StateObject private var viewModel: OnboardingViewModel
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   init(viewModel: OnboardingViewModel) {
     _viewModel = StateObject(wrappedValue: viewModel)
@@ -34,11 +35,16 @@ struct OnboardingFlowView: View {
           stepContent
             .padding(.horizontal, MoruPilotSpacing.twenty)
             .padding(.top, MoruPilotSpacing.thirtyTwo)
-            .padding(.bottom, AppSpacing.thirtySix)
+            .padding(.bottom, contentBottomSpacing)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .defaultScrollAnchor(.top)
+        .accessibilityIdentifier("onboarding.scroll.content")
       }
 
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .safeAreaInset(edge: .bottom, spacing: 0) {
       if viewModel.step.showsFooter {
         OnboardingFooterView(viewModel: viewModel)
       }
@@ -57,6 +63,16 @@ struct OnboardingFlowView: View {
         weekdayConflictDialogOverlay(weekdayConflict)
       }
     }
+  }
+
+  private var contentBottomSpacing: CGFloat {
+    guard viewModel.step == .alarm else {
+      return AppSpacing.thirtySix
+    }
+
+    return dynamicTypeSize.isAccessibilitySize
+      ? OnboardingFigmaLayout.alarmAccessibilityScrollBottomSpacing
+      : OnboardingFigmaLayout.alarmScrollBottomSpacing
   }
 
   @ViewBuilder
@@ -217,6 +233,24 @@ private enum OnboardingSurface {
   static let listRow = AppColor.grayWhite
 }
 
+enum OnboardingFigmaLayout {
+  static let goalTitleContentSpacing: CGFloat = 88
+  static let alarmTitleContentSpacing: CGFloat = 48
+  static let alarmTimeFontSize: CGFloat = 72
+  static let alarmScrollBottomSpacing: CGFloat = 72
+  static let alarmAccessibilityScrollBottomSpacing: CGFloat = 128
+  static let weekdayButtonSize: CGFloat = 44
+  static let maximumWeekdaySpacing: CGFloat = 7
+
+  static func weekdaySpacing(availableWidth: CGFloat) -> CGFloat {
+    let itemCount = CGFloat(Weekday.onboardingDisplayOrder.count)
+    let gapCount = max(itemCount - 1, 1)
+    let availableSpacing =
+      (availableWidth - weekdayButtonSize * itemCount) / gapCount
+    return min(maximumWeekdaySpacing, max(0, availableSpacing))
+  }
+}
+
 private struct OnboardingStepLayout<Content: View>: View {
   let title: String
   let subtitle: String
@@ -278,7 +312,7 @@ private struct RoutineGoalSelectionView: View {
     OnboardingStepLayout(
       title: "어떤 목표로\n시작할까요?",
       subtitle: "",
-      titleSpacing: AppSpacing.fortyEight
+      titleSpacing: OnboardingFigmaLayout.goalTitleContentSpacing
     ) {
       LazyVGrid(columns: columns, spacing: MoruPilotSpacing.twelve) {
         ForEach(OnboardingDraft.goalOptions) { option in
@@ -556,15 +590,22 @@ private struct RoutineReviewView: View {
 
 private struct OnboardingAlarmSettingView: View {
   @ObservedObject var viewModel: OnboardingViewModel
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
     OnboardingStepLayout(
       title: "아침에 일어날\n시간을 설정해 주세요",
       subtitle: "",
-      titleSpacing: AppSpacing.fortyEight
+      titleSpacing: dynamicTypeSize.isAccessibilitySize
+        ? MoruPilotSpacing.thirtyTwo
+        : OnboardingFigmaLayout.alarmTitleContentSpacing
     ) {
       if viewModel.validatedPreviewRoutine != nil {
-        VStack(spacing: MoruPilotSpacing.twenty) {
+        VStack(
+          spacing: dynamicTypeSize.isAccessibilitySize
+            ? MoruPilotSpacing.twelve
+            : MoruPilotSpacing.twenty
+        ) {
           Text("기상 시간")
             .onboardingTextStyle(.b4.weight(.semiBold))
             .foregroundStyle(MoruPilotColor.textSecondary)
@@ -581,22 +622,172 @@ private struct OnboardingAlarmSettingView: View {
             .foregroundStyle(MoruPilotColor.textSecondary)
             .frame(maxWidth: .infinity)
 
-          VStack(spacing: MoruPilotSpacing.twelve) {
-            WeekdayCircleSelector(viewModel: viewModel)
-              .frame(maxWidth: .infinity)
+          WeekdayCircleSelector(viewModel: viewModel)
+            .frame(maxWidth: .infinity)
 
-            Text(OnboardingCopy.alarmSoundGuidance)
-              .onboardingTextStyle(.c1)
-              .foregroundStyle(MoruPilotColor.textPrimary)
-              .multilineTextAlignment(.center)
-              .fixedSize(horizontal: false, vertical: true)
-              .frame(maxWidth: .infinity)
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+            Text("알람")
+              .onboardingTextStyle(.b4.weight(.semiBold))
+              .foregroundStyle(MoruPilotColor.textSecondary)
+
+            OnboardingAlarmOptionsCard()
           }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(
+            .top,
+            dynamicTypeSize.isAccessibilitySize
+              ? -MoruPilotSpacing.twelve
+              : -MoruPilotSpacing.twenty
+          )
         }
       } else {
         PreviewUnavailableState(errorMessage: viewModel.errorMessage)
       }
     }
+  }
+}
+
+private struct OnboardingAlarmOptionsCard: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  var body: some View {
+    VStack(spacing: cardSpacing) {
+      VStack(spacing: soundSectionSpacing) {
+        soundHeader
+
+        HStack(spacing: MoruPilotSpacing.twelve) {
+          Image(systemName: "speaker.wave.2.fill")
+            .font(.system(size: 20, weight: .medium))
+            .foregroundStyle(MoruPilotColor.textTertiary)
+            .frame(width: 28, height: compactControlHeight)
+            .accessibilityHidden(true)
+
+          Slider(value: .constant(0.45), in: 0...1)
+            .tint(MoruPilotColor.accent)
+            .disabled(true)
+            .accessibilityLabel("알람 음량")
+            .accessibilityValue("iPhone 설정에서 조절")
+        }
+
+      }
+
+      Rectangle()
+        .fill(MoruPilotColor.border.opacity(0.8))
+        .frame(height: 1)
+
+      unavailableSettingRow(title: "날씨 알려주기")
+      unavailableSettingRow(title: "오늘의 운세 알려주기")
+    }
+    .padding(cardPadding)
+    .background(OnboardingSurface.card)
+    .overlay(
+      RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+        .stroke(MoruPilotColor.border, lineWidth: 1)
+    )
+    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+    .accessibilityHint(OnboardingCopy.alarmSoundGuidance)
+  }
+
+  private var cardSpacing: CGFloat {
+    dynamicTypeSize.isAccessibilitySize
+      ? MoruPilotSpacing.twelve
+      : MoruPilotSpacing.four
+  }
+
+  private var soundSectionSpacing: CGFloat {
+    dynamicTypeSize.isAccessibilitySize
+      ? MoruPilotSpacing.eight
+      : 2
+  }
+
+  private var compactControlHeight: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? 44 : 32
+  }
+
+  private var cardPadding: CGFloat {
+    dynamicTypeSize.isAccessibilitySize
+      ? MoruPilotSpacing.sixteen
+      : MoruPilotSpacing.eight
+  }
+
+  @ViewBuilder
+  private var soundHeader: some View {
+    if dynamicTypeSize.isAccessibilitySize {
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+        Text("사운드")
+          .onboardingTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textPrimary)
+
+        Text("iPhone 설정")
+          .onboardingTextStyle(.c1.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textSecondary)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    } else {
+      HStack(spacing: MoruPilotSpacing.twelve) {
+        Text("사운드")
+          .onboardingTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textPrimary)
+
+          Spacer(minLength: MoruPilotSpacing.eight)
+
+          Text("iPhone 설정")
+          .onboardingTextStyle(.c1.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textSecondary)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func unavailableSettingRow(title: String) -> some View {
+    if dynamicTypeSize.isAccessibilitySize {
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+        unavailableSettingTitle(title)
+
+        HStack(spacing: MoruPilotSpacing.eight) {
+          unavailableBadge
+          Spacer(minLength: MoruPilotSpacing.eight)
+          unavailableToggle(title: title)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.vertical, MoruPilotSpacing.four)
+      .accessibilityElement(children: .contain)
+    } else {
+      HStack(spacing: MoruPilotSpacing.eight) {
+        unavailableSettingTitle(title)
+        Spacer(minLength: MoruPilotSpacing.eight)
+        unavailableBadge
+        unavailableToggle(title: title)
+      }
+      .frame(minHeight: compactControlHeight)
+      .accessibilityElement(children: .contain)
+    }
+  }
+
+  private func unavailableSettingTitle(_ title: String) -> some View {
+    Text(title)
+      .onboardingTextStyle(.c1.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textSecondary)
+      .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private var unavailableBadge: some View {
+    Text("준비 중")
+      .onboardingTextStyle(.c2.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textTertiary)
+      .padding(.horizontal, MoruPilotSpacing.ten)
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 28 : 24)
+      .background(MoruPilotColor.progressTrack)
+      .clipShape(Capsule())
+  }
+
+  private func unavailableToggle(title: String) -> some View {
+    Toggle("", isOn: .constant(false))
+      .labelsHidden()
+      .disabled(true)
+      .accessibilityLabel(title)
+      .accessibilityValue("준비 중")
   }
 }
 
@@ -875,57 +1066,120 @@ private struct OnboardingChecklistRow: View {
 
 private struct TimeWheelControl: View {
   @ObservedObject var viewModel: OnboardingViewModel
+  @State private var isEditing = false
 
   var body: some View {
-    VStack(spacing: AppSpacing.xs) {
-      HStack(spacing: AppSpacing.fortyEight) {
-        wheelColumn(
-          previous: hourText(viewModel.draft.alarmHour - 1),
-          current: hourText(viewModel.draft.alarmHour),
-          next: hourText(viewModel.draft.alarmHour + 1),
-          decrement: {
-            viewModel.updateAlarm(
-              hour: wrappedHour(viewModel.draft.alarmHour - 1),
-              minute: viewModel.draft.alarmMinute
+    VStack(spacing: MoruPilotSpacing.sixteen) {
+      Button {
+        isEditing.toggle()
+      } label: {
+        VStack(spacing: 0) {
+          Text(timePresentation.time)
+            .font(
+              .custom(
+                MoruTextWeight.semiBold.rawValue,
+                fixedSize: OnboardingFigmaLayout.alarmTimeFontSize
+              )
             )
-          },
-          increment: {
-            viewModel.updateAlarm(
-              hour: wrappedHour(viewModel.draft.alarmHour + 1),
-              minute: viewModel.draft.alarmMinute
-            )
-          }
-        )
+            .foregroundStyle(MoruPilotColor.textStrong)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, minHeight: 82)
 
-        wheelColumn(
-          previous: minuteText(viewModel.draft.alarmMinute - 1),
-          current: minuteText(viewModel.draft.alarmMinute),
-          next: minuteText(viewModel.draft.alarmMinute + 1),
-          decrement: {
-            viewModel.updateAlarm(
-              hour: viewModel.draft.alarmHour,
-              minute: wrappedMinute(viewModel.draft.alarmMinute - 1)
-            )
-          },
-          increment: {
-            viewModel.updateAlarm(
-              hour: viewModel.draft.alarmHour,
-              minute: wrappedMinute(viewModel.draft.alarmMinute + 1)
-            )
-          }
-        )
+          Text(timePresentation.period)
+            .onboardingTextStyle(.b2.weight(.semiBold))
+            .foregroundStyle(MoruPilotColor.textSecondary)
+            .frame(minHeight: 24)
+        }
       }
-      .frame(maxWidth: .infinity)
-      .padding(.vertical, AppSpacing.sm)
-      .background(
-        RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
-          .fill(MoruPilotColor.progressTrack)
-          .frame(height: 44)
+      .buttonStyle(.plain)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("기상 시간")
+      .accessibilityValue(timePresentation.accessibilityValue)
+      .accessibilityHint(
+        isEditing
+          ? "시간 선택기를 닫습니다. 위아래로 쓸어 5분 단위로 조절할 수 있습니다."
+          : "시간 선택기를 엽니다. 위아래로 쓸어 5분 단위로 조절할 수 있습니다."
+      )
+      .accessibilityIdentifier("onboarding.alarm.time")
+      .accessibilityAdjustableAction { direction in
+        switch direction {
+        case .increment:
+          adjustTime(byMinutes: 5)
+        case .decrement:
+          adjustTime(byMinutes: -5)
+        @unknown default:
+          break
+        }
+      }
+
+      if isEditing {
+        wheelEditor
+          .transition(.opacity.combined(with: .move(edge: .top)))
+      }
+    }
+    .padding(.bottom, isEditing ? 0 : MoruPilotSpacing.twenty)
+    .animation(.easeInOut(duration: 0.2), value: isEditing)
+  }
+
+  private var wheelEditor: some View {
+    HStack(spacing: MoruPilotSpacing.twelve) {
+      wheelColumn(
+        label: "시간",
+        previous: hourText(viewModel.draft.alarmHour - 1),
+        current: hourText(viewModel.draft.alarmHour),
+        next: hourText(viewModel.draft.alarmHour + 1),
+        decrement: {
+          viewModel.updateAlarm(
+            hour: wrappedHour(viewModel.draft.alarmHour - 1),
+            minute: viewModel.draft.alarmMinute
+          )
+        },
+        increment: {
+          viewModel.updateAlarm(
+            hour: wrappedHour(viewModel.draft.alarmHour + 1),
+            minute: viewModel.draft.alarmMinute
+          )
+        }
+      )
+
+      Text(":")
+        .font(
+          .custom(
+            MoruTextWeight.semiBold.rawValue,
+            fixedSize: 30
+          )
+        )
+        .foregroundStyle(MoruPilotColor.textStrong)
+        .accessibilityHidden(true)
+
+      wheelColumn(
+        label: "분",
+        previous: minuteText(viewModel.draft.alarmMinute - 1),
+        current: minuteText(viewModel.draft.alarmMinute),
+        next: minuteText(viewModel.draft.alarmMinute + 1),
+        decrement: {
+          viewModel.updateAlarm(
+            hour: viewModel.draft.alarmHour,
+            minute: wrappedMinute(viewModel.draft.alarmMinute - 1)
+          )
+        },
+        increment: {
+          viewModel.updateAlarm(
+            hour: viewModel.draft.alarmHour,
+            minute: wrappedMinute(viewModel.draft.alarmMinute + 1)
+          )
+        }
       )
     }
+    .frame(maxWidth: .infinity)
+    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.vertical, MoruPilotSpacing.twelve)
+    .background(OnboardingSurface.card.opacity(0.72))
+    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
   }
 
   private func wheelColumn(
+    label: String,
     previous: String,
     current: String,
     next: String,
@@ -935,29 +1189,49 @@ private struct TimeWheelControl: View {
     VStack(spacing: AppSpacing.xs) {
       Button(action: decrement) {
         Text(previous)
-          .onboardingTextStyle(.b2.weight(.semiBold))
+          .font(
+            .custom(
+              MoruTextWeight.semiBold.rawValue,
+              fixedSize: 18
+            )
+          )
           .foregroundStyle(MoruPilotColor.textTertiary)
-          .frame(width: 64, height: 36)
+          .frame(maxWidth: .infinity, minHeight: 44)
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("\(label) 줄이기")
 
       Text(current)
-        .onboardingTextStyle(.h2.weight(.semiBold))
+        .font(
+          .custom(
+            MoruTextWeight.semiBold.rawValue,
+            fixedSize: 30
+          )
+        )
         .foregroundStyle(MoruPilotColor.textStrong)
-        .frame(width: 64, height: 44)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .accessibilityHidden(true)
 
       Button(action: increment) {
         Text(next)
-          .onboardingTextStyle(.b2.weight(.semiBold))
+          .font(
+            .custom(
+              MoruTextWeight.semiBold.rawValue,
+              fixedSize: 18
+            )
+          )
           .foregroundStyle(MoruPilotColor.textTertiary)
-          .frame(width: 64, height: 36)
+          .frame(maxWidth: .infinity, minHeight: 44)
       }
       .buttonStyle(.plain)
+      .accessibilityLabel("\(label) 늘리기")
     }
+    .frame(maxWidth: .infinity)
   }
 
   private func hourText(_ value: Int) -> String {
-    String(format: "%02d", wrappedHour(value))
+    OnboardingAlarmTimePresentation.displayHourText(for: value)
   }
 
   private func minuteText(_ value: Int) -> String {
@@ -971,36 +1245,80 @@ private struct TimeWheelControl: View {
   private func wrappedMinute(_ value: Int) -> Int {
     (value % 60 + 60) % 60
   }
+
+  private func adjustTime(byMinutes minuteDelta: Int) {
+    let minutesPerDay = 24 * 60
+    let currentMinutes = viewModel.draft.alarmHour * 60
+      + viewModel.draft.alarmMinute
+    let adjustedMinutes = (
+      currentMinutes + minuteDelta + minutesPerDay
+    ) % minutesPerDay
+    viewModel.updateAlarm(
+      hour: adjustedMinutes / 60,
+      minute: adjustedMinutes % 60
+    )
+  }
+
+  private var timePresentation: OnboardingAlarmTimePresentation {
+    OnboardingAlarmTimePresentation(
+      hour: viewModel.draft.alarmHour,
+      minute: viewModel.draft.alarmMinute
+    )
+  }
 }
 
 private struct WeekdayCircleSelector: View {
   @ObservedObject var viewModel: OnboardingViewModel
 
   var body: some View {
-    HStack(spacing: AppSpacing.xs) {
-      ForEach(Weekday.onboardingDisplayOrder) { weekday in
-        Button {
-          viewModel.toggleWeekday(weekday)
-        } label: {
-          Text(weekday.shortKoreanTitle)
-            .onboardingTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(
-              viewModel.draft.selectedWeekdays.contains(weekday)
-                ? AppColor.grayWhite
-                : MoruPilotColor.textTertiary
-            )
-            .minimumScaleFactor(0.7)
-            .frame(width: 42, height: 42)
-            .background(
-              viewModel.draft.selectedWeekdays.contains(weekday)
-                ? MoruPilotColor.accent
-                : MoruPilotColor.progressTrack
-            )
-            .clipShape(Circle())
+    GeometryReader { geometry in
+      HStack(
+        spacing: OnboardingFigmaLayout.weekdaySpacing(
+          availableWidth: geometry.size.width
+        )
+      ) {
+        ForEach(Weekday.onboardingDisplayOrder) { weekday in
+          Button {
+            viewModel.toggleWeekday(weekday)
+          } label: {
+            Text(weekday.shortKoreanTitle)
+              .font(
+                .custom(
+                  MoruTextWeight.semiBold.rawValue,
+                  fixedSize: 18
+                )
+              )
+              .foregroundStyle(
+                viewModel.draft.selectedWeekdays.contains(weekday)
+                  ? AppColor.grayWhite
+                  : MoruPilotColor.textTertiary
+              )
+              .lineLimit(1)
+              .frame(width: 42, height: 42)
+              .background(
+                viewModel.draft.selectedWeekdays.contains(weekday)
+                  ? MoruPilotColor.accent
+                  : MoruPilotColor.progressTrack
+              )
+              .clipShape(Circle())
+          }
+          .buttonStyle(.plain)
+          .frame(
+            width: OnboardingFigmaLayout.weekdayButtonSize,
+            height: OnboardingFigmaLayout.weekdayButtonSize
+          )
+          .contentShape(Rectangle())
+          .accessibilityLabel("\(weekday.shortKoreanTitle)요일")
+          .accessibilityValue(
+            viewModel.draft.selectedWeekdays.contains(weekday)
+              ? "선택됨"
+              : "선택 안 됨"
+          )
         }
-        .buttonStyle(.plain)
       }
+      .frame(maxWidth: .infinity)
     }
+    .frame(height: OnboardingFigmaLayout.weekdayButtonSize)
   }
 }
 
@@ -1046,20 +1364,133 @@ private struct OnboardingOptionButton: View {
   }
 }
 
-private struct FlowLayout<Content: View>: View {
+struct FlowLayout: Layout {
   let spacing: CGFloat
-  @ViewBuilder var content: Content
 
-  var body: some View {
-    ViewThatFits(in: .horizontal) {
-      HStack(spacing: spacing) {
-        content
-      }
+  func sizeThatFits(
+    proposal: ProposedViewSize,
+    subviews: Subviews,
+    cache: inout ()
+  ) -> CGSize {
+    let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    let maximumWidth = finiteWidth(proposal.width)
+    let measurement = Self.measure(
+      sizes: sizes,
+      maximumWidth: maximumWidth,
+      spacing: spacing
+    )
 
-      VStack(alignment: .leading, spacing: spacing) {
-        content
-      }
+    return CGSize(
+      width: proposal.width.flatMap { $0.isFinite ? $0 : nil }
+        ?? measurement.size.width,
+      height: measurement.size.height
+    )
+  }
+
+  func placeSubviews(
+    in bounds: CGRect,
+    proposal: ProposedViewSize,
+    subviews: Subviews,
+    cache: inout ()
+  ) {
+    let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+    let measurement = Self.measure(
+      sizes: sizes,
+      maximumWidth: max(0, bounds.width),
+      spacing: spacing
+    )
+
+    for (index, subview) in subviews.enumerated() {
+      let size = sizes[index]
+      let origin = measurement.origins[index]
+      subview.place(
+        at: CGPoint(
+          x: bounds.minX + origin.x,
+          y: bounds.minY + origin.y
+        ),
+        anchor: .topLeading,
+        proposal: ProposedViewSize(width: size.width, height: size.height)
+      )
     }
+  }
+
+  static func measure(
+    sizes: [CGSize],
+    maximumWidth: CGFloat,
+    spacing: CGFloat
+  ) -> FlowLayoutMeasurement {
+    guard !sizes.isEmpty else {
+      return FlowLayoutMeasurement(origins: [], size: .zero)
+    }
+
+    let availableWidth = maximumWidth.isFinite
+      ? max(0, maximumWidth)
+      : .greatestFiniteMagnitude
+    var origins: [CGPoint] = []
+    var currentX: CGFloat = 0
+    var currentY: CGFloat = 0
+    var rowHeight: CGFloat = 0
+    var measuredWidth: CGFloat = 0
+
+    for size in sizes {
+      if currentX > 0, currentX + size.width > availableWidth {
+        currentX = 0
+        currentY += rowHeight + spacing
+        rowHeight = 0
+      }
+
+      origins.append(CGPoint(x: currentX, y: currentY))
+      measuredWidth = max(measuredWidth, currentX + size.width)
+      rowHeight = max(rowHeight, size.height)
+      currentX += size.width + spacing
+    }
+
+    return FlowLayoutMeasurement(
+      origins: origins,
+      size: CGSize(width: measuredWidth, height: currentY + rowHeight)
+    )
+  }
+
+  private func finiteWidth(_ width: CGFloat?) -> CGFloat {
+    guard let width, width.isFinite else {
+      return .greatestFiniteMagnitude
+    }
+    return max(0, width)
+  }
+}
+
+struct FlowLayoutMeasurement: Equatable {
+  let origins: [CGPoint]
+  let size: CGSize
+}
+
+struct OnboardingAlarmTimePresentation: Equatable {
+  let time: String
+  let period: String
+  let accessibilityValue: String
+
+  init(hour: Int, minute: Int) {
+    let normalizedHour = (hour % 24 + 24) % 24
+    let normalizedMinute = (minute % 60 + 60) % 60
+    let displayHour = normalizedHour % 12 == 0 ? 12 : normalizedHour % 12
+    time = String(
+      format: "%@:%02d",
+      Self.displayHourText(for: normalizedHour),
+      normalizedMinute
+    )
+    period = normalizedHour < 12 ? "AM" : "PM"
+    accessibilityValue = String(
+      format: "%@ %d시 %d분",
+      normalizedHour < 12 ? "오전" : "오후",
+      displayHour,
+      normalizedMinute
+    )
+  }
+
+  static func displayHourText(for hour: Int) -> String {
+    let normalizedHour = (hour % 24 + 24) % 24
+    let displayHour = normalizedHour % 12 == 0 ? 12 : normalizedHour % 12
+    return String(format: "%02d", displayHour)
   }
 }
 

@@ -11,12 +11,29 @@ private struct Options {
   let outputDirectory: URL
   let maskedTopPixels: Int
   let maskedBottomPixels: Int
+  let comparisonRect: PixelRect?
   let differenceGain: Int
+  let maximumMeanAbsoluteChannelDelta: Double?
+}
+
+private struct PixelRect: Codable {
+  let x: Int
+  let y: Int
+  let width: Int
+  let height: Int
+
+  func contains(column: Int, row: Int) -> Bool {
+    column >= x
+      && column < x + width
+      && row >= y
+      && row < y + height
+  }
 }
 
 private struct ComparisonMetrics: Codable {
   let width: Int
   let height: Int
+  let comparisonRect: PixelRect?
   let comparedPixelCount: Int
   let maskedPixelCount: Int
   let differingPixelCount: Int
@@ -60,7 +77,9 @@ Usage:
     --output-dir <directory> \\
     [--mask-top-pixels <count>] \\
     [--mask-bottom-pixels <count>] \\
-    [--difference-gain <1...16>]
+    [--compare-rect-pixels <x,y,width,height>] \\
+    [--difference-gain <1...16>] \\
+    [--maximum-mae <value>]
 
 Outputs:
   side-by-side.png
@@ -76,7 +95,9 @@ private func parseOptions(_ arguments: [String]) throws -> Options {
     "--output-dir",
     "--mask-top-pixels",
     "--mask-bottom-pixels",
+    "--compare-rect-pixels",
     "--difference-gain",
+    "--maximum-mae",
   ]
   var values: [String: String] = [:]
   var index = 0
@@ -111,6 +132,12 @@ private func parseOptions(_ arguments: [String]) throws -> Options {
     name: "--difference-gain",
     range: 1...16
   )
+  let comparisonRect = try values["--compare-rect-pixels"].map {
+    try pixelRectValue($0, name: "--compare-rect-pixels")
+  }
+  let maximumMeanAbsoluteChannelDelta = try values["--maximum-mae"].map {
+    try doubleValue($0, name: "--maximum-mae", range: 0...255)
+  }
 
   return Options(
     referenceURL: URL(fileURLWithPath: referencePath),
@@ -118,7 +145,9 @@ private func parseOptions(_ arguments: [String]) throws -> Options {
     outputDirectory: URL(fileURLWithPath: outputPath),
     maskedTopPixels: maskedTopPixels,
     maskedBottomPixels: maskedBottomPixels,
-    differenceGain: differenceGain
+    comparisonRect: comparisonRect,
+    differenceGain: differenceGain,
+    maximumMeanAbsoluteChannelDelta: maximumMeanAbsoluteChannelDelta
   )
 }
 
@@ -133,6 +162,37 @@ private func integerValue(
     )
   }
   return integer
+}
+
+private func doubleValue(
+  _ value: String,
+  name: String,
+  range: ClosedRange<Double>
+) throws -> Double {
+  guard let number = Double(value), range.contains(number) else {
+    throw ComparisonError.invalidArguments(
+      "\(name) must be in \(range.lowerBound)...\(range.upperBound)."
+    )
+  }
+  return number
+}
+
+private func pixelRectValue(_ value: String, name: String) throws -> PixelRect {
+  let components = value.split(separator: ",", omittingEmptySubsequences: false)
+  guard components.count == 4,
+        let x = Int(components[0]),
+        let y = Int(components[1]),
+        let width = Int(components[2]),
+        let height = Int(components[3]),
+        x >= 0,
+        y >= 0,
+        width > 0,
+        height > 0 else {
+    throw ComparisonError.invalidArguments(
+      "\(name) must use non-negative x,y and positive width,height: x,y,width,height."
+    )
+  }
+  return PixelRect(x: x, y: y, width: width, height: height)
 }
 
 private func loadCGImage(at url: URL) throws -> CGImage {
@@ -239,6 +299,9 @@ private func compare(
       || row >= height - options.maskedBottomPixels
 
     for column in 0..<width {
+      let isOutsideComparisonRect = options.comparisonRect.map {
+        !$0.contains(column: column, row: row)
+      } ?? false
       let pixelIndex = row * width + column
       let sourceOffset = pixelIndex * 4
       let sideReferenceOffset = (row * width * 2 + column) * 4
@@ -259,7 +322,7 @@ private func compare(
       overlay[sourceOffset + 3] = 255
       difference[sourceOffset + 3] = 255
 
-      guard !isMasked else {
+      guard !isMasked, !isOutsideComparisonRect else {
         continue
       }
 
@@ -300,6 +363,7 @@ private func compare(
   let metrics = ComparisonMetrics(
     width: width,
     height: height,
+    comparisonRect: options.comparisonRect,
     comparedPixelCount: comparedPixelCount,
     maskedPixelCount: maskedPixelCount,
     differingPixelCount: differingPixelCount,
@@ -330,10 +394,18 @@ do {
     )
   }
   guard options.maskedTopPixels + options.maskedBottomPixels
-    <= referenceImage.height else {
+    < referenceImage.height else {
     throw ComparisonError.invalidArguments(
-      "The combined masks exceed the image height."
+      "The combined masks must leave at least one image row."
     )
+  }
+  if let rect = options.comparisonRect {
+    guard rect.x + rect.width <= referenceImage.width,
+          rect.y + rect.height <= referenceImage.height else {
+      throw ComparisonError.invalidArguments(
+        "The comparison rectangle exceeds the image bounds."
+      )
+    }
   }
 
   let referencePixels = try rgbaPixels(for: referenceImage)
@@ -345,6 +417,11 @@ do {
     height: referenceImage.height,
     options: options
   )
+  guard result.metrics.comparedPixelCount > 0 else {
+    throw ComparisonError.invalidArguments(
+      "The masks and comparison rectangle leave no pixels to compare."
+    )
+  }
 
   try FileManager.default.createDirectory(
     at: options.outputDirectory,
@@ -384,6 +461,12 @@ do {
     to: options.outputDirectory.appendingPathComponent("metrics.json"),
     options: .atomic
   )
+  if let maximumMAE = options.maximumMeanAbsoluteChannelDelta,
+     result.metrics.meanAbsoluteChannelDelta > maximumMAE {
+    throw ComparisonError.invalidArguments(
+      "MAE \(result.metrics.meanAbsoluteChannelDelta) exceeds \(maximumMAE)."
+    )
+  }
   print(options.outputDirectory.path)
 } catch {
   FileHandle.standardError.write(

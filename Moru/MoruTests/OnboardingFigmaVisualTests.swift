@@ -12,6 +12,98 @@ import XCTest
 
 @MainActor
 final class OnboardingFigmaVisualTests: XCTestCase {
+  func testFlowLayoutWrapsItemsWithoutFallingBackToSingleItemRows() {
+    let measurement = FlowLayout.measure(
+      sizes: [
+        CGSize(width: 80, height: 32),
+        CGSize(width: 88, height: 32),
+        CGSize(width: 72, height: 32),
+        CGSize(width: 64, height: 32),
+      ],
+      maximumWidth: 176,
+      spacing: 8
+    )
+
+    XCTAssertEqual(
+      measurement.origins,
+      [
+        CGPoint(x: 0, y: 0),
+        CGPoint(x: 88, y: 0),
+        CGPoint(x: 0, y: 40),
+        CGPoint(x: 80, y: 40),
+      ]
+    )
+    XCTAssertEqual(measurement.size, CGSize(width: 176, height: 72))
+  }
+
+  func testFigmaGoalSpacingAndAlarmTimePresentationContract() {
+    XCTAssertEqual(OnboardingFigmaLayout.goalTitleContentSpacing, 88)
+    XCTAssertEqual(OnboardingFigmaLayout.alarmScrollBottomSpacing, 72)
+    XCTAssertEqual(
+      OnboardingFigmaLayout.alarmAccessibilityScrollBottomSpacing,
+      128
+    )
+
+    let midnight = OnboardingAlarmTimePresentation(hour: 0, minute: 5)
+    XCTAssertEqual(midnight.time, "12:05")
+    XCTAssertEqual(midnight.period, "AM")
+    XCTAssertEqual(midnight.accessibilityValue, "오전 12시 5분")
+
+    let noon = OnboardingAlarmTimePresentation(hour: 12, minute: 0)
+    XCTAssertEqual(noon.time, "12:00")
+    XCTAssertEqual(noon.period, "PM")
+    XCTAssertEqual(noon.accessibilityValue, "오후 12시 0분")
+
+    let evening = OnboardingAlarmTimePresentation(hour: 19, minute: 45)
+    XCTAssertEqual(evening.time, "07:45")
+    XCTAssertEqual(evening.period, "PM")
+    XCTAssertEqual(evening.accessibilityValue, "오후 7시 45분")
+    XCTAssertEqual(
+      OnboardingAlarmTimePresentation.displayHourText(for: 19),
+      "07"
+    )
+  }
+
+  func testWeekdaySelectorKeepsFullHitTargetsOnNarrowScreens() {
+    let referenceWidth: CGFloat = 353
+    XCTAssertEqual(
+      OnboardingFigmaLayout.weekdaySpacing(
+        availableWidth: referenceWidth
+      ),
+      7
+    )
+
+    let narrowWidth: CGFloat = 335
+    let narrowSpacing = OnboardingFigmaLayout.weekdaySpacing(
+      availableWidth: narrowWidth
+    )
+    let occupiedWidth =
+      OnboardingFigmaLayout.weekdayButtonSize * 7
+      + narrowSpacing * 6
+
+    XCTAssertEqual(narrowSpacing, 4.5)
+    XCTAssertLessThanOrEqual(occupiedWidth, narrowWidth)
+  }
+
+  func testAlarmRendersAtNarrowPhoneWidth() throws {
+    let outputDirectory = URL(
+      fileURLWithPath: "/private/tmp/moru-figma-p1-after"
+    )
+    let image = try MoruVisualCaptureFixture.render(
+      screen(for: .alarm),
+      filename: "alarm-light-M-375.png",
+      variant: .lightMedium,
+      outputDirectory: outputDirectory,
+      configuration: MoruVisualCaptureConfiguration(
+        size: CGSize(width: 375, height: 812),
+        scale: 3
+      )
+    )
+
+    XCTAssertEqual(image.size, CGSize(width: 375, height: 812))
+    XCTAssertEqual(image.scale, 3)
+  }
+
   func testAppStoreScreenshotOnboardingGoals() throws {
     let outputDirectory = try appStoreScreenshotOutputDirectory()
     _ = try MoruVisualCaptureFixture.render(
@@ -156,14 +248,14 @@ final class OnboardingFigmaVisualTests: XCTestCase {
 
     var draft = OnboardingDraft()
     draft.experience = .wantsRecommendation
-    draft.selectedGoalTags = ["energy", "health"]
+    draft.selectedGoalTags = state == .goals ? [] : ["energy", "health"]
     draft.selectedKeywords = ["물 마시기", "스트레칭"]
     draft.freeformText = state == .freeform
       ? ""
       : "일어나면 물을 마시고 스트레칭한 뒤 오늘 계획을 확인하기"
     draft.alarmHour = 7
     draft.alarmMinute = 0
-    draft.selectedWeekdays = [.monday, .wednesday, .friday, .sunday]
+    draft.selectedWeekdays = [.monday, .wednesday, .saturday, .sunday]
 
     let suggestionService: any RoutineSuggestionService
     if state == .previewUnavailable {

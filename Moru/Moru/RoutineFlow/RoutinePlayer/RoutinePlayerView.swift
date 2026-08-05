@@ -386,10 +386,23 @@ struct RoutinePlayerView: View {
 
     private var progressSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ProgressView(
-                value: viewModel.progressValue
-            )
-            .tint(AppColor.orange250)
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(MoruPilotColor.progressTrack)
+
+                    Capsule()
+                        .fill(MoruPilotColor.accent)
+                        .frame(
+                            width: geometry.size.width
+                              * min(max(viewModel.progressValue, 0), 1)
+                        )
+                }
+            }
+            .frame(height: 5)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("루틴 진행 상황")
+            .accessibilityValue(viewModel.currentStepNumberText)
 
             Text(viewModel.currentStepNumberText)
                 .font(
@@ -500,7 +513,7 @@ struct RoutinePlayerView: View {
             colors: [
                 AppColor.babyBlue100.opacity(0.52),
                 AppColor.babyBlue50,
-                AppColor.grayWhite
+                AppColor.babyBlue50
             ],
             startPoint: .top,
             endPoint: .bottom

@@ -239,15 +239,10 @@ struct VoiceInputControlView: View {
   }
 
   private var guidanceWaitingView: some View {
-    VStack(spacing: 12) {
-      ProgressView()
-        .tint(AppColor.orange250)
-
-      Text("음성 안내가 끝난 뒤 인식을 시작해요.")
-        .font(AppFont.caption1SemiBold)
-        .foregroundStyle(AppColor.gray350)
-    }
-    .frame(height: 76)
+    VoiceMicButton(isDisabled: true) {}
+      .accessibilityLabel("음성 안내가 끝난 뒤 인식을 시작해요.")
+      .accessibilityHint("안내가 끝나면 자동으로 음성 인식을 시작합니다")
+      .frame(height: 76)
   }
 
   private var recognitionControlView: some View {

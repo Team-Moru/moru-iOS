@@ -259,10 +259,24 @@ private struct HomeWeatherCard: View {
     }
     .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.vertical, MoruPilotSpacing.twelve)
-    .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+    .frame(
+      maxWidth: .infinity,
+      minHeight: minimumCardHeight,
+      alignment: .leading
+    )
     .homePilotSurface()
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("home.weather.card")
+  }
+
+  private var minimumCardHeight: CGFloat {
+    switch state {
+    case .denied, .noFix, .unavailable:
+      HomeFigmaLayout.actionableWeatherCardHeight
+    case .notRequested, .requestingPermission, .locating, .loading,
+         .fresh, .stale, .restricted:
+      HomeFigmaLayout.weatherCardHeight
+    }
   }
 
   @ViewBuilder
@@ -449,7 +463,7 @@ private struct HomeLoadingSkeleton: View {
       }
 
       HomeSkeletonBlock()
-        .frame(height: 84)
+        .frame(height: HomeFigmaLayout.weatherCardHeight)
 
       HomeSkeletonBlock()
         .frame(height: 326)

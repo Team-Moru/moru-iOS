@@ -58,7 +58,7 @@ struct RoutineFinishedView: View {
   }
 
   private var topContentPadding: CGFloat {
-    dynamicTypeSize.isAccessibilitySize ? 24 : 188
+    dynamicTypeSize.isAccessibilitySize ? 24 : 191
   }
 
   private var stepColumns: [GridItem] {
@@ -124,7 +124,7 @@ struct RoutineFinishedView: View {
       Image(AppImage.moruGradientGlow)
         .resizable()
         .frame(width: 393, height: 450)
-        .offset(y: -47)
+        .offset(y: -30)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

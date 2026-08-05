@@ -13,9 +13,34 @@
 import SwiftUI
 import Combine
 
+private struct RoutinePlayerCaptureTimerRemainingSecondsKey: EnvironmentKey {
+    static let defaultValue: Int? = nil
+}
+
+private struct RoutinePlayerCaptureActiveTimerSegmentIndexKey: EnvironmentKey {
+    static let defaultValue: Int? = nil
+}
+
+extension EnvironmentValues {
+    var routinePlayerCaptureTimerRemainingSeconds: Int? {
+        get { self[RoutinePlayerCaptureTimerRemainingSecondsKey.self] }
+        set { self[RoutinePlayerCaptureTimerRemainingSecondsKey.self] = newValue }
+    }
+
+    var routinePlayerCaptureActiveTimerSegmentIndex: Int? {
+        get { self[RoutinePlayerCaptureActiveTimerSegmentIndexKey.self] }
+        set {
+            self[RoutinePlayerCaptureActiveTimerSegmentIndexKey.self] = newValue
+        }
+    }
+}
+
 struct TimerStepContentView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
+    @Environment(\.routinePlayerCaptureTimerRemainingSeconds)
+    private var captureRemainingSeconds
+    @Environment(\.routinePlayerCaptureActiveTimerSegmentIndex)
+    private var captureActiveTimerSegmentIndex
     let step: RoutineStep
     let isGuidancePlaying: Bool
     let onComplete: () -> Void
@@ -49,12 +74,12 @@ struct TimerStepContentView: View {
             stepTitleSection
 
             Spacer()
-                .frame(height: timerSegments == nil ? 68 : 28)
+                .frame(height: timerSegments == nil ? 84 : 74)
 
             timerProgressView
 
             Spacer()
-                .frame(height: timerSegments == nil ? 76 : 24)
+                .frame(height: timerSegments == nil ? 52 : 26)
 
             if let timerSegments {
                 timerSegmentList(timerSegments)
@@ -97,8 +122,8 @@ struct TimerStepContentView: View {
             timerTextSection
         }
         .frame(
-            width: timerSegments == nil ? 198 : 168,
-            height: timerSegments == nil ? 198 : 168
+            width: 218,
+            height: 218
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("남은 시간 \(timeText)")
@@ -106,12 +131,12 @@ struct TimerStepContentView: View {
 
     private var timerBackground: some View {
         Circle()
-            .fill(AppColor.grayWhite.opacity(0.38))
+            .fill(AppColor.grayWhite.opacity(0.18))
             .shadow(
-                color: AppColor.orange150.opacity(0.22),
-                radius: 30,
+                color: AppColor.orange150.opacity(0.34),
+                radius: 32,
                 x: 0,
-                y: 10
+                y: 8
             )
     }
 
@@ -204,7 +229,7 @@ struct TimerStepContentView: View {
                             in: Circle()
                         )
 
-                    Text(segment.title)
+                    Text(segmentDisplayText(segment))
                         .font(
                             AppFont.pretendardMedium(
                                 size: 14,
@@ -212,7 +237,7 @@ struct TimerStepContentView: View {
                             )
                         )
                         .foregroundStyle(
-                            index == segments.indices.last
+                            index == activeTimerSegmentIndex
                               ? AppColor.gray600
                               : AppColor.gray500
                         )
@@ -221,25 +246,14 @@ struct TimerStepContentView: View {
 
                     Spacer(minLength: 4)
 
-                    if let duration = segment.duration {
-                        Text(duration)
-                            .font(
-                                AppFont.pretendardMedium(
-                                    size: 14,
-                                    relativeTo: .caption
-                                )
-                            )
-                            .foregroundStyle(AppColor.gray350)
-                            .lineLimit(1)
-                    }
                 }
                 .padding(.horizontal, 18)
                 .frame(
                     maxWidth: .infinity,
-                    minHeight: dynamicTypeSize.isAccessibilitySize ? 68 : 42
+                    minHeight: dynamicTypeSize.isAccessibilitySize ? 68 : 46
                 )
                 .background(
-                    index == segments.indices.last
+                    index == activeTimerSegmentIndex
                       ? AppColor.grayWhite.opacity(0.72)
                       : AppColor.grayWhite.opacity(0.42),
                     in: RoundedRectangle(
@@ -255,10 +269,18 @@ struct TimerStepContentView: View {
 
     private var activeTimerSegmentIndex: Int {
         guard let timerSegments else { return 0 }
+#if DEBUG
+        if let captureActiveTimerSegmentIndex {
+            return min(
+                max(captureActiveTimerSegmentIndex, 0),
+                max(timerSegments.count - 1, 0)
+            )
+        }
+#endif
         let segmentDurations = timerSegments.map { segment -> Int in
             segment.durationSeconds ?? 60
         }
-        let elapsedSeconds = max(totalSeconds - remainingSeconds, 0)
+        let elapsedSeconds = max(totalSeconds - displayedRemainingSeconds, 0)
         var cumulativeSeconds = 0
 
         for (index, duration) in segmentDurations.enumerated() {
@@ -297,7 +319,7 @@ struct TimerStepContentView: View {
         }
 
         let value =
-            CGFloat(remainingSeconds)
+            CGFloat(displayedRemainingSeconds)
             / CGFloat(totalSeconds)
 
         return min(max(value, 0), 1)
@@ -306,8 +328,8 @@ struct TimerStepContentView: View {
     // MARK: - Text
 
     private var timeText: String {
-        let minutes = remainingSeconds / 60
-        let seconds = remainingSeconds % 60
+        let minutes = displayedRemainingSeconds / 60
+        let seconds = displayedRemainingSeconds % 60
 
         return String(
             format: "%d:%02d",
@@ -337,5 +359,24 @@ struct TimerStepContentView: View {
 
     private var timerSegments: [RoutinePlayerCopy.TimerSegment]? {
         RoutinePlayerCopy.timerSegments(for: step)
+    }
+
+    private var displayedRemainingSeconds: Int {
+#if DEBUG
+        if let captureRemainingSeconds {
+            return min(max(captureRemainingSeconds, 0), totalSeconds)
+        }
+#endif
+        return remainingSeconds
+    }
+
+    private func segmentDisplayText(
+        _ segment: RoutinePlayerCopy.TimerSegment
+    ) -> String {
+        guard let duration = segment.duration else {
+            return segment.title
+        }
+
+        return "\(segment.title) · \(duration)"
     }
 }

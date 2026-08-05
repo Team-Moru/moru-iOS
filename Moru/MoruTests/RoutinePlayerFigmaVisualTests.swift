@@ -221,24 +221,36 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
   ) async throws -> AnyView {
     switch state {
     case .regularConfirm:
-      return try await runningView(currentStepIndex: 0)
+      return try await runningView(
+        currentStepIndex: 0,
+        isGuidancePlaying: true,
+        keepsGuidanceActive: true
+      )
     case .confirmTranscript:
       return try await runningView(
         currentStepIndex: 0,
-        transcript: "네, 끝났어요."
+        transcript: "네, 끝났어요.",
+        waveformLevels: captureWaveformLevels
       )
     case .regularTimer:
       return try await runningView(
         currentStepIndex: 1,
-        isGuidancePlaying: true
+        isGuidancePlaying: true,
+        timerRemainingSeconds: 108
       )
     case .regularStructuredTimer:
       return try await runningView(
         currentStepIndex: 3,
-        isGuidancePlaying: true
+        isGuidancePlaying: true,
+        timerRemainingSeconds: 108,
+        activeTimerSegmentIndex: 3
       )
     case .regularInput:
-      return try await runningView(currentStepIndex: 2)
+      return try await runningView(
+        currentStepIndex: 2,
+        isGuidancePlaying: true,
+        keepsGuidanceActive: true
+      )
     case .inputLongKorean:
       return try await runningView(
         currentStepIndex: 2,
@@ -246,7 +258,8 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
         오늘도 최선을 다해서 행복한 하루를 만들고 싶습니다. 오늘은 할 일을 \
         미루지 않겠습니다. 휴대폰 보느라 늦잠도 자지 않고, 아침에 빨리 \
         일어나겠습니다.
-        """
+        """,
+        waveformLevels: captureWaveformLevels
       )
     case .stepCompleted:
       let viewModel = makeViewModel()
@@ -282,11 +295,16 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
     currentStepIndex: Int,
     isTrial: Bool = false,
     transcript: String? = nil,
-    isGuidancePlaying: Bool = false
+    waveformLevels: [Float]? = nil,
+    isGuidancePlaying: Bool = false,
+    keepsGuidanceActive: Bool = false,
+    timerRemainingSeconds: Int? = nil,
+    activeTimerSegmentIndex: Int? = nil
   ) async throws -> AnyView {
     let viewModel = makeViewModel(
       isTrial: isTrial,
-      isGuidancePlaying: isGuidancePlaying
+      isGuidancePlaying: isGuidancePlaying,
+      keepsGuidanceActive: keepsGuidanceActive
     )
     advance(viewModel, to: currentStepIndex)
 
@@ -295,8 +313,11 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
       silenceTimeout: 60,
       makeSession: { session }
     )
-    if viewModel.currentStepIsVoiceDriven {
+    if viewModel.currentStepIsVoiceDriven, !keepsGuidanceActive {
       await speechInputController.start()
+      if let waveformLevels {
+        session.send(.audioLevels(waveformLevels))
+      }
       if let transcript {
         session.send(.transcript(transcript, isFinal: false))
       }
@@ -306,6 +327,14 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
       RoutinePlayerView(
         viewModel: viewModel,
         speechInputController: speechInputController
+      )
+      .environment(
+        \.routinePlayerCaptureTimerRemainingSeconds,
+        timerRemainingSeconds
+      )
+      .environment(
+        \.routinePlayerCaptureActiveTimerSegmentIndex,
+        activeTimerSegmentIndex
       )
     )
   }
@@ -332,6 +361,7 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
   private func makeViewModel(
     isTrial: Bool = false,
     isGuidancePlaying: Bool = false,
+    keepsGuidanceActive: Bool = false,
     resolution: RoutineExecutionResolution? = nil
   ) -> RoutinePlayerViewModel {
     let routine = isTrial ? trialCaptureRoutine : captureRoutine
@@ -340,7 +370,11 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
     )
     let playbackState = RoutineGuidancePlaybackState()
     playbackState.update(isPlaying: isGuidancePlaying)
+    let guidancePlayer: any RoutineGuidancePlaying = keepsGuidanceActive
+      ? RoutinePlayerCaptureGuidancePlayer()
+      : NoopRoutineGuidancePlayer()
     let guidanceCoordinator = RoutineGuidanceCoordinator(
+      player: guidancePlayer,
       playbackState: playbackState
     )
 
@@ -429,6 +463,15 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
     }
     routine.steps = steps
     return routine
+  }
+
+  private var captureWaveformLevels: [Float] {
+    [
+      0.18, 0.34, 0.62, 0.84, 0.48,
+      0.26, 0.54, 0.78, 0.44, 0.22,
+      0.40, 0.66, 0.88, 0.58, 0.30,
+      0.50, 0.74, 0.42, 0.24, 0.16,
+    ]
   }
 
   private func step(
@@ -554,4 +597,26 @@ private final class RoutinePlayerCaptureSpeechSession: SpeechInputSession {
   func send(_ event: SpeechInputSessionEvent) {
     eventHandler?(event)
   }
+}
+
+@MainActor
+private final class RoutinePlayerCaptureGuidancePlayer: RoutineGuidancePlaying {
+  func play(
+    itemID: String,
+    voiceCode: String,
+    kind: RoutineAudioCueKind
+  ) async -> GuidancePlaybackResult {
+    do {
+      try await Task.sleep(for: .seconds(3_600))
+      return .completed
+    } catch {
+      return .cancelled
+    }
+  }
+
+  func stop() {}
+
+  func stopAndWaitUntilIdle() async {}
+
+  func resumeAfterSpeechInput() {}
 }
