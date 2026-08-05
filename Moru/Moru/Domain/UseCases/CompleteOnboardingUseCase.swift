@@ -10,13 +10,16 @@ import Foundation
 struct CompleteOnboardingRequest: Hashable {
   var suggestionInput: RoutineSuggestionInput
   var selectedVoice: VoiceProfile
+  var previewRoutine: Routine?
 
   init(
     suggestionInput: RoutineSuggestionInput,
-    selectedVoice: VoiceProfile
+    selectedVoice: VoiceProfile,
+    previewRoutine: Routine? = nil
   ) {
     self.suggestionInput = suggestionInput
     self.selectedVoice = selectedVoice
+    self.previewRoutine = previewRoutine
   }
 }
 
@@ -29,6 +32,7 @@ enum CompleteOnboardingError: Error, Equatable, LocalizedError {
   case invalidAlarmTime(hour: Int, minute: Int)
   case emptyWeekdays
   case unavailableVoice(String)
+  case invalidRoutine
 
   var errorDescription: String? {
     switch self {
@@ -38,6 +42,8 @@ enum CompleteOnboardingError: Error, Equatable, LocalizedError {
       return "알람이 울릴 요일을 하나 이상 선택해 주세요."
     case .unavailableVoice:
       return "v1에서 사용할 수 있는 로컬 목소리만 선택할 수 있어요."
+    case .invalidRoutine:
+      return "추천 루틴 내용을 다시 확인해 주세요."
     }
   }
 }
@@ -74,7 +80,14 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
     profile.selectedVoice = request.selectedVoice
     profile.updatedAt = Date()
 
-    var routine = try routineSuggestionService.makeRoutine(from: request.suggestionInput)
+    var routine: Routine
+    if let previewRoutine = request.previewRoutine {
+      routine = previewRoutine
+    } else {
+      routine = try routineSuggestionService.makeRoutine(
+        from: request.suggestionInput
+      )
+    }
     routine.isActive = true
     routine.alarmSchedule = makeEnabledAlarm(
       from: request.suggestionInput,
@@ -110,6 +123,12 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
 
     guard VoiceProfile.localVoices.contains(request.selectedVoice) else {
       throw CompleteOnboardingError.unavailableVoice(request.selectedVoice.id)
+    }
+
+    if let routine = request.previewRoutine {
+      guard RoutineSuggestionDraftValidation.isValidDraft(routine) else {
+        throw CompleteOnboardingError.invalidRoutine
+      }
     }
   }
 

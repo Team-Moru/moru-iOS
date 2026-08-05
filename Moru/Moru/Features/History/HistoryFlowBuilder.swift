@@ -15,17 +15,35 @@ protocol HistoryFlowBuilding: AnyObject {
 @MainActor
 final class DefaultHistoryFlowBuilder: HistoryFlowBuilding {
   private let loadHistoryUseCase: any LoadHistoryUseCaseProtocol
+  private let summaryEnricher: (any HistorySummaryEnriching)?
+  private let accountDailyReportLoader:
+    (any AccountHistoryDailyReportLoading)?
+  private let accountIdentity: Int64?
 
-  init(loadHistoryUseCase: any LoadHistoryUseCaseProtocol) {
+  init(
+    loadHistoryUseCase: any LoadHistoryUseCaseProtocol,
+    summaryEnricher: (any HistorySummaryEnriching)? = nil,
+    accountDailyReportLoader:
+      (any AccountHistoryDailyReportLoading)? = nil,
+    accountIdentity: Int64? = nil
+  ) {
     self.loadHistoryUseCase = loadHistoryUseCase
+    self.summaryEnricher = summaryEnricher
+    self.accountDailyReportLoader = accountDailyReportLoader
+    self.accountIdentity = accountIdentity
   }
 
   func make(destination: Binding<HistoryDestination?>) -> AnyView {
     AnyView(
       HistoryView(
-        viewModel: HistoryViewModel(loadHistoryUseCase: loadHistoryUseCase),
+        viewModel: HistoryViewModel(
+          loadHistoryUseCase: loadHistoryUseCase,
+          summaryEnricher: summaryEnricher
+        ),
+        accountDailyReportLoader: accountDailyReportLoader,
         destination: destination
       )
+      .id(accountIdentity)
     )
   }
 }

@@ -11,7 +11,7 @@ import XCTest
 
 final class FinalScreenVisualTests: XCTestCase {
   @MainActor
-  func testMainScreensRenderAtReferenceAccessibilitySizes() throws {
+  func testMainScreensRenderAtReferenceAccessibilitySizes() async throws {
     for variant in VisualVariant.allCases {
       try render(
         mainScreen(homeView(), selection: .home),
@@ -24,7 +24,7 @@ final class FinalScreenVisualTests: XCTestCase {
         variant: variant
       )
       try render(
-        mainScreen(historyView(), selection: .record),
+        mainScreen(await historyView(), selection: .record),
         filename: "moru-pr32-final-history-\(variant.filenameSuffix).png",
         variant: variant
       )
@@ -108,10 +108,10 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
-  func testHistoryAndCompletionStreakSurfacesRenderAtReferenceAccessibilitySizes() throws {
+  func testHistoryAndCompletionStreakSurfacesRenderAtReferenceAccessibilitySizes() async throws {
     for variant in [VisualVariant.lightMedium, .lightAccessibility3] {
       try render(
-        mainScreen(historyView(), selection: .record),
+        mainScreen(await historyView(), selection: .record),
         filename: "moru-pr52-history-streak-\(variant.filenameSuffix).png",
         variant: variant,
         matchesApprovedBaseline: false
@@ -211,10 +211,10 @@ final class FinalScreenVisualTests: XCTestCase {
   }
 
   @MainActor
-  private func historyView() -> some View {
+  private func historyView() async -> some View {
     let viewModel = HistoryViewModel(loadHistoryUseCase: VisualHistoryUseCase())
-    viewModel.load()
-    return HistoryView(viewModel: viewModel)
+    await viewModel.load()
+    return HistoryView(viewModel: viewModel, automaticallyLoads: false)
   }
 
   @MainActor
