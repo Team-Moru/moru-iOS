@@ -19,6 +19,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let alarmService: any ProfileAlarmServicing
   private let accountServerRemoteService:
     (any AccountServerRemoteServing)?
+  private let accountRoutineGroupRemoteService:
+    (any AccountRoutineGroupRemoteServing)?
   private let accountSessionStore: AccountSessionStore
   private let socialLoginCoordinator: any SocialLoginCoordinating
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
@@ -36,6 +38,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     alarmService: any ProfileAlarmServicing,
     accountServerRemoteService:
       (any AccountServerRemoteServing)? = nil,
+    accountRoutineGroupRemoteService:
+      (any AccountRoutineGroupRemoteServing)? = nil,
     accountSessionStore: AccountSessionStore,
     socialLoginCoordinator: any SocialLoginCoordinating,
     googleAuthorizationSession: any GoogleAuthorizationStarting,
@@ -51,6 +55,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
     self.accountServerRemoteService = accountServerRemoteService
+    self.accountRoutineGroupRemoteService =
+      accountRoutineGroupRemoteService
     self.accountSessionStore = accountSessionStore
     self.socialLoginCoordinator = socialLoginCoordinator
     self.googleAuthorizationSession = googleAuthorizationSession
@@ -80,6 +86,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
         accountServerViewModel: AccountServerSettingsViewModel(
           remoteService: accountServerRemoteService
         ),
+        accountRoutineGroupRemoteService:
+          accountRoutineGroupRemoteService,
         accountSessionStore: accountSessionStore,
         googleAuthorizationSession: googleAuthorizationSession,
         kakaoAuthorizationSession: kakaoAuthorizationSession,
