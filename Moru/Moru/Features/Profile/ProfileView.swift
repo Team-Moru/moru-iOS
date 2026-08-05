@@ -19,9 +19,15 @@ struct ProfileView: View {
   static let kakaoSignInAccessibilityIdentifier = "profile.account.kakao-sign-in"
   static let accountLogoutAccessibilityIdentifier = "profile.account.logout"
   static let accountWithdrawalAccessibilityIdentifier = "profile.account.withdrawal"
+  static let accountRoutineArchiveAccessibilityIdentifier =
+    "profile.account.routine-archive"
 
   @State private var viewModel: ProfileViewModel
   @State private var accountServerViewModel: AccountServerSettingsViewModel
+  @State private var accountRoutineGroupListViewModel:
+    AccountRoutineGroupListViewModel
+  @State private var accountRoutineGroupDetailViewModel:
+    AccountRoutineGroupDetailViewModel
   @ObservedObject private var accountSessionStore: AccountSessionStore
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.scenePhase) private var scenePhase
@@ -32,6 +38,8 @@ struct ProfileView: View {
   @State private var isResetConfirmationPresented = false
   @State private var isAppleSignInPresented = false
   @State private var isWithdrawalConfirmationPresented = false
+  @State private var routineArchiveNavigation =
+    AccountRoutineGroupArchiveNavigationState()
   @State private var appleAuthorizationSession = AppleAuthorizationSession()
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
   private let kakaoAuthorizationSession: any KakaoAuthorizationStarting
@@ -42,6 +50,8 @@ struct ProfileView: View {
     viewModel: ProfileViewModel,
     accountServerViewModel: AccountServerSettingsViewModel =
       AccountServerSettingsViewModel(),
+    accountRoutineGroupRemoteService:
+      (any AccountRoutineGroupRemoteServing)? = nil,
     accountSessionStore: AccountSessionStore,
     googleAuthorizationSession: any GoogleAuthorizationStarting =
       UnavailableGoogleAuthorizationSession(),
@@ -52,6 +62,16 @@ struct ProfileView: View {
   ) {
     _viewModel = State(initialValue: viewModel)
     _accountServerViewModel = State(initialValue: accountServerViewModel)
+    _accountRoutineGroupListViewModel = State(
+      initialValue: AccountRoutineGroupListViewModel(
+        remoteService: accountRoutineGroupRemoteService
+      )
+    )
+    _accountRoutineGroupDetailViewModel = State(
+      initialValue: AccountRoutineGroupDetailViewModel(
+        remoteService: accountRoutineGroupRemoteService
+      )
+    )
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
     self.googleAuthorizationSession = googleAuthorizationSession
     self.kakaoAuthorizationSession = kakaoAuthorizationSession
@@ -73,6 +93,31 @@ struct ProfileView: View {
       }
       .background(MoruPilotColor.canvas.ignoresSafeArea())
       .toolbar(.hidden, for: .navigationBar)
+      .navigationDestination(
+        isPresented: $routineArchiveNavigation.isArchivePresented
+      ) {
+        AccountRoutineGroupListView(
+          viewModel: accountRoutineGroupListViewModel,
+          memberID: accountSessionStore.signedInMemberID,
+          onSelectRoutineGroup: { routineGroupID in
+            routineArchiveNavigation.presentDetail(
+              routineGroupID: routineGroupID
+            )
+          }
+        )
+      }
+      .navigationDestination(
+        isPresented: $routineArchiveNavigation.isDetailPresented
+      ) {
+        if let selectedRoutineGroupID =
+          routineArchiveNavigation.selectedRoutineGroupID {
+          AccountRoutineGroupDetailView(
+            viewModel: accountRoutineGroupDetailViewModel,
+            routineGroupID: selectedRoutineGroupID,
+            memberID: accountSessionStore.signedInMemberID
+          )
+        }
+      }
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
@@ -93,6 +138,17 @@ struct ProfileView: View {
       }
 
       await accountServerViewModel.load(memberID: memberID)
+    }
+    .onChange(of: accountSessionStore.signedInMemberID) {
+      _, memberID in
+      isServerVoiceSelectionPresented = false
+      routineArchiveNavigation.reset()
+      accountRoutineGroupListViewModel.accountDidChange(
+        memberID: memberID
+      )
+      accountRoutineGroupDetailViewModel.accountDidChange(
+        memberID: memberID
+      )
     }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else {
@@ -336,6 +392,29 @@ struct ProfileView: View {
         }
       )
 
+      if Self.shouldShowAccountRoutineArchive(
+        accountState: accountSessionStore.state,
+        hasRemoteService:
+          accountRoutineGroupListViewModel.isRemoteServiceAvailable
+      ) {
+        Button {
+          routineArchiveNavigation.presentArchive()
+        } label: {
+          settingsRow(
+            title: "서버 루틴 보관함",
+            detail: "계정에 저장된 루틴을 보기만 할 수 있어요.",
+            systemImage: "archivebox.fill"
+          )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(
+          "이 기기의 루틴과 합치거나 실행하지 않고 서버 데이터를 봅니다."
+        )
+        .accessibilityIdentifier(
+          Self.accountRoutineArchiveAccessibilityIdentifier
+        )
+      }
+
       Button {
         Task {
           await viewModel.logoutButtonDidTap()
@@ -381,6 +460,16 @@ struct ProfileView: View {
     case .unknown:
       "MORU"
     }
+  }
+
+  static func shouldShowAccountRoutineArchive(
+    accountState: AccountSessionState,
+    hasRemoteService: Bool
+  ) -> Bool {
+    guard case .signedIn = accountState else {
+      return false
+    }
+    return hasRemoteService
   }
 
   private func accountProgressMessage(for action: AccountLifecycleAction) -> String {

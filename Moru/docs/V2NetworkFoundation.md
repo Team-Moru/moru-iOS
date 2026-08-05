@@ -27,7 +27,7 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 ## 현재 연동 범위
 
 2026-08-05 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
-현재 제품 흐름에 연결된 operation은 15개입니다.
+현재 제품 흐름에 연결된 operation은 17개입니다.
 
 | 기능 | API | 앱 연결 상태 |
 | --- | --- | --- |
@@ -43,15 +43,19 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 | 계정 프로필·스트릭 | `GET /members/me/profile`, `GET /members/me/streak` | Profile의 읽기 전용 계정 정보에 연결 |
 | 계정 음성 | `GET /tts`, `PATCH /members/me/tts` | 서버 생성 음성 목록과 선택 변경에 연결 |
 | 구독 조회 | `GET /subscriptions/me` | Profile의 읽기 전용 플랜 상태에 연결 |
+| 계정 루틴 보관함 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}` | Profile에서 목록·상세를 읽기 전용으로 표시. 로컬 루틴과 병합·실행하지 않음 |
 | 서버 상태 | `GET /health` | Target과 계약 테스트만 존재 |
 
-전체 Swagger 기준 operation 커버리지는 `15/31`입니다.
+전체 Swagger 기준 operation 커버리지는 `17/31`(`54.8%`)입니다.
 제품 앱에서 연결하면 안 되는 개발 토큰과 화면 없는 health를 제외하면
-`15/29`입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은 아닙니다.
+`17/29`(`58.6%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
+아닙니다.
 
 홈, 루틴 관리, 실행 저장, 편집 가능한 로컬 프로필의 기준 데이터는
 계속 SwiftData입니다. History는 로컬 기록을 기준으로 서버 집계를 보강하고,
 Profile의 서버 계정 정보는 로컬 설정과 섞지 않는 읽기 전용 snapshot입니다.
+계정 루틴 보관함도 서버 응답을 메모리에만 보관하며, 같은 제목의 그룹을
+합치거나 로컬 `RoutineRepository`에 쓰지 않습니다.
 서버 API가 존재하더라도 로컬 ID와 서버 ID의 매핑, 충돌, 시간대,
 멱등성 계약이 확정되지 않은 기능은 임의로 연결하지 않습니다.
 
@@ -262,6 +266,9 @@ History의 주간·월간·기상 요청은 서로 독립적으로 실패할 수
 Profile은 로컬 닉네임·번들 안내 음성과 서버 닉네임·서버 생성 음성을
 별도 상태로 표시합니다. 구독 조회 실패를 FREE로 간주하지 않으며,
 PRO 음성은 활성 PRO 응답이 확인된 경우만 변경합니다.
+계정 루틴 보관함은 로그인한 사용자가 직접 진입했을 때만 목록을 요청하고,
+항목을 선택했을 때만 상세를 요청합니다. 응답은 읽기 전용이며 로컬 루틴의
+추가·수정·실행 또는 알람 설정으로 이어지지 않습니다.
 
 서버 기능을 조립할 때도 Local Repository는 교체하지 않습니다.
 APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
@@ -269,7 +276,10 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 
 ## 계약 확인 전 보류하는 연동
 
-- 루틴 그룹 생성·조회·활성화·삭제와 실행 결과 업로드
+- 루틴 그룹 쓰기와 실행용 조회
+  - `POST /routine-groups`, 루틴 추가, `PATCH`, `DELETE`는 연결하지 않습니다.
+  - `GET /routine-groups/active`, `GET /routine-groups/today`도 로컬 루틴과
+    실행 기준을 정하지 않아 연결하지 않습니다.
   - 로컬 UUID와 서버 `Int64` ID의 영속 매핑이 없습니다.
   - 수정·재정렬, client mutation ID, idempotency, revision,
     tombstone, 증분 동기화 계약이 없습니다.
@@ -290,6 +300,30 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 - 서버 음성과 번들 안내 음성 통합
   - 서버 `voiceCode`와 번들 `VoiceProfile` 매핑 계약이 없습니다.
   - 현재 두 설정은 의도적으로 분리합니다.
+
+## 쓰기 연동 전 서버 계약
+
+현재 백엔드 동작을 직접 확인한 결과는 다음과 같습니다.
+
+- 같은 루틴 그룹 생성 요청을 두 번 보내면 서로 다른 그룹 두 개가 생성됩니다.
+- 같은 루틴 추가 요청을 두 번 보내면 루틴 두 개가 생성됩니다.
+- 같은 실행 결과를 다시 보내면 실행 기록이 중복 저장됩니다.
+- 요청 중복을 식별할 idempotency key 또는 correlation key가 없습니다.
+
+따라서 네트워크 재시도만으로 중복 쓰기가 생길 수 있습니다. 아래 계약이
+Swagger와 서버 구현에 포함되기 전에는 쓰기 API를 제품 흐름에 연결하지
+않습니다.
+
+- 생성·수정 요청에 `Idempotency-Key` 또는 `clientMutationId`를 받습니다.
+- 같은 키와 같은 payload를 다시 보내면 새 데이터를 만들지 않고 최초 결과를
+  재사용합니다.
+- 같은 키에 다른 payload가 오면 `409 Conflict`로 거절합니다.
+- 루틴 그룹·루틴·step에 앱이 재전송 후에도 사용할 안정적인 client ID를
+  지원합니다.
+- 실행 업로드는 batch ID와 `clientExecutionId`로 중복을 판별합니다.
+- timeout 뒤 이전 요청의 성공 여부를 조회할 reconciliation API를 제공합니다.
+- 수정 충돌을 감지할 revision 또는 ETag 계약을 제공합니다.
+- 삭제와 증분 동기화를 위한 tombstone과 delta 조회 계약을 제공합니다.
 
 ## TTS 경계
 
@@ -331,3 +365,15 @@ Network Foundation 테스트는 다음 계약을 유지합니다.
 - Swift Task 취소와 실제 Alamofire 취소 오류 매핑
 - 인증 토큰을 요청마다 한 번만 snapshot하는지
 - 인증 헤더와 요청 본문이 로그 메시지에 남지 않는지
+
+### 계정 루틴 보관함 QA
+
+- 서버 그룹이 0개, 1개, 여러 개인 계정에서 목록·빈 상태를 확인합니다.
+- 선택 필드가 누락된 목록과 상세가 “확인 불가” 상태로 안전하게 표시되는지
+  확인합니다.
+- 제목이 같은 그룹이 여러 개여도 서버 ID별 행을 그대로 표시하는지 확인합니다.
+- 오프라인, timeout, `401`에서 재시도와 기존 읽기 결과 보존을 확인합니다.
+- 목록 또는 상세 요청 중 계정을 전환하면 이전 계정 데이터가 즉시 사라지고
+  늦게 도착한 응답도 표시되지 않는지 확인합니다.
+- 새로고침을 반복해도 로컬 루틴이 추가·수정되지 않고 서버 순서와 개수가
+  그대로 유지되는지 확인합니다.
