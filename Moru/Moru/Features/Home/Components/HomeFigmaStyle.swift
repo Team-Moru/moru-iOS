@@ -16,6 +16,11 @@ enum HomeCopy {
   static let activeRoutines = "활성 루틴"
 }
 
+enum HomeFigmaLayout {
+  static let weatherCardHeight: CGFloat = 84
+  static let actionableWeatherCardHeight: CGFloat = 104
+}
+
 struct HomePilotSurfaceModifier: ViewModifier {
   let cornerRadius: CGFloat
 

@@ -26,6 +26,11 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     XCTAssertEqual(ProfileCopy.moruVoice, "모루 말투")
   }
 
+  func testWeatherCardHeightContract() {
+    XCTAssertEqual(HomeFigmaLayout.weatherCardHeight, 84)
+    XCTAssertEqual(HomeFigmaLayout.actionableWeatherCardHeight, 104)
+  }
+
   func testHomeAndProfileStatesRenderDeterministicallyAtReferenceVariants() async throws {
     let environment = ProcessInfo.processInfo.environment
     let phase = environment["MORU_HOME_PROFILE_CAPTURE_PHASE"] ?? "after"

@@ -19,7 +19,7 @@ struct InputStepContentView: View {
       stepTitleSection
 
       Spacer()
-        .frame(height: hasTranscript ? 62 : 42)
+        .frame(height: hasTranscript ? 73 : 42)
 
       if hasTranscript {
         transcriptCard
@@ -32,7 +32,7 @@ struct InputStepContentView: View {
       }
 
       Spacer()
-        .frame(height: hasTranscript ? 53 : 44)
+        .frame(height: hasTranscript ? 76 : 44)
 
       if !hasTranscript {
         VStack(spacing: 8) {
@@ -111,16 +111,20 @@ struct InputStepContentView: View {
         .accessibilityLabel(RoutinePlayerCopy.transcriptTitle(for: step))
         .accessibilityValue(speechInputController.displayTranscript)
     }
-    .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
+    .frame(maxWidth: .infinity, minHeight: 155, alignment: .topLeading)
     .padding(24)
     .background(
-      AppColor.grayWhite.opacity(0.58),
+      AppColor.babyBlue100.opacity(0.20),
       in: RoundedRectangle(cornerRadius: 24, style: .continuous)
     )
+    .overlay {
+      RoundedRectangle(cornerRadius: 24, style: .continuous)
+        .stroke(AppColor.grayWhite.opacity(0.90), lineWidth: 1)
+    }
     .shadow(
-      color: AppColor.orange100.opacity(0.14),
-      radius: 24,
-      y: 8
+      color: MoruPilotColor.shadow.opacity(0.42),
+      radius: 22,
+      y: 10
     )
   }
 }
