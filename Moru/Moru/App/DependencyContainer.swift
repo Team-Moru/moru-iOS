@@ -14,6 +14,7 @@ struct DependencyContainer {
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
   let routineSuggestionCoordinator: any RoutineSuggestionCoordinating
+  let onboardingRecommendationCoordinator: any RoutineSuggestionCoordinating
   let homeWeatherRepository: (any HomeWeatherRepository)?
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
@@ -34,6 +35,8 @@ struct DependencyContainer {
     onboardingRepository: any OnboardingRepository,
     routineSuggestionService: any RoutineSuggestionService,
     routineSuggestionCoordinator: (any RoutineSuggestionCoordinating)? = nil,
+    onboardingRecommendationCoordinator:
+      (any RoutineSuggestionCoordinating)? = nil,
     homeWeatherRepository: (any HomeWeatherRepository)? = nil,
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
@@ -53,12 +56,16 @@ struct DependencyContainer {
     self.localProfileRepository = localProfileRepository
     self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
-    self.routineSuggestionCoordinator = routineSuggestionCoordinator
+    let resolvedRoutineSuggestionCoordinator = routineSuggestionCoordinator
       ?? RoutineSuggestionCoordinator(
         serverService: nil,
         localService: routineSuggestionService,
         signedInMemberProvider: nil
       )
+    self.routineSuggestionCoordinator = resolvedRoutineSuggestionCoordinator
+    self.onboardingRecommendationCoordinator =
+      onboardingRecommendationCoordinator
+      ?? resolvedRoutineSuggestionCoordinator
     self.homeWeatherRepository = homeWeatherRepository
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
@@ -78,6 +85,8 @@ struct DependencyContainer {
     modelContext: ModelContext,
     routineSuggestionRemoteDataSource:
       (any RoutineSuggestionRemoteDataSource)? = nil,
+    onboardingRecommendationRemoteDataSource:
+      (any OnboardingRecommendationRemoteDataSource)? = nil,
     signedInMemberProvider: (any SignedInMemberProviding)? = nil,
     accountHistoryRemoteService:
       (any AccountHistoryRemoteServing)? = nil
@@ -126,6 +135,16 @@ struct DependencyContainer {
       localService: localSuggestionService,
       signedInMemberProvider: signedInMemberProvider
     )
+    let serverOnboardingRecommendationService =
+      onboardingRecommendationRemoteDataSource.map {
+        ServerOnboardingRecommendationService(remoteDataSource: $0)
+      }
+    let onboardingRecommendationCoordinator =
+      OnboardingRecommendationCoordinator(
+        serverService: serverOnboardingRecommendationService,
+        localService: localSuggestionService,
+        signedInMemberProvider: signedInMemberProvider
+      )
     let alarmRuntimeHandler = DefaultAlarmRuntimeCoordinator(
       routineRepository: routineRepository,
       stateRepository: alarmStateRepository,
@@ -141,6 +160,8 @@ struct DependencyContainer {
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
       routineSuggestionService: localSuggestionService,
       routineSuggestionCoordinator: routineSuggestionCoordinator,
+      onboardingRecommendationCoordinator:
+        onboardingRecommendationCoordinator,
       homeWeatherRepository: SwiftDataHomeWeatherRepository(modelContext: modelContext),
       homeWeatherService: CoreLocationWeatherService(),
       localDataResetRepository: SwiftDataLocalDataResetRepository(
@@ -176,6 +197,8 @@ struct DependencyContainer {
     return DefaultOnboardingFlowBuilder(
       routineSuggestionService: routineSuggestionService,
       routineSuggestionCoordinator: routineSuggestionCoordinator,
+      onboardingRecommendationCoordinator:
+        onboardingRecommendationCoordinator,
       completeOnboardingUseCase: completeOnboardingUseCase,
       voicePreviewPlayer: makeVoicePreviewPlayer()
     )

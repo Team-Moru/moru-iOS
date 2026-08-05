@@ -52,6 +52,8 @@ final class OnboardingViewModel: ObservableObject {
   private let routineSuggestionService: any RoutineSuggestionService
   private let routineSuggestionCoordinator:
     (any RoutineSuggestionCoordinating)?
+  private let onboardingRecommendationCoordinator:
+    (any RoutineSuggestionCoordinating)?
   private let completeOnboardingUseCase: (any CompleteOnboardingUseCaseProtocol)?
   private let recommendedRoutineCreationUseCase:
     (any RecommendedRoutineCreationUseCaseProtocol)?
@@ -73,6 +75,8 @@ final class OnboardingViewModel: ObservableObject {
     routineSuggestionService: any RoutineSuggestionService,
     routineSuggestionCoordinator:
       (any RoutineSuggestionCoordinating)? = nil,
+    onboardingRecommendationCoordinator:
+      (any RoutineSuggestionCoordinating)? = nil,
     completeOnboardingUseCase: (any CompleteOnboardingUseCaseProtocol)? = nil,
     recommendedRoutineCreationUseCase:
       (any RecommendedRoutineCreationUseCaseProtocol)? = nil,
@@ -87,6 +91,8 @@ final class OnboardingViewModel: ObservableObject {
     self.step = step
     self.routineSuggestionService = routineSuggestionService
     self.routineSuggestionCoordinator = routineSuggestionCoordinator
+    self.onboardingRecommendationCoordinator =
+      onboardingRecommendationCoordinator
     self.completeOnboardingUseCase = completeOnboardingUseCase
     self.recommendedRoutineCreationUseCase = recommendedRoutineCreationUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
@@ -271,8 +277,18 @@ final class OnboardingViewModel: ObservableObject {
 
     switch step {
     case .goals:
-      if routineSuggestionCoordinator != nil {
-        startSuggestion(advancingTo: .suggestedRoutine)
+      let coordinator: (any RoutineSuggestionCoordinating)?
+      if flowMode == .onboarding {
+        coordinator = onboardingRecommendationCoordinator
+          ?? routineSuggestionCoordinator
+      } else {
+        coordinator = routineSuggestionCoordinator
+      }
+      if let coordinator {
+        startSuggestion(
+          using: coordinator,
+          advancingTo: .suggestedRoutine
+        )
       } else {
         guard refreshPreview() else {
           return
@@ -280,9 +296,10 @@ final class OnboardingViewModel: ObservableObject {
         step = .suggestedRoutine
       }
     case .freeform:
-      if routineSuggestionCoordinator != nil {
+      if let routineSuggestionCoordinator {
         step = .organizing
         startSuggestion(
+          using: routineSuggestionCoordinator,
           advancingTo: .review,
           returningTo: .freeform
         )
@@ -380,20 +397,24 @@ final class OnboardingViewModel: ObservableObject {
   @discardableResult
   func refreshPreviewAsync() async throws -> Bool {
     cancelSuggestion()
-    return try await loadPreviewAsync()
-  }
-
-  private func loadPreviewAsync() async throws -> Bool {
-    try Task.checkCancellation()
-
     guard let routineSuggestionCoordinator else {
       return refreshPreview()
     }
 
+    return try await loadPreviewAsync(
+      using: routineSuggestionCoordinator
+    )
+  }
+
+  private func loadPreviewAsync(
+    using coordinator: any RoutineSuggestionCoordinating
+  ) async throws -> Bool {
+    try Task.checkCancellation()
+
     let input = draft.suggestionInput
     let requestID = UUID()
     let requestTask = Task {
-      try await routineSuggestionCoordinator.suggest(from: input)
+      try await coordinator.suggest(from: input)
     }
     suggestionRequestID = requestID
     suggestionTask = requestTask
@@ -566,6 +587,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   private func startSuggestion(
+    using coordinator: any RoutineSuggestionCoordinating,
     advancingTo nextStep: OnboardingStep,
     returningTo failureStep: OnboardingStep? = nil
   ) {
@@ -582,7 +604,7 @@ final class OnboardingViewModel: ObservableObject {
 
       do {
         try Task.checkCancellation()
-        guard try await loadPreviewAsync() else {
+        guard try await loadPreviewAsync(using: coordinator) else {
           if let failureStep {
             step = failureStep
           }

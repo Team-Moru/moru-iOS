@@ -104,13 +104,20 @@ final class AppBootstrapper: ObservableObject {
       )
       let routineSuggestionRemoteDataSource:
         (any RoutineSuggestionRemoteDataSource)?
+      let onboardingRecommendationRemoteDataSource:
+        (any OnboardingRecommendationRemoteDataSource)?
       if appCapabilities.shouldAllowServerRequests {
         routineSuggestionRemoteDataSource =
           DefaultRoutineSuggestionRemoteDataSource(
             apiClient: authenticatedAPIClient
           )
+        onboardingRecommendationRemoteDataSource =
+          DefaultOnboardingRecommendationRemoteDataSource(
+            apiClient: authenticatedAPIClient
+          )
       } else {
         routineSuggestionRemoteDataSource = nil
+        onboardingRecommendationRemoteDataSource = nil
       }
       let accountHistoryRemoteService:
         (any AccountHistoryRemoteServing)?
@@ -125,6 +132,8 @@ final class AppBootstrapper: ObservableObject {
         modelContext: modelContainer.mainContext,
         routineSuggestionRemoteDataSource:
           routineSuggestionRemoteDataSource,
+        onboardingRecommendationRemoteDataSource:
+          onboardingRecommendationRemoteDataSource,
         signedInMemberProvider: accountSessionStore,
         accountHistoryRemoteService: accountHistoryRemoteService
       )
