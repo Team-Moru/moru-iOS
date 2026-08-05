@@ -1,5 +1,14 @@
 # MORU design QA index
 
+## Onboarding alarm card refinement
+
+Detailed evidence and final judgment:
+[`Moru/docs/figma-pilot-review-bundle/alignment-checkpoint-2-alarm-card/design-qa.md`](Moru/docs/figma-pilot-review-bundle/alignment-checkpoint-2-alarm-card/design-qa.md)
+
+- Source: user-provided comparison image plus Figma `2379679754802507594`.
+- Scope: alarm-card copy, spacing, sound slider, and weather/fortune toggles.
+- Result: the sound bar is operable, both choices are interactive and persisted, the card no longer overlaps the CTA, and masked full-screen MAE improved from 16.264 to 15.291.
+
 ## P3 routine management
 
 Detailed evidence and final judgment:

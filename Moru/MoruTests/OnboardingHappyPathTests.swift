@@ -32,7 +32,9 @@ final class OnboardingHappyPathTests: XCTestCase {
           wakeUpMinute: 30,
           weekdays: [.monday, .wednesday]
         ),
-        selectedVoice: .aoede
+        selectedVoice: .aoede,
+        includeWeather: false,
+        includeFortune: true
       )
     )
 
@@ -49,6 +51,8 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(savedRoutine.alarmSchedule?.minute, 30)
     XCTAssertEqual(savedRoutine.alarmSchedule?.weekdays, [.monday, .wednesday])
     XCTAssertEqual(savedRoutine.alarmSchedule?.isEnabled, true)
+    XCTAssertEqual(savedRoutine.alarmSchedule?.includeWeather, false)
+    XCTAssertEqual(savedRoutine.alarmSchedule?.includeFortune, true)
     XCTAssertEqual(Set(savedRoutine.steps.map(\.type)), Set(RoutineStepType.allCases))
     XCTAssertEqual(savedRoutine.sync?.status, .localOnly)
     XCTAssertNil(savedRoutine.sync?.remoteID)

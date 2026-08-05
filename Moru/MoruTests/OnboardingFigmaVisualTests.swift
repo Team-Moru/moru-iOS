@@ -187,10 +187,47 @@ final class OnboardingFigmaVisualTests: XCTestCase {
   func testAlarmSoundGuidanceCopyAndVisualContract() throws {
     XCTAssertEqual(
       OnboardingCopy.alarmSoundGuidance,
-      "알람 소리와 음량은 iPhone 설정을 따릅니다."
+      "사운드바를 드래그해 기기 음량을 조절할 수 있어요."
     )
+    XCTAssertEqual(OnboardingCopy.alarmSoundName, "레디얼")
+
+    let volumeControl = OnboardingSystemVolumeControlView(
+      frame: CGRect(x: 0, y: 0, width: 300, height: 36)
+    )
+    volumeControl.layoutIfNeeded()
+    XCTAssertTrue(volumeControl.isUserInteractionEnabled)
+    XCTAssertTrue(volumeControl.slider.isEnabled)
+    volumeControl.setVolumeForTesting(0.72)
+    XCTAssertEqual(volumeControl.slider.value, 0.72, accuracy: 0.001)
 
     try assertStateRendersDeterministically(.alarm)
+  }
+
+  func testAlarmNarrationOptionsUpdateThePreviewSchedule() throws {
+    var draft = OnboardingDraft()
+    draft.previewRoutine = try LocalTemplateSuggestionService.shared.makeRoutine(
+      from: draft.suggestionInput
+    )
+    let viewModel = OnboardingViewModel(
+      draft: draft,
+      step: .alarm,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+
+    XCTAssertTrue(viewModel.draft.includeWeather)
+    XCTAssertTrue(viewModel.draft.includeFortune)
+
+    viewModel.setIncludeWeather(false)
+    viewModel.setIncludeFortune(false)
+
+    XCTAssertFalse(viewModel.draft.includeWeather)
+    XCTAssertFalse(viewModel.draft.includeFortune)
+    XCTAssertFalse(
+      viewModel.draft.previewRoutine?.alarmSchedule?.includeWeather ?? true
+    )
+    XCTAssertFalse(
+      viewModel.draft.previewRoutine?.alarmSchedule?.includeFortune ?? true
+    )
   }
 
   func testOnboardingStatesRenderDeterministicallyAtReferenceVariants() throws {

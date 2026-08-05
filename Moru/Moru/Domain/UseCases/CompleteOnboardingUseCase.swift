@@ -11,15 +11,21 @@ struct CompleteOnboardingRequest: Hashable {
   var suggestionInput: RoutineSuggestionInput
   var selectedVoice: VoiceProfile
   var previewRoutine: Routine?
+  var includeWeather: Bool
+  var includeFortune: Bool
 
   init(
     suggestionInput: RoutineSuggestionInput,
     selectedVoice: VoiceProfile,
-    previewRoutine: Routine? = nil
+    previewRoutine: Routine? = nil,
+    includeWeather: Bool = true,
+    includeFortune: Bool = true
   ) {
     self.suggestionInput = suggestionInput
     self.selectedVoice = selectedVoice
     self.previewRoutine = previewRoutine
+    self.includeWeather = includeWeather
+    self.includeFortune = includeFortune
   }
 }
 
@@ -91,7 +97,9 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
     routine.isActive = true
     routine.alarmSchedule = makeEnabledAlarm(
       from: request.suggestionInput,
-      existingAlarm: routine.alarmSchedule
+      existingAlarm: routine.alarmSchedule,
+      includeWeather: request.includeWeather,
+      includeFortune: request.includeFortune
     )
     routine.sync = .localOnly
     routine.updatedAt = Date()
@@ -135,7 +143,9 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
   @MainActor
   private func makeEnabledAlarm(
     from input: RoutineSuggestionInput,
-    existingAlarm: AlarmSchedule?
+    existingAlarm: AlarmSchedule?,
+    includeWeather: Bool,
+    includeFortune: Bool
   ) -> AlarmSchedule {
     AlarmSchedule(
       id: existingAlarm?.id ?? UUID(),
@@ -144,8 +154,8 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
       weekdays: input.weekdays,
       soundName: existingAlarm?.soundName ?? "moru-default",
       isEnabled: true,
-      includeWeather: false,
-      includeFortune: false
+      includeWeather: includeWeather,
+      includeFortune: includeFortune
     )
   }
 }

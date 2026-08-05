@@ -17,6 +17,8 @@ struct OnboardingDraft: Equatable {
   var alarmHour: Int = 7
   var alarmMinute: Int = 0
   var selectedWeekdays: Set<Weekday> = Set(Weekday.onboardingDisplayOrder.prefix(5))
+  var includeWeather: Bool = true
+  var includeFortune: Bool = true
   var selectedVoice: VoiceProfile = .aoede
 
   var orderedGoalTags: [String] {
