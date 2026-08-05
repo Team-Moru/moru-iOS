@@ -263,6 +263,7 @@ struct AccountServerVoiceSelectionView: View {
           Button("닫기") {
             dismiss()
           }
+          .disabled(viewModel.isUpdatingVoice)
         }
       }
     }

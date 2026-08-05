@@ -118,6 +118,7 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
       await viewModel.selectVoice(voice, memberID: 98)
     }
     await service.waitUntilUpdateRequested()
+    await viewModel.load(memberID: 98)
 
     XCTAssertEqual(viewModel.selectedTTSID, 1)
     XCTAssertTrue(viewModel.isUpdatingVoice)

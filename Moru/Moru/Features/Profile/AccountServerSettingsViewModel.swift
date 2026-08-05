@@ -53,6 +53,10 @@ final class AccountServerSettingsViewModel {
   }
 
   func load(memberID: Int64?) async {
+    guard !isUpdatingVoice || currentMemberID != memberID else {
+      return
+    }
+
     let previousMemberID = currentMemberID
     loadGeneration += 1
     let generation = loadGeneration
