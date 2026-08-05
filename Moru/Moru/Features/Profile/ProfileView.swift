@@ -21,12 +21,14 @@ struct ProfileView: View {
   static let accountWithdrawalAccessibilityIdentifier = "profile.account.withdrawal"
 
   @State private var viewModel: ProfileViewModel
+  @State private var accountServerViewModel: AccountServerSettingsViewModel
   @ObservedObject private var accountSessionStore: AccountSessionStore
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.scenePhase) private var scenePhase
   @State private var displayNameDraft = ""
   @State private var isDisplayNameEditorPresented = false
   @State private var isVoiceSelectionPresented = false
+  @State private var isServerVoiceSelectionPresented = false
   @State private var isResetConfirmationPresented = false
   @State private var isAppleSignInPresented = false
   @State private var isWithdrawalConfirmationPresented = false
@@ -38,6 +40,8 @@ struct ProfileView: View {
 
   init(
     viewModel: ProfileViewModel,
+    accountServerViewModel: AccountServerSettingsViewModel =
+      AccountServerSettingsViewModel(),
     accountSessionStore: AccountSessionStore,
     googleAuthorizationSession: any GoogleAuthorizationStarting =
       UnavailableGoogleAuthorizationSession(),
@@ -47,6 +51,7 @@ struct ProfileView: View {
     automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
+    _accountServerViewModel = State(initialValue: accountServerViewModel)
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
     self.googleAuthorizationSession = googleAuthorizationSession
     self.kakaoAuthorizationSession = kakaoAuthorizationSession
@@ -78,6 +83,17 @@ struct ProfileView: View {
 
       viewModel.loadProfileSettings()
     }
+    .task(id: accountSessionStore.signedInMemberID) {
+      let memberID = accountSessionStore.signedInMemberID
+      if memberID == nil {
+        isServerVoiceSelectionPresented = false
+      }
+      guard automaticallyLoads else {
+        return
+      }
+
+      await accountServerViewModel.load(memberID: memberID)
+    }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else {
         return
@@ -92,6 +108,14 @@ struct ProfileView: View {
     }
     .sheet(isPresented: $isVoiceSelectionPresented) {
       voiceSelectionView
+    }
+    .sheet(isPresented: $isServerVoiceSelectionPresented) {
+      if let memberID = accountSessionStore.signedInMemberID {
+        AccountServerVoiceSelectionView(
+          viewModel: accountServerViewModel,
+          memberID: memberID
+        )
+      }
     }
     .sheet(isPresented: $isAppleSignInPresented) {
       appleSignInSheet
@@ -303,6 +327,14 @@ struct ProfileView: View {
         "\(Self.providerDisplayName(account.provider)) 계정 연결됨"
       )
       .accessibilityHint("로컬 루틴과 기록은 기기에 계속 저장됩니다.")
+
+      AccountServerSettingsSummaryView(
+        viewModel: accountServerViewModel,
+        memberID: account.memberID,
+        onOpenVoiceSelection: {
+          isServerVoiceSelectionPresented = true
+        }
+      )
 
       Button {
         Task {

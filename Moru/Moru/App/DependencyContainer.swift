@@ -19,6 +19,7 @@ struct DependencyContainer {
   let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
   let accountHistoryRemoteService: (any AccountHistoryRemoteServing)?
+  let accountServerRemoteService: (any AccountServerRemoteServing)?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -41,6 +42,7 @@ struct DependencyContainer {
     homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
     accountHistoryRemoteService: (any AccountHistoryRemoteServing)? = nil,
+    accountServerRemoteService: (any AccountServerRemoteServing)? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -70,6 +72,7 @@ struct DependencyContainer {
     self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
     self.accountHistoryRemoteService = accountHistoryRemoteService
+    self.accountServerRemoteService = accountServerRemoteService
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -89,7 +92,9 @@ struct DependencyContainer {
       (any OnboardingRecommendationRemoteDataSource)? = nil,
     signedInMemberProvider: (any SignedInMemberProviding)? = nil,
     accountHistoryRemoteService:
-      (any AccountHistoryRemoteServing)? = nil
+      (any AccountHistoryRemoteServing)? = nil,
+    accountServerRemoteService:
+      (any AccountServerRemoteServing)? = nil
   ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
@@ -168,6 +173,7 @@ struct DependencyContainer {
         modelContext: modelContext
       ),
       accountHistoryRemoteService: accountHistoryRemoteService,
+      accountServerRemoteService: accountServerRemoteService,
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
       alarmRuntimeHandler: alarmRuntimeHandler,

@@ -121,12 +121,18 @@ final class AppBootstrapper: ObservableObject {
       }
       let accountHistoryRemoteService:
         (any AccountHistoryRemoteServing)?
+      let accountServerRemoteService:
+        (any AccountServerRemoteServing)?
       if appCapabilities.shouldAllowServerRequests {
         accountHistoryRemoteService = DefaultAccountHistoryRemoteService(
           apiClient: authenticatedAPIClient
         )
+        accountServerRemoteService = DefaultAccountServerRemoteService(
+          apiClient: authenticatedAPIClient
+        )
       } else {
         accountHistoryRemoteService = nil
+        accountServerRemoteService = nil
       }
       let dependencies = DependencyContainer.local(
         modelContext: modelContainer.mainContext,
@@ -135,7 +141,8 @@ final class AppBootstrapper: ObservableObject {
         onboardingRecommendationRemoteDataSource:
           onboardingRecommendationRemoteDataSource,
         signedInMemberProvider: accountSessionStore,
-        accountHistoryRemoteService: accountHistoryRemoteService
+        accountHistoryRemoteService: accountHistoryRemoteService,
+        accountServerRemoteService: accountServerRemoteService
       )
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()

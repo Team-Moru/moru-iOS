@@ -389,6 +389,7 @@ struct AppRouter: View {
       profileSettingsUseCase: profileSettingsUseCase,
       voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
+      accountServerRemoteService: dependencies.accountServerRemoteService,
       accountSessionStore: accountSessionStore,
       socialLoginCoordinator: socialLoginCoordinator,
       googleAuthorizationSession: googleAuthorizationSession,
