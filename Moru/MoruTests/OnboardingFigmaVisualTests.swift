@@ -104,17 +104,6 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     XCTAssertEqual(image.scale, 3)
   }
 
-  func testAppStoreScreenshotOnboardingGoals() throws {
-    let outputDirectory = try appStoreScreenshotOutputDirectory()
-    _ = try MoruVisualCaptureFixture.render(
-      screen(for: .goals),
-      filename: "02-onboarding-goals.png",
-      variant: .lightMedium,
-      outputDirectory: outputDirectory,
-      configuration: .iPad13
-    )
-  }
-
   func testFigmaCopyAndProgressContract() {
     XCTAssertEqual(
       RoutineExperience.allCases.map(OnboardingCopy.experienceDescription),
