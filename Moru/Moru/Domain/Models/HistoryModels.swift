@@ -23,6 +23,10 @@ extension HistoryRunStatus {
   }
 }
 
+enum HistorySummarySource: Sendable, Equatable {
+  case device
+  case account
+}
 
 struct HistoryOverview: Sendable, Equatable {
   let calendar: Calendar
@@ -31,6 +35,7 @@ struct HistoryOverview: Sendable, Equatable {
   let wakeMetrics: HistoryWakeMetrics
   let monthlyHeatmap: HistoryMonthlyHeatmap
   let streak: RoutineStreak
+  let summarySource: HistorySummarySource
 
   nonisolated init(
     calendar: Calendar,
@@ -38,7 +43,8 @@ struct HistoryOverview: Sendable, Equatable {
     week: HistoryWeekReport,
     wakeMetrics: HistoryWakeMetrics,
     monthlyHeatmap: HistoryMonthlyHeatmap,
-    streak: RoutineStreak = .empty
+    streak: RoutineStreak = .empty,
+    summarySource: HistorySummarySource = .device
   ) {
     self.calendar = calendar
     self.recentDays = recentDays
@@ -46,6 +52,11 @@ struct HistoryOverview: Sendable, Equatable {
     self.wakeMetrics = wakeMetrics
     self.monthlyHeatmap = monthlyHeatmap
     self.streak = streak
+    self.summarySource = summarySource
+  }
+
+  var hasDisplayableHistory: Bool {
+    !recentDays.isEmpty || summarySource == .account
   }
 }
 
@@ -108,6 +119,7 @@ enum HistoryWakeMetrics: Sendable, Equatable {
     averageDeviationMinutes: Int,
     regularity: HistoryStartTimeRegularity
   )
+  case account(HistoryAccountWakeMetrics)
 
   var observationCount: Int {
     switch self {
@@ -116,8 +128,18 @@ enum HistoryWakeMetrics: Sendable, Equatable {
     case .insufficient(let observationCount),
          .calculated(let observationCount, _, _, _):
       return observationCount
+    case .account:
+      return 0
     }
   }
+}
+
+struct HistoryAccountWakeMetrics: Sendable, Equatable {
+  let averageWakeMinute: Int?
+  let wakeTimeDifferenceMinutes: Int?
+  let regularityScore: Int?
+  let standardDeviationMinutes: Int?
+  let regularityLabel: String
 }
 
 struct HistoryMonthlyHeatmap: Sendable, Equatable {
@@ -129,6 +151,19 @@ struct HistoryHeatmapDay: Identifiable, Sendable, Equatable {
   let id: String
   let date: Date?
   let completionRate: Double?
+  let summarySource: HistorySummarySource
+
+  nonisolated init(
+    id: String,
+    date: Date?,
+    completionRate: Double?,
+    summarySource: HistorySummarySource = .device
+  ) {
+    self.id = id
+    self.date = date
+    self.completionRate = completionRate
+    self.summarySource = summarySource
+  }
 
   var bucket: HistoryHeatmapBucket {
     guard let completionRate else {
@@ -201,6 +236,9 @@ struct HistoryWeekReport: Sendable, Equatable {
   let completionRate: Double
   let dailyCompletionRates: [HistoryDailyCompletion]
   let completionRateChangePercentagePoints: Int?
+  let totalDurationSeconds: Int?
+  let routineStats: [HistoryWeeklyRoutineStat]
+  let summarySource: HistorySummarySource
 
   nonisolated init(
     weekStartDate: Date,
@@ -209,7 +247,10 @@ struct HistoryWeekReport: Sendable, Equatable {
     totalRunCount: Int,
     completionRate: Double,
     dailyCompletionRates: [HistoryDailyCompletion],
-    completionRateChangePercentagePoints: Int? = nil
+    completionRateChangePercentagePoints: Int? = nil,
+    totalDurationSeconds: Int? = nil,
+    routineStats: [HistoryWeeklyRoutineStat] = [],
+    summarySource: HistorySummarySource = .device
   ) {
     self.weekStartDate = weekStartDate
     self.weekEndDate = weekEndDate
@@ -218,10 +259,30 @@ struct HistoryWeekReport: Sendable, Equatable {
     self.completionRate = completionRate
     self.dailyCompletionRates = dailyCompletionRates
     self.completionRateChangePercentagePoints = completionRateChangePercentagePoints
+    self.totalDurationSeconds = totalDurationSeconds
+    self.routineStats = routineStats
+    self.summarySource = summarySource
   }
+}
+
+struct HistoryWeeklyRoutineStat: Sendable, Equatable {
+  let routineID: Int64
+  let title: String
+  let completionRate: Double
 }
 
 struct HistoryDailyCompletion: Sendable, Equatable {
   let date: Date
   let completionRate: Double
+  let hasData: Bool
+
+  nonisolated init(
+    date: Date,
+    completionRate: Double,
+    hasData: Bool = true
+  ) {
+    self.date = date
+    self.completionRate = completionRate
+    self.hasData = hasData
+  }
 }

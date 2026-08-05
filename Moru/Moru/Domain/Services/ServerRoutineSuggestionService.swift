@@ -139,14 +139,14 @@ protocol ServerRoutineSuggestionServing: AnyObject {
 @MainActor
 final class ServerRoutineSuggestionService: ServerRoutineSuggestionServing {
   private let remoteFetcher: any ServerRoutineSuggestionFetching
-  private let now: () -> Date
+  private let draftFactory: ServerRoutineDraftFactory
 
   init(
     remoteDataSource: any ServerRoutineSuggestionFetching,
     now: @escaping () -> Date = Date.init
   ) {
     self.remoteFetcher = remoteDataSource
-    self.now = now
+    self.draftFactory = ServerRoutineDraftFactory(now: now)
   }
 
   func makeRoutine(
@@ -158,6 +158,42 @@ final class ServerRoutineSuggestionService: ServerRoutineSuggestionServing {
       memberID: memberID
     )
     try Task.checkCancellation()
+    return try draftFactory.makeRoutine(
+      from: response,
+      input: input
+    )
+  }
+
+  static func serverInput(from input: RoutineSuggestionInput) -> String {
+    let components = [
+      input.goalTags.joined(separator: ", "),
+      input.selectedKeywords.joined(separator: ", "),
+      input.freeformText.trimmingCharacters(in: .whitespacesAndNewlines),
+    ]
+      .filter { !$0.isEmpty }
+    let value = components.isEmpty
+      ? "아침 루틴을 추천해 주세요."
+      : components.joined(separator: " / ")
+
+    let boundedValue = RoutineSuggestionDraftValidation.boundedUserInput(value)
+    return boundedValue.isEmpty
+      ? "아침 루틴을 추천해 주세요."
+      : boundedValue
+  }
+}
+
+@MainActor
+struct ServerRoutineDraftFactory {
+  private let now: () -> Date
+
+  init(now: @escaping () -> Date = Date.init) {
+    self.now = now
+  }
+
+  func makeRoutine(
+    from response: ServerRoutineSuggestionResponse,
+    input: RoutineSuggestionInput
+  ) throws -> Routine {
     let title = response.title.trimmingCharacters(in: .whitespacesAndNewlines)
     let description = (response.description ?? "")
       .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -183,7 +219,7 @@ final class ServerRoutineSuggestionService: ServerRoutineSuggestionServing {
       ) else {
         throw ServerRoutineSuggestionError.invalidStepTitle(index: index)
       }
-      guard let type = Self.stepType(from: step.kind) else {
+      guard let type = stepType(from: step.kind) else {
         throw ServerRoutineSuggestionError.invalidStepType(
           index: index,
           value: step.kind.unsupportedValue ?? "UNKNOWN"
@@ -231,24 +267,7 @@ final class ServerRoutineSuggestionService: ServerRoutineSuggestionServing {
     )
   }
 
-  static func serverInput(from input: RoutineSuggestionInput) -> String {
-    let components = [
-      input.goalTags.joined(separator: ", "),
-      input.selectedKeywords.joined(separator: ", "),
-      input.freeformText.trimmingCharacters(in: .whitespacesAndNewlines),
-    ]
-      .filter { !$0.isEmpty }
-    let value = components.isEmpty
-      ? "아침 루틴을 추천해 주세요."
-      : components.joined(separator: " / ")
-
-    let boundedValue = RoutineSuggestionDraftValidation.boundedUserInput(value)
-    return boundedValue.isEmpty
-      ? "아침 루틴을 추천해 주세요."
-      : boundedValue
-  }
-
-  private static func stepType(
+  private func stepType(
     from kind: ServerRoutineSuggestionStepKind
   ) -> RoutineStepType? {
     switch kind {

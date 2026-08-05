@@ -16,7 +16,8 @@ nonisolated protocol RoutineSuggestionRemoteDataSource:
 nonisolated enum RoutineSuggestionRemoteDataSourceError:
   Error,
   Equatable,
-  Sendable {
+  Sendable,
+  RoutineSuggestionInvalidResponseError {
   case invalidUserInput
 }
 
@@ -38,55 +39,7 @@ nonisolated extension RoutineSuggestionRemoteDataSource {
         memberID: memberID
       ).domainModel
     } catch {
-      throw Self.mapRemoteFailure(error)
-    }
-  }
-
-  private static func mapRemoteFailure(
-    _ error: Error
-  ) -> RoutineSuggestionRemoteFailure {
-    if let failure = error as? RoutineSuggestionRemoteFailure {
-      return failure
-    }
-    if error is RoutineSuggestionRemoteDataSourceError {
-      return .invalidResponse
-    }
-    if error is CancellationError {
-      return .cancelled
-    }
-
-    guard let apiError = error as? APIError else {
-      return .unavailable
-    }
-
-    switch apiError {
-    case .transport(let code, _):
-      if code == URLError.timedOut.rawValue {
-        return .timeout
-      }
-      if [
-        URLError.notConnectedToInternet.rawValue,
-        URLError.networkConnectionLost.rawValue,
-        URLError.cannotConnectToHost.rawValue,
-        URLError.cannotFindHost.rawValue,
-      ].contains(code) {
-        return .offline
-      }
-      return .unavailable
-    case .server(let statusCode, _, _) where statusCode == 408:
-      return .timeout
-    case .server(let statusCode, _, _)
-      where (500..<600).contains(statusCode):
-      return .serverUnavailable
-    case .decoding, .missingResult:
-      return .invalidResponse
-    case .cancelled:
-      return .cancelled
-    case .authenticationRequired,
-         .capabilityDisabled,
-         .invalidRequest,
-         .server:
-      return .unavailable
+      throw RoutineSuggestionRemoteFailureMapper.map(error)
     }
   }
 }

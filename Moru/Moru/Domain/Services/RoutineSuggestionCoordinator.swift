@@ -46,6 +46,35 @@ struct RoutineSuggestionResult: Equatable {
   let source: RoutineSuggestionSource
 }
 
+nonisolated protocol RoutineSuggestionInvalidDraftError: Error {}
+
+nonisolated enum RoutineSuggestionFallbackPolicy {
+  static func reason(
+    for error: Error
+  ) -> RoutineSuggestionFallbackReason {
+    if error is any RoutineSuggestionInvalidDraftError {
+      return .invalidResponse
+    }
+
+    guard let failure = error as? RoutineSuggestionRemoteFailure else {
+      return .unavailable
+    }
+
+    switch failure {
+    case .offline:
+      return .offline
+    case .timeout:
+      return .timeout
+    case .serverUnavailable:
+      return .serverUnavailable
+    case .invalidResponse:
+      return .invalidResponse
+    case .unavailable, .cancelled:
+      return .unavailable
+    }
+  }
+}
+
 @MainActor
 protocol RoutineSuggestionCoordinating: AnyObject {
   func suggest(
@@ -101,7 +130,7 @@ final class RoutineSuggestionCoordinator: RoutineSuggestionCoordinating {
 
       return try localResult(
         from: input,
-        reason: Self.fallbackReason(for: error)
+        reason: RoutineSuggestionFallbackPolicy.reason(for: error)
       )
     }
   }
@@ -116,28 +145,6 @@ final class RoutineSuggestionCoordinator: RoutineSuggestionCoordinating {
     )
   }
 
-  private static func fallbackReason(
-    for error: Error
-  ) -> RoutineSuggestionFallbackReason {
-    if error is ServerRoutineSuggestionError {
-      return .invalidResponse
-    }
-
-    guard let failure = error as? RoutineSuggestionRemoteFailure else {
-      return .unavailable
-    }
-
-    switch failure {
-    case .offline:
-      return .offline
-    case .timeout:
-      return .timeout
-    case .serverUnavailable:
-      return .serverUnavailable
-    case .invalidResponse:
-      return .invalidResponse
-    case .unavailable, .cancelled:
-      return .unavailable
-    }
-  }
 }
+
+extension ServerRoutineSuggestionError: RoutineSuggestionInvalidDraftError {}

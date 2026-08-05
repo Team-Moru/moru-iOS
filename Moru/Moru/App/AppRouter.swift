@@ -352,10 +352,26 @@ struct AppRouter: View {
 
   @MainActor
   var mainTabView: MainTabView {
+    let historySummaryEnricher = dependencies.accountHistoryRemoteService.map {
+      AccountHistorySummaryEnricher(
+        remoteService: $0,
+        signedInMemberProvider: accountSessionStore
+      )
+    }
+    let accountDailyReportLoader =
+      dependencies.accountHistoryRemoteService.map {
+        LoadAccountHistoryDailyReportUseCase(
+          remoteService: $0,
+          signedInMemberProvider: accountSessionStore
+        )
+      }
     let historyBuilder = DefaultHistoryFlowBuilder(
       loadHistoryUseCase: LoadHistoryUseCase(
         routineRunRepository: dependencies.routineRunRepository
-      )
+      ),
+      summaryEnricher: historySummaryEnricher,
+      accountDailyReportLoader: accountDailyReportLoader,
+      accountIdentity: accountSessionStore.signedInMemberID
     )
     let profileSettingsUseCase = ProfileSettingsUseCase(
       localProfileRepository: dependencies.localProfileRepository,
@@ -373,6 +389,7 @@ struct AppRouter: View {
       profileSettingsUseCase: profileSettingsUseCase,
       voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
+      accountServerRemoteService: dependencies.accountServerRemoteService,
       accountSessionStore: accountSessionStore,
       socialLoginCoordinator: socialLoginCoordinator,
       googleAuthorizationSession: googleAuthorizationSession,

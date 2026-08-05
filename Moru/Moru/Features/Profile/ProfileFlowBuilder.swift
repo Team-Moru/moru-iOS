@@ -17,6 +17,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
+  private let accountServerRemoteService:
+    (any AccountServerRemoteServing)?
   private let accountSessionStore: AccountSessionStore
   private let socialLoginCoordinator: any SocialLoginCoordinating
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
@@ -32,6 +34,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
+    accountServerRemoteService:
+      (any AccountServerRemoteServing)? = nil,
     accountSessionStore: AccountSessionStore,
     socialLoginCoordinator: any SocialLoginCoordinating,
     googleAuthorizationSession: any GoogleAuthorizationStarting,
@@ -46,6 +50,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
+    self.accountServerRemoteService = accountServerRemoteService
     self.accountSessionStore = accountSessionStore
     self.socialLoginCoordinator = socialLoginCoordinator
     self.googleAuthorizationSession = googleAuthorizationSession
@@ -71,6 +76,9 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
           resetAvailability: resetAvailability,
           onOpenSettings: onOpenSettings,
           onResetSucceeded: onResetSucceeded
+        ),
+        accountServerViewModel: AccountServerSettingsViewModel(
+          remoteService: accountServerRemoteService
         ),
         accountSessionStore: accountSessionStore,
         googleAuthorizationSession: googleAuthorizationSession,
