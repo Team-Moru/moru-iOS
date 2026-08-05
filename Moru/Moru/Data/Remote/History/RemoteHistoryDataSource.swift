@@ -38,9 +38,13 @@ nonisolated final class DefaultAccountHistoryRemoteService:
         as: [HistoryMonthlyDayDTO].self,
         authorizedForMemberID: memberID
       )
-      let (weekly, monthly) = try await (
+      async let wakePatternResult = fetchWakePattern(
+        memberID: memberID
+      )
+      let (weekly, monthly, wakePattern) = try await (
         weeklyResponse,
-        monthlyResponse
+        monthlyResponse,
+        wakePatternResult
       )
       try _Concurrency.Task<Never, Never>.checkCancellation()
 
@@ -49,7 +53,66 @@ nonisolated final class DefaultAccountHistoryRemoteService:
         monthlyDays: try monthly.makeDomainModels(
           requestedYear: year,
           requestedMonth: month
-        )
+        ),
+        wakePattern: wakePattern
+      )
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch APIError.cancelled {
+      throw CancellationError()
+    } catch is AccountAuthorizationContextError {
+      throw AccountHistoryRemoteError.accountAuthorizationChanged
+    }
+  }
+
+  private func fetchWakePattern(
+    memberID: Int64
+  ) async throws -> ServerHistoryWakePattern? {
+    do {
+      let response = try await apiClient.requestOptional(
+        HistoryTarget.wakePattern,
+        as: HistoryWakePatternResponseDTO.self,
+        authorizedForMemberID: memberID
+      )
+      return try response?.makeDomainModel()
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch APIError.cancelled {
+      throw CancellationError()
+    } catch is AccountAuthorizationContextError {
+      throw AccountHistoryRemoteError.accountAuthorizationChanged
+    } catch {
+      return nil
+    }
+  }
+
+  func fetchDaily(
+    year: Int,
+    month: Int,
+    day: Int,
+    memberID: Int64
+  ) async throws -> ServerHistoryDailySummary {
+    guard memberID > 0,
+          let date = ServerHistoryDateParser.makeString(
+            year: year,
+            month: month,
+            day: day
+          ) else {
+      throw AccountHistoryRemoteError.invalidRequest
+    }
+
+    do {
+      let response = try await apiClient.request(
+        HistoryTarget.daily(date: date),
+        as: HistoryDailyResponseDTO.self,
+        authorizedForMemberID: memberID
+      )
+      try _Concurrency.Task<Never, Never>.checkCancellation()
+
+      return try response.makeDomainModel(
+        requestedYear: year,
+        requestedMonth: month,
+        requestedDay: day
       )
     } catch is CancellationError {
       throw CancellationError()
@@ -161,6 +224,106 @@ nonisolated private extension Array where Element == HistoryMonthlyDayDTO {
   }
 }
 
+nonisolated private extension HistoryWakePatternResponseDTO {
+  func makeDomainModel() throws -> ServerHistoryWakePattern {
+    let normalizedLabel = regularityLabel.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    let averageWakeMinute = try avgWakeTime.map {
+      guard let minute = ServerHistoryTimeParser.parse($0) else {
+        throw AccountHistoryRemoteError.invalidResponse
+      }
+      return minute
+    }
+
+    guard !normalizedLabel.isEmpty,
+          wakeTimeDiffMin.map(Self.isValidInt32) ?? true,
+          regularityScore.map({ (0...100).contains($0) }) ?? true,
+          stdDevMin.map({ $0 >= 0 && Self.isValidInt32($0) }) ?? true,
+          averageWakeMinute != nil
+            || wakeTimeDiffMin != nil
+            || regularityScore != nil
+            || stdDevMin != nil else {
+      throw AccountHistoryRemoteError.invalidResponse
+    }
+
+    return ServerHistoryWakePattern(
+      averageWakeMinute: averageWakeMinute,
+      wakeTimeDifferenceMinutes: wakeTimeDiffMin,
+      regularityScore: regularityScore,
+      standardDeviationMinutes: stdDevMin,
+      regularityLabel: normalizedLabel
+    )
+  }
+
+  private static func isValidInt32(_ value: Int) -> Bool {
+    (Int(Int32.min)...Int(Int32.max)).contains(value)
+  }
+}
+
+nonisolated private extension HistoryDailyResponseDTO {
+  func makeDomainModel(
+    requestedYear: Int,
+    requestedMonth: Int,
+    requestedDay: Int
+  ) throws -> ServerHistoryDailySummary {
+    guard let date = ServerHistoryDateParser.parse(executedDate),
+          date.year == requestedYear,
+          date.month == requestedMonth,
+          date.day == requestedDay,
+          (0...100).contains(completionRate),
+          totalDurationSecond >= 0,
+          currentStreak >= 0,
+          currentStreak <= Int64(Int.max) else {
+      throw AccountHistoryRemoteError.invalidResponse
+    }
+
+    let wakeMinute = try actualWakeTime.map {
+      guard let minute = ServerHistoryTimeParser.parse($0) else {
+        throw AccountHistoryRemoteError.invalidResponse
+      }
+      return minute
+    }
+    let mappedRoutines = try routines.map { routine in
+      let title = routine.title.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      )
+      guard routine.routineId > 0,
+            !title.isEmpty,
+            let type = ServerHistoryDailyRoutineType(
+              rawValue: routine.type
+            ),
+            routine.durationSecond >= 0 else {
+        throw AccountHistoryRemoteError.invalidResponse
+      }
+      let normalizedInput = routine.memberInput?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+      return ServerHistoryDailyRoutine(
+        routineID: routine.routineId,
+        title: title,
+        type: type,
+        durationSeconds: routine.durationSecond,
+        isCompleted: routine.isCompleted,
+        memberInput: normalizedInput?.isEmpty == false
+          ? normalizedInput
+          : nil
+      )
+    }
+
+    return ServerHistoryDailySummary(
+      year: date.year,
+      month: date.month,
+      day: date.day,
+      completionRate: Double(completionRate) / 100,
+      totalDurationSeconds: totalDurationSecond,
+      actualWakeMinute: wakeMinute,
+      currentStreak: Int(currentStreak),
+      routines: mappedRoutines
+    )
+  }
+}
+
 nonisolated private enum ServerHistoryDateParser {
   struct Components {
     let year: Int
@@ -186,6 +349,19 @@ nonisolated private enum ServerHistoryDateParser {
     return Components(year: year, month: month, day: day)
   }
 
+  static func makeString(
+    year: Int,
+    month: Int,
+    day: Int
+  ) -> String? {
+    guard (1...12).contains(month),
+          (1...daysInMonth(year: year, month: month)).contains(day) else {
+      return nil
+    }
+
+    return String(format: "%04d-%02d-%02d", year, month, day)
+  }
+
   private static func daysInMonth(year: Int, month: Int) -> Int {
     switch month {
     case 2:
@@ -200,5 +376,23 @@ nonisolated private enum ServerHistoryDateParser {
   private static func isLeapYear(_ year: Int) -> Bool {
     year.isMultiple(of: 400)
       || (year.isMultiple(of: 4) && !year.isMultiple(of: 100))
+  }
+}
+
+nonisolated private enum ServerHistoryTimeParser {
+  static func parse(_ value: String) -> Int? {
+    let parts = value.split(separator: ":", omittingEmptySubsequences: false)
+    guard parts.count == 2,
+          parts[0].count == 2,
+          parts[1].count == 2,
+          parts.allSatisfy({ $0.allSatisfy(\.isNumber) }),
+          let hour = Int(parts[0]),
+          let minute = Int(parts[1]),
+          (0...23).contains(hour),
+          (0...59).contains(minute) else {
+      return nil
+    }
+
+    return (hour * 60) + minute
   }
 }

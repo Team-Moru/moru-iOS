@@ -358,11 +358,19 @@ struct AppRouter: View {
         signedInMemberProvider: accountSessionStore
       )
     }
+    let accountDailyReportLoader =
+      dependencies.accountHistoryRemoteService.map {
+        LoadAccountHistoryDailyReportUseCase(
+          remoteService: $0,
+          signedInMemberProvider: accountSessionStore
+        )
+      }
     let historyBuilder = DefaultHistoryFlowBuilder(
       loadHistoryUseCase: LoadHistoryUseCase(
         routineRunRepository: dependencies.routineRunRepository
       ),
       summaryEnricher: historySummaryEnricher,
+      accountDailyReportLoader: accountDailyReportLoader,
       accountIdentity: accountSessionStore.signedInMemberID
     )
     let profileSettingsUseCase = ProfileSettingsUseCase(

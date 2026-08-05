@@ -59,16 +59,23 @@ struct HistoryView: View {
   @State private var selectedRunCalendar: Calendar?
   @State private var selectedDay: HistoryDaySummary?
   @State private var selectedDayCalendar: Calendar?
+  @State private var selectedAccountDayDate: Date?
+  @State private var selectedAccountDayCalendar: Calendar?
   @State private var isDestinationMissing = false
+  private let accountDailyReportLoader:
+    (any AccountHistoryDailyReportLoading)?
   private let automaticallyLoads: Bool
 
   init(
     viewModel: HistoryViewModel,
+    accountDailyReportLoader:
+      (any AccountHistoryDailyReportLoading)? = nil,
     destination: Binding<HistoryDestination?> = .constant(nil),
     automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
     _pendingDestination = destination
+    self.accountDailyReportLoader = accountDailyReportLoader
     self.automaticallyLoads = automaticallyLoads
   }
 
@@ -130,6 +137,19 @@ struct HistoryView: View {
           HistoryDailyDetailView(day: selectedDay, calendar: selectedDayCalendar)
         }
       }
+      .navigationDestination(isPresented: isAccountDayDetailPresented) {
+        if let selectedAccountDayDate,
+           let selectedAccountDayCalendar,
+           let accountDailyReportLoader {
+          HistoryAccountDailyDetailView(
+            viewModel: HistoryAccountDailyViewModel(
+              date: selectedAccountDayDate,
+              calendar: selectedAccountDayCalendar,
+              loader: accountDailyReportLoader
+            )
+          )
+        }
+      }
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
@@ -174,17 +194,25 @@ struct HistoryView: View {
           HistoryWakeMetricsView(metrics: overview.wakeMetrics)
           HistoryMonthlyHeatmapView(
             heatmap: overview.monthlyHeatmap,
-            calendar: overview.calendar
+            calendar: overview.calendar,
+            onSelect: { day in
+              selectHeatmapDay(day, in: overview)
+            }
           )
 
           HistoryWeeklyCompletionChart(
             completions: overview.week.dailyCompletionRates,
             calendar: overview.calendar,
-            onSelect: overview.week.summarySource == .device
-              ? { completion in
-                selectDay(for: completion.date, in: overview)
+            onSelect: { completion in
+              guard completion.hasData else {
+                return
               }
-              : nil
+              selectDate(
+                completion.date,
+                source: overview.week.summarySource,
+                in: overview
+              )
+            }
           )
 
           VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
@@ -242,13 +270,53 @@ struct HistoryView: View {
     )
   }
 
-  private func selectDay(for date: Date, in overview: HistoryOverview) {
-    guard let day = overview.daySummary(for: date) else {
+  private var isAccountDayDetailPresented: Binding<Bool> {
+    Binding(
+      get: { selectedAccountDayDate != nil },
+      set: { isPresented in
+        guard !isPresented else {
+          return
+        }
+
+        selectedAccountDayDate = nil
+        selectedAccountDayCalendar = nil
+      }
+    )
+  }
+
+  private func selectHeatmapDay(
+    _ day: HistoryHeatmapDay,
+    in overview: HistoryOverview
+  ) {
+    guard let date = day.date else {
       return
     }
 
-    selectedDay = day
-    selectedDayCalendar = overview.calendar
+    selectDate(
+      date,
+      source: day.summarySource,
+      in: overview
+    )
+  }
+
+  private func selectDate(
+    _ date: Date,
+    source: HistorySummarySource,
+    in overview: HistoryOverview
+  ) {
+    if source == .device,
+       let day = overview.daySummary(for: date) {
+      selectedDay = day
+      selectedDayCalendar = overview.calendar
+      return
+    }
+
+    guard accountDailyReportLoader != nil else {
+      return
+    }
+
+    selectedAccountDayDate = date
+    selectedAccountDayCalendar = overview.calendar
   }
 
   private func resolveLoadedDestination() {

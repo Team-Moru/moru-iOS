@@ -27,6 +27,27 @@ nonisolated protocol AccountBoundAPIClient: APIClient {
   ) async throws -> Payload
 }
 
+nonisolated extension AccountBoundAPIClient {
+  func requestOptional<
+    Target: MoruTargetType,
+    Payload: Decodable & Sendable
+  >(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    authorizedForMemberID memberID: Int64
+  ) async throws -> Payload? {
+    do {
+      return try await request(
+        target,
+        as: payloadType,
+        authorizedForMemberID: memberID
+      )
+    } catch APIError.missingResult {
+      return nil
+    }
+  }
+}
+
 actor DefaultAPIClient: AccountBoundAPIClient {
   private let provider: MoyaProvider<MultiTarget>
   private let configuration: NetworkConfiguration

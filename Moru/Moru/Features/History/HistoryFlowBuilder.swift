@@ -16,15 +16,20 @@ protocol HistoryFlowBuilding: AnyObject {
 final class DefaultHistoryFlowBuilder: HistoryFlowBuilding {
   private let loadHistoryUseCase: any LoadHistoryUseCaseProtocol
   private let summaryEnricher: (any HistorySummaryEnriching)?
+  private let accountDailyReportLoader:
+    (any AccountHistoryDailyReportLoading)?
   private let accountIdentity: Int64?
 
   init(
     loadHistoryUseCase: any LoadHistoryUseCaseProtocol,
     summaryEnricher: (any HistorySummaryEnriching)? = nil,
+    accountDailyReportLoader:
+      (any AccountHistoryDailyReportLoading)? = nil,
     accountIdentity: Int64? = nil
   ) {
     self.loadHistoryUseCase = loadHistoryUseCase
     self.summaryEnricher = summaryEnricher
+    self.accountDailyReportLoader = accountDailyReportLoader
     self.accountIdentity = accountIdentity
   }
 
@@ -35,6 +40,7 @@ final class DefaultHistoryFlowBuilder: HistoryFlowBuilding {
           loadHistoryUseCase: loadHistoryUseCase,
           summaryEnricher: summaryEnricher
         ),
+        accountDailyReportLoader: accountDailyReportLoader,
         destination: destination
       )
       .id(accountIdentity)

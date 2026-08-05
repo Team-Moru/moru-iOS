@@ -282,17 +282,34 @@ struct HistoryWakeMetricsView: View {
     }
 
     private var averageWakeText: String {
-        guard case .calculated(_, let minute, _, _) = metrics else {
-            return metrics == .unavailable ? "--:--" : "계산 중"
+        switch metrics {
+        case .calculated(_, let minute, _, _):
+            return String(format: "%02d:%02d", minute / 60, minute % 60)
+        case .account(let account):
+            guard let minute = account.averageWakeMinute else {
+                return "--:--"
+            }
+            return String(format: "%02d:%02d", minute / 60, minute % 60)
+        case .insufficient:
+            return "계산 중"
+        case .unavailable:
+            return "--:--"
         }
-
-        return String(format: "%02d:%02d", minute / 60, minute % 60)
     }
 
     private var averageDetailText: String {
         switch metrics {
         case .calculated:
             return "지난 기록 기준"
+        case .account(let account):
+            guard let difference = account.wakeTimeDifferenceMinutes else {
+                return "계정 기록 기준"
+            }
+            if difference == 0 {
+                return "지난주와 같은 시각"
+            }
+            return "지난주보다 \(abs(difference))분 "
+              + (difference < 0 ? "일찍" : "늦게")
         case .insufficient(let count):
             return "기록 \(count)회 · 3회부터 계산"
         case .unavailable:
@@ -301,19 +318,31 @@ struct HistoryWakeMetricsView: View {
     }
 
     private var regularityScoreText: String {
-        guard case .calculated(_, _, _, let regularity) = metrics else {
+        switch metrics {
+        case .calculated(_, _, _, let regularity):
+            return "\(regularity.score)점"
+        case .account(let account):
+            guard let score = account.regularityScore else {
+                return "--점"
+            }
+            return "\(score)점"
+        case .insufficient, .unavailable:
             return "--점"
         }
-
-        return "\(regularity.score)점"
     }
 
     private var deviationText: String {
-        guard case .calculated(_, _, let minutes, let regularity) = metrics else {
+        switch metrics {
+        case .calculated(_, _, let minutes, let regularity):
+            return "편차 ±\(minutes)분 · \(regularity.shortText)"
+        case .account(let account):
+            if let minutes = account.standardDeviationMinutes {
+                return "표준편차 \(minutes)분 · \(account.regularityLabel)"
+            }
+            return account.regularityLabel
+        case .insufficient, .unavailable:
             return "편차 기록 없음"
         }
-
-        return "편차 ±\(minutes)분 · \(regularity.shortText)"
     }
 }
 
@@ -599,6 +628,17 @@ struct HistoryMonthlyHeatmapView: View {
 
     let heatmap: HistoryMonthlyHeatmap
     let calendar: Calendar
+    let onSelect: ((HistoryHeatmapDay) -> Void)?
+
+    init(
+        heatmap: HistoryMonthlyHeatmap,
+        calendar: Calendar,
+        onSelect: ((HistoryHeatmapDay) -> Void)? = nil
+    ) {
+        self.heatmap = heatmap
+        self.calendar = calendar
+        self.onSelect = onSelect
+    }
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: MoruPilotSpacing.four),
@@ -645,21 +685,26 @@ struct HistoryMonthlyHeatmapView: View {
                                 calendar: calendar
                             )
 
-                            ZStack {
-                                RoundedRectangle(cornerRadius: MoruPilotSpacing.eight)
-                                    .fill(fillColor(for: day.bucket))
-
-                                if let date = day.date {
-                                    Text("\(calendar.component(.day, from: date))")
-                                        .historyOverviewTextStyle(.c2)
-                                        .foregroundStyle(AppColor.gray500)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.45)
+                            if isSelectable(day) {
+                                Button {
+                                    onSelect?(day)
+                                } label: {
+                                    heatmapCell(day)
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(
+                                    presentation.accessibilityLabel ?? ""
+                                )
+                                .accessibilityHint("데일리 리포트를 엽니다.")
+                            } else {
+                                heatmapCell(day)
+                                    .accessibilityLabel(
+                                        presentation.accessibilityLabel ?? ""
+                                    )
+                                    .accessibilityHidden(
+                                        presentation.isAccessibilityHidden
+                                    )
                             }
-                            .frame(height: heatmapCellHeight)
-                            .accessibilityLabel(presentation.accessibilityLabel ?? "")
-                            .accessibilityHidden(presentation.isAccessibilityHidden)
                         }
                     }
                 }
@@ -693,7 +738,29 @@ struct HistoryMonthlyHeatmapView: View {
     }
 
     private var heatmapCellHeight: CGFloat {
-        dynamicTypeSize.isAccessibilitySize ? 44 : 24
+        onSelect != nil || dynamicTypeSize.isAccessibilitySize ? 44 : 24
+    }
+
+    private func isSelectable(_ day: HistoryHeatmapDay) -> Bool {
+        onSelect != nil
+          && day.date != nil
+          && day.completionRate != nil
+    }
+
+    private func heatmapCell(_ day: HistoryHeatmapDay) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: MoruPilotSpacing.eight)
+                .fill(fillColor(for: day.bucket))
+
+            if let date = day.date {
+                Text("\(calendar.component(.day, from: date))")
+                    .historyOverviewTextStyle(.c2)
+                    .foregroundStyle(AppColor.gray500)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.45)
+            }
+        }
+        .frame(height: heatmapCellHeight)
     }
 
     private func fillColor(for bucket: HistoryHeatmapBucket) -> Color {

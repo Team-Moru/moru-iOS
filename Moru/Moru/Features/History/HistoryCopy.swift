@@ -25,9 +25,14 @@ enum HistoryCopy {
   static let noHistoryMessage =
     "루틴을 완료하면 이곳에서 매일의 기록과 주간 리포트를 확인할 수 있어요."
   static let accountSummaryNotice =
-    "로그인한 계정의 주간·월간 요약을 표시하고 있어요. 연속 기록과 상세 실행 기록은 이 기기에 저장된 기록을 보여요."
+    "로그인한 계정의 주간·월간·기상 요약을 표시하고 있어요. 계정에서 채운 날짜는 선택해 서버 상세 기록을 볼 수 있어요."
   static let accountSummaryDetailNotice =
     "이 기기에서 저장한 상세 실행 기록은 아직 없어요."
+  static let accountRecordNotice = "로그인한 계정의 서버 기록"
+  static let accountDailyLoading = "계정 기록을 불러오고 있어요."
+  static let accountDailyLoadingMessage = "잠시만 기다려 주세요."
+  static let accountDailyUnavailable = "계정의 상세 기록이 없어요."
+  static let accountDailyLoadFailed = "계정 기록을 불러오지 못했어요."
   static let loadingAccessibilityLabel = "기록을 불러오는 중이에요."
   static let retry = "다시 시도"
   static let retryLater = "잠시 후 다시 시도해 주세요."

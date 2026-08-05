@@ -414,6 +414,37 @@ final class NetworkFoundationTests: XCTestCase {
     )
   }
 
+  func testAccountBoundOptionalRequestAllowsDocumentedNullResult()
+    async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "member-token",
+      memberID: 96
+    )
+    let client = makeClient(
+      statusCode: 200,
+      data: Data(
+        """
+        {
+          "isSuccess": true,
+          "code": "COMMON200",
+          "message": "성공입니다.",
+          "result": null
+        }
+        """.utf8
+      ),
+      tokenProvider: tokenProvider
+    )
+
+    let result: StubResult? = try await client.requestOptional(
+      StubTarget(authenticationRequirement: .bearer),
+      as: StubResult.self,
+      authorizedForMemberID: 96
+    )
+
+    XCTAssertNil(result)
+  }
+
   func testAccountBoundRequestRejectsAnotherMemberBeforeTransport() async {
     let tokenProvider = MemoryAccessTokenProvider()
     tokenProvider.establishAccountSession(

@@ -15,13 +15,27 @@ final class HistoryRemoteContractTests: XCTestCase {
   func testTargetsMatchOpenAPIAndSamplesDecode() throws {
     let weekly = HistoryTarget.weekly
     let monthly = HistoryTarget.monthly(year: 2026, month: 4)
+    let daily = HistoryTarget.daily(date: "2026-04-03")
+    let wakePattern = HistoryTarget.wakePattern
 
     XCTAssertEqual(weekly.path, "/routine-executions/weekly")
     XCTAssertEqual(monthly.path, "/routine-executions/monthly")
+    XCTAssertEqual(
+      daily.path,
+      "/routine-executions/daily/2026-04-03"
+    )
+    XCTAssertEqual(
+      wakePattern.path,
+      "/routine-executions/wake-pattern"
+    )
     XCTAssertEqual(weekly.method, .get)
     XCTAssertEqual(monthly.method, .get)
+    XCTAssertEqual(daily.method, .get)
+    XCTAssertEqual(wakePattern.method, .get)
     XCTAssertEqual(weekly.authenticationRequirement, .bearer)
     XCTAssertEqual(monthly.authenticationRequirement, .bearer)
+    XCTAssertEqual(daily.authenticationRequirement, .bearer)
+    XCTAssertEqual(wakePattern.authenticationRequirement, .bearer)
 
     guard case .requestParameters(let parameters, _) = monthly.task else {
       return XCTFail("Expected the monthly query parameters.")
@@ -38,6 +52,14 @@ final class HistoryRemoteContractTests: XCTestCase {
       APIResponse<[HistoryMonthlyDayDTO]>.self,
       from: monthly.sampleData
     )
+    let dailyEnvelope = try decoder.decode(
+      APIResponse<HistoryDailyResponseDTO>.self,
+      from: daily.sampleData
+    )
+    let wakeEnvelope = try decoder.decode(
+      APIResponse<HistoryWakePatternResponseDTO>.self,
+      from: wakePattern.sampleData
+    )
     XCTAssertEqual(weeklyEnvelope.result?.weeklyCompletionRate.count, 7)
     XCTAssertNil(
       weeklyEnvelope.result?.weeklyCompletionRate[4].completionRate
@@ -46,6 +68,8 @@ final class HistoryRemoteContractTests: XCTestCase {
       monthlyEnvelope.result?.first?.executedDate,
       "2026-04-01"
     )
+    XCTAssertEqual(dailyEnvelope.result?.currentStreak, 7)
+    XCTAssertEqual(wakeEnvelope.result?.regularityScore, 73)
   }
 
   func testFetchesAccountHistoryEndpointsAndMapsValidatedSummary()
@@ -96,13 +120,24 @@ final class HistoryRemoteContractTests: XCTestCase {
         ),
       ]
     )
+    XCTAssertEqual(
+      summary.wakePattern,
+      ServerHistoryWakePattern(
+        averageWakeMinute: (7 * 60) + 8,
+        wakeTimeDifferenceMinutes: -12,
+        regularityScore: 73,
+        standardDeviationMinutes: 18,
+        regularityLabel: "꽤 규칙적이에요"
+      )
+    )
     let requests = capture.requests
-    XCTAssertEqual(requests.count, 2)
+    XCTAssertEqual(requests.count, 3)
     XCTAssertEqual(
       Set(requests.compactMap(\.url?.path)),
       Set([
         "/routine-executions/weekly",
         "/routine-executions/monthly",
+        "/routine-executions/wake-pattern",
       ])
     )
     XCTAssertTrue(
@@ -129,8 +164,9 @@ final class HistoryRemoteContractTests: XCTestCase {
     )
   }
 
-  func testFetchStartsWeeklyAndMonthlyConcurrently() async throws {
-    let gate = HistoryRequestGate(expectedRequestCount: 2)
+  func testFetchStartsWeeklyMonthlyAndWakePatternConcurrently()
+    async throws {
+    let gate = HistoryRequestGate(expectedRequestCount: 3)
     let service = DefaultAccountHistoryRemoteService(
       apiClient: ConcurrentHistoryAPIClient(gate: gate)
     )
@@ -150,6 +186,7 @@ final class HistoryRemoteContractTests: XCTestCase {
       Set([
         "/routine-executions/weekly",
         "/routine-executions/monthly",
+        "/routine-executions/wake-pattern",
       ])
     )
 
@@ -174,6 +211,89 @@ final class HistoryRemoteContractTests: XCTestCase {
           year: year,
           month: month,
           memberID: memberID
+        )
+      }
+    }
+
+    XCTAssertEqual(client.callCount, 0)
+  }
+
+  func testFetchesValidatedDailyReportWithAccountBoundRequest()
+    async throws {
+    let capture = HistoryRequestCapturePlugin()
+    let service = makeService(additionalPlugins: [capture])
+
+    let report = try await service.fetchDaily(
+      year: 2026,
+      month: 4,
+      day: 3,
+      memberID: 98
+    )
+
+    XCTAssertEqual(
+      report,
+      ServerHistoryDailySummary(
+        year: 2026,
+        month: 4,
+        day: 3,
+        completionRate: 0.6,
+        totalDurationSeconds: 3_600,
+        actualWakeMinute: (7 * 60) + 23,
+        currentStreak: 7,
+        routines: [
+          ServerHistoryDailyRoutine(
+            routineID: 1,
+            title: "물 마시기",
+            type: .check,
+            durationSeconds: 20,
+            isCompleted: true,
+            memberInput: "완료했어요"
+          ),
+        ]
+      )
+    )
+    let request = try XCTUnwrap(capture.requests.first)
+    XCTAssertEqual(
+      request.url?.path,
+      "/routine-executions/daily/2026-04-03"
+    )
+    XCTAssertEqual(
+      request.value(forHTTPHeaderField: "Authorization"),
+      "Bearer access-token"
+    )
+  }
+
+  func testDocumentedNullWakePatternKeepsOtherSummaryData()
+    async throws {
+    let summary = try await makeService(
+      wakeData: Self.nullResultData()
+    ).fetchSummary(
+      year: 2026,
+      month: 4,
+      memberID: 98
+    )
+
+    XCTAssertNil(summary.wakePattern)
+    XCTAssertEqual(summary.weekly.completionRate, 0.75)
+    XCTAssertEqual(summary.monthlyDays.count, 2)
+  }
+
+  func testRejectsInvalidDailyDateBeforeTransport() async {
+    let client = HistoryCallCountingAPIClient()
+    let service = DefaultAccountHistoryRemoteService(apiClient: client)
+
+    for request in [
+      (2026, 2, 29, Int64(98)),
+      (2026, 13, 1, Int64(98)),
+      (2026, 4, 0, Int64(98)),
+      (2026, 4, 1, Int64(0)),
+    ] {
+      await assertRemoteError(.invalidRequest) {
+        _ = try await service.fetchDaily(
+          year: request.0,
+          month: request.1,
+          day: request.2,
+          memberID: request.3
         )
       }
     }
@@ -312,11 +432,17 @@ final class HistoryRemoteContractTests: XCTestCase {
   nonisolated private func makeService(
     weeklyData: Data? = nil,
     monthlyData: Data? = nil,
+    wakeData: Data? = nil,
+    dailyData: Data? = nil,
     additionalPlugins: [any PluginType & Sendable] = []
   ) -> DefaultAccountHistoryRemoteService {
     let responses = [
       "/routine-executions/weekly": weeklyData ?? Self.weeklyData(),
       "/routine-executions/monthly": monthlyData ?? Self.monthlyData(),
+      "/routine-executions/wake-pattern":
+        wakeData ?? Self.wakePatternData(),
+      "/routine-executions/daily/2026-04-03":
+        dailyData ?? Self.dailyData(),
     ]
     let client = DefaultAPIClient(
       tokenProvider: HistoryAccessTokenProvider(),
@@ -404,6 +530,67 @@ final class HistoryRemoteContractTests: XCTestCase {
         "code": "COMMON200",
         "message": "성공입니다.",
         "result": [\(result)]
+      }
+      """.utf8
+    )
+  }
+
+  nonisolated private static func wakePatternData() -> Data {
+    Data(
+      """
+      {
+        "isSuccess": true,
+        "code": "COMMON200",
+        "message": "성공입니다.",
+        "result": {
+          "avgWakeTime": "07:08",
+          "wakeTimeDiffMin": -12,
+          "regularityScore": 73,
+          "stdDevMin": 18,
+          "regularityLabel": " 꽤 규칙적이에요 "
+        }
+      }
+      """.utf8
+    )
+  }
+
+  nonisolated private static func dailyData() -> Data {
+    Data(
+      """
+      {
+        "isSuccess": true,
+        "code": "COMMON200",
+        "message": "성공입니다.",
+        "result": {
+          "executedDate": "2026-04-03",
+          "completionRate": 60,
+          "totalDurationSecond": 3600,
+          "actualWakeTime": "07:23",
+          "currentStreak": 7,
+          "routines": [
+            {
+              "routineId": 1,
+              "title": " 물 마시기 ",
+              "type": "CHECK",
+              "durationSecond": 20,
+              "isCompleted": true,
+              "memberInput": " 완료했어요 "
+            }
+          ]
+        }
+      }
+      """.utf8
+    )
+  }
+
+  nonisolated private static func nullResultData() -> Data {
+    Data(
+      """
+      {
+        "isSuccess": true,
+        "code": "COMMON200",
+        "message": "성공입니다.",
+        "result": null
       }
       """.utf8
     )
@@ -585,6 +772,16 @@ nonisolated private final class ConcurrentHistoryAPIClient:
           completionRate: 80
         ),
       ]
+    case .wakePattern:
+      response = HistoryWakePatternResponseDTO(
+        avgWakeTime: "07:08",
+        wakeTimeDiffMin: -12,
+        regularityScore: 73,
+        stdDevMin: 18,
+        regularityLabel: "꽤 규칙적이에요"
+      )
+    case .daily:
+      throw APIError.invalidRequest("Unexpected daily request.")
     }
 
     guard let payload = response as? Payload else {

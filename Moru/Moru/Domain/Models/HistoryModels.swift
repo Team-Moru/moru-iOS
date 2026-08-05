@@ -119,6 +119,7 @@ enum HistoryWakeMetrics: Sendable, Equatable {
     averageDeviationMinutes: Int,
     regularity: HistoryStartTimeRegularity
   )
+  case account(HistoryAccountWakeMetrics)
 
   var observationCount: Int {
     switch self {
@@ -127,8 +128,18 @@ enum HistoryWakeMetrics: Sendable, Equatable {
     case .insufficient(let observationCount),
          .calculated(let observationCount, _, _, _):
       return observationCount
+    case .account:
+      return 0
     }
   }
+}
+
+struct HistoryAccountWakeMetrics: Sendable, Equatable {
+  let averageWakeMinute: Int?
+  let wakeTimeDifferenceMinutes: Int?
+  let regularityScore: Int?
+  let standardDeviationMinutes: Int?
+  let regularityLabel: String
 }
 
 struct HistoryMonthlyHeatmap: Sendable, Equatable {
@@ -140,6 +151,19 @@ struct HistoryHeatmapDay: Identifiable, Sendable, Equatable {
   let id: String
   let date: Date?
   let completionRate: Double?
+  let summarySource: HistorySummarySource
+
+  nonisolated init(
+    id: String,
+    date: Date?,
+    completionRate: Double?,
+    summarySource: HistorySummarySource = .device
+  ) {
+    self.id = id
+    self.date = date
+    self.completionRate = completionRate
+    self.summarySource = summarySource
+  }
 
   var bucket: HistoryHeatmapBucket {
     guard let completionRate else {

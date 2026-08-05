@@ -11,6 +11,13 @@ nonisolated protocol AccountHistoryRemoteServing: Sendable {
     month: Int,
     memberID: Int64
   ) async throws -> ServerHistorySummary
+
+  func fetchDaily(
+    year: Int,
+    month: Int,
+    day: Int,
+    memberID: Int64
+  ) async throws -> ServerHistoryDailySummary
 }
 
 nonisolated enum AccountHistoryRemoteError:

@@ -243,6 +243,15 @@ private actor RecordingAccountHistoryRemoteService:
       throw HistoryServerEnrichmentTestError.unexpectedRequest
     }
   }
+
+  func fetchDaily(
+    year: Int,
+    month: Int,
+    day: Int,
+    memberID: Int64
+  ) async throws -> ServerHistoryDailySummary {
+    throw HistoryServerEnrichmentTestError.unexpectedRequest
+  }
 }
 
 private actor DeferredAccountHistoryRemoteService:
@@ -260,6 +269,15 @@ private actor DeferredAccountHistoryRemoteService:
     return try await withCheckedThrowingContinuation {
       continuation = $0
     }
+  }
+
+  func fetchDaily(
+    year: Int,
+    month: Int,
+    day: Int,
+    memberID: Int64
+  ) async throws -> ServerHistoryDailySummary {
+    throw HistoryServerEnrichmentTestError.unexpectedRequest
   }
 
   func waitUntilRequested() async {

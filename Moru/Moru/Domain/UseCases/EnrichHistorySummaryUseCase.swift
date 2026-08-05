@@ -78,9 +78,14 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
       into: local.monthlyHeatmap,
       serverCalendar: serverCalendar
     )
+    let mergedWakeMetrics = mergeWakePattern(
+      server.wakePattern,
+      into: local.wakeMetrics
+    )
     let didUseAccountSummary =
       mergedWeek != local.week
       || mergedHeatmap != local.monthlyHeatmap
+      || mergedWakeMetrics != local.wakeMetrics
 
     guard didUseAccountSummary else {
       return local
@@ -90,10 +95,32 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
       calendar: local.calendar,
       recentDays: local.recentDays,
       week: mergedWeek,
-      wakeMetrics: local.wakeMetrics,
+      wakeMetrics: mergedWakeMetrics,
       monthlyHeatmap: mergedHeatmap,
       streak: local.streak,
       summarySource: .account
+    )
+  }
+
+  private func mergeWakePattern(
+    _ server: ServerHistoryWakePattern?,
+    into local: HistoryWakeMetrics
+  ) -> HistoryWakeMetrics {
+    guard local == .unavailable,
+          let server else {
+      return local
+    }
+
+    return .account(
+      HistoryAccountWakeMetrics(
+        averageWakeMinute: server.averageWakeMinute,
+        wakeTimeDifferenceMinutes:
+          server.wakeTimeDifferenceMinutes,
+        regularityScore: server.regularityScore,
+        standardDeviationMinutes:
+          server.standardDeviationMinutes,
+        regularityLabel: server.regularityLabel
+      )
     )
   }
 
@@ -172,7 +199,8 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
       return HistoryHeatmapDay(
         id: localDay.id,
         date: date,
-        completionRate: remoteRate
+        completionRate: remoteRate,
+        summarySource: .account
       )
     }
 
