@@ -73,6 +73,7 @@ where Element == RoutineGroupSummaryResponseDTO {
     var seenRoutineGroupIDs: Set<Int64> = []
 
     return try map { summary in
+      try _Concurrency.Task<Never, Never>.checkCancellation()
       guard let routineGroupID = summary.routineGroupId,
             routineGroupID > 0,
             seenRoutineGroupIDs.insert(routineGroupID).inserted else {
@@ -83,10 +84,10 @@ where Element == RoutineGroupSummaryResponseDTO {
         routineGroupID: routineGroupID,
         title: try normalizedRoutineGroupText(summary.title),
         isActive: summary.isActive,
-        routineCount: try nonnegativeOptionalValue(
+        routineCount: try validatedOptionalInt32Value(
           summary.routineCount
         ),
-        totalDurationSeconds: try nonnegativeOptionalValue(
+        totalDurationSeconds: try validatedOptionalInt32Value(
           summary.totalDurationSecond
         )
       )
@@ -122,6 +123,7 @@ where Element == RoutineGroupRoutineResponseDTO {
     var seenRoutineIDs: Set<Int64> = []
 
     return try map { routine in
+      try _Concurrency.Task<Never, Never>.checkCancellation()
       guard let routineID = routine.routineId,
             routineID > 0,
             seenRoutineIDs.insert(routineID).inserted else {
@@ -132,7 +134,7 @@ where Element == RoutineGroupRoutineResponseDTO {
         routineID: routineID,
         title: try normalizedRoutineGroupText(routine.title),
         type: try ServerRoutineItemType(serverValue: routine.type),
-        durationSeconds: try nonnegativeOptionalValue(
+        durationSeconds: try validatedOptionalInt32Value(
           routine.durationSecond
         ),
         steps: try routine.steps?.makeDomainModels()
@@ -147,6 +149,7 @@ where Element == RoutineGroupStepResponseDTO {
     var seenStepIDs: Set<Int64> = []
 
     return try map { step in
+      try _Concurrency.Task<Never, Never>.checkCancellation()
       guard let stepID = step.stepId,
             stepID > 0,
             seenStepIDs.insert(stepID).inserted else {
@@ -156,7 +159,7 @@ where Element == RoutineGroupStepResponseDTO {
       return ServerRoutineNestedStep(
         stepID: stepID,
         content: try normalizedRoutineGroupText(step.content),
-        orderIndex: try nonnegativeOptionalValue(step.orderIndex)
+        orderIndex: try validatedOptionalInt32Value(step.orderIndex)
       )
     }
   }
@@ -201,13 +204,13 @@ nonisolated private func normalizedRoutineGroupText(
   return normalized
 }
 
-nonisolated private func nonnegativeOptionalValue(
+nonisolated private func validatedOptionalInt32Value(
   _ value: Int?
 ) throws -> Int? {
   guard let value else {
     return nil
   }
-  guard value >= 0 else {
+  guard (0...Int(Int32.max)).contains(value) else {
     throw AccountRoutineGroupRemoteError.invalidResponse
   }
   return value

@@ -270,7 +270,7 @@ final class AccountRoutineGroupViewModelTests: XCTestCase {
   }
 
   @MainActor
-  func testDetailDisappearanceClearsMemoryAndCancelsRequest() async {
+  func testDetailDisappearanceClearsLoadedMemory() async {
     let detail = routineGroupDetail(id: 12)
     let service = AccountRoutineGroupRemoteStub(
       detailResults: [.success(detail)]
@@ -281,6 +281,26 @@ final class AccountRoutineGroupViewModelTests: XCTestCase {
     await viewModel.load(routineGroupID: 12, memberID: 98)
 
     viewModel.screenDidDisappear()
+
+    XCTAssertEqual(viewModel.state, .loading(previous: nil))
+    XCTAssertNil(viewModel.failureMessage)
+  }
+
+  @MainActor
+  func testDetailDisappearanceDropsLateInFlightResponse() async {
+    let service = DeferredAccountRoutineGroupRemoteStub()
+    let viewModel = AccountRoutineGroupDetailViewModel(
+      remoteService: service
+    )
+
+    let load = Task {
+      await viewModel.load(routineGroupID: 12, memberID: 98)
+    }
+    await service.waitUntilDetailRequested()
+
+    viewModel.screenDidDisappear()
+    await service.resumeDetail(returning: routineGroupDetail(id: 12))
+    await load.value
 
     XCTAssertEqual(viewModel.state, .loading(previous: nil))
     XCTAssertNil(viewModel.failureMessage)

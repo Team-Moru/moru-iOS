@@ -167,6 +167,42 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
     XCTAssertEqual(groups, [])
   }
 
+  func testInt32FieldsAcceptSwaggerMaximumValue() async throws {
+    let maximum = Int(Int32.max)
+    let service = DefaultAccountRoutineGroupRemoteService(
+      apiClient: RoutineGroupPayloadAPIClient(
+        summaries: [
+          routineGroupSummaryDTO(
+            routineCount: maximum,
+            totalDurationSecond: maximum
+          ),
+        ],
+        detail: routineGroupDetailDTO(
+          routines: [
+            routineDTO(
+              durationSecond: maximum,
+              steps: [stepDTO(orderIndex: maximum)]
+            ),
+          ]
+        )
+      )
+    )
+
+    let groups = try await service.fetchRoutineGroups(memberID: 98)
+    let detail = try await service.fetchRoutineGroupDetail(
+      routineGroupID: 12,
+      memberID: 98
+    )
+
+    XCTAssertEqual(groups.first?.routineCount, maximum)
+    XCTAssertEqual(groups.first?.totalDurationSeconds, maximum)
+    XCTAssertEqual(detail.routines?.first?.durationSeconds, maximum)
+    XCTAssertEqual(
+      detail.routines?.first?.steps?.first?.orderIndex,
+      maximum
+    )
+  }
+
   func testListRejectsMissingNonpositiveDuplicateIDsAndInvalidValues()
     async {
     let invalidLists: [[RoutineGroupSummaryResponseDTO]] = [
@@ -180,6 +216,12 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       [routineGroupSummaryDTO(title: " \n ")],
       [routineGroupSummaryDTO(routineCount: -1)],
       [routineGroupSummaryDTO(totalDurationSecond: -1)],
+      [routineGroupSummaryDTO(routineCount: Int(Int32.max) + 1)],
+      [
+        routineGroupSummaryDTO(
+          totalDurationSecond: Int(Int32.max) + 1
+        ),
+      ],
     ]
 
     for summaries in invalidLists {
@@ -417,12 +459,26 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       ),
       routineGroupDetailDTO(
         routines: [
+          routineDTO(durationSecond: Int(Int32.max) + 1),
+        ]
+      ),
+      routineGroupDetailDTO(
+        routines: [
           routineDTO(steps: [stepDTO(content: " ")])
         ]
       ),
       routineGroupDetailDTO(
         routines: [
           routineDTO(steps: [stepDTO(orderIndex: -1)])
+        ]
+      ),
+      routineGroupDetailDTO(
+        routines: [
+          routineDTO(
+            steps: [
+              stepDTO(orderIndex: Int(Int32.max) + 1),
+            ]
+          ),
         ]
       ),
     ]
