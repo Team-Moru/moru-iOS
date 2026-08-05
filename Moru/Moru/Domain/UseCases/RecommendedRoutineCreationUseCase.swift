@@ -10,6 +10,8 @@ struct RecommendedRoutineCreationRequest: Equatable {
   var alarmHour: Int
   var alarmMinute: Int
   var selectedWeekdays: Set<Weekday>
+  var includeWeather: Bool = false
+  var includeFortune: Bool = false
 }
 
 struct RecommendedRoutineCreationResult: Equatable {
@@ -124,6 +126,8 @@ final class RecommendedRoutineCreationUseCase:
       hour: request.alarmHour,
       minute: request.alarmMinute,
       selectedWeekdays: request.selectedWeekdays,
+      includeWeather: request.includeWeather,
+      includeFortune: request.includeFortune,
       steps: routine.steps
         .sorted { $0.order < $1.order }
         .map { step in

@@ -5,6 +5,8 @@
 //  Created by Codex on 7/6/26.
 //
 
+import AVFAudio
+import MediaPlayer
 import SwiftUI
 
 @MainActor
@@ -630,7 +632,7 @@ private struct OnboardingAlarmSettingView: View {
               .onboardingTextStyle(.b4.weight(.semiBold))
               .foregroundStyle(MoruPilotColor.textSecondary)
 
-            OnboardingAlarmOptionsCard()
+            OnboardingAlarmOptionsCard(viewModel: viewModel)
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(
@@ -648,146 +650,273 @@ private struct OnboardingAlarmSettingView: View {
 }
 
 private struct OnboardingAlarmOptionsCard: View {
+  @ObservedObject var viewModel: OnboardingViewModel
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    VStack(spacing: cardSpacing) {
-      VStack(spacing: soundSectionSpacing) {
-        soundHeader
-
-        HStack(spacing: MoruPilotSpacing.twelve) {
-          Image(systemName: "speaker.wave.2.fill")
-            .font(.system(size: 20, weight: .medium))
-            .foregroundStyle(MoruPilotColor.textTertiary)
-            .frame(width: 28, height: compactControlHeight)
-            .accessibilityHidden(true)
-
-          Slider(value: .constant(0.45), in: 0...1)
-            .tint(MoruPilotColor.accent)
-            .disabled(true)
-            .accessibilityLabel("알람 음량")
-            .accessibilityValue("iPhone 설정에서 조절")
-        }
-
-      }
-
-      Rectangle()
-        .fill(MoruPilotColor.border.opacity(0.8))
-        .frame(height: 1)
-
-      unavailableSettingRow(title: "날씨 알려주기")
-      unavailableSettingRow(title: "오늘의 운세 알려주기")
+    VStack(alignment: .leading, spacing: cardSpacing) {
+      soundHeader
+      systemVolumeControl
+      settingRow(
+        title: "날씨 알려주기",
+        isOn: Binding(
+          get: { viewModel.draft.includeWeather },
+          set: { isOn in
+            viewModel.setIncludeWeather(isOn)
+          }
+        )
+      )
+      settingRow(
+        title: "오늘의 운세 알려주기",
+        isOn: Binding(
+          get: { viewModel.draft.includeFortune },
+          set: { isOn in
+            viewModel.setIncludeFortune(isOn)
+          }
+        )
+      )
     }
-    .padding(cardPadding)
+    .padding(.horizontal, horizontalCardPadding)
+    .padding(.vertical, verticalCardPadding)
     .background(OnboardingSurface.card)
     .overlay(
       RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
         .stroke(MoruPilotColor.border, lineWidth: 1)
     )
     .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+    .shadow(
+      color: MoruPilotColor.shadow.opacity(0.45),
+      radius: 8,
+      x: 0,
+      y: 4
+    )
+    .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 0 : 5)
     .accessibilityHint(OnboardingCopy.alarmSoundGuidance)
   }
 
   private var cardSpacing: CGFloat {
     dynamicTypeSize.isAccessibilitySize
-      ? MoruPilotSpacing.twelve
+      ? MoruPilotSpacing.sixteen
       : MoruPilotSpacing.four
   }
 
-  private var soundSectionSpacing: CGFloat {
-    dynamicTypeSize.isAccessibilitySize
-      ? MoruPilotSpacing.eight
-      : 2
+  private var horizontalCardPadding: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? MoruPilotSpacing.twenty : AppSpacing.xl
   }
 
-  private var compactControlHeight: CGFloat {
-    dynamicTypeSize.isAccessibilitySize ? 44 : 32
-  }
-
-  private var cardPadding: CGFloat {
-    dynamicTypeSize.isAccessibilitySize
-      ? MoruPilotSpacing.sixteen
-      : MoruPilotSpacing.eight
+  private var verticalCardPadding: CGFloat {
+    dynamicTypeSize.isAccessibilitySize ? MoruPilotSpacing.twenty : MoruPilotSpacing.twelve
   }
 
   @ViewBuilder
   private var soundHeader: some View {
     if dynamicTypeSize.isAccessibilitySize {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-        Text("사운드")
-          .onboardingTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textPrimary)
-
-        Text("iPhone 설정")
-          .onboardingTextStyle(.c1.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textSecondary)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    } else {
-      HStack(spacing: MoruPilotSpacing.twelve) {
-        Text("사운드")
-          .onboardingTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textPrimary)
-
-          Spacer(minLength: MoruPilotSpacing.eight)
-
-          Text("iPhone 설정")
-          .onboardingTextStyle(.c1.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textSecondary)
-      }
-    }
-  }
-
-  @ViewBuilder
-  private func unavailableSettingRow(title: String) -> some View {
-    if dynamicTypeSize.isAccessibilitySize {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-        unavailableSettingTitle(title)
-
-        HStack(spacing: MoruPilotSpacing.eight) {
-          unavailableBadge
+        HStack(spacing: MoruPilotSpacing.twelve) {
+          soundTitle
           Spacer(minLength: MoruPilotSpacing.eight)
-          unavailableToggle(title: title)
+          alarmSoundName
         }
+
+        Text("다음")
+          .onboardingTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
+          .frame(maxWidth: .infinity)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.vertical, MoruPilotSpacing.four)
-      .accessibilityElement(children: .contain)
     } else {
-      HStack(spacing: MoruPilotSpacing.eight) {
-        unavailableSettingTitle(title)
-        Spacer(minLength: MoruPilotSpacing.eight)
-        unavailableBadge
-        unavailableToggle(title: title)
+      ZStack {
+        HStack(spacing: MoruPilotSpacing.twelve) {
+          soundTitle
+          Spacer(minLength: MoruPilotSpacing.eight)
+          alarmSoundName
+        }
+
+        Text("다음")
+          .onboardingTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
       }
-      .frame(minHeight: compactControlHeight)
-      .accessibilityElement(children: .contain)
+      .frame(maxWidth: .infinity)
     }
   }
 
-  private func unavailableSettingTitle(_ title: String) -> some View {
-    Text(title)
-      .onboardingTextStyle(.c1.weight(.semiBold))
+  private var soundTitle: some View {
+    Text("사운드")
+      .onboardingTextStyle(.b4.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.textSecondary)
-      .fixedSize(horizontal: false, vertical: true)
   }
 
-  private var unavailableBadge: some View {
-    Text("준비 중")
-      .onboardingTextStyle(.c2.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textTertiary)
-      .padding(.horizontal, MoruPilotSpacing.ten)
-      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 28 : 24)
-      .background(MoruPilotColor.progressTrack)
-      .clipShape(Capsule())
+  private var alarmSoundName: some View {
+    Text("\(OnboardingCopy.alarmSoundName) >")
+      .onboardingTextStyle(.b4.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textSecondary)
+      .lineLimit(1)
   }
 
-  private func unavailableToggle(title: String) -> some View {
-    Toggle("", isOn: .constant(false))
-      .labelsHidden()
-      .disabled(true)
-      .accessibilityLabel(title)
-      .accessibilityValue("준비 중")
+  private var systemVolumeControl: some View {
+    HStack(spacing: MoruPilotSpacing.eight) {
+      Image(systemName: "speaker.wave.1")
+        .font(.system(size: 22, weight: .medium))
+        .foregroundStyle(MoruPilotColor.accent)
+        .frame(width: 26, height: 28)
+        .accessibilityHidden(true)
+
+      OnboardingSystemVolumeSlider()
+        .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+        .accessibilityLabel("알람 음량")
+        .accessibilityHint("좌우로 조절해 기기 음량을 변경합니다.")
+    }
+  }
+
+  private func settingRow(
+    title: String,
+    isOn: Binding<Bool>
+  ) -> some View {
+    HStack(spacing: MoruPilotSpacing.twelve) {
+      Text(title)
+        .onboardingTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Spacer(minLength: MoruPilotSpacing.eight)
+
+      Button {
+        isOn.wrappedValue.toggle()
+      } label: {
+        ZStack(alignment: isOn.wrappedValue ? .trailing : .leading) {
+          Capsule()
+            .fill(
+              isOn.wrappedValue
+                ? MoruPilotColor.accent
+                : MoruPilotColor.border
+            )
+
+          Circle()
+            .fill(Color.white)
+            .frame(width: 20, height: 20)
+            .padding(.horizontal, 2)
+        }
+        .frame(width: 42, height: 24)
+      }
+      .buttonStyle(.plain)
+      .frame(minWidth: 44, minHeight: 31)
+    }
+    .frame(maxWidth: .infinity, minHeight: 31)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(title)
+    .accessibilityValue(isOn.wrappedValue ? "켬" : "끔")
+  }
+}
+
+struct OnboardingSystemVolumeSlider: UIViewRepresentable {
+  func makeUIView(context: Context) -> OnboardingSystemVolumeControlView {
+    OnboardingSystemVolumeControlView(frame: .zero)
+  }
+
+  func updateUIView(
+    _ volumeView: OnboardingSystemVolumeControlView,
+    context: Context
+  ) {
+    volumeView.refreshFromSystemVolume()
+  }
+}
+
+final class OnboardingSystemVolumeControlView: UIView {
+  let slider = UISlider(frame: .zero)
+  private let systemVolumeView = MPVolumeView(frame: .zero)
+
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    configureView()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    systemVolumeView.frame = CGRect(x: -2, y: -2, width: 1, height: 1)
+    refreshFromSystemVolume()
+  }
+
+  func refreshFromSystemVolume() {
+    guard !slider.isTracking else {
+      return
+    }
+
+    slider.value = AVAudioSession.sharedInstance().outputVolume
+  }
+
+  func setVolumeForTesting(_ value: Float) {
+    slider.value = value
+    applySliderValue(slider)
+  }
+
+  private func configureView() {
+    clipsToBounds = true
+
+    slider.translatesAutoresizingMaskIntoConstraints = false
+    slider.isEnabled = true
+    slider.isContinuous = true
+    slider.minimumValue = 0
+    slider.maximumValue = 1
+    slider.minimumTrackTintColor = UIColor(MoruPilotColor.accent)
+    slider.maximumTrackTintColor = UIColor(MoruPilotColor.accentTint)
+    slider.thumbTintColor = UIColor(MoruPilotColor.accent)
+    let thumbConfiguration = UIImage.SymbolConfiguration(
+      pointSize: 18,
+      weight: .regular
+    )
+    let thumbImage = UIImage(
+      systemName: "circle.fill",
+      withConfiguration: thumbConfiguration
+    )?.withTintColor(
+      UIColor(MoruPilotColor.accent),
+      renderingMode: .alwaysOriginal
+    )
+    slider.setThumbImage(thumbImage, for: .normal)
+    slider.setThumbImage(thumbImage, for: .highlighted)
+    slider.value = AVAudioSession.sharedInstance().outputVolume
+    slider.addTarget(self, action: #selector(applySliderValue), for: .valueChanged)
+
+    systemVolumeView.showsVolumeSlider = true
+    systemVolumeView.isUserInteractionEnabled = false
+    systemVolumeView.alpha = 0.01
+
+    addSubview(systemVolumeView)
+    addSubview(slider)
+    NSLayoutConstraint.activate([
+      slider.leadingAnchor.constraint(equalTo: leadingAnchor),
+      slider.trailingAnchor.constraint(equalTo: trailingAnchor),
+      slider.centerYAnchor.constraint(equalTo: centerYAnchor),
+    ])
+  }
+
+  @objc
+  private func applySliderValue(_ sender: UISlider) {
+    systemVolumeView.layoutIfNeeded()
+    guard let systemSlider = findSlider(in: systemVolumeView) else {
+      return
+    }
+
+    systemSlider.setValue(sender.value, animated: false)
+    systemSlider.sendActions(for: .valueChanged)
+  }
+
+  private func findSlider(in view: UIView) -> UISlider? {
+    if let slider = view as? UISlider {
+      return slider
+    }
+
+    for subview in view.subviews {
+      if let slider = findSlider(in: subview) {
+        return slider
+      }
+    }
+
+    return nil
   }
 }
 

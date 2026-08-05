@@ -196,6 +196,16 @@ final class OnboardingViewModel: ObservableObject {
     updatePreviewAlarm()
   }
 
+  func setIncludeWeather(_ isIncluded: Bool) {
+    draft.includeWeather = isIncluded
+    updatePreviewAlarm()
+  }
+
+  func setIncludeFortune(_ isIncluded: Bool) {
+    draft.includeFortune = isIncluded
+    updatePreviewAlarm()
+  }
+
   func updatePreviewName(_ name: String) {
     guard var routine = draft.previewRoutine else {
       return
@@ -359,7 +369,9 @@ final class OnboardingViewModel: ObservableObject {
       let result = try await completeOnboardingUseCase.execute(
         CompleteOnboardingRequest(
           suggestionInput: draft.suggestionInput,
-          selectedVoice: draft.selectedVoice
+          selectedVoice: draft.selectedVoice,
+          includeWeather: draft.includeWeather,
+          includeFortune: draft.includeFortune
         )
       )
       didComplete = true
@@ -392,12 +404,16 @@ final class OnboardingViewModel: ObservableObject {
       schedule.minute = draft.alarmMinute
       schedule.weekdays = draft.orderedWeekdays
       schedule.isEnabled = true
+      schedule.includeWeather = draft.includeWeather
+      schedule.includeFortune = draft.includeFortune
       routine.alarmSchedule = schedule
     } else {
       routine.alarmSchedule = AlarmSchedule(
         hour: draft.alarmHour,
         minute: draft.alarmMinute,
-        weekdays: draft.orderedWeekdays
+        weekdays: draft.orderedWeekdays,
+        includeWeather: draft.includeWeather,
+        includeFortune: draft.includeFortune
       )
     }
 
@@ -422,7 +438,9 @@ final class OnboardingViewModel: ObservableObject {
       routine: routine,
       alarmHour: draft.alarmHour,
       alarmMinute: draft.alarmMinute,
-      selectedWeekdays: draft.selectedWeekdays
+      selectedWeekdays: draft.selectedWeekdays,
+      includeWeather: draft.includeWeather,
+      includeFortune: draft.includeFortune
     )
 
     if !resolvingWeekdayConflict {

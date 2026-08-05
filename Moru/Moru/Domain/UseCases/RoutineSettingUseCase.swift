@@ -16,6 +16,8 @@ struct RoutineSettingMutation {
   var hour: Int
   var minute: Int
   var selectedWeekdays: Set<Weekday>
+  var includeWeather: Bool? = nil
+  var includeFortune: Bool? = nil
   var steps: [RoutineStepMutation]
   var isActive: Bool
 }
@@ -225,6 +227,10 @@ struct RoutineSettingUseCase {
       schedule.minute = mutation.minute
       schedule.weekdays = mutation.selectedWeekdays.sortedByDisplayOrder()
       schedule.isEnabled = mutation.isActive
+      schedule.includeWeather =
+        mutation.includeWeather ?? schedule.includeWeather
+      schedule.includeFortune =
+        mutation.includeFortune ?? schedule.includeFortune
       alarmSchedule = schedule
     } else {
       alarmSchedule = AlarmSchedule(
@@ -232,7 +238,9 @@ struct RoutineSettingUseCase {
         hour: mutation.hour,
         minute: mutation.minute,
         weekdays: mutation.selectedWeekdays.sortedByDisplayOrder(),
-        isEnabled: mutation.isActive
+        isEnabled: mutation.isActive,
+        includeWeather: mutation.includeWeather ?? false,
+        includeFortune: mutation.includeFortune ?? false
       )
     }
 
@@ -266,6 +274,8 @@ struct RoutineSettingUseCase {
       hour: schedule?.hour ?? 7,
       minute: schedule?.minute ?? 0,
       selectedWeekdays: Set(schedule?.weekdays ?? Weekday.weekdays),
+      includeWeather: schedule?.includeWeather,
+      includeFortune: schedule?.includeFortune,
       steps: routine.steps
         .sorted { $0.order < $1.order }
         .map { step in
