@@ -7,6 +7,7 @@
 
 import CoreLocation
 import Foundation
+import UIKit
 import WeatherKit
 
 enum HomeWeatherAuthorizationStatus: Equatable, Sendable {
@@ -22,6 +23,7 @@ enum HomeWeatherServiceError: Error, Equatable, Sendable {
   case locationServicesDisabled
   case noLocationFix
   case weatherUnavailable
+  case attributionUnavailable
   case invalidWeatherData
 }
 
@@ -39,33 +41,126 @@ protocol HomeWeatherRepository: AnyObject {
 @MainActor
 protocol HomeWeatherService: AnyObject {
   var authorizationStatus: HomeWeatherAuthorizationStatus { get }
-  var isLocationServiceEnabled: Bool { get }
 
+  func locationServicesEnabled() async -> Bool
   func requestWhenInUseAuthorization() async -> HomeWeatherAuthorizationStatus
   func currentLocation() async throws -> CLLocation
   func weatherSnapshot(for location: CLLocation) async throws -> HomeWeatherSnapshot
+  func weatherAttribution() async throws -> HomeWeatherAttribution
   func cancelCurrentLocationRequests()
 }
 
 @MainActor
+protocol HomeLocationManaging: AnyObject {
+  var delegate: (any CLLocationManagerDelegate)? { get set }
+  var desiredAccuracy: CLLocationAccuracy { get set }
+  var authorizationStatus: CLAuthorizationStatus { get }
+
+  func requestWhenInUseAuthorization()
+  func requestLocation()
+  func stopUpdatingLocation()
+}
+
+extension CLLocationManager: HomeLocationManaging {}
+
+typealias HomeLocationTimeoutScheduler = @MainActor @Sendable (
+  Duration,
+  @escaping @MainActor @Sendable () -> Void
+) -> Task<Void, Never>
+
+nonisolated struct HomeWeatherAttributionSource: Sendable, Equatable {
+  let serviceName: String
+  let combinedMarkLightURL: URL
+  let combinedMarkDarkURL: URL
+  let legalPageURL: URL
+}
+
+nonisolated struct HomeWeatherAttributionAssetResponse: Sendable, Equatable {
+  let data: Data
+  let statusCode: Int
+  let finalURL: URL
+}
+
+typealias HomeWeatherAttributionProvider =
+  @MainActor () async throws -> HomeWeatherAttributionSource
+typealias HomeWeatherAttributionAssetLoader =
+  @Sendable (URL) async throws -> HomeWeatherAttributionAssetResponse
+
+@MainActor
 final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   nonisolated private static let maximumLocationAge: TimeInterval = 15 * 60
+  nonisolated private static let maximumAttributionAssetBytes = 1_000_000
   private static let maximumLocationRequestAttempts = 3
   private static let locationRequestTimeout: Duration = .seconds(10)
 
-  private let locationManager: CLLocationManager
+  private let locationManager: any HomeLocationManaging
   private let weatherService: WeatherService
+  private let locationServicesEnabledProbe: @Sendable () -> Bool
+  private let scheduleLocationTimeout: HomeLocationTimeoutScheduler
+  private let weatherAttributionProvider: HomeWeatherAttributionProvider
+  private let weatherAttributionAssetLoader: HomeWeatherAttributionAssetLoader
   private var authorizationContinuations: [
     CheckedContinuation<HomeWeatherAuthorizationStatus, Never>
   ] = []
   private var locationContinuations: [CheckedContinuation<CLLocation, Error>] = []
   private var locationRequestStartedAt: Date?
   private var locationRequestAttempt = 0
+  private var activeLocationRequestID: UUID?
   private var locationTimeoutTask: Task<Void, Never>?
+  private var cachedWeatherAttribution: HomeWeatherAttribution?
+  private var weatherAttributionTask: Task<HomeWeatherAttribution, Error>?
 
-  override init() {
-    locationManager = CLLocationManager()
-    weatherService = .shared
+  #if DEBUG
+  var pendingLocationCallerCount: Int {
+    locationContinuations.count
+  }
+  #endif
+
+  override convenience init() {
+    self.init(
+      locationManager: CLLocationManager(),
+      weatherService: .shared,
+      locationServicesEnabled: {
+        CLLocationManager.locationServicesEnabled()
+      },
+      scheduleLocationTimeout: { duration, action in
+        Task { @MainActor in
+          try? await Task.sleep(for: duration)
+          guard !Task.isCancelled else {
+            return
+          }
+
+          action()
+        }
+      },
+      weatherAttributionProvider: nil,
+      weatherAttributionAssetLoader: nil
+    )
+  }
+
+  init(
+    locationManager: any HomeLocationManaging,
+    weatherService: WeatherService,
+    locationServicesEnabled: @escaping @Sendable () -> Bool,
+    scheduleLocationTimeout: @escaping HomeLocationTimeoutScheduler,
+    weatherAttributionProvider: HomeWeatherAttributionProvider? = nil,
+    weatherAttributionAssetLoader: HomeWeatherAttributionAssetLoader? = nil
+  ) {
+    self.locationManager = locationManager
+    self.weatherService = weatherService
+    self.locationServicesEnabledProbe = locationServicesEnabled
+    self.scheduleLocationTimeout = scheduleLocationTimeout
+    self.weatherAttributionProvider = weatherAttributionProvider ?? {
+      let attribution = try await weatherService.attribution
+      return HomeWeatherAttributionSource(
+        serviceName: attribution.serviceName,
+        combinedMarkLightURL: attribution.combinedMarkLightURL,
+        combinedMarkDarkURL: attribution.combinedMarkDarkURL,
+        legalPageURL: attribution.legalPageURL
+      )
+    }
+    self.weatherAttributionAssetLoader = weatherAttributionAssetLoader
+      ?? Self.loadAttributionAsset
     super.init()
     locationManager.delegate = self
     locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
@@ -86,15 +181,18 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
     }
   }
 
-  var isLocationServiceEnabled: Bool {
-    CLLocationManager.locationServicesEnabled()
+  func locationServicesEnabled() async -> Bool {
+    let probe = locationServicesEnabledProbe
+    return await Task.detached(priority: .userInitiated) {
+      probe()
+    }.value
   }
 
   func requestWhenInUseAuthorization() async -> HomeWeatherAuthorizationStatus {
     guard authorizationStatus == .notDetermined else {
       return authorizationStatus
     }
-    guard isLocationServiceEnabled else {
+    guard await locationServicesEnabled() else {
       return .notDetermined
     }
 
@@ -105,7 +203,7 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   }
 
   func currentLocation() async throws -> CLLocation {
-    guard isLocationServiceEnabled else {
+    guard await locationServicesEnabled() else {
       throw HomeWeatherServiceError.locationServicesDisabled
     }
 
@@ -170,14 +268,36 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
     }
   }
 
+  func weatherAttribution() async throws -> HomeWeatherAttribution {
+    if let cachedWeatherAttribution {
+      return cachedWeatherAttribution
+    }
+
+    if let weatherAttributionTask {
+      return try await weatherAttributionTask.value
+    }
+
+    let task = Task { [weak self] in
+      guard let self else {
+        throw CancellationError()
+      }
+      return try await self.fetchWeatherAttribution()
+    }
+    weatherAttributionTask = task
+
+    do {
+      let attribution = try await task.value
+      cachedWeatherAttribution = attribution
+      weatherAttributionTask = nil
+      return attribution
+    } catch {
+      weatherAttributionTask = nil
+      throw error
+    }
+  }
+
   func cancelCurrentLocationRequests() {
-    locationTimeoutTask?.cancel()
-    locationTimeoutTask = nil
-    let continuations = locationContinuations
-    locationContinuations.removeAll()
-    locationRequestStartedAt = nil
-    locationRequestAttempt = 0
-    continuations.forEach { $0.resume(throwing: CancellationError()) }
+    finishLocationRequests(with: .failure(CancellationError()))
   }
 
   nonisolated static func isValidLocation(_ location: CLLocation) -> Bool {
@@ -188,6 +308,10 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
       && (-180...180).contains(coordinate.longitude)
       && location.horizontalAccuracy.isFinite
       && location.horizontalAccuracy >= 0
+  }
+
+  nonisolated static func isValidAttributionURL(_ url: URL) -> Bool {
+    url.scheme?.lowercased() == "https" && url.host?.isEmpty == false
   }
 
   nonisolated static func isValidLocationFix(
@@ -249,46 +373,133 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
     continuations.forEach { $0.resume(returning: status) }
   }
 
-  private func resumeLocationContinuations(throwing error: Error) {
+  private func endActiveLocationAttempt() {
+    guard activeLocationRequestID != nil else {
+      locationTimeoutTask?.cancel()
+      locationTimeoutTask = nil
+      return
+    }
+
+    activeLocationRequestID = nil
     locationTimeoutTask?.cancel()
     locationTimeoutTask = nil
+    locationRequestStartedAt = nil
+    locationManager.stopUpdatingLocation()
+  }
+
+  private func finishLocationRequests(with result: Result<CLLocation, Error>) {
+    endActiveLocationAttempt()
     let continuations = locationContinuations
     locationContinuations.removeAll()
-    locationRequestStartedAt = nil
     locationRequestAttempt = 0
-    continuations.forEach { $0.resume(throwing: error) }
+
+    switch result {
+    case .success(let location):
+      continuations.forEach { $0.resume(returning: location) }
+    case .failure(let error):
+      continuations.forEach { $0.resume(throwing: error) }
+    }
   }
 
   private func startLocationRequest() {
-    guard !locationContinuations.isEmpty else {
+    guard !locationContinuations.isEmpty, activeLocationRequestID == nil else {
       return
     }
 
-    locationTimeoutTask?.cancel()
     locationRequestAttempt += 1
     locationRequestStartedAt = Date()
-    locationManager.requestLocation()
+    let requestID = UUID()
+    activeLocationRequestID = requestID
 
-    locationTimeoutTask = Task { [weak self] in
-      try? await Task.sleep(for: Self.locationRequestTimeout)
-      guard !Task.isCancelled else {
-        return
-      }
-
-      self?.retryLocationRequestOrFinish()
+    locationTimeoutTask = scheduleLocationTimeout(Self.locationRequestTimeout) {
+      [weak self] in
+      self?.locationRequestDidTimeOut(requestID: requestID)
     }
+    locationManager.requestLocation()
+  }
+
+  private func locationRequestDidTimeOut(requestID: UUID) {
+    guard activeLocationRequestID == requestID else {
+      return
+    }
+
+    retryLocationRequestOrFinish()
   }
 
   private func retryLocationRequestOrFinish() {
-    guard !locationContinuations.isEmpty else {
+    guard !locationContinuations.isEmpty, activeLocationRequestID != nil else {
       return
     }
+
+    endActiveLocationAttempt()
 
     if locationRequestAttempt < Self.maximumLocationRequestAttempts {
       startLocationRequest()
     } else {
-      resumeLocationContinuations(throwing: HomeWeatherServiceError.noLocationFix)
+      finishLocationRequests(with: .failure(HomeWeatherServiceError.noLocationFix))
     }
+  }
+
+  private func fetchWeatherAttribution() async throws -> HomeWeatherAttribution {
+    do {
+      let source = try await weatherAttributionProvider()
+      guard !source.serviceName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            Self.isValidAttributionURL(source.combinedMarkLightURL),
+            Self.isValidAttributionURL(source.combinedMarkDarkURL),
+            Self.isValidAttributionURL(source.legalPageURL) else {
+        throw HomeWeatherServiceError.attributionUnavailable
+      }
+
+      async let lightResponse = weatherAttributionAssetLoader(
+        source.combinedMarkLightURL
+      )
+      async let darkResponse = weatherAttributionAssetLoader(
+        source.combinedMarkDarkURL
+      )
+      let (light, dark) = try await (lightResponse, darkResponse)
+
+      guard Self.isValidAttributionAsset(light),
+            Self.isValidAttributionAsset(dark),
+            UIImage(data: light.data) != nil,
+            UIImage(data: dark.data) != nil else {
+        throw HomeWeatherServiceError.attributionUnavailable
+      }
+
+      return HomeWeatherAttribution(
+        serviceName: source.serviceName,
+        combinedMarkLightData: light.data,
+        combinedMarkDarkData: dark.data,
+        legalPageURL: source.legalPageURL
+      )
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      throw HomeWeatherServiceError.attributionUnavailable
+    }
+  }
+
+  nonisolated private static func isValidAttributionAsset(
+    _ response: HomeWeatherAttributionAssetResponse
+  ) -> Bool {
+    (200..<300).contains(response.statusCode)
+      && isValidAttributionURL(response.finalURL)
+      && !response.data.isEmpty
+      && response.data.count <= maximumAttributionAssetBytes
+  }
+
+  nonisolated private static func loadAttributionAsset(
+    from url: URL
+  ) async throws -> HomeWeatherAttributionAssetResponse {
+    let (data, response) = try await URLSession.shared.data(from: url)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw HomeWeatherServiceError.attributionUnavailable
+    }
+
+    return HomeWeatherAttributionAssetResponse(
+      data: data,
+      statusCode: httpResponse.statusCode,
+      finalURL: httpResponse.url ?? url
+    )
   }
 }
 
@@ -302,6 +513,10 @@ extension CoreLocationWeatherService: CLLocationManagerDelegate {
   }
 
   func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    guard activeLocationRequestID != nil, !locationContinuations.isEmpty else {
+      return
+    }
+
     guard let location = locations.last(where: {
       Self.isValidLocationFix(
         $0,
@@ -313,16 +528,14 @@ extension CoreLocationWeatherService: CLLocationManagerDelegate {
       return
     }
 
-    locationTimeoutTask?.cancel()
-    locationTimeoutTask = nil
-    let continuations = locationContinuations
-    locationContinuations.removeAll()
-    locationRequestStartedAt = nil
-    locationRequestAttempt = 0
-    continuations.forEach { $0.resume(returning: location) }
+    finishLocationRequests(with: .success(location))
   }
 
   func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    guard activeLocationRequestID != nil, !locationContinuations.isEmpty else {
+      return
+    }
+
     let serviceError: HomeWeatherServiceError
     if let locationError = error as? CLError, locationError.code == .denied {
       serviceError = .authorizationDenied
@@ -334,6 +547,6 @@ extension CoreLocationWeatherService: CLLocationManagerDelegate {
       serviceError = .noLocationFix
     }
 
-    resumeLocationContinuations(throwing: serviceError)
+    finishLocationRequests(with: .failure(serviceError))
   }
 }

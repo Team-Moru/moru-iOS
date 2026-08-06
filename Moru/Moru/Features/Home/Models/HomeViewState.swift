@@ -41,9 +41,6 @@ enum HomeFailure: Equatable {
 }
 
 enum HomeWeatherError: Error, Equatable {
-  case cacheReadFailed
-  case cacheEraseFailed
-  case cacheWriteFailed
   case service(HomeWeatherServiceError)
   case unavailableConfiguration
 }
@@ -53,8 +50,8 @@ enum HomeWeatherState: Equatable {
   case requestingPermission
   case locating(UUID)
   case loading(UUID)
-  case fresh(HomeWeatherSnapshot)
-  case stale(HomeWeatherSnapshot)
+  case fresh(HomeWeatherContent)
+  case stale(HomeWeatherContent)
   case denied
   case restricted
   case noFix
