@@ -8,6 +8,10 @@
 import SwiftUI
 
 struct TodayRoutineProgressCard: View {
+  private enum Metric {
+    static let percentAlignmentOffset: CGFloat = -5
+  }
+
   let progress: HomeProgressState
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -28,18 +32,29 @@ struct TodayRoutineProgressCard: View {
           .frame(width: progressRingSize, height: progressRingSize)
 
         VStack(spacing: 0) {
-          Text(progress.percentText)
+          HStack(spacing: 0) {
+            Text(percentSymbolText)
+              .hidden()
+            Text(percentValueText)
+            Text(percentSymbolText)
+          }
             .homeFigmaTextStyle(.h2)
             .foregroundStyle(MoruPilotColor.textPrimary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
+            .offset(x: Metric.percentAlignmentOffset)
 
           Text(progress.completedText)
             .homeFigmaTextStyle(.c2.weight(.regular))
             .foregroundStyle(MoruPilotColor.textTertiary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
         }
+        .frame(width: progressRingSize, alignment: .center)
       }
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(HomeCopy.todayRoutine)
@@ -66,6 +81,16 @@ struct TodayRoutineProgressCard: View {
 
   private var ringLineWidth: CGFloat {
     dynamicTypeSize.isAccessibilitySize ? 10 : 8
+  }
+
+  private var percentValueText: String {
+    progress.percentText.hasSuffix("%")
+      ? String(progress.percentText.dropLast())
+      : progress.percentText
+  }
+
+  private var percentSymbolText: String {
+    progress.percentText.hasSuffix("%") ? "%" : ""
   }
 
   private var progressGradient: LinearGradient {

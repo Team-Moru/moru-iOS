@@ -41,25 +41,39 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
 
     for state in HomeProfileCaptureState.allCases {
       for variant in MoruVisualCaptureVariant.allCases {
-        let filename = "\(state.rawValue)-\(variant.rawValue).png"
-        let screen = try await screen(for: state)
-        let first = try MoruVisualCaptureFixture.render(
-          screen,
-          filename: filename,
+        try await assertDeterministicCapture(
+          state: state,
           variant: variant,
           outputDirectory: outputDirectory
         )
-        let second = try MoruVisualCaptureFixture.render(
-          screen,
-          filename: "\(state.rawValue)-\(variant.rawValue)-repeat.png",
-          variant: variant,
-          outputDirectory: outputDirectory
-        )
-
-        XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
-        XCTAssertEqual(first.scale, 3)
-        XCTAssertEqual(first.pngData(), second.pngData())
       }
+    }
+  }
+
+  private func assertDeterministicCapture(
+    state: HomeProfileCaptureState,
+    variant: MoruVisualCaptureVariant,
+    outputDirectory: URL
+  ) async throws {
+    let screen = try await screen(for: state)
+    try autoreleasepool {
+      let filename = "\(state.rawValue)-\(variant.rawValue).png"
+      let first = try MoruVisualCaptureFixture.render(
+        screen,
+        filename: filename,
+        variant: variant,
+        outputDirectory: outputDirectory
+      )
+      let second = try MoruVisualCaptureFixture.render(
+        screen,
+        filename: "\(state.rawValue)-\(variant.rawValue)-repeat.png",
+        variant: variant,
+        outputDirectory: outputDirectory
+      )
+
+      XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
+      XCTAssertEqual(first.scale, 3)
+      XCTAssertEqual(first.pngData(), second.pngData())
     }
   }
 
@@ -87,7 +101,12 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
 
     let weatherState: HomeWeatherState = state == .homeWeatherDenied
       ? .denied
-      : .fresh(weatherSnapshot)
+      : .fresh(
+        HomeWeatherContent(
+          snapshot: weatherSnapshot,
+          attribution: weatherAttribution
+        )
+      )
     let viewModel = HomeViewModel(
       loadHomeRoutinesUseCase: loadUseCase,
       initialWeatherState: weatherState
@@ -288,6 +307,21 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       fetchedAt: Date(timeIntervalSince1970: 1_784_841_300),
       fetchedTimeZoneIdentifier: "Asia/Seoul",
       fetchedUTCOffsetSeconds: 32_400
+    )
+  }
+
+  private var weatherAttribution: HomeWeatherAttribution {
+    let markData = Data(
+      base64Encoded:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    )!
+    return HomeWeatherAttribution(
+      serviceName: "Apple Weather",
+      combinedMarkLightData: markData,
+      combinedMarkDarkData: markData,
+      legalPageURL: URL(
+        string: "https://weatherkit.apple.com/legal-attribution.html"
+      )!
     )
   }
 

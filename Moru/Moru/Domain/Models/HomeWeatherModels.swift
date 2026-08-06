@@ -29,3 +29,15 @@ nonisolated struct HomeWeatherSnapshot: Sendable, Equatable {
   let fetchedTimeZoneIdentifier: String
   let fetchedUTCOffsetSeconds: Int
 }
+
+nonisolated struct HomeWeatherAttribution: Sendable, Equatable {
+  let serviceName: String
+  let combinedMarkLightData: Data
+  let combinedMarkDarkData: Data
+  let legalPageURL: URL
+}
+
+nonisolated struct HomeWeatherContent: Sendable, Equatable {
+  let snapshot: HomeWeatherSnapshot
+  let attribution: HomeWeatherAttribution
+}
