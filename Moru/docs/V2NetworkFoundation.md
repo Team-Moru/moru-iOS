@@ -26,8 +26,8 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 
 ## 현재 연동 범위
 
-2026-08-05 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
-현재 제품 흐름에 연결된 operation은 17개입니다.
+2026-08-06 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
+현재 제품 흐름에 연결된 operation은 20개입니다.
 
 | 기능 | API | 앱 연결 상태 |
 | --- | --- | --- |
@@ -43,19 +43,22 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 | 계정 프로필·스트릭 | `GET /members/me/profile`, `GET /members/me/streak` | Profile의 읽기 전용 계정 정보에 연결 |
 | 계정 음성 | `GET /tts`, `PATCH /members/me/tts` | 서버 생성 음성 목록과 선택 변경에 연결 |
 | 구독 조회 | `GET /subscriptions/me` | Profile의 읽기 전용 플랜 상태에 연결 |
-| 계정 루틴 보관함 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}` | Profile에서 목록·상세를 읽기 전용으로 표시. 로컬 루틴과 병합·실행하지 않음 |
+| 계정 루틴 보관함 조회 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}`, `GET /routine-groups/active`, `GET /routine-groups/today` | Profile에서 목록·상세·활성 그룹·오늘 현황을 서버 snapshot으로 표시. 로컬 루틴과 병합·실행하지 않음 |
+| 계정 루틴 보관함 활성 상태 | `PATCH /routine-groups/{routineGroupId}/active` | 요청의 `isActive` 값으로 서버 상태를 명시적으로 지정. Home과 SwiftData 활성 상태는 변경하지 않음 |
 | 서버 상태 | `GET /health` | Target과 계약 테스트만 존재 |
 
-전체 Swagger 기준 operation 커버리지는 `17/31`(`54.8%`)입니다.
+전체 Swagger 기준 operation 커버리지는 `20/31`(`64.5%`)입니다.
 제품 앱에서 연결하면 안 되는 개발 토큰과 화면 없는 health를 제외하면
-`17/29`(`58.6%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
+`20/29`(`69.0%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
 아닙니다.
 
 홈, 루틴 관리, 실행 저장, 편집 가능한 로컬 프로필의 기준 데이터는
 계속 SwiftData입니다. History는 로컬 기록을 기준으로 서버 집계를 보강하고,
 Profile의 서버 계정 정보는 로컬 설정과 섞지 않는 읽기 전용 snapshot입니다.
 계정 루틴 보관함도 서버 응답을 메모리에만 보관하며, 같은 제목의 그룹을
-합치거나 로컬 `RoutineRepository`에 쓰지 않습니다.
+합치거나 로컬 `RoutineRepository`에 쓰지 않습니다. 서버 활성 상태를
+변경하거나 오늘 현황을 조회해도 Home, 로컬 실행, 알람 설정에는 반영하지
+않습니다.
 서버 API가 존재하더라도 로컬 ID와 서버 ID의 매핑, 충돌, 시간대,
 멱등성 계약이 확정되지 않은 기능은 임의로 연결하지 않습니다.
 
@@ -267,19 +270,49 @@ Profile은 로컬 닉네임·번들 안내 음성과 서버 닉네임·서버 �
 별도 상태로 표시합니다. 구독 조회 실패를 FREE로 간주하지 않으며,
 PRO 음성은 활성 PRO 응답이 확인된 경우만 변경합니다.
 계정 루틴 보관함은 로그인한 사용자가 직접 진입했을 때만 목록을 요청하고,
-항목을 선택했을 때만 상세를 요청합니다. 응답은 읽기 전용이며 로컬 루틴의
-추가·수정·실행 또는 알람 설정으로 이어지지 않습니다.
+항목을 선택했을 때만 상세를 요청합니다. 목록·상세 응답은 서버 snapshot으로
+표시하며 로컬 루틴의 추가·수정·실행 또는 알람 설정으로 이어지지 않습니다.
+활성 그룹과 오늘 현황도 Profile의 서버 보관함 안에서만 요청합니다.
+두 조회의 “오늘”은 기기 시간대와 무관하게 `Asia/Seoul`의 00:00을 하루
+경계로 사용합니다. 활성 그룹이 없어서 두 조회가 `HTTP 404`,
+`ROUTINE4005`, `사용 중인 루틴이 없습니다.`를 반환하면 네트워크 실패가
+아닌 정상 빈 상태로 표시합니다.
+
+활성 상태 변경은 토글이 아닙니다.
+`PATCH /routine-groups/{routineGroupId}/active`에
+`{"isActive": true}` 또는 `{"isActive": false}`를 보내 요청 값을 그대로
+지정합니다. 같은 요청을 재전송해도 상태가 뒤집히지 않습니다. 성공 뒤에는
+서버 목록과 활성 그룹을 다시 조회해 서버의 단일 활성 그룹 snapshot과
+Profile 상태를 맞추되, Home과 SwiftData의 로컬 활성 상태는 변경하지
+않습니다. timeout, `5xx`, 응답 decoding 실패처럼 서버 적용 여부가 모호한
+실패도 목록·활성 그룹·오늘 현황을 다시 조회합니다. 새 목록과 활성 그룹이
+요청 상태에 동의하면 그 상태로 보정하고, 반대 상태면 미반영으로 표시하며,
+두 응답이 없거나 충돌하면 변경 여부를 확인할 수 없는 상태로 표시합니다.
 
 서버 기능을 조립할 때도 Local Repository는 교체하지 않습니다.
 APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 필요한 Coordinator를 선택 기능으로 추가합니다.
 
+## 확인 필요
+
+- 공개 Swagger의 활성 상태 `PATCH` 설명은 아직 “토글”이지만, 요청 DTO와
+  확정 계약은 명시적 `isActive` 지정 방식입니다. Swagger 문구 정정이
+  필요합니다.
+- 확정 계약은 사용자당 활성 그룹 최대 1개와 새 활성화 시 기존 그룹 자동
+  비활성화를 규정하지만, 공개 서버 소스에는 자동 비활성화가 보이지 않고
+  알람 요일 충돌 검증만 있습니다. 배포 동작과 공개 소스의 일치 여부를
+  확인해야 합니다.
+- 활성 그룹과 오늘 현황 응답에 기준 KST 날짜나 snapshot revision이 없어
+  00:00 KST 경계 또는 외부 동시 변경 때 두 병렬 응답이 같은 snapshot인지
+  클라이언트가 검증할 수 없습니다. 서버가 기준일 또는 revision을 제공해야
+  완전히 판별할 수 있습니다.
+
 ## 계약 확인 전 보류하는 연동
 
-- 루틴 그룹 쓰기와 실행용 조회
-  - `POST /routine-groups`, 루틴 추가, `PATCH`, `DELETE`는 연결하지 않습니다.
-  - `GET /routine-groups/active`, `GET /routine-groups/today`도 로컬 루틴과
-    실행 기준을 정하지 않아 연결하지 않습니다.
+- 루틴 그룹 생성과 구조 변경
+  - `POST /routine-groups`, `POST /routine-groups/{routineGroupId}/routines`,
+    `DELETE /routine-groups/{routineGroupId}`는 연결하지 않습니다.
+  - 활성 상태 지정 외 수정·재정렬도 연결하지 않습니다.
   - 로컬 UUID와 서버 `Int64` ID의 영속 매핑이 없습니다.
   - 수정·재정렬, client mutation ID, idempotency, revision,
     tombstone, 증분 동기화 계약이 없습니다.
@@ -310,9 +343,10 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 - 같은 실행 결과를 다시 보내면 실행 기록이 중복 저장됩니다.
 - 요청 중복을 식별할 idempotency key 또는 correlation key가 없습니다.
 
-따라서 네트워크 재시도만으로 중복 쓰기가 생길 수 있습니다. 아래 계약이
-Swagger와 서버 구현에 포함되기 전에는 쓰기 API를 제품 흐름에 연결하지
-않습니다.
+명시적 상태 지정 `PATCH`는 같은 `isActive` 값을 다시 보내도 결과가 같은
+별도 계약입니다. 그 외 생성, 루틴 추가, 실행 저장은 네트워크 재시도만으로
+중복 쓰기가 생길 수 있습니다. 아래 계약이 Swagger와 서버 구현에 포함되기
+전에는 해당 API를 제품 흐름에 연결하지 않습니다.
 
 - 생성·수정 요청에 `Idempotency-Key` 또는 `clientMutationId`를 받습니다.
 - 같은 키와 같은 payload를 다시 보내면 새 데이터를 만들지 않고 최초 결과를
@@ -369,11 +403,17 @@ Network Foundation 테스트는 다음 계약을 유지합니다.
 ### 계정 루틴 보관함 QA
 
 - 서버 그룹이 0개, 1개, 여러 개인 계정에서 목록·빈 상태를 확인합니다.
+- 활성 그룹과 오늘 현황의 `ROUTINE4005`가 오류 화면이 아닌 정상 빈 상태로
+  표시되고, timeout·인증·일반 서버 오류와 구분되는지 확인합니다.
+- 기기 시간대를 바꿔도 활성 그룹과 오늘 현황이 KST 00:00 경계로
+  해석되는지 확인합니다.
+- 동일한 `isActive` 요청을 반복해도 상태가 뒤집히지 않고, 활성화 성공 뒤
+  목록과 활성 그룹에는 서버가 선택한 단일 활성 그룹만 남는지 확인합니다.
 - 선택 필드가 누락된 목록과 상세가 “확인 불가” 상태로 안전하게 표시되는지
   확인합니다.
 - 제목이 같은 그룹이 여러 개여도 서버 ID별 행을 그대로 표시하는지 확인합니다.
 - 오프라인, timeout, `401`에서 재시도와 기존 읽기 결과 보존을 확인합니다.
-- 목록 또는 상세 요청 중 계정을 전환하면 이전 계정 데이터가 즉시 사라지고
-  늦게 도착한 응답도 표시되지 않는지 확인합니다.
-- 새로고침을 반복해도 로컬 루틴이 추가·수정되지 않고 서버 순서와 개수가
-  그대로 유지되는지 확인합니다.
+- 목록·상세·활성·오늘 요청 중 계정을 전환하면 이전 계정 데이터가 즉시
+  사라지고 늦게 도착한 응답도 표시되지 않는지 확인합니다.
+- 조회·활성 변경·새로고침을 반복해도 Home과 SwiftData의 로컬 루틴이
+  추가·수정되지 않고 서버 순서와 개수가 그대로 유지되는지 확인합니다.

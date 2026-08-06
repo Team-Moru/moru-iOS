@@ -15,19 +15,47 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
   func testTargetsMatchSwaggerAndSamplesDecode() throws {
     let list = RoutineGroupTarget.list
     let detail = RoutineGroupTarget.detail(routineGroupID: 12)
+    let active = RoutineGroupTarget.active
+    let today = RoutineGroupTarget.today
+    let updateActivation = RoutineGroupTarget.updateActivation(
+      routineGroupID: 12,
+      request: RoutineGroupActivationRequestDTO(isActive: false)
+    )
 
     XCTAssertEqual(list.path, "/routine-groups")
     XCTAssertEqual(detail.path, "/routine-groups/12")
+    XCTAssertEqual(active.path, "/routine-groups/active")
+    XCTAssertEqual(today.path, "/routine-groups/today")
+    XCTAssertEqual(
+      updateActivation.path,
+      "/routine-groups/12/active"
+    )
     XCTAssertEqual(list.method, .get)
     XCTAssertEqual(detail.method, .get)
+    XCTAssertEqual(active.method, .get)
+    XCTAssertEqual(today.method, .get)
+    XCTAssertEqual(updateActivation.method, .patch)
     XCTAssertEqual(list.authenticationRequirement, .bearer)
     XCTAssertEqual(detail.authenticationRequirement, .bearer)
+    XCTAssertEqual(active.authenticationRequirement, .bearer)
+    XCTAssertEqual(today.authenticationRequirement, .bearer)
+    XCTAssertEqual(updateActivation.authenticationRequirement, .bearer)
 
-    for target in [list, detail] {
+    for target in [list, detail, active, today] {
       guard case .requestPlain = target.task else {
         return XCTFail("Expected a body-free GET request.")
       }
     }
+    guard case .requestJSONEncodable(let encodable) =
+            updateActivation.task,
+          let activationRequest =
+            encodable as? RoutineGroupActivationRequestDTO else {
+      return XCTFail("Expected an explicit activation JSON request.")
+    }
+    XCTAssertEqual(
+      activationRequest,
+      RoutineGroupActivationRequestDTO(isActive: false)
+    )
 
     let decoder = JSONDecoder()
     let listEnvelope = try decoder.decode(
@@ -38,6 +66,18 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       APIResponse<RoutineGroupDetailResponseDTO>.self,
       from: detail.sampleData
     )
+    let activeEnvelope = try decoder.decode(
+      APIResponse<ActiveRoutineGroupResponseDTO>.self,
+      from: active.sampleData
+    )
+    let todayEnvelope = try decoder.decode(
+      APIResponse<TodayRoutineProgressResponseDTO>.self,
+      from: today.sampleData
+    )
+    let activationEnvelope = try decoder.decode(
+      APIResponse<RoutineGroupActivationResponseDTO>.self,
+      from: updateActivation.sampleData
+    )
 
     XCTAssertEqual(listEnvelope.result?.first?.routineGroupId, 12)
     XCTAssertEqual(detailEnvelope.result?.routineGroupId, 12)
@@ -45,6 +85,14 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       detailEnvelope.result?.routines?.first?.steps?.first?.stepId,
       41
     )
+    XCTAssertEqual(activeEnvelope.result?.routineGroupId, 12)
+    XCTAssertEqual(activeEnvelope.result?.completionRate, 50)
+    XCTAssertEqual(activeEnvelope.result?.routines?.first?.routineId, 31)
+    XCTAssertEqual(todayEnvelope.result?.completedCount, 1)
+    XCTAssertEqual(todayEnvelope.result?.totalCount, 2)
+    XCTAssertEqual(todayEnvelope.result?.completionRate, 50)
+    XCTAssertEqual(activationEnvelope.result?.routineGroupId, 12)
+    XCTAssertEqual(activationEnvelope.result?.isActive, false)
   }
 
   func testFetchesListAndDetailWithAccountBindingAndNoRequestBody()
@@ -91,6 +139,112 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
     )
   }
 
+  func testFetchesActiveTodayAndSetsActivationWithAccountBinding()
+    async throws {
+    let capture = RoutineGroupRequestCapturePlugin()
+    let service = makeStubbedService(additionalPlugins: [capture])
+
+    let fetchedActive = try await service.fetchActiveRoutineGroup(
+      memberID: 98
+    )
+    let fetchedToday = try await service.fetchTodayRoutineProgress(
+      memberID: 98
+    )
+    let active = try XCTUnwrap(fetchedActive)
+    let today = try XCTUnwrap(fetchedToday)
+    let firstActivation = try await service.updateRoutineGroupActivation(
+      routineGroupID: 12,
+      isActive: true,
+      memberID: 98
+    )
+    let repeatedActivation = try await service.updateRoutineGroupActivation(
+      routineGroupID: 12,
+      isActive: true,
+      memberID: 98
+    )
+    let deactivation = try await service.updateRoutineGroupActivation(
+      routineGroupID: 12,
+      isActive: false,
+      memberID: 98
+    )
+
+    XCTAssertEqual(active.routineGroupID, 12)
+    XCTAssertEqual(active.title, "아침 루틴")
+    XCTAssertEqual(active.totalDurationSeconds, 180)
+    XCTAssertEqual(active.completionRate, 0.5)
+    XCTAssertEqual(active.routines?.map(\.routineID), [31])
+    XCTAssertEqual(active.routines?.first?.isCompleted, true)
+    XCTAssertEqual(active.routines?.first?.completedTimeSeconds, 30)
+    XCTAssertEqual(
+      today,
+      ServerTodayRoutineProgress(
+        completedCount: 1,
+        totalCount: 2,
+        completionRate: 0.5
+      )
+    )
+    XCTAssertEqual(
+      firstActivation,
+      ServerRoutineGroupActivation(
+        routineGroupID: 12,
+        isActive: true
+      )
+    )
+    XCTAssertEqual(repeatedActivation, firstActivation)
+    XCTAssertEqual(
+      deactivation,
+      ServerRoutineGroupActivation(
+        routineGroupID: 12,
+        isActive: false
+      )
+    )
+
+    let requests = capture.requests
+    XCTAssertEqual(
+      requests.compactMap(\.url?.path),
+      [
+        "/routine-groups/active",
+        "/routine-groups/today",
+        "/routine-groups/12/active",
+        "/routine-groups/12/active",
+        "/routine-groups/12/active",
+      ]
+    )
+    XCTAssertTrue(
+      requests.allSatisfy {
+        $0.value(forHTTPHeaderField: "Authorization")
+          == "Bearer access-token"
+      }
+    )
+
+    let serverDatedGETs = Array(requests.prefix(2))
+    XCTAssertTrue(
+      serverDatedGETs.allSatisfy {
+        $0.httpMethod == "GET"
+          && $0.httpBody == nil
+          && $0.url?.query == nil
+      }
+    )
+
+    let activationRequests = Array(requests.dropFirst(2))
+    XCTAssertTrue(
+      activationRequests.allSatisfy { $0.httpMethod == "PATCH" }
+    )
+    let activationBodies = try activationRequests.map {
+      try XCTUnwrap($0.httpBody)
+    }
+    XCTAssertEqual(activationBodies[0], activationBodies[1])
+    let requestedStates = try activationBodies.map { body in
+      let object = try XCTUnwrap(
+        JSONSerialization.jsonObject(with: body)
+          as? [String: Bool]
+      )
+      XCTAssertEqual(object.count, 1)
+      return try XCTUnwrap(object["isActive"])
+    }
+    XCTAssertEqual(requestedStates, [true, true, false])
+  }
+
   func testDTOsDecodeEverySwaggerFieldAsOptional() throws {
     let decoder = JSONDecoder()
     let summary = try decoder.decode(
@@ -109,6 +263,22 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       RoutineGroupStepResponseDTO.self,
       from: Data("{}".utf8)
     )
+    let active = try decoder.decode(
+      ActiveRoutineGroupResponseDTO.self,
+      from: Data("{}".utf8)
+    )
+    let activeRoutine = try decoder.decode(
+      ActiveRoutineItemResponseDTO.self,
+      from: Data("{}".utf8)
+    )
+    let today = try decoder.decode(
+      TodayRoutineProgressResponseDTO.self,
+      from: Data("{}".utf8)
+    )
+    let activation = try decoder.decode(
+      RoutineGroupActivationResponseDTO.self,
+      from: Data("{}".utf8)
+    )
 
     XCTAssertNil(summary.routineGroupId)
     XCTAssertNil(summary.title)
@@ -121,6 +291,18 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
     XCTAssertNil(routine.steps)
     XCTAssertNil(step.stepId)
     XCTAssertNil(step.orderIndex)
+    XCTAssertNil(active.routineGroupId)
+    XCTAssertNil(active.totalDurationSec)
+    XCTAssertNil(active.completionRate)
+    XCTAssertNil(active.routines)
+    XCTAssertNil(activeRoutine.routineId)
+    XCTAssertNil(activeRoutine.isCompleted)
+    XCTAssertNil(activeRoutine.completedTimeSec)
+    XCTAssertNil(today.completedCount)
+    XCTAssertNil(today.totalCount)
+    XCTAssertNil(today.completionRate)
+    XCTAssertNil(activation.routineGroupId)
+    XCTAssertNil(activation.isActive)
   }
 
   func testListPreservesServerOrderDuplicateTitlesAndUnknownValues()
@@ -496,6 +678,242 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
     }
   }
 
+  func testActiveAndTodayMapServerOrderOptionalsAndNormalizedRates()
+    async throws {
+    let service = DefaultAccountRoutineGroupRemoteService(
+      apiClient: RoutineGroupPayloadAPIClient(
+        active: activeRoutineGroupDTO(
+          title: "  출근 준비  ",
+          totalDurationSec: nil,
+          completionRate: 75,
+          routines: [
+            activeRoutineItemDTO(
+              routineId: 8,
+              title: "  물 마시기  ",
+              isCompleted: nil,
+              completedTimeSec: nil
+            ),
+            activeRoutineItemDTO(
+              routineId: 4,
+              title: nil,
+              isCompleted: false,
+              completedTimeSec: 0
+            ),
+          ]
+        ),
+        today: todayRoutineProgressDTO(
+          completedCount: 3,
+          totalCount: 4,
+          completionRate: 75
+        )
+      )
+    )
+
+    let fetchedActive = try await service.fetchActiveRoutineGroup(
+      memberID: 98
+    )
+    let fetchedToday = try await service.fetchTodayRoutineProgress(
+      memberID: 98
+    )
+    let active = try XCTUnwrap(fetchedActive)
+    let today = try XCTUnwrap(fetchedToday)
+
+    XCTAssertEqual(active.title, "출근 준비")
+    XCTAssertNil(active.totalDurationSeconds)
+    XCTAssertEqual(active.completionRate, 0.75)
+    XCTAssertEqual(active.routines?.map(\.routineID), [8, 4])
+    XCTAssertEqual(active.routines?.first?.title, "물 마시기")
+    XCTAssertNil(active.routines?.first?.isCompleted)
+    XCTAssertNil(active.routines?.first?.completedTimeSeconds)
+    XCTAssertNil(active.routines?.last?.title)
+    XCTAssertEqual(active.routines?.last?.isCompleted, false)
+    XCTAssertEqual(active.routines?.last?.completedTimeSeconds, 0)
+    XCTAssertEqual(
+      today,
+      ServerTodayRoutineProgress(
+        completedCount: 3,
+        totalCount: 4,
+        completionRate: 0.75
+      )
+    )
+  }
+
+  func testActiveKeepsOmittedRoutinesDifferentFromEmptyRoutines()
+    async throws {
+    let omittedService = DefaultAccountRoutineGroupRemoteService(
+      apiClient: RoutineGroupPayloadAPIClient(
+        active: activeRoutineGroupDTO(
+          title: nil,
+          totalDurationSec: nil,
+          completionRate: nil,
+          routines: nil
+        )
+      )
+    )
+    let emptyService = DefaultAccountRoutineGroupRemoteService(
+      apiClient: RoutineGroupPayloadAPIClient(
+        active: activeRoutineGroupDTO(routines: [])
+      )
+    )
+
+    let fetchedOmitted = try await omittedService
+      .fetchActiveRoutineGroup(memberID: 98)
+    let fetchedEmpty = try await emptyService.fetchActiveRoutineGroup(
+      memberID: 98
+    )
+    let omitted = try XCTUnwrap(fetchedOmitted)
+    let empty = try XCTUnwrap(fetchedEmpty)
+
+    XCTAssertNil(omitted.title)
+    XCTAssertNil(omitted.totalDurationSeconds)
+    XCTAssertNil(omitted.completionRate)
+    XCTAssertNil(omitted.routines)
+    XCTAssertEqual(empty.routines, [])
+  }
+
+  func testActiveRejectsInvalidIdentityMetadataAndRoutines() async {
+    let invalidActiveGroups = [
+      activeRoutineGroupDTO(routineGroupId: nil),
+      activeRoutineGroupDTO(routineGroupId: 0),
+      activeRoutineGroupDTO(title: " \n "),
+      activeRoutineGroupDTO(totalDurationSec: -1),
+      activeRoutineGroupDTO(
+        totalDurationSec: Int(Int32.max) + 1
+      ),
+      activeRoutineGroupDTO(completionRate: -1),
+      activeRoutineGroupDTO(completionRate: 101),
+      activeRoutineGroupDTO(
+        routines: [activeRoutineItemDTO(routineId: nil)]
+      ),
+      activeRoutineGroupDTO(
+        routines: [activeRoutineItemDTO(routineId: 0)]
+      ),
+      activeRoutineGroupDTO(
+        routines: [
+          activeRoutineItemDTO(routineId: 1),
+          activeRoutineItemDTO(routineId: 1),
+        ]
+      ),
+      activeRoutineGroupDTO(
+        routines: [activeRoutineItemDTO(title: " \t ")]
+      ),
+      activeRoutineGroupDTO(
+        routines: [activeRoutineItemDTO(completedTimeSec: -1)]
+      ),
+      activeRoutineGroupDTO(
+        routines: [
+          activeRoutineItemDTO(
+            completedTimeSec: Int(Int32.max) + 1
+          ),
+        ]
+      ),
+    ]
+
+    for active in invalidActiveGroups {
+      let service = DefaultAccountRoutineGroupRemoteService(
+        apiClient: RoutineGroupPayloadAPIClient(active: active)
+      )
+      await assertRemoteError(.invalidResponse) {
+        _ = try await service.fetchActiveRoutineGroup(memberID: 98)
+      }
+    }
+  }
+
+  func testTodayRejectsMissingInvalidOrInconsistentProgress() async {
+    let invalidProgress = [
+      todayRoutineProgressDTO(completedCount: nil),
+      todayRoutineProgressDTO(totalCount: nil),
+      todayRoutineProgressDTO(completionRate: nil),
+      todayRoutineProgressDTO(completedCount: -1),
+      todayRoutineProgressDTO(totalCount: -1),
+      todayRoutineProgressDTO(
+        completedCount: Int(Int32.max) + 1
+      ),
+      todayRoutineProgressDTO(totalCount: Int(Int32.max) + 1),
+      todayRoutineProgressDTO(
+        completedCount: 2,
+        totalCount: 1
+      ),
+      todayRoutineProgressDTO(completionRate: -1),
+      todayRoutineProgressDTO(completionRate: 101),
+    ]
+
+    for today in invalidProgress {
+      let service = DefaultAccountRoutineGroupRemoteService(
+        apiClient: RoutineGroupPayloadAPIClient(today: today)
+      )
+      await assertRemoteError(.invalidResponse) {
+        _ = try await service.fetchTodayRoutineProgress(memberID: 98)
+      }
+    }
+  }
+
+  func testActivationResponseMustEchoRequestedIDAndState() async {
+    let invalidResponses = [
+      routineGroupActivationDTO(routineGroupId: nil),
+      routineGroupActivationDTO(routineGroupId: 0),
+      routineGroupActivationDTO(routineGroupId: 13),
+      routineGroupActivationDTO(isActive: nil),
+      routineGroupActivationDTO(isActive: false),
+    ]
+
+    for activation in invalidResponses {
+      let service = DefaultAccountRoutineGroupRemoteService(
+        apiClient: RoutineGroupPayloadAPIClient(
+          activation: activation
+        )
+      )
+      await assertRemoteError(.invalidResponse) {
+        _ = try await service.updateRoutineGroupActivation(
+          routineGroupID: 12,
+          isActive: true,
+          memberID: 98
+        )
+      }
+    }
+  }
+
+  func testRoutine4005IsNormalAbsenceOnlyForActiveAndToday()
+    async throws {
+    let noActiveRoutine = APIError.server(
+      statusCode: 404,
+      code: "ROUTINE4005",
+      message: "사용 중인 루틴이 없습니다."
+    )
+    let service = DefaultAccountRoutineGroupRemoteService(
+      apiClient: RoutineGroupThrowingAPIClient(
+        error: noActiveRoutine
+      )
+    )
+
+    let active = try await service.fetchActiveRoutineGroup(memberID: 98)
+    let today = try await service.fetchTodayRoutineProgress(memberID: 98)
+
+    XCTAssertNil(active)
+    XCTAssertNil(today)
+  }
+
+  func testOtherNotFoundErrorsRemainFailuresForActiveAndToday()
+    async {
+    let otherNotFound = APIError.server(
+      statusCode: 404,
+      code: "ROUTINE4004",
+      message: "루틴 그룹을 찾을 수 없습니다."
+    )
+    let service = DefaultAccountRoutineGroupRemoteService(
+      apiClient: RoutineGroupThrowingAPIClient(
+        error: otherNotFound
+      )
+    )
+
+    await assertAPIError(otherNotFound) {
+      _ = try await service.fetchActiveRoutineGroup(memberID: 98)
+    }
+    await assertAPIError(otherNotFound) {
+      _ = try await service.fetchTodayRoutineProgress(memberID: 98)
+    }
+  }
+
   func testRejectsInvalidRequestBeforeTransport() async {
     let client = RoutineGroupCallCountingAPIClient()
     let service = DefaultAccountRoutineGroupRemoteService(
@@ -515,6 +933,26 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       _ = try await service.fetchRoutineGroupDetail(
         routineGroupID: 12,
         memberID: -1
+      )
+    }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.fetchActiveRoutineGroup(memberID: 0)
+    }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.fetchTodayRoutineProgress(memberID: -1)
+    }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.updateRoutineGroupActivation(
+        routineGroupID: 0,
+        isActive: true,
+        memberID: 98
+      )
+    }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.updateRoutineGroupActivation(
+        routineGroupID: 12,
+        isActive: false,
+        memberID: 0
       )
     }
 
@@ -595,6 +1033,45 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
     }
   }
 
+  func testCancellationAfterTransportCannotPublishRoutine4005AsEmpty()
+    async {
+    let noActiveRoutine = APIError.server(
+      statusCode: 404,
+      code: "ROUTINE4005",
+      message: "사용 중인 루틴이 없습니다."
+    )
+
+    for fetchesToday in [false, true] {
+      let gate = RoutineGroupRequestGate()
+      let service = DefaultAccountRoutineGroupRemoteService(
+        apiClient: RoutineGroupDeferredErrorAPIClient(
+          gate: gate,
+          error: noActiveRoutine
+        )
+      )
+      let task = _Concurrency.Task {
+        if fetchesToday {
+          _ = try await service.fetchTodayRoutineProgress(memberID: 98)
+        } else {
+          _ = try await service.fetchActiveRoutineGroup(memberID: 98)
+        }
+      }
+
+      await gate.waitUntilRequestArrives()
+      task.cancel()
+      await gate.release()
+
+      do {
+        _ = try await task.value
+        XCTFail("Expected cancellation.")
+      } catch is CancellationError {
+        // Expected.
+      } catch {
+        XCTFail("Expected CancellationError, got \(error)")
+      }
+    }
+  }
+
   private func assertRemoteError(
     _ expected: AccountRoutineGroupRemoteError,
     operation: () async throws -> Void
@@ -606,6 +1083,20 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       XCTAssertEqual(error, expected)
     } catch {
       XCTFail("Expected AccountRoutineGroupRemoteError, got \(error)")
+    }
+  }
+
+  private func assertAPIError(
+    _ expected: APIError,
+    operation: () async throws -> Void
+  ) async {
+    do {
+      try await operation()
+      XCTFail("Expected \(expected).")
+    } catch let error as APIError {
+      XCTAssertEqual(error, expected)
+    } catch {
+      XCTFail("Expected APIError, got \(error)")
     }
   }
 
@@ -702,6 +1193,60 @@ nonisolated private func stepDTO(
   )
 }
 
+nonisolated private func activeRoutineGroupDTO(
+  routineGroupId: Int64? = 12,
+  title: String? = "아침 루틴",
+  totalDurationSec: Int? = 180,
+  completionRate: Int? = 50,
+  routines: [ActiveRoutineItemResponseDTO]? = [
+    activeRoutineItemDTO(),
+  ]
+) -> ActiveRoutineGroupResponseDTO {
+  ActiveRoutineGroupResponseDTO(
+    routineGroupId: routineGroupId,
+    title: title,
+    totalDurationSec: totalDurationSec,
+    completionRate: completionRate,
+    routines: routines
+  )
+}
+
+nonisolated private func activeRoutineItemDTO(
+  routineId: Int64? = 31,
+  title: String? = "물 마시기",
+  isCompleted: Bool? = true,
+  completedTimeSec: Int? = 30
+) -> ActiveRoutineItemResponseDTO {
+  ActiveRoutineItemResponseDTO(
+    routineId: routineId,
+    title: title,
+    isCompleted: isCompleted,
+    completedTimeSec: completedTimeSec
+  )
+}
+
+nonisolated private func todayRoutineProgressDTO(
+  completedCount: Int? = 1,
+  totalCount: Int? = 2,
+  completionRate: Int? = 50
+) -> TodayRoutineProgressResponseDTO {
+  TodayRoutineProgressResponseDTO(
+    completedCount: completedCount,
+    totalCount: totalCount,
+    completionRate: completionRate
+  )
+}
+
+nonisolated private func routineGroupActivationDTO(
+  routineGroupId: Int64? = 12,
+  isActive: Bool? = true
+) -> RoutineGroupActivationResponseDTO {
+  RoutineGroupActivationResponseDTO(
+    routineGroupId: routineGroupId,
+    isActive: isActive
+  )
+}
+
 nonisolated private final class RoutineGroupAccessTokenProvider:
   AccountBoundAccessTokenProviding {
   private let context = AccountAuthorizationContext(
@@ -746,15 +1291,26 @@ nonisolated private final class RoutineGroupPayloadAPIClient:
   @unchecked Sendable {
   private let summaries: [RoutineGroupSummaryResponseDTO]
   private let detail: RoutineGroupDetailResponseDTO
+  private let active: ActiveRoutineGroupResponseDTO
+  private let today: TodayRoutineProgressResponseDTO
+  private let activation: RoutineGroupActivationResponseDTO
 
   init(
     summaries: [RoutineGroupSummaryResponseDTO] = [
       routineGroupSummaryDTO(),
     ],
-    detail: RoutineGroupDetailResponseDTO = routineGroupDetailDTO()
+    detail: RoutineGroupDetailResponseDTO = routineGroupDetailDTO(),
+    active: ActiveRoutineGroupResponseDTO = activeRoutineGroupDTO(),
+    today: TodayRoutineProgressResponseDTO =
+      todayRoutineProgressDTO(),
+    activation: RoutineGroupActivationResponseDTO =
+      routineGroupActivationDTO()
   ) {
     self.summaries = summaries
     self.detail = detail
+    self.active = active
+    self.today = today
+    self.activation = activation
   }
 
   func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
@@ -780,6 +1336,12 @@ nonisolated private final class RoutineGroupPayloadAPIClient:
       response = summaries
     case .detail:
       response = detail
+    case .active:
+      response = active
+    case .today:
+      response = today
+    case .updateActivation:
+      response = activation
     }
 
     guard let payload = response as? Payload else {
@@ -915,6 +1477,46 @@ nonisolated private final class RoutineGroupDeferredAPIClient:
       throw APIError.decoding("Unexpected routine-group payload type.")
     }
     return payload
+  }
+
+  func requestVoid<Target: MoruTargetType>(
+    _ target: Target
+  ) async throws {
+    throw APIError.invalidRequest("Unexpected void request.")
+  }
+
+  func requestData<Target: MoruTargetType>(
+    _ target: Target
+  ) async throws -> Data {
+    throw APIError.invalidRequest("Unexpected data request.")
+  }
+}
+
+nonisolated private final class RoutineGroupDeferredErrorAPIClient:
+  AccountBoundAPIClient,
+  Sendable {
+  private let gate: RoutineGroupRequestGate
+  private let error: APIError
+
+  init(gate: RoutineGroupRequestGate, error: APIError) {
+    self.gate = gate
+    self.error = error
+  }
+
+  func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _ target: Target,
+    as payloadType: Payload.Type
+  ) async throws -> Payload {
+    throw APIError.invalidRequest("Expected an account-bound request.")
+  }
+
+  func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    authorizedForMemberID memberID: Int64
+  ) async throws -> Payload {
+    await gate.arrive()
+    throw error
   }
 
   func requestVoid<Target: MoruTargetType>(

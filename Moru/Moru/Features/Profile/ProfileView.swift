@@ -402,13 +402,13 @@ struct ProfileView: View {
         } label: {
           settingsRow(
             title: "서버 루틴 보관함",
-            detail: "계정에 저장된 루틴을 보기만 할 수 있어요.",
+            detail: "서버 루틴을 확인하고 사용 상태를 바꿔요.",
             systemImage: "archivebox.fill"
           )
         }
         .buttonStyle(.plain)
         .accessibilityHint(
-          "이 기기의 루틴과 합치거나 실행하지 않고 서버 데이터를 봅니다."
+          "로컬 루틴과 합치거나 실행하지 않고 서버의 사용 상태만 변경합니다."
         )
         .accessibilityIdentifier(
           Self.accountRoutineArchiveAccessibilityIdentifier

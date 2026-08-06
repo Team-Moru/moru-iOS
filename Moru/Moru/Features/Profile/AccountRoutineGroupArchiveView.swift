@@ -16,7 +16,11 @@ struct AccountRoutineGroupListView: View {
   var body: some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
-        readOnlyBanner
+        serverOnlyBanner
+        activityOverview
+        Text("모든 서버 루틴")
+          .moruPilotTextStyle(.b3.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
         content
       }
       .padding(MoruPilotSpacing.twenty)
@@ -29,7 +33,7 @@ struct AccountRoutineGroupListView: View {
       ToolbarItem(placement: .topBarTrailing) {
         Button {
           Task {
-            await viewModel.load(memberID: memberID)
+            await loadAll()
           }
         } label: {
           Label("새로고침", systemImage: "arrow.clockwise")
@@ -41,16 +45,16 @@ struct AccountRoutineGroupListView: View {
       }
     }
     .task(id: memberID) {
-      await viewModel.load(memberID: memberID)
+      await loadAll()
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
   }
 
-  private var readOnlyBanner: some View {
+  private var serverOnlyBanner: some View {
     Label(
-      "읽기 전용 · 이 기기의 루틴과 합치거나 실행하지 않아요.",
-      systemImage: "lock.fill"
+      "서버 전용 · 사용 상태만 바꾸며, 이 기기의 루틴과 합치거나 실행하지 않아요.",
+      systemImage: "externaldrive.fill"
     )
     .moruPilotTextStyle(.c1)
     .foregroundStyle(MoruPilotColor.textSecondary)
@@ -59,8 +63,204 @@ struct AccountRoutineGroupListView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
     .accessibilityIdentifier(
-      "profile.account.routine-archive.read-only"
+      "profile.account.routine-archive.server-only"
     )
+  }
+
+  private var activityOverview: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+      Text("현재 사용 중")
+        .moruPilotTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
+
+      activeContent
+
+      Divider()
+
+      Text("오늘 진행 · KST")
+        .moruPilotTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
+
+      todayContent
+
+      if hasActivityFailure {
+        activityRetryButton
+      }
+    }
+    .padding(MoruPilotSpacing.sixteen)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier(
+      "profile.account.routine-archive.activity"
+    )
+  }
+
+  @ViewBuilder
+  private var activeContent: some View {
+    switch viewModel.activeState {
+    case .signedOut:
+      activityMessage("로그인하면 사용 중인 서버 루틴을 확인할 수 있어요.")
+    case .unavailable:
+      activityMessage("이 빌드에서는 사용 중인 서버 루틴을 확인할 수 없어요.")
+    case .loading(previous: nil):
+      activityLoading("사용 중인 서버 루틴을 불러오고 있어요.")
+    case .loading(previous: let activeRoutineGroup?):
+      activeRoutineGroupContent(
+        activeRoutineGroup,
+        notice: "서버에서 새로 확인하고 있어요."
+      )
+    case .content(let activeRoutineGroup):
+      activeRoutineGroupContent(activeRoutineGroup)
+    case .empty:
+      activityMessage("사용 중인 서버 루틴이 없어요.")
+    case .failed(previous: nil):
+      activityMessage(
+        viewModel.activeFailureMessage
+          ?? "사용 중인 서버 루틴을 불러오지 못했어요."
+      )
+    case .failed(previous: let activeRoutineGroup?):
+      activeRoutineGroupContent(
+        activeRoutineGroup,
+        notice: (viewModel.activeFailureMessage
+          ?? "사용 중인 서버 루틴을 새로 불러오지 못했어요.")
+          + " 이전 정보를 표시해요."
+      )
+    }
+  }
+
+  @ViewBuilder
+  private var todayContent: some View {
+    switch viewModel.todayState {
+    case .signedOut:
+      activityMessage("로그인하면 오늘 진행 현황을 확인할 수 있어요.")
+    case .unavailable:
+      activityMessage("이 빌드에서는 오늘 진행 현황을 확인할 수 없어요.")
+    case .loading(previous: nil):
+      activityLoading("오늘 진행 현황을 불러오고 있어요.")
+    case .loading(previous: let progress?):
+      todayProgressContent(
+        progress,
+        notice: "서버에서 새로 확인하고 있어요."
+      )
+    case .content(let progress):
+      todayProgressContent(progress)
+    case .empty:
+      activityMessage("사용 중인 루틴이 없어 오늘 진행 현황도 비어 있어요.")
+    case .failed(previous: nil):
+      activityMessage(
+        viewModel.todayFailureMessage
+          ?? "오늘의 서버 루틴 현황을 불러오지 못했어요."
+      )
+    case .failed(previous: let progress?):
+      todayProgressContent(
+        progress,
+        notice: (viewModel.todayFailureMessage
+          ?? "오늘 진행 현황을 새로 불러오지 못했어요.")
+          + " 이전 정보를 표시해요."
+      )
+    }
+  }
+
+  private func activeRoutineGroupContent(
+    _ activeRoutineGroup: ServerActiveRoutineGroup,
+    notice: String? = nil
+  ) -> some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      if let notice {
+        activityNotice(notice)
+      }
+      Text(activeRoutineGroup.title ?? "제목 확인 불가")
+        .moruPilotTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
+      Text(
+        activeRoutineMetadata(activeRoutineGroup)
+      )
+      .moruPilotTextStyle(.c1)
+      .foregroundStyle(MoruPilotColor.textSecondary)
+      .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private func todayProgressContent(
+    _ progress: ServerTodayRoutineProgress,
+    notice: String? = nil
+  ) -> some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      if let notice {
+        activityNotice(notice)
+      }
+      Text(
+        "\(progress.completedCount)/\(progress.totalCount)개 완료 · "
+          + AccountRoutineGroupDisplayText.percentage(
+            progress.completionRate
+          )
+      )
+      .moruPilotTextStyle(.b4.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textStrong)
+      .accessibilityIdentifier(
+        "profile.account.routine-archive.today-progress"
+      )
+    }
+  }
+
+  private func activeRoutineMetadata(
+    _ activeRoutineGroup: ServerActiveRoutineGroup
+  ) -> String {
+    let duration = activeRoutineGroup.totalDurationSeconds.map {
+      "총 \(AccountRoutineGroupDisplayText.duration(seconds: $0))"
+    } ?? "총 시간 정보 없음"
+    let completionRate = activeRoutineGroup.completionRate.map {
+      AccountRoutineGroupDisplayText.percentage($0)
+    } ?? "완료율 정보 없음"
+    let routineCount = activeRoutineGroup.routines.map {
+      "루틴 \($0.count)개"
+    } ?? "루틴 수 정보 없음"
+    return "\(routineCount) · \(duration) · \(completionRate)"
+  }
+
+  private func activityLoading(_ message: String) -> some View {
+    HStack(spacing: MoruPilotSpacing.eight) {
+      ProgressView()
+      activityMessage(message)
+    }
+  }
+
+  private func activityMessage(_ message: String) -> some View {
+    Text(message)
+      .moruPilotTextStyle(.c1)
+      .foregroundStyle(MoruPilotColor.textSecondary)
+      .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private func activityNotice(_ message: String) -> some View {
+    Text(message)
+      .moruPilotTextStyle(.c2)
+      .foregroundStyle(MoruPilotColor.textTertiary)
+      .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private var activityRetryButton: some View {
+    Button("현재 상태 다시 확인") {
+      Task {
+        await viewModel.retryActivity(memberID: memberID)
+      }
+    }
+    .buttonStyle(.bordered)
+    .tint(MoruPilotColor.accent)
+    .accessibilityIdentifier(
+      "profile.account.routine-archive.activity-retry"
+    )
+  }
+
+  private var hasActivityFailure: Bool {
+    if case .failed = viewModel.activeState {
+      return true
+    }
+    if case .failed = viewModel.todayState {
+      return true
+    }
+    return false
   }
 
   @ViewBuilder
@@ -117,20 +317,66 @@ struct AccountRoutineGroupListView: View {
           .fixedSize(horizontal: false, vertical: true)
       }
 
+      if let activationFailureMessage =
+        viewModel.activationFailureMessage {
+        Text(activationFailureMessage)
+          .moruPilotTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .accessibilityIdentifier(
+            "profile.account.routine-archive.activation-error"
+          )
+      }
+
       ForEach(summaries, id: \.routineGroupID) { summary in
-        Button {
-          onSelectRoutineGroup(summary.routineGroupID)
-        } label: {
-          AccountRoutineGroupSummaryRow(summary: summary)
+        VStack(alignment: .trailing, spacing: MoruPilotSpacing.eight) {
+          Button {
+            onSelectRoutineGroup(summary.routineGroupID)
+          } label: {
+            AccountRoutineGroupSummaryRow(summary: summary)
+          }
+          .buttonStyle(.plain)
+          .accessibilityHint("서버 루틴 상세를 엽니다.")
+          .accessibilityIdentifier(
+            "profile.account.routine-archive.group."
+              + "\(summary.routineGroupID)"
+          )
+
+          activationButton(for: summary)
         }
-        .buttonStyle(.plain)
-        .accessibilityHint("서버 루틴 상세를 엽니다.")
-        .accessibilityIdentifier(
-          "profile.account.routine-archive.group."
-            + "\(summary.routineGroupID)"
-        )
       }
     }
+  }
+
+  @ViewBuilder
+  private func activationButton(
+    for summary: ServerRoutineGroupSummary
+  ) -> some View {
+    Button {
+      Task {
+        await viewModel.updateActivation(
+          routineGroupID: summary.routineGroupID,
+          isActive: summary.isActive != true,
+          memberID: memberID
+        )
+      }
+    } label: {
+      if viewModel.activatingRoutineGroupID == summary.routineGroupID {
+        ProgressView()
+          .controlSize(.small)
+      } else {
+        Text(summary.isActive == true ? "사용 중지" : "사용하기")
+      }
+    }
+    .buttonStyle(.bordered)
+    .tint(summary.isActive == true
+      ? MoruPilotColor.textSecondary
+      : MoruPilotColor.accent)
+    .disabled(viewModel.activatingRoutineGroupID != nil)
+    .accessibilityIdentifier(
+      "profile.account.routine-archive.activation."
+        + "\(summary.routineGroupID)"
+    )
   }
 
   private var failureView: some View {
@@ -169,7 +415,19 @@ struct AccountRoutineGroupListView: View {
     if case .loading(previous: nil) = viewModel.state {
       return true
     }
-    return false
+    if case .loading(previous: nil) = viewModel.activeState {
+      return true
+    }
+    if case .loading(previous: nil) = viewModel.todayState {
+      return true
+    }
+    return viewModel.activatingRoutineGroupID != nil
+  }
+
+  private func loadAll() async {
+    async let listLoad: Void = viewModel.load(memberID: memberID)
+    async let activityLoad: Void = viewModel.loadActivity(memberID: memberID)
+    _ = await (listLoad, activityLoad)
   }
 }
 
@@ -522,6 +780,10 @@ private struct AccountRoutineItemView: View {
 }
 
 nonisolated enum AccountRoutineGroupDisplayText {
+  static func percentage(_ normalizedValue: Double) -> String {
+    "\(Int((normalizedValue * 100).rounded()))%"
+  }
+
   static func duration(seconds: Int) -> String {
     let hours = seconds / 3_600
     let minutes = seconds % 3_600 / 60
