@@ -7,6 +7,7 @@
 
 import Accessibility
 import SwiftUI
+import UIKit
 
 typealias HomeAccessibilityAnnouncementHandler = @MainActor (String) -> Void
 
@@ -60,6 +61,7 @@ struct HomeView: View {
   private let automaticallyLoads: Bool
 
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.scenePhase) private var scenePhase
   @State private var viewModel: HomeViewModel
   @State private var presentedRoutineSheet: HomeRoutineSheet?
   @State private var routineLaunchMessage: String?
@@ -137,6 +139,14 @@ struct HomeView: View {
         routineLaunchMessage = nil
       }
       viewModel.load()
+      viewModel.loadWeatherAutomaticallyIfNeeded()
+    }
+    .onChange(of: scenePhase) { _, newPhase in
+      guard newPhase == .active else {
+        return
+      }
+
+      viewModel.resumeWeatherAfterAuthorizationChange()
     }
     .sheet(item: $presentedRoutineSheet, onDismiss: {
       viewModel.load()
@@ -249,30 +259,22 @@ private struct HomeWeatherCard: View {
   let state: HomeWeatherState
   let requestWeather: () -> Void
 
+  @Environment(\.colorScheme) private var colorScheme
+
   var body: some View {
-    Group {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      Label("현재 위치 날씨", systemImage: "cloud.sun.fill")
+        .homeFigmaTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textPrimary)
+
       weatherContent
     }
     .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.vertical, MoruPilotSpacing.twelve)
-    .frame(
-      maxWidth: .infinity,
-      minHeight: minimumCardHeight,
-      alignment: .leading
-    )
+    .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
     .homePilotSurface()
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("home.weather.card")
-  }
-
-  private var minimumCardHeight: CGFloat {
-    switch state {
-    case .denied, .noFix, .unavailable:
-      HomeFigmaLayout.actionableWeatherCardHeight
-    case .notRequested, .requestingPermission, .locating, .loading,
-         .fresh, .stale, .restricted:
-      HomeFigmaLayout.weatherCardHeight
-    }
   }
 
   @ViewBuilder
@@ -282,17 +284,25 @@ private struct HomeWeatherCard: View {
       weatherRequestButton
     case .requestingPermission, .locating, .loading:
       weatherLoadingContent
-    case .fresh(let snapshot):
-      weatherSnapshotContent(snapshot, updateText: "업데이트")
-    case .stale(let snapshot):
-      weatherSnapshotContent(snapshot, updateText: "마지막 업데이트")
+    case .fresh(let content):
+      weatherSnapshotContent(content, updateText: "업데이트")
+    case .stale(let content):
+      weatherSnapshotContent(content, updateText: "마지막 업데이트")
     case .denied:
-      weatherMessage("위치 권한이 꺼져 있어요")
+      VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        weatherMessage("위치 권한이 꺼져 있어요")
+        openLocationSettingsButton
+      }
     case .restricted:
       weatherMessage("위치 접근이 제한되어 있어요")
     case .noFix:
       VStack(alignment: .leading, spacing: AppSpacing.sm) {
         weatherMessage("현재 위치를 확인할 수 없어요")
+        weatherRequestButton
+      }
+    case .unavailable(.service(.attributionUnavailable)):
+      VStack(alignment: .leading, spacing: AppSpacing.sm) {
+        weatherMessage("날씨 출처 정보를 불러오지 못했어요")
         weatherRequestButton
       }
     case .unavailable:
@@ -324,21 +334,82 @@ private struct HomeWeatherCard: View {
     .accessibilityHint("현재 위치의 날씨를 요청합니다.")
   }
 
+  private var openLocationSettingsButton: some View {
+    Button {
+      Task {
+        await AppSettingsOpener().open()
+      }
+    } label: {
+      Label("설정에서 위치 권한 켜기", systemImage: "gearshape.fill")
+        .homeFigmaTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textPrimary)
+    }
+    .accessibilityHint("MORU의 위치 권한을 변경할 수 있는 설정을 엽니다.")
+  }
+
+  @ViewBuilder
   private func weatherSnapshotContent(
-    _ snapshot: HomeWeatherSnapshot,
+    _ content: HomeWeatherContent,
     updateText: String
   ) -> some View {
-    ViewThatFits(in: .horizontal) {
-      HStack(alignment: .bottom, spacing: MoruPilotSpacing.sixteen) {
-        weatherReading(snapshot, updateText: updateText)
-        Spacer(minLength: MoruPilotSpacing.eight)
-        refreshButton
-      }
+    if let markImage = attributionMarkImage(for: content.attribution) {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-        weatherReading(snapshot, updateText: updateText)
-        refreshButton
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .bottom, spacing: MoruPilotSpacing.sixteen) {
+            weatherReading(content.snapshot, updateText: updateText)
+            Spacer(minLength: MoruPilotSpacing.eight)
+            refreshButton
+          }
+          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+            weatherReading(content.snapshot, updateText: updateText)
+            refreshButton
+          }
+        }
+
+        weatherAttributionFooter(
+          content.attribution,
+          markImage: markImage
+        )
+      }
+    } else {
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+        weatherMessage("날씨 출처 정보를 불러오지 못했어요")
+        weatherRequestButton
       }
     }
+  }
+
+  private func weatherAttributionFooter(
+    _ attribution: HomeWeatherAttribution,
+    markImage: UIImage
+  ) -> some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      Image(uiImage: markImage)
+        .resizable()
+        .scaledToFit()
+        .frame(height: 18)
+        .accessibilityLabel("Apple Weather")
+        .accessibilityIdentifier("home.weather.attribution.mark")
+
+      Link(
+        "날씨 데이터 출처 및 법적 고지",
+        destination: attribution.legalPageURL
+      )
+      .homeFigmaTextStyle(.c2.weight(.regular))
+      .foregroundStyle(MoruPilotColor.textTertiary)
+      .underline()
+      .accessibilityHint("Apple Weather의 법적 출처 페이지를 엽니다.")
+      .accessibilityIdentifier("home.weather.attribution.link")
+    }
+  }
+
+  private func attributionMarkImage(
+    for attribution: HomeWeatherAttribution
+  ) -> UIImage? {
+    let data = colorScheme == .dark
+      ? attribution.combinedMarkDarkData
+      : attribution.combinedMarkLightData
+    return UIImage(data: data)
   }
 
   private func weatherReading(
@@ -443,7 +514,7 @@ private struct HomeLoadingSkeleton: View {
       }
 
       HomeSkeletonBlock()
-        .frame(height: HomeFigmaLayout.weatherCardHeight)
+        .frame(height: 84)
 
       HomeSkeletonBlock()
         .frame(height: 326)
