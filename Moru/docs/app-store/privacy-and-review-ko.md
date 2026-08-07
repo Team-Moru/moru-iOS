@@ -5,8 +5,8 @@
 | 등급 | 이 문서에서의 사용 원칙 | 현재 상태 |
 |---|---|---|
 | 사용자 확정 최종 빌드 사실 | 알람, 온디바이스 음성 코칭, 원본 음성 비저장·비전송, 서버 폴백 없음을 제품·개인정보 문안에 확정형으로 사용 | 확정 |
-| 현재 업로드 빌드 관찰값 | 2026-08-05 업로드·제출한 버전 1.0(5), 번들 ID `com.teammoru.Moru`, iPhone, iOS 26.0. WeatherKit attribution 확인 요청으로 반려됨 | 수정 빌드 1.0(6)은 archive 검증·업로드·선택 필요 |
-| 수정 빌드 관찰값 | 2026-08-06 로컬 archive·App Store Connect export 성공: 1.0(6), `com.teammoru.Moru`, iOS 26.0, Cloud Managed Apple Distribution, WeatherKit entitlement, `get-task-allow=false`. iPad Air 11-inch 시뮬레이터에서 최초 허용 및 설정 복귀 흐름에 Apple 법적 페이지로 연결되는 Apple Weather 결합 마크가 표시됨 | 실제 지원 iPad 녹화·첨부와 App Store Connect 업로드·선택은 미완료 |
+| 현재 업로드 빌드 관찰값 | 2026-08-05 업로드·제출한 버전 1.0(5), 번들 ID `com.teammoru.Moru`, iPhone, iOS 26.0. WeatherKit attribution 확인 요청으로 반려됨 | 수정 빌드 2.1.1(1)은 archive 검증·업로드·선택 필요 |
+| 수정 빌드 예정값 | 2.1.1(1), `com.teammoru.Moru`, iOS 26.0, WeatherKit entitlement. iPad Air 11-inch 시뮬레이터에서 최초 허용 및 설정 복귀 흐름에 Apple 법적 페이지로 연결되는 Apple Weather 결합 마크가 표시됨 | 실제 지원 iPad 녹화·첨부와 App Store Connect 업로드·선택은 미완료 |
 | Apple 플랫폼 규칙 | 필드 한도, 연령 등급, 수출 규정, OS 관리 백업 관련 플랫폼 규칙을 2026-07-14 확인 기준으로 적용 | 미래 제출 시 현행 규칙 재확인 |
 | 후속 제출 입력·증빙 | 실제 선택 빌드, 계정 값, 권리 문서, 심사 연락처, 수출 규정 최종 분기를 실제 증빙으로 채움 | 미완료 |
 
@@ -65,7 +65,7 @@ App Privacy의 데이터 수집은 개발자 또는 통합 제3자 파트너가 
 4. 면제되지 않는 경우 수출 규정 문서 업로드 필요 여부를 확인합니다.
 5. 미래 제출에서 `ITSAppUsesNonExemptEncryption` 값을 위 판단과 일치하게 확인합니다.
 
-현재 저장소와 1.0(6) export 관찰상 `ITSAppUsesNonExemptEncryption`은 `false`입니다. 이 관찰값은 수출 규정의 최종 답변이 아니며, 실제 제출 전 최종 빌드와 통합 라이브러리를 기준으로 다시 확인합니다.
+현재 저장소와 2.1.1(1) archive 검증 대상 기준 `ITSAppUsesNonExemptEncryption`은 `false`입니다. 이 관찰값은 수출 규정의 최종 답변이 아니며, 실제 제출 전 최종 빌드와 통합 라이브러리를 기준으로 다시 확인합니다.
 
 ## 콘텐츠 권리 증빙 매트릭스
 
@@ -107,7 +107,7 @@ App Privacy의 데이터 수집은 개발자 또는 통합 제3자 파트너가 
 ```
 WeatherKit attribution review path (Korean UI labels are quoted):
 
-Version 1.0 (6) displays the Apple-provided Apple Weather combined mark whenever WeatherKit data is shown. The mark links directly to Apple's legal attribution page.
+Version 2.1.1 (1) displays the Apple-provided Apple Weather combined mark whenever WeatherKit data is shown. The mark links directly to Apple's legal attribution page.
 
 1. On a fresh install, complete onboarding. The trial routine opens automatically.
 2. Tap "건너뛰기" on each trial step and confirm "건너뛰기". On the result screen, tap "홈으로".
@@ -116,7 +116,7 @@ Version 1.0 (6) displays the Apple-provided Apple Weather combined mark whenever
 5. Current weather appears with the Apple Weather mark at the bottom-right of the weather card.
 6. Tap the Apple Weather mark to open Apple's legal attribution page.
 
-A physical-device screen recording showing these steps is attached in App Review Information as "MORU-1.0-6-WeatherKit-Attribution.mov".
+A physical-device screen recording showing these steps is attached in App Review Information as "MORU-2.1.1-1-WeatherKit-Attribution.mov".
 No login or test account is required. An active internet connection is required for WeatherKit.
 ```
 
@@ -126,12 +126,12 @@ No login or test account is required. An active internet connection is required 
 
 ### 반려 메시지 답변 원문
 
-아래 답변도 실기기 녹화 첨부와 1.0(6) 빌드 선택을 확인한 뒤 사용합니다.
+아래 답변도 실기기 녹화 첨부와 2.1.1(1) 빌드 선택을 확인한 뒤 사용합니다.
 
 ```
 Hello App Review Team,
 
-MORU uses WeatherKit. Version 1.0 (6) now displays the Apple-provided Apple Weather combined mark whenever Apple weather data is shown. The mark links directly to Apple's legal attribution page.
+MORU uses WeatherKit. Version 2.1.1 (1) now displays the Apple-provided Apple Weather combined mark whenever Apple weather data is shown. The mark links directly to Apple's legal attribution page.
 
 We attached a physical-device screen recording in App Review Information showing the WeatherKit feature, the Apple Weather trademark, and opening Apple's legal attribution page.
 
@@ -147,7 +147,7 @@ Thank you.
 5. 홈에 진입하면 자동으로 나타나는 위치 권한 요청을 허용합니다.
 6. 현재 기온·상태와 Apple Weather 상표가 함께 표시되는지 확인합니다.
 7. 카드 오른쪽 하단의 Apple Weather 마크를 눌러 Apple이 제공한 법적 고지 페이지가 열리는지 확인합니다.
-8. 이 전체 흐름을 지원되는 실제 iPad에서 녹화하고 `MORU-1.0-6-WeatherKit-Attribution.mov`라는 이름으로 App Review Information에 첨부합니다.
+8. 이 전체 흐름을 지원되는 실제 iPad에서 녹화하고 `MORU-2.1.1-1-WeatherKit-Attribution.mov`라는 이름으로 App Review Information에 첨부합니다.
 
 로그인, 외부 계정, 테스트 서버는 필요하지 않습니다. WeatherKit 조회에는 활성 인터넷 연결이 필요합니다.
 ## 공식 근거
