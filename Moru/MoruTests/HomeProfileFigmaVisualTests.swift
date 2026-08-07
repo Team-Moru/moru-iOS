@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 import XCTest
 @testable import Moru
 
@@ -48,6 +49,66 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
         )
       }
     }
+  }
+
+  func testWeatherAttributionRendersAtSmallWidthInLightAndDark() async throws {
+    let outputDirectory = URL(
+      fileURLWithPath: ProcessInfo.processInfo.environment[
+        "MORU_WEATHER_ATTRIBUTION_CAPTURE_DIR"
+      ] ?? "/private/tmp/moru-weather-attribution"
+    )
+    let configurations: [(name: String, value: MoruVisualCaptureConfiguration)] = [
+      (
+        name: "light",
+        value: MoruVisualCaptureConfiguration(
+          size: CGSize(width: 320, height: 420),
+          scale: 2
+        )
+      ),
+      (
+        name: "dark",
+        value: MoruVisualCaptureConfiguration(
+          size: CGSize(width: 320, height: 420),
+          scale: 2,
+          colorScheme: .dark,
+          userInterfaceStyle: .dark
+        )
+      ),
+    ]
+
+    for configuration in configurations {
+      for variant in MoruVisualCaptureVariant.allCases {
+        let image = try MoruVisualCaptureFixture.render(
+          weatherAttributionCardScreen,
+          filename: "weather-\(configuration.name)-\(variant.rawValue).png",
+          variant: variant,
+          outputDirectory: outputDirectory,
+          configuration: configuration.value
+        )
+
+        XCTAssertEqual(image.size, configuration.value.size)
+        XCTAssertEqual(image.scale, configuration.value.scale)
+      }
+    }
+  }
+
+  private var weatherAttributionCardScreen: some View {
+    HomeWeatherCard(
+      state: .fresh(
+        HomeWeatherContent(
+          snapshot: weatherSnapshot,
+          attribution: weatherAttribution
+        )
+      ),
+      requestWeather: {}
+    )
+    .padding(MoruPilotSpacing.twenty)
+    .frame(
+      maxWidth: .infinity,
+      maxHeight: .infinity,
+      alignment: .top
+    )
+    .background(AppColor.babyBlue50)
   }
 
   private func assertDeterministicCapture(
@@ -311,18 +372,35 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
   }
 
   private var weatherAttribution: HomeWeatherAttribution {
-    let markData = Data(
-      base64Encoded:
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-    )!
     return HomeWeatherAttribution(
       serviceName: "Apple Weather",
-      combinedMarkLightData: markData,
-      combinedMarkDarkData: markData,
+      combinedMarkLightData: weatherAttributionMarkData(color: .black),
+      combinedMarkDarkData: weatherAttributionMarkData(color: .white),
       legalPageURL: URL(
         string: "https://weatherkit.apple.com/legal-attribution.html"
       )!
     )
+  }
+
+  private func weatherAttributionMarkData(color: UIColor) -> Data {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = false
+    let renderer = UIGraphicsImageRenderer(
+      size: CGSize(width: 84, height: 20),
+      format: format
+    )
+
+    return renderer.pngData { _ in
+      let text = " Weather" as NSString
+      text.draw(
+        at: CGPoint(x: 1, y: 1),
+        withAttributes: [
+          .font: UIFont.systemFont(ofSize: 14, weight: .medium),
+          .foregroundColor: color,
+        ]
+      )
+    }
   }
 
   private func profileResult(

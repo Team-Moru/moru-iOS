@@ -24,11 +24,19 @@
 			remoteGlobalIDString = E0D6C3B62FF1232200DA2A54;
 			remoteInfo = Moru;
 		};
+		F10000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E0D6C3AF2FF1232200DA2A54 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E0D6C3B62FF1232200DA2A54;
+			remoteInfo = Moru;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		E0D6C3B72FF1232200DA2A54 /* Moru.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Moru.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0D6C3D02FF12A0000DA2A54 /* MoruTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoruTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F10000000000000000000002 /* MoruUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoruUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -40,6 +48,11 @@
 		E0D6C3D12FF12A0000DA2A54 /* MoruTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = MoruTests;
+			sourceTree = "<group>";
+		};
+		F10000000000000000000003 /* MoruUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MoruUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -66,6 +79,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F10000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -74,6 +94,7 @@
 			children = (
 				B4FD313E3003D254003C20C8 /* Moru */,
 				E0D6C3D12FF12A0000DA2A54 /* MoruTests */,
+				F10000000000000000000003 /* MoruUITests */,
 				E0D6C3B82FF1232200DA2A54 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -83,6 +104,7 @@
 			children = (
 				E0D6C3B72FF1232200DA2A54 /* Moru.app */,
 				E0D6C3D02FF12A0000DA2A54 /* MoruTests.xctest */,
+				F10000000000000000000002 /* MoruUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -142,6 +164,29 @@
 			productReference = E0D6C3D02FF12A0000DA2A54 /* MoruTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		F10000000000000000000005 /* MoruUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1000000000000000000000B /* Build configuration list for PBXNativeTarget "MoruUITests" */;
+			buildPhases = (
+				F10000000000000000000007 /* Sources */,
+				F10000000000000000000004 /* Frameworks */,
+				F10000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F10000000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F10000000000000000000003 /* MoruUITests */,
+			);
+			name = MoruUITests;
+			packageProductDependencies = (
+			);
+			productName = MoruUITests;
+			productReference = F10000000000000000000002 /* MoruUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -156,6 +201,10 @@
 						CreatedOnToolsVersion = 26.5;
 					};
 					E0D6C3D32FF12A0000DA2A54 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = E0D6C3B62FF1232200DA2A54;
+					};
+					F10000000000000000000005 = {
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = E0D6C3B62FF1232200DA2A54;
 					};
@@ -183,6 +232,7 @@
 			targets = (
 				E0D6C3B62FF1232200DA2A54 /* Moru */,
 				E0D6C3D32FF12A0000DA2A54 /* MoruTests */,
+				F10000000000000000000005 /* MoruUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -196,6 +246,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E0D6C3D52FF12A0000DA2A54 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10000000000000000000006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -219,6 +276,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F10000000000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -226,6 +290,11 @@
 			isa = PBXTargetDependency;
 			target = E0D6C3B62FF1232200DA2A54 /* Moru */;
 			targetProxy = E0D6C3D72FF12A0000DA2A54 /* PBXContainerItemProxy */;
+		};
+		F10000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E0D6C3B62FF1232200DA2A54 /* Moru */;
+			targetProxy = F10000000000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -352,11 +421,12 @@
 		E0D6C3C32FF1232300DA2A54 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CURRENT_PROJECT_VERSION = 6;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Moru/Moru.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -399,7 +469,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Moru/Moru.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 6;
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -440,7 +510,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 6;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -483,6 +553,42 @@
 			};
 			name = Release;
 		};
+		F10000000000000000000009 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 6;
+				DEVELOPMENT_TEAM = Z7FSDLFCMK;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.2;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Moru;
+			};
+			name = Debug;
+		};
+		F1000000000000000000000A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 6;
+				DEVELOPMENT_TEAM = Z7FSDLFCMK;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.2;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Moru;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -509,6 +615,15 @@
 			buildConfigurations = (
 				E0D6C3D82FF12A0000DA2A54 /* Debug */,
 				E0D6C3D92FF12A0000DA2A54 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F1000000000000000000000B /* Build configuration list for PBXNativeTarget "MoruUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F10000000000000000000009 /* Debug */,
+				F1000000000000000000000A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
