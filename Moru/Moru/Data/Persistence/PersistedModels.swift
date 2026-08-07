@@ -357,3 +357,38 @@ final class PersistedSnoozedAlarm {
     self.createdAt = createdAt
   }
 }
+
+@Model
+final class PersistedRoutineTTSLink {
+  @Attribute(.unique) var localRoutineID: UUID
+  var memberID: Int64
+  var serverRoutineGroupID: Int64?
+  var contentFingerprint: String
+  var statusRawValue: String
+  var assetsRawValue: String
+  var lastFailureCode: String?
+  var createdAt: Date
+  var updatedAt: Date
+
+  init(
+    localRoutineID: UUID,
+    memberID: Int64,
+    serverRoutineGroupID: Int64?,
+    contentFingerprint: String,
+    statusRawValue: String,
+    assetsRawValue: String,
+    lastFailureCode: String?,
+    createdAt: Date,
+    updatedAt: Date
+  ) {
+    self.localRoutineID = localRoutineID
+    self.memberID = memberID
+    self.serverRoutineGroupID = serverRoutineGroupID
+    self.contentFingerprint = contentFingerprint
+    self.statusRawValue = statusRawValue
+    self.assetsRawValue = assetsRawValue
+    self.lastFailureCode = lastFailureCode
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+  }
+}

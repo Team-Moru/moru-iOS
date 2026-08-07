@@ -7,9 +7,16 @@ import Foundation
 
 nonisolated struct AppCapabilities: Equatable, Sendable {
   let accountFeaturesEnabled: Bool
+  let serverRoutineTTSEnabled: Bool
 
-  static let production = AppCapabilities(accountFeaturesEnabled: true)
-  static let localOnly = AppCapabilities(accountFeaturesEnabled: false)
+  static let production = AppCapabilities(
+    accountFeaturesEnabled: true,
+    serverRoutineTTSEnabled: true
+  )
+  static let localOnly = AppCapabilities(
+    accountFeaturesEnabled: false,
+    serverRoutineTTSEnabled: false
+  )
 
   var shouldShowAccountUI: Bool {
     accountFeaturesEnabled
@@ -21,6 +28,10 @@ nonisolated struct AppCapabilities: Equatable, Sendable {
 
   var shouldAllowServerRequests: Bool {
     accountFeaturesEnabled
+  }
+
+  var shouldUseServerRoutineTTS: Bool {
+    shouldAllowServerRequests && serverRoutineTTSEnabled
   }
 
   func canUseAccountFeatures(

@@ -125,6 +125,8 @@ final class AppBootstrapper: ObservableObject {
         (any AccountServerRemoteServing)?
       let accountRoutineGroupRemoteService:
         (any AccountRoutineGroupRemoteServing)?
+      let accountRoutineTTSRemoteService:
+        (any AccountRoutineTTSRemoteServing)?
       if appCapabilities.shouldAllowServerRequests {
         accountHistoryRemoteService = DefaultAccountHistoryRemoteService(
           apiClient: authenticatedAPIClient
@@ -136,10 +138,19 @@ final class AppBootstrapper: ObservableObject {
           DefaultAccountRoutineGroupRemoteService(
             apiClient: authenticatedAPIClient
           )
+        if appCapabilities.shouldUseServerRoutineTTS {
+          accountRoutineTTSRemoteService =
+            DefaultAccountRoutineTTSRemoteService(
+              apiClient: authenticatedAPIClient
+            )
+        } else {
+          accountRoutineTTSRemoteService = nil
+        }
       } else {
         accountHistoryRemoteService = nil
         accountServerRemoteService = nil
         accountRoutineGroupRemoteService = nil
+        accountRoutineTTSRemoteService = nil
       }
       let dependencies = DependencyContainer.local(
         modelContext: modelContainer.mainContext,
@@ -151,7 +162,9 @@ final class AppBootstrapper: ObservableObject {
         accountHistoryRemoteService: accountHistoryRemoteService,
         accountServerRemoteService: accountServerRemoteService,
         accountRoutineGroupRemoteService:
-          accountRoutineGroupRemoteService
+          accountRoutineGroupRemoteService,
+        accountRoutineTTSRemoteService:
+          accountRoutineTTSRemoteService
       )
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
@@ -176,10 +189,24 @@ final class AppBootstrapper: ObservableObject {
           .kakao: kakaoAuthorizationSession,
         ]
       )
+      let accountScopedDataCleaner: any AccountScopedDataCleaning
+      if let routineTTSLinkRepository =
+        dependencies.routineTTSLinkRepository,
+        let routineTTSAudioFileStore =
+        dependencies.routineTTSAudioFileStore {
+        accountScopedDataCleaner = RoutineTTSAccountScopedDataCleaner(
+          linkRepository: routineTTSLinkRepository,
+          audioFileStore: routineTTSAudioFileStore,
+          preparationScheduler:
+            dependencies.routineTTSPreparationScheduler
+        )
+      } else {
+        accountScopedDataCleaner = NoAccountScopedDataCleaner()
+      }
       let accountLifecycleService = DefaultAccountLifecycleService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
-        accountScopedDataCleaner: NoAccountScopedDataCleaner(),
+        accountScopedDataCleaner: accountScopedDataCleaner,
         providerSessionSignOut: providerSessionSignOut
       )
       let navigationCoordinator = AppNavigationCoordinator()

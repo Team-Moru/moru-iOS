@@ -428,9 +428,11 @@ final class AccountSessionFoundationTests: XCTestCase {
     )
     XCTAssertTrue(AppCapabilities.production.shouldShowAccountUI)
     XCTAssertTrue(AppCapabilities.production.shouldAllowServerRequests)
+    XCTAssertTrue(AppCapabilities.production.shouldUseServerRoutineTTS)
     XCTAssertFalse(AppCapabilities.localOnly.shouldShowAccountUI)
     XCTAssertFalse(AppCapabilities.localOnly.shouldRestoreAccountSession)
     XCTAssertFalse(AppCapabilities.localOnly.shouldAllowServerRequests)
+    XCTAssertFalse(AppCapabilities.localOnly.shouldUseServerRoutineTTS)
   }
 
   func testBootstrapPublishesRestoringStateBeforeOptionalAccountRestore() async throws {

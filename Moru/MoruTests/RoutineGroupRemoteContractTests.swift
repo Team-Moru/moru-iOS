@@ -780,6 +780,10 @@ nonisolated private final class RoutineGroupPayloadAPIClient:
       response = summaries
     case .detail:
       response = detail
+    case .create, .delete:
+      throw APIError.invalidRequest(
+        "Unexpected routine-group mutation request."
+      )
     }
 
     guard let payload = response as? Payload else {

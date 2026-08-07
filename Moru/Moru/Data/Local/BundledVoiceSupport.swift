@@ -71,9 +71,11 @@ final class BundledVoicePreviewPlayer: VoicePreviewPlaying {
       }
 
       _ = await guidancePlayer.play(
-        itemID: BundledVoiceAvailabilityProbe.previewItemID,
-        voiceCode: voice.assetVoiceCode,
-        kind: .intro
+        RoutineGuidanceCueRequest(
+          presetItemID: BundledVoiceAvailabilityProbe.previewItemID,
+          voiceCode: voice.assetVoiceCode,
+          kind: .intro
+        )
       )
     }
     return true

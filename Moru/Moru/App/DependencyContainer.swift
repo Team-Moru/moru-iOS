@@ -22,6 +22,12 @@ struct DependencyContainer {
   let accountServerRemoteService: (any AccountServerRemoteServing)?
   let accountRoutineGroupRemoteService:
     (any AccountRoutineGroupRemoteServing)?
+  let accountRoutineTTSRemoteService:
+    (any AccountRoutineTTSRemoteServing)?
+  let routineTTSLinkRepository: (any RoutineTTSLinkRepository)?
+  let routineTTSPreparationScheduler:
+    (any RoutineTTSPreparationScheduling)?
+  let routineTTSAudioFileStore: RoutineTTSAudioFileStore?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -47,6 +53,12 @@ struct DependencyContainer {
     accountServerRemoteService: (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
       (any AccountRoutineGroupRemoteServing)? = nil,
+    accountRoutineTTSRemoteService:
+      (any AccountRoutineTTSRemoteServing)? = nil,
+    routineTTSLinkRepository: (any RoutineTTSLinkRepository)? = nil,
+    routineTTSPreparationScheduler:
+      (any RoutineTTSPreparationScheduling)? = nil,
+    routineTTSAudioFileStore: RoutineTTSAudioFileStore? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -79,6 +91,12 @@ struct DependencyContainer {
     self.accountServerRemoteService = accountServerRemoteService
     self.accountRoutineGroupRemoteService =
       accountRoutineGroupRemoteService
+    self.accountRoutineTTSRemoteService =
+      accountRoutineTTSRemoteService
+    self.routineTTSLinkRepository = routineTTSLinkRepository
+    self.routineTTSPreparationScheduler =
+      routineTTSPreparationScheduler
+    self.routineTTSAudioFileStore = routineTTSAudioFileStore
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -102,12 +120,25 @@ struct DependencyContainer {
     accountServerRemoteService:
       (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
-      (any AccountRoutineGroupRemoteServing)? = nil
+      (any AccountRoutineGroupRemoteServing)? = nil,
+    accountRoutineTTSRemoteService:
+      (any AccountRoutineTTSRemoteServing)? = nil
   ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
+    let routineTTSLinkRepository = SwiftDataRoutineTTSLinkRepository(
+      modelContext: modelContext
+    )
+    let routineTTSAudioFileStore = RoutineTTSAudioFileStore()
+    let routineTTSAudioManifestProvider =
+      SwiftDataRoutineTTSAudioManifestProvider(
+        linkRepository: routineTTSLinkRepository,
+        signedInMemberProvider: signedInMemberProvider
+      )
     let guidancePlaybackState = RoutineGuidancePlaybackState()
     let guidancePlayer = BundledRoutineGuidancePlayer(
       resourceLoader: audioResourceLoader,
+      remoteAudioFileStore: routineTTSAudioFileStore,
+      remoteManifestProvider: routineTTSAudioManifestProvider,
       playbackState: guidancePlaybackState
     )
     let audioSessionCoordinator = RoutineAudioSessionCoordinator(
@@ -117,6 +148,18 @@ struct DependencyContainer {
       resourceLoader: audioResourceLoader
     )
     let routineRepository = SwiftDataRoutineRepository(modelContext: modelContext)
+    let routineTTSPreparationScheduler:
+      (any RoutineTTSPreparationScheduling)? =
+      accountRoutineTTSRemoteService.map {
+        DefaultRoutineTTSPreparationCoordinator(
+          routineRepository: routineRepository,
+          linkRepository: routineTTSLinkRepository,
+          remoteService: $0,
+          signedInMemberProvider: signedInMemberProvider,
+          audioDownloader: URLSessionRoutineTTSAudioDownloader(),
+          audioFileStore: routineTTSAudioFileStore
+        )
+      }
     let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
       modelContext: modelContext
     )
@@ -184,6 +227,12 @@ struct DependencyContainer {
       accountServerRemoteService: accountServerRemoteService,
       accountRoutineGroupRemoteService:
         accountRoutineGroupRemoteService,
+      accountRoutineTTSRemoteService:
+        accountRoutineTTSRemoteService,
+      routineTTSLinkRepository: routineTTSLinkRepository,
+      routineTTSPreparationScheduler:
+        routineTTSPreparationScheduler,
+      routineTTSAudioFileStore: routineTTSAudioFileStore,
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
       alarmRuntimeHandler: alarmRuntimeHandler,
@@ -207,7 +256,9 @@ struct DependencyContainer {
     let completeOnboardingUseCase = CompleteOnboardingUseCase(
       onboardingRepository: onboardingRepository,
       routineSuggestionService: routineSuggestionService,
-      alarmScheduleMutator: alarmScheduleMutator
+      alarmScheduleMutator: alarmScheduleMutator,
+      routineTTSPreparationScheduler:
+        routineTTSPreparationScheduler
     )
 
     return DefaultOnboardingFlowBuilder(

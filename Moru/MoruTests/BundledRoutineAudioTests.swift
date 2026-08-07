@@ -54,8 +54,8 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(
       player.cues,
       [
-        GuidanceCueCall(
-          itemID: BundledVoiceAvailabilityProbe.previewItemID,
+        RoutineGuidanceCueRequest(
+          presetItemID: BundledVoiceAvailabilityProbe.previewItemID,
           voiceCode: VoiceProfile.kore.assetVoiceCode,
           kind: .intro
         ),
@@ -72,9 +72,11 @@ final class BundledRoutineAudioTests: XCTestCase {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
     let delay = ImmediateGuidanceDelay()
+    let routineID = UUID()
     let coordinator = RoutineGuidanceCoordinator(
       player: player,
       playbackState: state,
+      localRoutineID: routineID,
       voiceCode: VoiceProfile.charon.assetVoiceCode,
       delay: delay
     )
@@ -94,7 +96,9 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(player.cues.filter { $0.kind == .remind }.count, 1)
     XCTAssertTrue(
       player.cues.allSatisfy {
-        $0.itemID == "ENERGY-02"
+        $0.localRoutineID == routineID
+          && $0.localStepID == step.id
+          && $0.presetItemID == "ENERGY-02"
           && $0.voiceCode == VoiceProfile.charon.assetVoiceCode
       }
     )
@@ -105,7 +109,7 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(player.cues.filter { $0.kind == .done }.count, 1)
   }
 
-  func testFastStepTransitionCancelsReminderAndMissingPresetStaysSilent() async {
+  func testFastStepTransitionCancelsReminderAndPassesCustomStepToPlayer() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
     let coordinator = RoutineGuidanceCoordinator(
@@ -133,10 +137,12 @@ final class BundledRoutineAudioTests: XCTestCase {
     coordinator.stepDidStart(customStep)
     await drainTasks()
 
-    XCTAssertEqual(player.cues.filter { $0.kind == .intro }.count, 1)
+    XCTAssertEqual(player.cues.filter { $0.kind == .intro }.count, 2)
     XCTAssertEqual(player.cues.filter { $0.kind == .remind }.count, 0)
     XCTAssertEqual(player.cues.filter { $0.kind == .done }.count, 0)
-    XCTAssertFalse(state.isPlaying)
+    XCTAssertEqual(player.cues.last?.localStepID, customStep.id)
+    XCTAssertNil(player.cues.last?.presetItemID)
+    coordinator.stop()
   }
 
   func testCorruptCueIsANoopAndDoesNotExposePlayingState() async throws {
@@ -166,13 +172,15 @@ final class BundledRoutineAudioTests: XCTestCase {
     )
 
     let result = await player.play(
-      itemID: "TEST-01",
-      voiceCode: "Aoede",
-      kind: .intro
+      RoutineGuidanceCueRequest(
+        presetItemID: "TEST-01",
+        voiceCode: "Aoede",
+        kind: .intro
+      )
     )
 
     XCTAssertFalse(state.isPlaying)
-    XCTAssertEqual(result, .cancelled)
+    XCTAssertEqual(result, .completed)
   }
 
   func testRoutinePlayerTransitionsDriveCueLifecycleWithoutDuplicates() async {
@@ -380,9 +388,11 @@ final class BundledRoutineAudioTests: XCTestCase {
     coordinator.deactivateSpeechInput()
     let playbackTask = Task { @MainActor in
       await player.play(
-        itemID: "ENERGY-02",
-        voiceCode: VoiceProfile.aoede.assetVoiceCode,
-        kind: .done
+        RoutineGuidanceCueRequest(
+          presetItemID: "ENERGY-02",
+          voiceCode: VoiceProfile.aoede.assetVoiceCode,
+          kind: .done
+        )
       )
     }
     await drainTasks()
@@ -404,16 +414,10 @@ final class BundledRoutineAudioTests: XCTestCase {
   }
 }
 
-private struct GuidanceCueCall: Equatable {
-  let itemID: String
-  let voiceCode: String
-  let kind: RoutineAudioCueKind
-}
-
 @MainActor
 private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
   private let playbackState: RoutineGuidancePlaybackState
-  private(set) var cues: [GuidanceCueCall] = []
+  private(set) var cues: [RoutineGuidanceCueRequest] = []
   private(set) var stopCallCount = 0
   private(set) var stopAndWaitCallCount = 0
   private(set) var resumeCallCount = 0
@@ -425,16 +429,14 @@ private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
   }
 
   func play(
-    itemID: String,
-    voiceCode: String,
-    kind: RoutineAudioCueKind
+    _ request: RoutineGuidanceCueRequest
   ) async -> GuidancePlaybackResult {
     guard !isSuspendedForSpeechInput else {
       return .cancelled
     }
 
     finishPlayback(with: .cancelled)
-    cues.append(GuidanceCueCall(itemID: itemID, voiceCode: voiceCode, kind: kind))
+    cues.append(request)
     playbackState.update(isPlaying: true)
     return await withTaskCancellationHandler {
       await withCheckedContinuation { continuation in

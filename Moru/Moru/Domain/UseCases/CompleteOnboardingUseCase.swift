@@ -65,15 +65,21 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
   private let onboardingRepository: any OnboardingRepository
   private let routineSuggestionService: any RoutineSuggestionService
   private let alarmScheduleMutator: (any AlarmScheduleMutating)?
+  private let routineTTSPreparationScheduler:
+    (any RoutineTTSPreparationScheduling)?
 
   init(
     onboardingRepository: any OnboardingRepository,
     routineSuggestionService: any RoutineSuggestionService,
-    alarmScheduleMutator: (any AlarmScheduleMutating)? = nil
+    alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
+    routineTTSPreparationScheduler:
+      (any RoutineTTSPreparationScheduling)? = nil
   ) {
     self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
     self.alarmScheduleMutator = alarmScheduleMutator
+    self.routineTTSPreparationScheduler =
+      routineTTSPreparationScheduler
   }
 
   @MainActor
@@ -104,6 +110,7 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
     routine.sync = .localOnly
     routine.updatedAt = Date()
     try onboardingRepository.saveCompletion(profile: profile, routine: routine)
+    routineTTSPreparationScheduler?.routineDidSave(routine)
     if let alarmScheduleMutator {
       _ = try? await alarmScheduleMutator.apply(
         .synchronize(routines: [routine])

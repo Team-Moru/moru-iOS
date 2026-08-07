@@ -152,14 +152,40 @@ final class ProfileSettingsTests: XCTestCase {
     let recorder = ProfileTestEventRecorder()
     let alarmService = ProfileTestAlarmService(recorder: recorder)
     let resetRepository = ProfileTestResetRepository(recorder: recorder)
+    let cacheDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer {
+      try? FileManager.default.removeItem(at: cacheDirectory)
+    }
+    let audioFileStore = RoutineTTSAudioFileStore(
+      rootDirectory: cacheDirectory
+    )
+    let preparationScheduler =
+      ProfileTestRoutineTTSPreparationScheduler(
+        recorder: recorder
+      )
+    let relativePath = try audioFileStore.store(
+      Data([1, 2, 3]),
+      localRoutineID: UUID(),
+      localStepID: UUID(),
+      serverStepID: 1
+    )
     let useCase = ResetLocalDataUseCase(
       localDataResetRepository: resetRepository,
-      alarmService: alarmService
+      alarmService: alarmService,
+      routineTTSAudioFileStore: audioFileStore,
+      routineTTSPreparationScheduler: preparationScheduler
     )
 
     try await useCase.execute()
 
-    XCTAssertEqual(recorder.events, ["cancel alarms", "reset data"])
+    XCTAssertEqual(
+      recorder.events,
+      ["cancel preparations", "cancel alarms", "reset data"]
+    )
+    XCTAssertNil(
+      audioFileStore.cachedAudioURL(relativePath: relativePath)
+    )
   }
 
   @MainActor
@@ -381,6 +407,24 @@ private final class ProfileTestAlarmService: ProfileAlarmServicing {
     if let cancellationError {
       throw cancellationError
     }
+  }
+}
+
+@MainActor
+private final class ProfileTestRoutineTTSPreparationScheduler:
+  RoutineTTSPreparationScheduling {
+  private let recorder: ProfileTestEventRecorder
+
+  init(recorder: ProfileTestEventRecorder) {
+    self.recorder = recorder
+  }
+
+  func routineDidSave(_: Routine) {}
+
+  func routineDidDelete(localRoutineID _: UUID) {}
+
+  func cancelAllPreparations() {
+    recorder.events.append("cancel preparations")
   }
 }
 

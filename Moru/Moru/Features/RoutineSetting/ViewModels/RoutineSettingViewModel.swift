@@ -28,7 +28,9 @@ final class RoutineSettingViewModel {
     self.alarmScheduleMutator = dependencies.alarmScheduleMutator
     self.routineSettingUseCase = RoutineSettingUseCase(
       routineRepository: dependencies.routineRepository,
-      alarmScheduleMutator: dependencies.alarmScheduleMutator
+      alarmScheduleMutator: dependencies.alarmScheduleMutator,
+      routineTTSPreparationScheduler:
+        dependencies.routineTTSPreparationScheduler
     )
     self.calendar = calendar
   }

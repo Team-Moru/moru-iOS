@@ -57,7 +57,9 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
       request: request,
       resolver: resolver,
       finalizer: DefaultTrialRoutineFinalizer(),
-      guidanceCoordinator: makeGuidanceCoordinator(),
+      guidanceCoordinator: makeGuidanceCoordinator(
+        localRoutineID: request.routineID
+      ),
       presentationToken: presentationToken,
       onEvent: onEvent
     )
@@ -82,7 +84,9 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
         saveRoutineRunUseCase: saveRoutineRunUseCase,
         routineRunRepository: routineRunRepository
       ),
-      guidanceCoordinator: makeGuidanceCoordinator(),
+      guidanceCoordinator: makeGuidanceCoordinator(
+        localRoutineID: request.routineID
+      ),
       presentationToken: presentationToken,
       onEvent: onEvent
     )
@@ -95,13 +99,16 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
     )
   }
 
-  private func makeGuidanceCoordinator() -> RoutineGuidanceCoordinator {
+  private func makeGuidanceCoordinator(
+    localRoutineID: UUID
+  ) -> RoutineGuidanceCoordinator {
     let selectedVoice = (try? localProfileRepository.fetchProfile())?
       .selectedVoice ?? .aoede
 
     return RoutineGuidanceCoordinator(
       player: guidancePlayer,
       playbackState: guidancePlaybackState,
+      localRoutineID: localRoutineID,
       voiceCode: selectedVoice.assetVoiceCode
     )
   }

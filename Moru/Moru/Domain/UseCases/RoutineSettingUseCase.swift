@@ -36,29 +36,39 @@ struct RoutineStepMutation {
 struct RoutineSettingUseCase {
   private let routineRepository: any RoutineRepository
   private let alarmScheduleMutator: (any AlarmScheduleMutating)?
+  private let routineTTSPreparationScheduler:
+    (any RoutineTTSPreparationScheduling)?
 
   init(
     routineRepository: any RoutineRepository,
-    alarmScheduleMutator: (any AlarmScheduleMutating)? = nil
+    alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
+    routineTTSPreparationScheduler:
+      (any RoutineTTSPreparationScheduling)? = nil
   ) {
     self.routineRepository = routineRepository
     self.alarmScheduleMutator = alarmScheduleMutator
+    self.routineTTSPreparationScheduler =
+      routineTTSPreparationScheduler
   }
 
   func saveRoutine(
     from mutation: RoutineSettingMutation,
     resolvingWeekdayConflict: Bool = false
   ) async throws -> AlarmMutationResult {
+    let routine = try makeRoutine(from: mutation)
     let routines: [Routine]
     if resolvingWeekdayConflict {
-      routines = try routinesByResolvingWeekdayConflict(for: mutation)
+      routines = try routinesByResolvingWeekdayConflict(
+        for: mutation,
+        replacingWith: routine
+      )
       try routineRepository.saveRoutines(routines)
     } else {
-      let routine = try makeRoutine(from: mutation)
       routines = [routine]
       try routineRepository.saveRoutine(routine)
     }
 
+    routineTTSPreparationScheduler?.routineDidSave(routine)
     return await synchronizeAlarmSchedules(for: routines)
   }
 
@@ -130,13 +140,18 @@ struct RoutineSettingUseCase {
       }
       throw error
     }
+
+    routineTTSPreparationScheduler?.routineDidDelete(
+      localRoutineID: id
+    )
   }
 
   private func routinesByResolvingWeekdayConflict(
-    for mutation: RoutineSettingMutation
+    for mutation: RoutineSettingMutation,
+    replacingWith replacementRoutine: Routine? = nil
   ) throws -> [Routine] {
     var routines = try routinesWithWeekdayConflictRemoved(for: mutation)
-    let routine = try makeRoutine(from: mutation)
+    let routine = try replacementRoutine ?? makeRoutine(from: mutation)
 
     if let index = routines.firstIndex(where: { $0.id == routine.id }) {
       routines[index] = routine

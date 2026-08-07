@@ -20,6 +20,7 @@ struct ContinuousRoutineGuidanceDelay: RoutineGuidanceDelaying {
 final class RoutineGuidanceCoordinator {
   private let player: any RoutineGuidancePlaying
   private let playbackState: RoutineGuidancePlaybackState
+  private let localRoutineID: UUID?
   private let voiceCode: String
   private let delay: any RoutineGuidanceDelaying
 
@@ -30,11 +31,13 @@ final class RoutineGuidanceCoordinator {
   init(
     player: any RoutineGuidancePlaying = NoopRoutineGuidancePlayer(),
     playbackState: RoutineGuidancePlaybackState = RoutineGuidancePlaybackState(),
+    localRoutineID: UUID? = nil,
     voiceCode: String = VoiceProfile.aoede.assetVoiceCode,
     delay: any RoutineGuidanceDelaying = ContinuousRoutineGuidanceDelay()
   ) {
     self.player = player
     self.playbackState = playbackState
+    self.localRoutineID = localRoutineID
     self.voiceCode = voiceCode
     self.delay = delay
   }
@@ -46,21 +49,13 @@ final class RoutineGuidanceCoordinator {
   func stepDidStart(_ step: RoutineStep) {
     stopCurrentCue()
 
-    guard let itemID = step.presetItemID else {
-      return
-    }
-
     let activeGeneration = generation
     playTask = Task { [weak self] in
       guard let self, activeGeneration == generation else {
         return .cancelled
       }
 
-      return await player.play(
-        itemID: itemID,
-        voiceCode: voiceCode,
-        kind: .intro
-      )
+      return await player.play(cueRequest(for: step, kind: .intro))
     }
 
     guard let estimatedSeconds = step.estimatedSeconds, estimatedSeconds > 0 else {
@@ -83,20 +78,12 @@ final class RoutineGuidanceCoordinator {
         return
       }
 
-      _ = await player.play(
-        itemID: itemID,
-        voiceCode: voiceCode,
-        kind: .remind
-      )
+      _ = await player.play(cueRequest(for: step, kind: .remind))
     }
   }
 
   func stepDidComplete(_ step: RoutineStep) {
     stopCurrentCue()
-
-    guard let itemID = step.presetItemID else {
-      return
-    }
 
     let activeGeneration = generation
     playTask = Task { [weak self] in
@@ -104,11 +91,7 @@ final class RoutineGuidanceCoordinator {
         return .cancelled
       }
 
-      return await player.play(
-        itemID: itemID,
-        voiceCode: voiceCode,
-        kind: .done
-      )
+      return await player.play(cueRequest(for: step, kind: .done))
     }
   }
 
@@ -137,5 +120,18 @@ final class RoutineGuidanceCoordinator {
     reminderTask?.cancel()
     reminderTask = nil
     player.stop()
+  }
+
+  private func cueRequest(
+    for step: RoutineStep,
+    kind: RoutineAudioCueKind
+  ) -> RoutineGuidanceCueRequest {
+    RoutineGuidanceCueRequest(
+      localRoutineID: localRoutineID,
+      localStepID: step.id,
+      presetItemID: step.presetItemID,
+      voiceCode: voiceCode,
+      kind: kind
+    )
   }
 }

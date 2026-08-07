@@ -55,11 +55,15 @@ final class RecommendedRoutineCreationUseCase:
 
   init(
     routineRepository: any RoutineRepository,
-    alarmScheduleMutator: (any AlarmScheduleMutating)? = nil
+    alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
+    routineTTSPreparationScheduler:
+      (any RoutineTTSPreparationScheduling)? = nil
   ) {
     routineSettingUseCase = RoutineSettingUseCase(
       routineRepository: routineRepository,
-      alarmScheduleMutator: alarmScheduleMutator
+      alarmScheduleMutator: alarmScheduleMutator,
+      routineTTSPreparationScheduler:
+        routineTTSPreparationScheduler
     )
   }
 

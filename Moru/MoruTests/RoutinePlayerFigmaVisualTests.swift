@@ -345,7 +345,8 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
       : NoopRoutineGuidancePlayer()
     let guidanceCoordinator = RoutineGuidanceCoordinator(
       player: guidancePlayer,
-      playbackState: playbackState
+      playbackState: playbackState,
+      localRoutineID: routine.id
     )
 
     if isTrial {
@@ -572,9 +573,7 @@ private final class RoutinePlayerCaptureSpeechSession: SpeechInputSession {
 @MainActor
 private final class RoutinePlayerCaptureGuidancePlayer: RoutineGuidancePlaying {
   func play(
-    itemID: String,
-    voiceCode: String,
-    kind: RoutineAudioCueKind
+    _ request: RoutineGuidanceCueRequest
   ) async -> GuidancePlaybackResult {
     do {
       try await Task.sleep(for: .seconds(3_600))

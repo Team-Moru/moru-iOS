@@ -5,7 +5,7 @@
 
 import Foundation
 
-enum RoutineAudioCueKind: String, CaseIterable, Hashable {
+enum RoutineAudioCueKind: String, CaseIterable, Hashable, Sendable {
   case intro
   case done
   case remind

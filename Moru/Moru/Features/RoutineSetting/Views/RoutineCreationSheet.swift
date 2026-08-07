@@ -86,7 +86,9 @@ struct RoutineCreationSheet: View {
         recommendedRoutineCreationUseCase:
           RecommendedRoutineCreationUseCase(
             routineRepository: dependencies.routineRepository,
-            alarmScheduleMutator: dependencies.alarmScheduleMutator
+            alarmScheduleMutator: dependencies.alarmScheduleMutator,
+            routineTTSPreparationScheduler:
+              dependencies.routineTTSPreparationScheduler
           ),
         onRecommendedRoutineSaved: { _ in
           dismiss()

@@ -18,20 +18,14 @@ protocol GuidancePlaybackControlling {
 
 @MainActor
 protocol RoutineGuidancePlaying: GuidancePlaybackControlling {
-  func play(
-    itemID: String,
-    voiceCode: String,
-    kind: RoutineAudioCueKind
-  ) async -> GuidancePlaybackResult
+  func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult
   func stop()
 }
 
 @MainActor
 final class NoopRoutineGuidancePlayer: RoutineGuidancePlaying {
   func play(
-    itemID: String,
-    voiceCode: String,
-    kind: RoutineAudioCueKind
+    _ request: RoutineGuidanceCueRequest
   ) async -> GuidancePlaybackResult {
     .completed
   }

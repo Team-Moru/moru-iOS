@@ -43,11 +43,12 @@ nonisolated private final class RoutineAudioNotificationObservation:
 
 @MainActor
 final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
-  private let resourceLoader: RoutineAudioResourceLoader
+  private let audioResolver: any RoutineGuidanceAudioResolving
   private let playbackState: RoutineGuidancePlaybackState
   private let audioSession: AVAudioSession
 
   private var audioPlayer: AVAudioPlayer?
+  private var queuedAudioPlayers: [AVAudioPlayer] = []
   private var playbackContinuation: CheckedContinuation<GuidancePlaybackResult, Never>?
   private var ownsAudioSession = false
   private var isSuspendedForSpeechInput = false
@@ -55,22 +56,41 @@ final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
   private var routeChangeObservation: RoutineAudioNotificationObservation?
 
   init(
-    resourceLoader: RoutineAudioResourceLoader,
+    audioResolver: any RoutineGuidanceAudioResolving,
     playbackState: RoutineGuidancePlaybackState,
     audioSession: AVAudioSession = .sharedInstance(),
     notificationCenter: NotificationCenter = .default
   ) {
-    self.resourceLoader = resourceLoader
+    self.audioResolver = audioResolver
     self.playbackState = playbackState
     self.audioSession = audioSession
     super.init()
     observeAudioSessionChanges(notificationCenter: notificationCenter)
   }
 
+  convenience init(
+    resourceLoader: RoutineAudioResourceLoader,
+    remoteAudioFileStore: RoutineTTSAudioFileStore? = nil,
+    remoteManifestProvider:
+      (any RoutineTTSAudioAssetManifestProviding)? = nil,
+    playbackState: RoutineGuidancePlaybackState,
+    audioSession: AVAudioSession = .sharedInstance(),
+    notificationCenter: NotificationCenter = .default
+  ) {
+    self.init(
+      audioResolver: RemoteFirstRoutineGuidanceAudioResolver(
+        resourceLoader: resourceLoader,
+        remoteAudioFileStore: remoteAudioFileStore,
+        remoteManifestProvider: remoteManifestProvider
+      ),
+      playbackState: playbackState,
+      audioSession: audioSession,
+      notificationCenter: notificationCenter
+    )
+  }
+
   func play(
-    itemID: String,
-    voiceCode: String,
-    kind: RoutineAudioCueKind
+    _ request: RoutineGuidanceCueRequest
   ) async -> GuidancePlaybackResult {
     guard !isSuspendedForSpeechInput else {
       return .cancelled
@@ -79,32 +99,22 @@ final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
     stop()
 
     do {
-      guard let cue = try resourceLoader.cue(
-        itemID: itemID,
-        voiceCode: voiceCode,
-        kind: kind
-      ),
-      let resourceURL = resourceLoader.resourceURL(for: cue) else {
+      let plans = audioResolver.playbackPlans(for: request)
+      guard let preparedPlayers = firstPlayablePlan(in: plans) else {
         return .completed
       }
 
       try configureAudioSession()
       ownsAudioSession = true
-      let player = try AVAudioPlayer(contentsOf: resourceURL)
-      player.delegate = self
-      player.prepareToPlay()
-
-      audioPlayer = player
+      queuedAudioPlayers = preparedPlayers
       return await withTaskCancellationHandler {
         await withCheckedContinuation { continuation in
           playbackContinuation = continuation
 
-          guard player.play() else {
-            finishPlayback(with: .cancelled)
+          guard startNextPlayer() else {
+            finishPlayback(with: .completed)
             return
           }
-
-          playbackState.update(isPlaying: true)
         }
       } onCancel: {
         Task { @MainActor [weak self] in
@@ -112,8 +122,8 @@ final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
         }
       }
     } catch {
-      finishPlayback(with: .cancelled)
-      return .cancelled
+      finishPlayback(with: .completed)
+      return .completed
     }
   }
 
@@ -141,11 +151,70 @@ final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
     try audioSession.setActive(true)
   }
 
+  private func firstPlayablePlan(
+    in plans: [RoutineGuidanceAudioPlaybackPlan]
+  ) -> [AVAudioPlayer]? {
+    for plan in plans where !plan.urls.isEmpty {
+      var players: [AVAudioPlayer] = []
+      var isValidPlan = true
+
+      for url in plan.urls {
+        do {
+          let player = try AVAudioPlayer(contentsOf: url)
+          guard player.prepareToPlay() else {
+            isValidPlan = false
+            break
+          }
+          players.append(player)
+        } catch {
+          isValidPlan = false
+          break
+        }
+      }
+
+      if isValidPlan, players.count == plan.urls.count {
+        return players
+      }
+    }
+
+    return nil
+  }
+
+  private func startNextPlayer() -> Bool {
+    while !queuedAudioPlayers.isEmpty {
+      let player = queuedAudioPlayers.removeFirst()
+      player.delegate = self
+      audioPlayer = player
+
+      if player.play() {
+        playbackState.update(isPlaying: true)
+        return true
+      }
+
+      player.delegate = nil
+      audioPlayer = nil
+    }
+
+    return false
+  }
+
+  private func advanceAfterCurrentPlayer() {
+    audioPlayer?.delegate = nil
+    audioPlayer = nil
+
+    guard startNextPlayer() else {
+      finishPlayback(with: .completed)
+      return
+    }
+  }
+
   private func finishPlayback(with result: GuidancePlaybackResult) {
     let continuation = playbackContinuation
     playbackContinuation = nil
     audioPlayer?.delegate = nil
+    audioPlayer?.stop()
     audioPlayer = nil
+    queuedAudioPlayers.removeAll()
     playbackState.update(isPlaying: false)
     if ownsAudioSession {
       ownsAudioSession = false
@@ -212,7 +281,7 @@ final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
 extension BundledRoutineGuidancePlayer: AVAudioPlayerDelegate {
   nonisolated func audioPlayerDidFinishPlaying(
     _ player: AVAudioPlayer,
-    successfully flag: Bool
+    successfully _: Bool
   ) {
     let playerIdentifier = ObjectIdentifier(player)
     Task { @MainActor [weak self] in
@@ -221,7 +290,7 @@ extension BundledRoutineGuidancePlayer: AVAudioPlayerDelegate {
         return
       }
 
-      self?.finishPlayback(with: flag ? .completed : .cancelled)
+      self?.advanceAfterCurrentPlayer()
     }
   }
 
@@ -236,7 +305,7 @@ extension BundledRoutineGuidancePlayer: AVAudioPlayerDelegate {
         return
       }
 
-      self?.finishPlayback(with: .cancelled)
+      self?.advanceAfterCurrentPlayer()
     }
   }
 }

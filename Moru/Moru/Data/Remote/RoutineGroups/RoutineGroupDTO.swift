@@ -5,6 +5,27 @@
 
 import Foundation
 
+nonisolated struct RoutineGroupCreateRequestDTO:
+  Encodable,
+  Equatable,
+  Sendable {
+  let title: String
+  let description: String?
+  let alarmDays: String?
+  let alarmTime: String?
+  let weatherNotificationEnabled: Bool
+  let routines: [RoutineCreateRequestDTO]
+}
+
+nonisolated struct RoutineCreateRequestDTO:
+  Encodable,
+  Equatable,
+  Sendable {
+  let title: String
+  let type: String
+  let durationSecond: Int
+}
+
 nonisolated struct RoutineGroupSummaryResponseDTO:
   Decodable,
   Equatable,
@@ -47,4 +68,11 @@ nonisolated struct RoutineGroupStepResponseDTO:
   let stepId: Int64?
   let content: String?
   let orderIndex: Int?
+}
+
+nonisolated struct RoutineGroupDeleteResponseDTO:
+  Decodable,
+  Equatable,
+  Sendable {
+  let routineId: Int64?
 }

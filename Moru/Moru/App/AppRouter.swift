@@ -382,7 +382,11 @@ struct AppRouter: View {
     let resetUseCase = dependencies.localDataResetRepository.map {
       ResetLocalDataUseCase(
         localDataResetRepository: $0,
-        alarmService: profileAlarmService
+        alarmService: profileAlarmService,
+        routineTTSAudioFileStore:
+          dependencies.routineTTSAudioFileStore,
+        routineTTSPreparationScheduler:
+          dependencies.routineTTSPreparationScheduler
       )
     }
     let profileBuilder = DefaultProfileFlowBuilder(
