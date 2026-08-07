@@ -13,8 +13,6 @@ struct DependencyContainer {
   let localProfileRepository: any LocalProfileRepository
   let onboardingRepository: any OnboardingRepository
   let routineSuggestionService: any RoutineSuggestionService
-  let homeWeatherRepository: (any HomeWeatherRepository)?
-  let homeWeatherService: (any HomeWeatherService)?
   let localDataResetRepository: (any LocalDataResetRepository)?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
@@ -31,8 +29,6 @@ struct DependencyContainer {
     localProfileRepository: any LocalProfileRepository,
     onboardingRepository: any OnboardingRepository,
     routineSuggestionService: any RoutineSuggestionService,
-    homeWeatherRepository: (any HomeWeatherRepository)? = nil,
-    homeWeatherService: (any HomeWeatherService)? = nil,
     localDataResetRepository: (any LocalDataResetRepository)? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
@@ -49,8 +45,6 @@ struct DependencyContainer {
     self.localProfileRepository = localProfileRepository
     self.onboardingRepository = onboardingRepository
     self.routineSuggestionService = routineSuggestionService
-    self.homeWeatherRepository = homeWeatherRepository
-    self.homeWeatherService = homeWeatherService
     self.localDataResetRepository = localDataResetRepository
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
@@ -113,8 +107,6 @@ struct DependencyContainer {
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
       onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
       routineSuggestionService: LocalTemplateSuggestionService.shared,
-      homeWeatherRepository: SwiftDataHomeWeatherRepository(modelContext: modelContext),
-      homeWeatherService: CoreLocationWeatherService(),
       localDataResetRepository: SwiftDataLocalDataResetRepository(
         modelContext: modelContext
       ),

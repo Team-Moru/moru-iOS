@@ -7,7 +7,6 @@
 
 import Accessibility
 import SwiftUI
-import UIKit
 
 typealias HomeAccessibilityAnnouncementHandler = @MainActor (String) -> Void
 
@@ -61,7 +60,6 @@ struct HomeView: View {
   private let automaticallyLoads: Bool
 
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @Environment(\.scenePhase) private var scenePhase
   @State private var viewModel: HomeViewModel
   @State private var presentedRoutineSheet: HomeRoutineSheet?
   @State private var routineLaunchMessage: String?
@@ -104,12 +102,10 @@ struct HomeView: View {
           homeContent(content)
         case .empty(let content):
           HomeHeaderView(userName: content.userName)
-          weatherCard
-            .padding(.top, 24)
           HomeEmptyView(onCreateRoutine: {
             presentedRoutineSheet = .create
           })
-          .padding(.top, MoruPilotSpacing.twenty)
+          .padding(.top, 24)
         case .failed(let failure, let previousContent):
           if let previousContent {
             homeContent(previousContent)
@@ -117,10 +113,8 @@ struct HomeView: View {
               .padding(.top, MoruPilotSpacing.twenty)
           } else {
             HomeHeaderView(userName: "")
-            weatherCard
-              .padding(.top, 24)
             HomeFailureView(failure: failure, retryAction: viewModel.retry)
-              .padding(.top, MoruPilotSpacing.twenty)
+              .padding(.top, 24)
           }
         }
       }
@@ -139,14 +133,6 @@ struct HomeView: View {
         routineLaunchMessage = nil
       }
       viewModel.load()
-      viewModel.loadWeatherAutomaticallyIfNeeded()
-    }
-    .onChange(of: scenePhase) { _, newPhase in
-      guard newPhase == .active else {
-        return
-      }
-
-      viewModel.resumeWeatherAfterAuthorizationChange()
     }
     .sheet(item: $presentedRoutineSheet, onDismiss: {
       viewModel.load()
@@ -160,14 +146,6 @@ struct HomeView: View {
     }
   }
 
-  private var weatherCard: some View {
-    HomeWeatherCard(
-      state: viewModel.weatherState,
-      requestWeather: viewModel.requestWeather
-    )
-    .padding(.horizontal, AppSpacing.screenHorizontal)
-  }
-
   @ViewBuilder
   private func homeContent(_ content: HomeContentState) -> some View {
     HomeHeaderView(userName: content.userName)
@@ -175,9 +153,6 @@ struct HomeView: View {
     routineProgressCards(content)
       .padding(.top, 24)
       .padding(.horizontal, MoruPilotSpacing.twenty)
-
-    weatherCard
-      .padding(.top, MoruPilotSpacing.twenty)
 
     CurrentRoutineCard(
       routine: content.todayRoutine,
@@ -255,254 +230,6 @@ private enum HomeRoutineSheet: String, Identifiable {
   }
 }
 
-private struct HomeWeatherCard: View {
-  let state: HomeWeatherState
-  let requestWeather: () -> Void
-
-  @Environment(\.colorScheme) private var colorScheme
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-      Label("현재 위치 날씨", systemImage: "cloud.sun.fill")
-        .homeFigmaTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textPrimary)
-
-      weatherContent
-    }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
-    .padding(.vertical, MoruPilotSpacing.twelve)
-    .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
-    .homePilotSurface()
-    .accessibilityElement(children: .contain)
-    .accessibilityIdentifier("home.weather.card")
-  }
-
-  @ViewBuilder
-  private var weatherContent: some View {
-    switch state {
-    case .notRequested:
-      weatherRequestButton
-    case .requestingPermission, .locating, .loading:
-      weatherLoadingContent
-    case .fresh(let content):
-      weatherSnapshotContent(content, updateText: "업데이트")
-    case .stale(let content):
-      weatherSnapshotContent(content, updateText: "마지막 업데이트")
-    case .denied:
-      VStack(alignment: .leading, spacing: AppSpacing.sm) {
-        weatherMessage("위치 권한이 꺼져 있어요")
-        openLocationSettingsButton
-      }
-    case .restricted:
-      weatherMessage("위치 접근이 제한되어 있어요")
-    case .noFix:
-      VStack(alignment: .leading, spacing: AppSpacing.sm) {
-        weatherMessage("현재 위치를 확인할 수 없어요")
-        weatherRequestButton
-      }
-    case .unavailable(.service(.attributionUnavailable)):
-      VStack(alignment: .leading, spacing: AppSpacing.sm) {
-        weatherMessage("날씨 출처 정보를 불러오지 못했어요")
-        weatherRequestButton
-      }
-    case .unavailable:
-      VStack(alignment: .leading, spacing: AppSpacing.sm) {
-        weatherMessage("날씨 정보를 불러오지 못했어요")
-        weatherRequestButton
-      }
-    }
-  }
-
-  private var weatherLoadingContent: some View {
-    HStack(spacing: AppSpacing.sm) {
-      ProgressView()
-        .tint(AppColor.orange400)
-        .accessibilityHidden(true)
-      Text("날씨를 불러오는 중이에요")
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
-    }
-    .accessibilityElement(children: .combine)
-  }
-
-  private var weatherRequestButton: some View {
-    Button(action: requestWeather) {
-      Label("현재 위치 날씨 보기", systemImage: "location.fill")
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textPrimary)
-    }
-    .accessibilityHint("현재 위치의 날씨를 요청합니다.")
-  }
-
-  private var openLocationSettingsButton: some View {
-    Button {
-      Task {
-        await AppSettingsOpener().open()
-      }
-    } label: {
-      Label("설정에서 위치 권한 켜기", systemImage: "gearshape.fill")
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textPrimary)
-    }
-    .accessibilityHint("MORU의 위치 권한을 변경할 수 있는 설정을 엽니다.")
-  }
-
-  @ViewBuilder
-  private func weatherSnapshotContent(
-    _ content: HomeWeatherContent,
-    updateText: String
-  ) -> some View {
-    if let markImage = attributionMarkImage(for: content.attribution) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-        ViewThatFits(in: .horizontal) {
-          HStack(alignment: .bottom, spacing: MoruPilotSpacing.sixteen) {
-            weatherReading(content.snapshot, updateText: updateText)
-            Spacer(minLength: MoruPilotSpacing.eight)
-            refreshButton
-          }
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-            weatherReading(content.snapshot, updateText: updateText)
-            refreshButton
-          }
-        }
-
-        weatherAttributionFooter(
-          content.attribution,
-          markImage: markImage
-        )
-      }
-    } else {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-        weatherMessage("날씨 출처 정보를 불러오지 못했어요")
-        weatherRequestButton
-      }
-    }
-  }
-
-  private func weatherAttributionFooter(
-    _ attribution: HomeWeatherAttribution,
-    markImage: UIImage
-  ) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-      Image(uiImage: markImage)
-        .resizable()
-        .scaledToFit()
-        .frame(height: 18)
-        .accessibilityLabel("Apple Weather")
-        .accessibilityIdentifier("home.weather.attribution.mark")
-
-      Link(
-        "날씨 데이터 출처 및 법적 고지",
-        destination: attribution.legalPageURL
-      )
-      .homeFigmaTextStyle(.c2.weight(.regular))
-      .foregroundStyle(MoruPilotColor.textTertiary)
-      .underline()
-      .accessibilityHint("Apple Weather의 법적 출처 페이지를 엽니다.")
-      .accessibilityIdentifier("home.weather.attribution.link")
-    }
-  }
-
-  private func attributionMarkImage(
-    for attribution: HomeWeatherAttribution
-  ) -> UIImage? {
-    let data = colorScheme == .dark
-      ? attribution.combinedMarkDarkData
-      : attribution.combinedMarkLightData
-    return UIImage(data: data)
-  }
-
-  private func weatherReading(
-    _ snapshot: HomeWeatherSnapshot,
-    updateText: String
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 0) {
-      Text(temperatureText(for: snapshot))
-        .homeFigmaTextStyle(.h2)
-        .foregroundStyle(MoruPilotColor.textPrimary)
-        .lineLimit(1)
-
-      Text(
-        "\(conditionLabel(for: snapshot.condition)) · "
-          + "\(updateText) \(updateTime(for: snapshot))"
-      )
-      .homeFigmaTextStyle(.c2.weight(.regular))
-      .foregroundStyle(MoruPilotColor.textTertiary)
-      .fixedSize(horizontal: false, vertical: true)
-    }
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(weatherSnapshotAccessibilityLabel(snapshot))
-  }
-
-  private var refreshButton: some View {
-    Button(action: requestWeather) {
-      Image(systemName: "arrow.clockwise")
-        .font(.system(size: 16, weight: .medium))
-        .foregroundStyle(MoruPilotColor.textSecondary)
-        .frame(width: 44, height: 44)
-        .contentShape(Rectangle())
-    }
-    .accessibilityLabel("현재 위치 날씨 새로고침")
-    .accessibilityHint("현재 위치의 날씨를 다시 요청합니다.")
-  }
-
-  private func weatherMessage(_ message: String) -> some View {
-    Text(message)
-      .homeFigmaTextStyle(.c1)
-      .foregroundStyle(MoruPilotColor.textSecondary)
-  }
-
-  private func weatherSnapshotAccessibilityLabel(
-    _ snapshot: HomeWeatherSnapshot
-  ) -> String {
-    let rounded = snapshot.temperatureCelsius.rounded(.toNearestOrAwayFromZero)
-    return "\(conditionLabel(for: snapshot.condition)), 섭씨 "
-      + "\(String(format: "%.0f", rounded))도"
-  }
-
-  private func conditionLabel(for condition: HomeWeatherCondition) -> String {
-    switch condition {
-    case .clear:
-      "맑음"
-    case .cloudy:
-      "흐림"
-    case .rain:
-      "비"
-    case .snow:
-      "눈"
-    case .wind:
-      "바람"
-    case .fog:
-      "안개"
-    case .thunderstorm:
-      "뇌우"
-    case .mixed:
-      "혼합"
-    case .other:
-      "기타"
-    }
-  }
-
-  private func temperatureText(for snapshot: HomeWeatherSnapshot) -> String {
-    let rounded = snapshot.temperatureCelsius.rounded(.toNearestOrAwayFromZero)
-    return "\(String(format: "%.0f", rounded))°"
-  }
-
-  private func updateTime(for snapshot: HomeWeatherSnapshot) -> String {
-    let formatter = DateFormatter()
-    formatter.calendar = Calendar(identifier: .gregorian)
-    formatter.locale = Locale(identifier: "ko_KR")
-    let storedTimeZone = TimeZone(identifier: snapshot.fetchedTimeZoneIdentifier)
-    let hasMatchingOffset = storedTimeZone?.secondsFromGMT(for: snapshot.fetchedAt)
-      == snapshot.fetchedUTCOffsetSeconds
-    formatter.timeZone = hasMatchingOffset
-      ? storedTimeZone
-      : TimeZone(secondsFromGMT: snapshot.fetchedUTCOffsetSeconds)
-    formatter.dateFormat = "HH:mm"
-    return formatter.string(from: snapshot.fetchedAt)
-  }
-}
-
 private struct HomeLoadingSkeleton: View {
   var body: some View {
     VStack(spacing: MoruPilotSpacing.twenty) {
@@ -512,9 +239,6 @@ private struct HomeLoadingSkeleton: View {
         HomeSkeletonBlock()
           .frame(height: 184)
       }
-
-      HomeSkeletonBlock()
-        .frame(height: 84)
 
       HomeSkeletonBlock()
         .frame(height: 326)

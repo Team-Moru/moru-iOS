@@ -18,21 +18,15 @@ protocol HomeFlowBuilding: AnyObject {
 @MainActor
 final class DefaultHomeFlowBuilder: HomeFlowBuilding {
   private let loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol
-  private let weatherRepository: (any HomeWeatherRepository)?
-  private let weatherService: (any HomeWeatherService)?
   private let routineSettingContentFactory: @MainActor () -> AnyView
   private let routineCreationContentFactory: @MainActor () -> AnyView
 
   init(
     loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol,
-    weatherRepository: (any HomeWeatherRepository)? = nil,
-    weatherService: (any HomeWeatherService)? = nil,
     routineSettingContentFactory: @escaping @MainActor () -> AnyView,
     routineCreationContentFactory: (@MainActor () -> AnyView)? = nil
   ) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
-    self.weatherRepository = weatherRepository
-    self.weatherService = weatherService
     self.routineSettingContentFactory = routineSettingContentFactory
     self.routineCreationContentFactory =
       routineCreationContentFactory ?? routineSettingContentFactory
@@ -45,9 +39,7 @@ final class DefaultHomeFlowBuilder: HomeFlowBuilding {
     AnyView(
       HomeView(
         viewModel: HomeViewModel(
-          loadHomeRoutinesUseCase: loadHomeRoutinesUseCase,
-          weatherRepository: weatherRepository,
-          weatherService: weatherService
+          loadHomeRoutinesUseCase: loadHomeRoutinesUseCase
         ),
         onStartRoutine: onStartRoutine,
         refreshToken: refreshToken,

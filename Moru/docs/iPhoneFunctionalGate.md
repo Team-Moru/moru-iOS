@@ -64,6 +64,7 @@ Light 고정, README와 이 문서의 핵심 계약을 CI에서 검사한다.
 → 수정/비활성/삭제/reset → 예전 알람 미발생
 ```
 
-스피커, Bluetooth, 전화/Siri interruption과 WeatherKit 실제 권한도 확인한다.
+스피커, Bluetooth와 전화/Siri interruption을 확인한다. clean install에서는
+위치 권한 팝업과 날씨 UI가 나타나지 않아야 한다.
 실제 iPhone에서 수행하지 않은 항목은 통과로 기록하지 않으며,
 남은 출시 차단 위험과 후속 QA로 명시한다.

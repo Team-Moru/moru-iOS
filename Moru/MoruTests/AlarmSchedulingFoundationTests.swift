@@ -521,7 +521,7 @@ final class AlarmSchedulingFoundationTests: XCTestCase {
       container.mainContext.insert(
         PersistedHomeWeatherSnapshot(
           id: weatherID,
-          conditionRawValue: HomeWeatherCondition.clear.rawValue,
+          conditionRawValue: "clear",
           temperatureCelsius: 22,
           latitudeE4: 375_666,
           longitudeE4: 1_269_781,

@@ -75,7 +75,7 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
   private func screen(for state: HomeProfileCaptureState) async throws -> AnyView {
     switch state {
     case .homeRegular, .homeEmpty, .homeFailure, .homePartialData,
-         .homeWeatherDenied, .homeLongKorean:
+         .homeLongKorean:
       return AnyView(homeScreen(for: state))
     case .homeLoading:
       return AnyView(homeScreen(for: state))
@@ -94,17 +94,8 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       loadUseCase = HomeProfileCaptureHomeUseCase(result: homeResult(for: state))
     }
 
-    let weatherState: HomeWeatherState = state == .homeWeatherDenied
-      ? .denied
-      : .fresh(
-        HomeWeatherContent(
-          snapshot: weatherSnapshot,
-          attribution: weatherAttribution
-        )
-      )
     let viewModel = HomeViewModel(
-      loadHomeRoutinesUseCase: loadUseCase,
-      initialWeatherState: weatherState
+      loadHomeRoutinesUseCase: loadUseCase
     )
     if state != .homeLoading {
       viewModel.load()
@@ -286,34 +277,6 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     )
   }
 
-  private var weatherSnapshot: HomeWeatherSnapshot {
-    HomeWeatherSnapshot(
-      id: UUID(uuidString: "32000000-0000-0000-0000-000000000001")!,
-      condition: .clear,
-      temperatureCelsius: 26,
-      latitudeE4: 375_665,
-      longitudeE4: 1_269_780,
-      fetchedAt: Date(timeIntervalSince1970: 1_784_841_300),
-      fetchedTimeZoneIdentifier: "Asia/Seoul",
-      fetchedUTCOffsetSeconds: 32_400
-    )
-  }
-
-  private var weatherAttribution: HomeWeatherAttribution {
-    let markData = Data(
-      base64Encoded:
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-    )!
-    return HomeWeatherAttribution(
-      serviceName: "Apple Weather",
-      combinedMarkLightData: markData,
-      combinedMarkDarkData: markData,
-      legalPageURL: URL(
-        string: "https://weatherkit.apple.com/legal-attribution.html"
-      )!
-    )
-  }
-
   private func profileResult(
     for state: HomeProfileCaptureState
   ) -> ProfileSettingsLoadResult {
@@ -339,7 +302,6 @@ private enum HomeProfileCaptureState: String, CaseIterable {
   case homeEmpty = "home-empty"
   case homeFailure = "home-failure"
   case homePartialData = "home-partial-data"
-  case homeWeatherDenied = "home-weather-denied"
   case homeLongKorean = "home-long-korean"
   case profileRegular = "profile-regular"
   case profileLoading = "profile-loading"

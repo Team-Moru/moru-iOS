@@ -5,8 +5,8 @@
 | 등급 | 이 문서에서의 사용 원칙 | 현재 상태 |
 |---|---|---|
 | 사용자 확정 최종 빌드 사실 | 알람, 온디바이스 음성 코칭, 원본 음성 비저장·비전송, 서버 폴백 없음을 제품·개인정보 문안에 확정형으로 사용 | 확정 |
-| 현재 업로드 빌드 관찰값 | 2026-08-05 업로드·제출한 버전 1.0(5), 번들 ID `com.teammoru.Moru`, iPhone, iOS 26.0. WeatherKit attribution 확인 요청으로 반려됨 | 수정 빌드 1.0(6)은 archive 검증·업로드·선택 필요 |
-| 수정 빌드 관찰값 | 2026-08-06 로컬 archive·App Store Connect export 성공: 1.0(6), `com.teammoru.Moru`, iOS 26.0, Cloud Managed Apple Distribution, WeatherKit entitlement, `get-task-allow=false`. iPad Air 11-inch 시뮬레이터에서 최초 허용 및 설정 복귀 흐름에 Apple Weather 결합 마크와 법적 링크가 표시됨 | 실제 지원 iPad 녹화·첨부와 App Store Connect 업로드·선택은 미완료 |
+| 현재 업로드 빌드 관찰값 | 2026-08-05 업로드·제출한 버전 1.0(5), 번들 ID `com.teammoru.Moru`, iPhone, iOS 26.0. WeatherKit attribution 확인 요청으로 반려됨 | WeatherKit 미사용 수정 빌드 1.0(7)의 archive 검증·업로드·선택 필요 |
+| 수정 빌드 준비값 | 1.0(7) 소스에서 현재 위치 날씨 UI, WeatherKit·CoreLocation 호출, 위치 권한 문구와 WeatherKit entitlement를 제거 | Developer App ID 양쪽 WeatherKit 해제, 새 배포 프로파일, archive·실기기 검증과 업로드는 완료 증거 확인 전까지 미완료 |
 | Apple 플랫폼 규칙 | 필드 한도, 연령 등급, 수출 규정, OS 관리 백업 관련 플랫폼 규칙을 2026-07-14 확인 기준으로 적용 | 미래 제출 시 현행 규칙 재확인 |
 | 후속 제출 입력·증빙 | 실제 선택 빌드, 계정 값, 권리 문서, 심사 연락처, 수출 규정 최종 분기를 실제 증빙으로 채움 | 미완료 |
 
@@ -39,7 +39,6 @@ App Privacy의 데이터 수집은 개발자 또는 통합 제3자 파트너가 
 | 마이크 | 기기 안에서 음성 코칭 입력을 처리 | 음성 입력을 사용하는 코칭을 진행할 수 없음 | iOS 설정에서 MORU의 마이크 권한을 다시 허용 |
 | 음성 인식 | 기기 안에서 음성 입력을 전사해 단계 진행에 사용 | 음성 인식을 사용하는 코칭을 진행할 수 없음 | iOS 설정에서 MORU의 음성 인식 권한을 다시 허용 |
 | AlarmKit | 예약한 알람에서 MORU 루틴을 시작 | 알람 예약·시작을 사용할 수 없음 | iOS 설정에서 MORU의 알람 관련 권한을 다시 허용 |
-| 위치 | 사용자가 요청한 현재 위치 날씨를 조회 | 날씨만 사용할 수 없으며 루틴·알람은 계속 사용 가능 | 홈의 `설정에서 위치 권한 켜기`를 눌러 허용하고 앱으로 돌아오면 자동으로 날씨를 다시 조회 |
 
 ## 연령 등급 설문 초안
 
@@ -65,7 +64,7 @@ App Privacy의 데이터 수집은 개발자 또는 통합 제3자 파트너가 
 4. 면제되지 않는 경우 수출 규정 문서 업로드 필요 여부를 확인합니다.
 5. 미래 제출에서 `ITSAppUsesNonExemptEncryption` 값을 위 판단과 일치하게 확인합니다.
 
-현재 저장소와 1.0(6) export 관찰상 `ITSAppUsesNonExemptEncryption`은 `false`입니다. 이 관찰값은 수출 규정의 최종 답변이 아니며, 실제 제출 전 최종 빌드와 통합 라이브러리를 기준으로 다시 확인합니다.
+현재 1.0(7) 소스의 `ITSAppUsesNonExemptEncryption`은 `false`입니다. 이 관찰값은 수출 규정의 최종 답변이 아니며, 실제 제출 전 최종 빌드와 통합 라이브러리를 기준으로 다시 확인합니다.
 
 ## 콘텐츠 권리 증빙 매트릭스
 
@@ -102,54 +101,45 @@ App Privacy의 데이터 수집은 개발자 또는 통합 제3자 파트너가 
 
 ### 붙여넣기 원문
 
-아래 원문은 실기기 녹화 파일을 App Review Information에 첨부한 뒤에만 사용합니다. 첨부 전에는 녹화가 첨부되었다는 문장을 붙여넣지 않습니다.
+아래 원문은 1.0(7) archive에서 WeatherKit 링크·심볼, CoreLocation 직접 호출, 위치 권한 문구와 WeatherKit entitlement가 모두 없음을 확인한 뒤 사용합니다. AlarmKit 등 Apple SDK 전이 의존성 때문에 `libswiftCoreLocation.dylib`이 weak link로 남는 것은 허용하되, `CLLocation*` 심볼과 위치 권한 요청은 없어야 합니다. WeatherKit 미지원 답변에는 날씨 기능 녹화를 첨부하지 않습니다.
 
 ```
-WeatherKit attribution review path (Korean UI labels are quoted):
+WeatherKit removal:
 
-Version 1.0 (6) displays the Apple Weather trademark and Apple-provided legal attribution link whenever WeatherKit data is shown.
+Version 1.0 (7) no longer supports or uses WeatherKit. The current-location weather feature and all related UI have been removed. The app does not request Location permission, does not link the WeatherKit framework, and the submitted binary does not contain the com.apple.developer.weatherkit entitlement.
 
-1. On a fresh install, complete onboarding. The trial routine opens automatically.
-2. Tap "건너뛰기" on each trial step and confirm "건너뛰기". On the result screen, tap "홈으로".
-3. On Home, scroll slightly if needed to the "현재 위치 날씨" card.
-4. Open Home and allow Location access when the weather prompt appears automatically.
-5. Current weather appears together with the Apple Weather trademark and the "날씨 데이터 출처 및 법적 고지" link.
-6. Tap "날씨 데이터 출처 및 법적 고지" to open Apple's legal attribution page.
-
-A physical-device screen recording showing these steps is attached in App Review Information as "MORU-1.0-6-WeatherKit-Attribution.mov".
-No login or test account is required. An active internet connection is required for WeatherKit.
+No login or test account is required.
 ```
 
 | 필드 | 실제값 | 제한 | 결과 |
 |---|---:|---:|---|
-| Review Notes | 979 UTF-8 bytes | 4,000 UTF-8 bytes 이하 | PASS |
+| Review Notes | 365 UTF-8 bytes | 4,000 UTF-8 bytes 이하 | PASS |
 
 ### 반려 메시지 답변 원문
 
-아래 답변도 실기기 녹화 첨부와 1.0(6) 빌드 선택을 확인한 뒤 사용합니다.
+아래 답변도 1.0(7) 빌드 선택과 App Review Information 저장을 확인한 뒤 사용합니다.
 
 ```
 Hello App Review Team,
 
-MORU uses WeatherKit. Version 1.0 (6) now displays the Apple Weather trademark and the Apple-provided legal attribution link whenever Apple weather data is shown.
-
-We attached a physical-device screen recording in App Review Information showing the WeatherKit feature, the Apple Weather trademark, and opening Apple's legal attribution page.
+MORU no longer supports or uses WeatherKit in Version 1.0 (7). We removed the current-location weather feature, all related UI, the WeatherKit entitlement, and the Location permission request. We also added this information to the App Review Information section.
 
 Thank you.
 ```
 
-### 심사자 기능 중심 재현 흐름
+| 필드 | 실제값 |
+|---|---:|
+| 반려 메시지 답변 | 298 UTF-8 bytes |
 
-1. 새로 설치하고 온보딩을 완료합니다.
-2. 이어지는 체험 루틴에서 각 단계의 `건너뛰기`를 누르고 확인합니다.
-3. 결과 화면에서 `홈으로`를 누릅니다.
-4. 홈에서 필요하면 조금 스크롤해 `현재 위치 날씨` 카드를 찾습니다.
-5. 홈에 진입하면 자동으로 나타나는 위치 권한 요청을 허용합니다.
-6. 현재 기온·상태와 Apple Weather 상표가 함께 표시되는지 확인합니다.
-7. `날씨 데이터 출처 및 법적 고지` 링크를 눌러 Apple이 제공한 법적 고지 페이지가 열리는지 확인합니다.
-8. 이 전체 흐름을 지원되는 실제 iPad에서 녹화하고 `MORU-1.0-6-WeatherKit-Attribution.mov`라는 이름으로 App Review Information에 첨부합니다.
+### WeatherKit 제거 검증 흐름
 
-로그인, 외부 계정, 테스트 서버는 필요하지 않습니다. WeatherKit 조회에는 활성 인터넷 연결이 필요합니다.
+1. clean install에서 위치 권한 팝업이 나타나지 않는지 확인합니다.
+2. 온보딩과 체험 루틴을 마친 뒤 홈에 날씨 카드·Apple Weather 표식·법적 링크가 없는지 확인합니다.
+3. 1.0(5) 또는 1.0(6) 데이터가 있는 업데이트 설치에서도 홈·루틴·알람이 정상 동작하는지 확인합니다.
+4. archive의 앱과 provisioning profile에 WeatherKit entitlement가 없고, 실행 파일에 WeatherKit 링크·심볼 및 `CLLocation*` 직접 참조가 없는지 확인합니다. `libswiftCoreLocation.dylib` weak link만 남는 경우는 Apple SDK 전이 의존성으로 기록합니다.
+
+로그인, 외부 계정, 테스트 서버는 필요하지 않습니다.
+
 ## 공식 근거
 
 아래 외부 플랫폼 규칙은 2026-07-14에 확인했으며, 실제 제출 시 Apple의 현행 규칙과 App Store Connect 결과를 다시 확인합니다.
@@ -161,8 +151,7 @@ Thank you.
 | 수출 규정 판단 절차 | https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance |
 | 암호화 문서·면제 판단 | https://developer.apple.com/help/app-store-connect/manage-app-information/determine-and-upload-app-encryption-documentation |
 | Review Notes를 포함한 플랫폼 버전 정보 | https://developer.apple.com/help/app-store-connect/reference/app-information/platform-version-information/ |
-| WeatherKit attribution 및 Apple Weather 상표·법적 링크 요구사항 | https://developer.apple.com/weatherkit/ |
-| WeatherKit이 제공하는 attribution 자산과 legal page URL | https://developer.apple.com/documentation/weatherkit/weatherattribution |
+| App ID capability 변경 및 provisioning profile 재발급 | https://developer.apple.com/help/account/identifiers/enable-app-capabilities/ |
 | AlarmKit 알람 예약 안내 | https://developer.apple.com/documentation/alarmkit/scheduling-an-alarm-with-alarmkit |
 | 대한민국 규정 준수 정보 | https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-korea-compliance-information |
 | OS 관리 백업의 파일 시스템 맥락 | https://developer.apple.com/documentation/foundation/using-the-file-system-effectively |
