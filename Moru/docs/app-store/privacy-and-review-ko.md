@@ -5,8 +5,8 @@
 | 등급 | 이 문서에서의 사용 원칙 | 현재 상태 |
 |---|---|---|
 | 사용자 확정 최종 빌드 사실 | 알람, 온디바이스 음성 코칭, 원본 음성 비저장·비전송, 서버 폴백 없음을 제품·개인정보 문안에 확정형으로 사용 | 확정 |
-| 현재 업로드 빌드 관찰값 | 2026-08-05 업로드·제출한 버전 1.0(5), 번들 ID `com.teammoru.Moru`, iPhone, iOS 26.0. WeatherKit attribution 확인 요청으로 반려됨 | WeatherKit 미사용 수정 빌드 1.0(7)의 archive 검증·업로드·선택 필요 |
-| 수정 빌드 준비값 | 1.0(7) 소스에서 현재 위치 날씨 UI, WeatherKit·CoreLocation 호출, 위치 권한 문구와 WeatherKit entitlement를 제거 | Developer App ID 양쪽 WeatherKit 해제, 새 배포 프로파일, archive·실기기 검증과 업로드는 완료 증거 확인 전까지 미완료 |
+| 현재 업로드 빌드 관찰값 | 2026-08-07 13:10 KST에 WeatherKit 미사용 버전 1.0(7), 번들 ID `com.teammoru.Moru` 업로드 성공. App Store Connect 처리·빌드 선택·제출은 별도 확인 필요 | Xcode 업로드 결과 `Upload succeeded`; 제출하지 않음 |
+| 수정 빌드 준비값 | 1.0(7) 소스에서 현재 위치 날씨 UI, WeatherKit·CoreLocation 호출, 위치 권한 문구와 WeatherKit entitlement를 제거 | Developer App ID의 Capabilities·App Services 양쪽 WeatherKit 해제 완료. 새 App Store 배포 프로파일과 최종 IPA 검증 완료. 실기기 검증과 App Store Connect 처리·선택은 미완료 |
 | Apple 플랫폼 규칙 | 필드 한도, 연령 등급, 수출 규정, OS 관리 백업 관련 플랫폼 규칙을 2026-07-14 확인 기준으로 적용 | 미래 제출 시 현행 규칙 재확인 |
 | 후속 제출 입력·증빙 | 실제 선택 빌드, 계정 값, 권리 문서, 심사 연락처, 수출 규정 최종 분기를 실제 증빙으로 채움 | 미완료 |
 
@@ -139,6 +139,19 @@ Thank you.
 4. archive의 앱과 provisioning profile에 WeatherKit entitlement가 없고, 실행 파일에 WeatherKit 링크·심볼 및 `CLLocation*` 직접 참조가 없는지 확인합니다. `libswiftCoreLocation.dylib` weak link만 남는 경우는 Apple SDK 전이 의존성으로 기록합니다.
 
 로그인, 외부 계정, 테스트 서버는 필요하지 않습니다.
+
+### 1.0(7) 배포 검증 기록
+
+| 항목 | 2026-08-07 확인 결과 |
+|---|---|
+| 버전·빌드·번들 ID | `1.0` / `7` / `com.teammoru.Moru` |
+| Developer App ID | Capabilities와 App Services 양쪽 WeatherKit 해제·저장 |
+| App Store 배포 프로파일 | UUID `c7f70f19-0588-4b5a-950c-306ed7b8d83d`; `com.apple.developer.weatherkit` 없음; `get-task-allow=false` |
+| 앱 서명 entitlement | `com.apple.developer.weatherkit` 없음; `get-task-allow=false` |
+| 실행 파일 | WeatherKit framework 링크·WeatherKit 심볼·`CLLocation*` 심볼 없음. Apple SDK 전이 의존성인 `libswiftCoreLocation.dylib` weak link만 존재 |
+| Info.plist | 위치 권한 사용 설명 키 없음 |
+| App Store Connect 업로드 | 2026-08-07 13:10 KST `Upload succeeded`; 업로드 패키지 처리 시작 확인 |
+| 남은 확인 | App Store Connect 처리 완료 및 1.0(7) 선택, 지원되는 실제 기기에서 clean install·업데이트 회귀 확인, Review Notes 저장, 반려 답변 전송, 제출 |
 
 ## 공식 근거
 
