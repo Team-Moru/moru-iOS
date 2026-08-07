@@ -255,7 +255,7 @@ private enum HomeRoutineSheet: String, Identifiable {
   }
 }
 
-private struct HomeWeatherCard: View {
+struct HomeWeatherCard: View {
   let state: HomeWeatherState
   let requestWeather: () -> Void
 
@@ -271,7 +271,7 @@ private struct HomeWeatherCard: View {
     }
     .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.vertical, MoruPilotSpacing.twelve)
-    .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+    .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
     .homePilotSurface()
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("home.weather.card")
@@ -353,23 +353,31 @@ private struct HomeWeatherCard: View {
     updateText: String
   ) -> some View {
     if let markImage = attributionMarkImage(for: content.attribution) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-        ViewThatFits(in: .horizontal) {
-          HStack(alignment: .bottom, spacing: MoruPilotSpacing.sixteen) {
-            weatherReading(content.snapshot, updateText: updateText)
-            Spacer(minLength: MoruPilotSpacing.eight)
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .bottom, spacing: MoruPilotSpacing.sixteen) {
+          weatherReading(content.snapshot, updateText: updateText)
+            .layoutPriority(1)
+          Spacer(minLength: MoruPilotSpacing.eight)
+          VStack(alignment: .trailing, spacing: 0) {
             refreshButton
-          }
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-            weatherReading(content.snapshot, updateText: updateText)
-            refreshButton
+            weatherAttributionLink(
+              content.attribution,
+              markImage: markImage
+            )
           }
         }
 
-        weatherAttributionFooter(
-          content.attribution,
-          markImage: markImage
-        )
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+          weatherReading(content.snapshot, updateText: updateText)
+          HStack(alignment: .bottom, spacing: MoruPilotSpacing.eight) {
+            refreshButton
+            Spacer(minLength: MoruPilotSpacing.eight)
+            weatherAttributionLink(
+              content.attribution,
+              markImage: markImage
+            )
+          }
+        }
       }
     } else {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
@@ -379,28 +387,32 @@ private struct HomeWeatherCard: View {
     }
   }
 
-  private func weatherAttributionFooter(
+  private func weatherAttributionLink(
     _ attribution: HomeWeatherAttribution,
     markImage: UIImage
   ) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+    Link(destination: attribution.legalPageURL) {
       Image(uiImage: markImage)
         .resizable()
         .scaledToFit()
-        .frame(height: 18)
-        .accessibilityLabel("Apple Weather")
-        .accessibilityIdentifier("home.weather.attribution.mark")
-
-      Link(
-        "날씨 데이터 출처 및 법적 고지",
-        destination: attribution.legalPageURL
-      )
-      .homeFigmaTextStyle(.c2.weight(.regular))
-      .foregroundStyle(MoruPilotColor.textTertiary)
-      .underline()
-      .accessibilityHint("Apple Weather의 법적 출처 페이지를 엽니다.")
-      .accessibilityIdentifier("home.weather.attribution.link")
+        .frame(height: 14)
+        .fixedSize()
+        .accessibilityHidden(true)
     }
+    .buttonStyle(.plain)
+    .padding(.horizontal, 6)
+    .padding(.vertical, 5)
+    .background {
+      if colorScheme == .dark {
+        RoundedRectangle(cornerRadius: 6)
+          .fill(Color.black.opacity(0.6))
+      }
+    }
+    .contentShape(Rectangle())
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Apple Weather")
+    .accessibilityHint("Apple Weather의 날씨 데이터 출처 및 법적 고지 페이지를 엽니다.")
+    .accessibilityIdentifier("home.weather.attribution.mark")
   }
 
   private func attributionMarkImage(
@@ -432,6 +444,7 @@ private struct HomeWeatherCard: View {
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(weatherSnapshotAccessibilityLabel(snapshot))
+    .accessibilityIdentifier("home.weather.reading")
   }
 
   private var refreshButton: some View {

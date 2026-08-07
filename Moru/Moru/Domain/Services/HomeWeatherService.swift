@@ -234,6 +234,12 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
       throw HomeWeatherServiceError.invalidWeatherData
     }
 
+    #if DEBUG
+    if Self.usesUITestingWeatherFixture {
+      return Self.uiTestingWeatherSnapshot(for: location)
+    }
+    #endif
+
     do {
       let weather = try await weatherService.weather(for: location)
       let temperatureCelsius = weather.currentWeather.temperature
@@ -269,6 +275,12 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   }
 
   func weatherAttribution() async throws -> HomeWeatherAttribution {
+    #if DEBUG
+    if Self.usesUITestingWeatherFixture {
+      return Self.uiTestingWeatherAttribution
+    }
+    #endif
+
     if let cachedWeatherAttribution {
       return cachedWeatherAttribution
     }
@@ -501,6 +513,60 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
       finalURL: httpResponse.url ?? url
     )
   }
+
+  #if DEBUG
+  private static let uiTestingWeatherFixtureArgument =
+    "-ui-testing-weather-fixture"
+
+  private static var usesUITestingWeatherFixture: Bool {
+    ProcessInfo.processInfo.arguments.contains(uiTestingWeatherFixtureArgument)
+  }
+
+  private static func uiTestingWeatherSnapshot(
+    for location: CLLocation
+  ) -> HomeWeatherSnapshot {
+    let fetchedAt = Date()
+    let timeZone = TimeZone.current
+
+    return HomeWeatherSnapshot(
+      id: UUID(),
+      condition: .clear,
+      temperatureCelsius: 22,
+      latitudeE4: Int((location.coordinate.latitude * 10_000).rounded()),
+      longitudeE4: Int((location.coordinate.longitude * 10_000).rounded()),
+      fetchedAt: fetchedAt,
+      fetchedTimeZoneIdentifier: timeZone.identifier,
+      fetchedUTCOffsetSeconds: timeZone.secondsFromGMT(for: fetchedAt)
+    )
+  }
+
+  private static let uiTestingWeatherAttribution: HomeWeatherAttribution = {
+    let renderer = UIGraphicsImageRenderer(
+      size: CGSize(width: 96, height: 20)
+    )
+    let lightData = renderer.pngData { context in
+      UIColor.black.setFill()
+      (" Weather" as NSString).draw(
+        at: CGPoint(x: 1, y: 4),
+        withAttributes: [.font: UIFont.systemFont(ofSize: 11, weight: .medium)]
+      )
+    }
+    let darkData = renderer.pngData { context in
+      UIColor.white.setFill()
+      (" Weather" as NSString).draw(
+        at: CGPoint(x: 1, y: 4),
+        withAttributes: [.font: UIFont.systemFont(ofSize: 11, weight: .medium)]
+      )
+    }
+
+    return HomeWeatherAttribution(
+      serviceName: "Apple Weather",
+      combinedMarkLightData: lightData,
+      combinedMarkDarkData: darkData,
+      legalPageURL: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!
+    )
+  }()
+  #endif
 }
 
 extension CoreLocationWeatherService: CLLocationManagerDelegate {
