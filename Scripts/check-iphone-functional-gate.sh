@@ -21,7 +21,7 @@ readme = readme_path.read_text(encoding="utf-8")
 contract = contract_path.read_text(encoding="utf-8")
 
 device_families = re.findall(r"TARGETED_DEVICE_FAMILY = ([^;]+);", project)
-if device_families != ["1", "1", "1", "1"]:
+if not device_families or any(family != "1" for family in device_families):
     raise SystemExit(
         "error: every app/test Debug/Release configuration must use iPhone device family 1; "
         f"found {device_families}"
