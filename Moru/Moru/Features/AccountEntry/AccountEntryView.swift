@@ -235,43 +235,36 @@ struct AccountEntryView: View {
   }
 
   var body: some View {
-    ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.twenty) {
-        brand
-          .accessibilitySortPriority(9)
+    GeometryReader { proxy in
+      ZStack {
+        accountEntryBackground
 
-        header
-          .accessibilitySortPriority(8)
+        VStack(spacing: 0) {
+          Spacer()
+            .frame(height: max(160, proxy.size.height * 0.275))
 
-        localFirstCard
-          .accessibilitySortPriority(7)
+          brand
+            .accessibilitySortPriority(9)
 
-        if viewModel.status != .idle {
-          statusView
-            .accessibilitySortPriority(6)
+          Spacer(minLength: 24)
+
+          VStack(spacing: MoruPilotSpacing.sixteen) {
+            if viewModel.status != .idle {
+              statusView
+                .accessibilitySortPriority(6)
+            }
+
+            providerButtons
+
+            continueWithoutLoginButton
+              .accessibilitySortPriority(2)
+          }
+          .padding(.horizontal, MoruPilotSpacing.twenty)
+          .padding(.bottom, max(56, proxy.safeAreaInsets.bottom + 48))
         }
-
-        providerButtons
-
-        continueWithoutLoginButton
-          .accessibilitySortPriority(2)
-
-        policyLinks
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
-      .padding(.top, MoruPilotSpacing.thirtyTwo)
-      .padding(.bottom, MoruPilotSpacing.thirtySix)
-      .frame(maxWidth: 520)
-      .frame(maxWidth: .infinity)
     }
-    .background(
-      LinearGradient(
-        colors: [AppColor.grayWhite, MoruPilotColor.canvas],
-        startPoint: .top,
-        endPoint: .bottom
-      )
-      .ignoresSafeArea()
-    )
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(AccountEntryAccessibility.rootIdentifier)
     .task {
@@ -282,12 +275,41 @@ struct AccountEntryView: View {
   }
 
   private var brand: some View {
-    Image(AppImage.moruSplashBrand)
-      .resizable()
-      .scaledToFit()
-      .frame(maxWidth: .infinity)
-      .frame(height: 104)
-      .accessibilityLabel("MORU, 모두의 아침 루틴")
+    VStack(spacing: MoruPilotSpacing.sixteen) {
+      Image(AppImage.moruLoginLogo)
+        .resizable()
+        .scaledToFit()
+        .frame(width: 118, height: 90)
+        .accessibilityHidden(true)
+
+      VStack(spacing: 0) {
+        Text("MORU")
+          .font(AppFont.pretendardBold(size: 36, relativeTo: .largeTitle))
+          .foregroundStyle(AppColor.babyBlue300)
+          .lineLimit(1)
+
+        Text("모두의 아침 루틴")
+          .font(AppFont.pretendardMedium(size: 14, relativeTo: .callout))
+          .foregroundStyle(AppColor.babyBlue250)
+          .lineLimit(1)
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("MORU, 모두의 아침 루틴")
+  }
+
+  private var accountEntryBackground: some View {
+    LinearGradient(
+      colors: [
+        AppColor.grayWhite,
+        AppColor.babyBlue50,
+        AppColor.babyBlue100,
+      ],
+      startPoint: .top,
+      endPoint: .bottom
+    )
+    .ignoresSafeArea()
   }
 
   private var header: some View {
@@ -358,20 +380,28 @@ struct AccountEntryView: View {
   }
 
   private var providerButtons: some View {
-    VStack(spacing: MoruPilotSpacing.twelve) {
-      appleButton
-        .accessibilitySortPriority(5)
-
+    HStack(spacing: MoruPilotSpacing.twenty) {
       googleButton
         .accessibilitySortPriority(4)
 
       kakaoButton
         .accessibilitySortPriority(3)
+
+      appleButton
+        .accessibilitySortPriority(5)
     }
+    .frame(maxWidth: .infinity)
   }
 
   private var appleButton: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+    ZStack {
+      AccountEntrySocialIconButton(
+        provider: .apple,
+        isLoading: viewModel.activeProvider == .apple,
+        isDisabled: appleButtonDisabled
+      ) {}
+      .accessibilityHidden(true)
+
       SignInWithAppleButton(.continue) { request in
         guard viewModel.authorizationWillBegin(provider: .apple) else {
           return
@@ -388,106 +418,85 @@ struct AccountEntryView: View {
         }
       }
       .signInWithAppleButtonStyle(.black)
-      .frame(maxWidth: .infinity, minHeight: 52)
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
-      .disabled(
-        viewModel.isRequestInFlight
-          || !providerAvailability.appleSignInEnabled
-          || !policyConfiguration.isReady
-      )
+      .frame(width: 56, height: 56)
+      .clipShape(Circle())
+      .opacity(0.02)
+      .disabled(appleButtonDisabled)
       .accessibilityLabel("Apple로 계속하기")
       .accessibilityHint(appleAccessibilityHint)
       .accessibilityIdentifier(AccountEntryAccessibility.appleIdentifier)
-
-      if !providerAvailability.appleSignInEnabled {
-        providerConfigurationMessage(
-          "Apple 로그인은 provisioning과 서버 검증이 준비된 빌드에서 사용할 수 있어요."
-        )
-      }
     }
+    .frame(width: 56, height: 56)
   }
 
   private var googleButton: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-      GoogleSignInButton {
-        Task {
-          guard viewModel.authorizationWillBegin(provider: .google) else {
-            return
-          }
-
-          let outcome = await googleAuthorizationSession.authorize()
-          await viewModel.authorizationDidComplete(outcome)
+    AccountEntrySocialIconButton(
+      provider: .google,
+      isLoading: viewModel.activeProvider == .google,
+      isDisabled: googleButtonDisabled
+    ) {
+      Task {
+        guard viewModel.authorizationWillBegin(provider: .google) else {
+          return
         }
-      }
-      .frame(maxWidth: .infinity, minHeight: 52)
-      .disabled(
-        viewModel.isRequestInFlight
-          || !googleAuthorizationSession.isConfigured
-          || !policyConfiguration.isReady
-      )
-      .accessibilityLabel("Google로 계속하기")
-      .accessibilityHint(googleAccessibilityHint)
-      .accessibilityIdentifier(AccountEntryAccessibility.googleIdentifier)
 
-      if !googleAuthorizationSession.isConfigured {
-        providerConfigurationMessage(
-          "Google 로그인은 공개 OAuth 설정이 준비된 빌드에서 사용할 수 있어요."
-        )
+        let outcome = await googleAuthorizationSession.authorize()
+        await viewModel.authorizationDidComplete(outcome)
       }
     }
+    .accessibilityLabel("Google로 계속하기")
+    .accessibilityHint(googleAccessibilityHint)
+    .accessibilityIdentifier(AccountEntryAccessibility.googleIdentifier)
   }
 
   private var kakaoButton: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-      Button {
-        Task {
-          guard viewModel.authorizationWillBegin(provider: .kakao) else {
-            return
-          }
-
-          let outcome = await kakaoAuthorizationSession.authorize()
-          await viewModel.authorizationDidComplete(outcome)
+    AccountEntrySocialIconButton(
+      provider: .kakao,
+      isLoading: viewModel.activeProvider == .kakao,
+      isDisabled: kakaoButtonDisabled
+    ) {
+      Task {
+        guard viewModel.authorizationWillBegin(provider: .kakao) else {
+          return
         }
-      } label: {
-        Image("KakaoLoginButton")
-          .resizable()
-          .scaledToFit()
-          .frame(maxWidth: .infinity, minHeight: 52, maxHeight: 52)
-      }
-      .buttonStyle(.plain)
-      .disabled(
-        viewModel.isRequestInFlight
-          || !kakaoAuthorizationSession.isConfigured
-          || !policyConfiguration.isReady
-      )
-      .accessibilityLabel("Kakao로 계속하기")
-      .accessibilityHint(kakaoAccessibilityHint)
-      .accessibilityIdentifier(AccountEntryAccessibility.kakaoIdentifier)
 
-      if !kakaoAuthorizationSession.isConfigured {
-        providerConfigurationMessage(
-          "Kakao 로그인은 공개 Native app key 설정이 준비된 빌드에서 사용할 수 있어요."
-        )
+        let outcome = await kakaoAuthorizationSession.authorize()
+        await viewModel.authorizationDidComplete(outcome)
       }
     }
+    .accessibilityLabel("Kakao로 계속하기")
+    .accessibilityHint(kakaoAccessibilityHint)
+    .accessibilityIdentifier(AccountEntryAccessibility.kakaoIdentifier)
   }
 
   private var continueWithoutLoginButton: some View {
-    Button("로그인 없이 시작하기") {
+    Button("이미 계정이 있어요") {
       onContinueWithoutLogin()
     }
-    .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
-    .foregroundStyle(MoruPilotColor.textStrong)
-    .frame(maxWidth: .infinity, minHeight: 52)
-    .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
-    .overlay {
-      RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve)
-        .stroke(MoruPilotColor.border, lineWidth: 1)
-    }
+    .font(AppFont.pretendardMedium(size: 14, relativeTo: .callout))
+    .foregroundStyle(AppColor.gray300)
+    .frame(maxWidth: .infinity)
     .disabled(viewModel.isRequestInFlight)
     .accessibilityHint("계정을 연결하지 않고 이 기기의 로컬 온보딩을 시작합니다.")
     .accessibilityIdentifier(AccountEntryAccessibility.guestIdentifier)
+  }
+
+  private var appleButtonDisabled: Bool {
+    viewModel.isRequestInFlight
+      || !providerAvailability.appleSignInEnabled
+      || !policyConfiguration.isReady
+  }
+
+  private var googleButtonDisabled: Bool {
+    viewModel.isRequestInFlight
+      || !googleAuthorizationSession.isConfigured
+      || !policyConfiguration.isReady
+  }
+
+  private var kakaoButtonDisabled: Bool {
+    viewModel.isRequestInFlight
+      || !kakaoAuthorizationSession.isConfigured
+      || !policyConfiguration.isReady
   }
 
   private var policyLinks: some View {
@@ -642,5 +651,49 @@ struct AccountEntryView: View {
     return kakaoAuthorizationSession.isConfigured
       ? "Kakao 인증을 시작합니다."
       : "공개 Native app key 설정이 없어 현재 빌드에서는 사용할 수 없습니다."
+  }
+}
+
+private struct AccountEntrySocialIconButton: View {
+  let provider: AccountEntryProvider
+  let isLoading: Bool
+  let isDisabled: Bool
+  let action: @MainActor () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      ZStack {
+        Image(provider.assetName)
+          .resizable()
+          .scaledToFit()
+
+        if isLoading {
+          Circle()
+            .fill(AppColor.grayWhite.opacity(0.72))
+
+          ProgressView()
+            .tint(AppColor.grayBlack)
+            .controlSize(.small)
+        }
+      }
+      .frame(width: 56, height: 56)
+      .opacity(isDisabled ? 0.45 : 1)
+      .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .disabled(isDisabled)
+  }
+}
+
+private extension AccountEntryProvider {
+  var assetName: String {
+    switch self {
+    case .apple:
+      return AppImage.moruLoginApple
+    case .google:
+      return AppImage.moruLoginGoogle
+    case .kakao:
+      return AppImage.moruLoginKakao
+    }
   }
 }

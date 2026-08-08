@@ -14,5 +14,10 @@ enum AppImage {
   static let moruRoutineCompleted = "moruRoutineCompleted"
   static let moruRoutineDirectCreation = "moruRoutineDirectCreation"
   static let moruRoutineRecommendation = "moruRoutineRecommendation"
+  static let moruLoginLogo = "moruLoginIcon"
+  static let moruLoginGoogle = "moruLoginGoogle"
+  static let moruLoginKakao = "moruLoginKakao"
+  static let moruLoginApple = "moruLoginApple"
+  static let moruLoginIcon = "moruLoginIcon"
   static let moruSplashBrand = "moruSplashBrand"
 }
