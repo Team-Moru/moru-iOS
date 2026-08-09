@@ -410,20 +410,19 @@ private struct RoutineDurationPreviewView: View {
 
   var body: some View {
     if let routine = viewModel.validatedPreviewRoutine {
+      let totalMinutes = OnboardingDuration.totalMinutes(for: routine)
+
       VStack(alignment: .leading, spacing: AppSpacing.xl) {
         Text(
-          "예상 루틴 시간은\n\(Text("\(OnboardingDuration.totalMinutes(for: routine))분").foregroundColor(MoruPilotColor.accent))이에요"
+          "예상 루틴 시간은\n\(Text("\(totalMinutes)분").foregroundColor(MoruPilotColor.accent))이에요"
         )
         .onboardingTextStyle(.h2.weight(.semiBold))
         .foregroundColor(MoruPilotColor.textStrong)
         .fixedSize(horizontal: false, vertical: true)
 
-        Image(AppImage.moruOnboardingClock)
-          .resizable()
-          .scaledToFit()
+        RoutineDurationClockView(totalMinutes: totalMinutes)
           .frame(width: 240, height: 240)
           .frame(maxWidth: .infinity)
-          .accessibilityHidden(true)
       }
     } else {
       OnboardingStepLayout(
@@ -434,6 +433,116 @@ private struct RoutineDurationPreviewView: View {
         PreviewUnavailableState(errorMessage: viewModel.errorMessage)
       }
     }
+  }
+}
+
+private struct RoutineDurationClockView: View {
+  let totalMinutes: Int
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var displayedProgress: CGFloat = 0
+
+  private var targetProgress: CGFloat {
+    CGFloat(OnboardingDuration.clockProgress(forMinutes: totalMinutes))
+  }
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .trim(from: 0, to: displayedProgress)
+        .stroke(
+          MoruPilotColor.accent.opacity(0.42),
+          style: StrokeStyle(lineWidth: 28, lineCap: .butt)
+        )
+        .rotationEffect(.degrees(-90))
+        .blur(radius: 9)
+        .frame(width: 208, height: 208)
+
+      Circle()
+        .fill(
+          LinearGradient(
+            colors: [
+              AppColor.babyBlue100,
+              AppColor.babyBlue150.opacity(0.82),
+            ],
+            startPoint: .bottomLeading,
+            endPoint: .topTrailing
+          )
+        )
+        .frame(width: 208, height: 208)
+        .shadow(color: MoruPilotColor.shadow.opacity(0.34), radius: 14)
+
+      ClockDurationSector(progress: displayedProgress)
+        .fill(AppColor.grayWhite.opacity(0.54))
+        .frame(width: 208, height: 208)
+        .clipShape(Circle())
+
+      ForEach(0..<12, id: \.self) { index in
+        Circle()
+          .fill(
+            index.isMultiple(of: 3)
+              ? AppColor.grayWhite.opacity(0.9)
+              : AppColor.babyBlue250.opacity(0.68)
+          )
+          .frame(width: 10, height: 10)
+          .offset(y: -87)
+          .rotationEffect(.degrees(Double(index) * 30))
+      }
+
+      Capsule()
+        .fill(AppColor.grayWhite.opacity(0.8))
+        .frame(width: 4, height: 76)
+        .offset(y: -38)
+        .rotationEffect(.degrees(Double(displayedProgress) * 360))
+
+      Circle()
+        .fill(MoruPilotColor.accentSoft)
+        .frame(width: 16, height: 16)
+        .shadow(color: MoruPilotColor.accent.opacity(0.38), radius: 4)
+    }
+    .frame(width: 240, height: 240)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("예상 루틴 시간 \(totalMinutes)분")
+    .onAppear(perform: updateProgress)
+    .onChange(of: totalMinutes) { _, _ in
+      updateProgress()
+    }
+  }
+
+  private func updateProgress() {
+    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.9)) {
+      displayedProgress = targetProgress
+    }
+  }
+}
+
+private struct ClockDurationSector: Shape {
+  var progress: CGFloat
+
+  var animatableData: CGFloat {
+    get { progress }
+    set { progress = newValue }
+  }
+
+  func path(in rect: CGRect) -> Path {
+    let clampedProgress = min(max(progress, 0), 1)
+    guard clampedProgress > 0 else {
+      return Path()
+    }
+
+    let center = CGPoint(x: rect.midX, y: rect.midY)
+    let radius = min(rect.width, rect.height) / 2
+    var path = Path()
+    path.move(to: center)
+    path.addArc(
+      center: center,
+      radius: radius,
+      startAngle: .degrees(-90),
+      endAngle: .degrees(-90 + Double(clampedProgress) * 360),
+      clockwise: false
+    )
+    path.closeSubpath()
+    return path
   }
 }
 
@@ -511,12 +620,9 @@ private struct RoutineOrganizingView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      Image(AppImage.moruImageHalo)
-        .resizable()
-        .scaledToFit()
+      OrganizingRoutineOrbView()
         .frame(width: 200, height: 200)
         .padding(.top, 104)
-        .accessibilityHidden(true)
 
       Text(OnboardingCopy.organizingTitle)
         .onboardingTextStyle(.h2.weight(.semiBold))
@@ -540,6 +646,113 @@ private struct RoutineOrganizingView: View {
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .padding(.horizontal, MoruPilotSpacing.twenty)
+  }
+}
+
+private struct OrganizingRoutineOrbView: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  private let waveGradient = AngularGradient(
+    colors: [
+      AppColor.babyBlue200,
+      AppColor.purple350.opacity(0.48),
+      MoruPilotColor.accentTint,
+      AppColor.babyBlue150,
+    ],
+    center: .center
+  )
+
+  var body: some View {
+    TimelineView(
+      .animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)
+    ) { context in
+      let time = reduceMotion
+        ? 0
+        : context.date.timeIntervalSinceReferenceDate
+      let slowBreath = CGFloat(sin(time * 2.15))
+      let counterBreath = CGFloat(cos(time * 2.55))
+      let coreBreath = CGFloat(sin(time * 2.35))
+
+      ZStack {
+        ripple(time: time, offset: 0)
+        ripple(time: time, offset: 0.5)
+
+        OrganicOrbWaveShape(
+          phase: time * 1.8,
+          amplitude: 0.085,
+          lobeCount: 5
+        )
+        .stroke(waveGradient, lineWidth: 7)
+        .frame(width: 156, height: 156)
+        .scaleEffect(1.02 + 0.065 * slowBreath)
+        .blur(radius: 6)
+        .opacity(0.42)
+
+        OrganicOrbWaveShape(
+          phase: -time * 1.5,
+          amplitude: 0.06,
+          lobeCount: 7
+        )
+        .stroke(waveGradient, lineWidth: 2.5)
+        .frame(width: 154, height: 154)
+        .scaleEffect(1 + 0.05 * counterBreath)
+        .opacity(0.62)
+
+        Image(AppImage.moruImageHalo)
+          .resizable()
+          .scaledToFit()
+          .scaleEffect(0.96 + 0.075 * coreBreath)
+      }
+    }
+    .accessibilityHidden(true)
+  }
+
+  private func ripple(time: Double, offset: Double) -> some View {
+    let progress = CGFloat(
+      (time / 1.7 + offset).truncatingRemainder(dividingBy: 1)
+    )
+
+    return Circle()
+      .stroke(waveGradient, lineWidth: 2)
+      .frame(width: 154, height: 154)
+      .scaleEffect(0.84 + progress * 0.45)
+      .opacity((1 - progress) * 0.34)
+      .blur(radius: 2 + progress * 4)
+  }
+}
+
+private struct OrganicOrbWaveShape: Shape {
+  let phase: Double
+  let amplitude: CGFloat
+  let lobeCount: Double
+
+  func path(in rect: CGRect) -> Path {
+    let center = CGPoint(x: rect.midX, y: rect.midY)
+    let baseRadius = min(rect.width, rect.height) / 2
+    let segmentCount = 180
+    var path = Path()
+
+    for segment in 0...segmentCount {
+      let ratio = Double(segment) / Double(segmentCount)
+      let angle = ratio * 2 * Double.pi
+      let primaryWave = sin(angle * lobeCount + phase)
+      let secondaryWave = sin(angle * (lobeCount + 2) - phase * 0.7)
+      let wave = CGFloat(primaryWave * 0.7 + secondaryWave * 0.3)
+      let radius = baseRadius * (1 + amplitude * wave)
+      let point = CGPoint(
+        x: center.x + radius * CGFloat(cos(angle)),
+        y: center.y + radius * CGFloat(sin(angle))
+      )
+
+      if segment == 0 {
+        path.move(to: point)
+      } else {
+        path.addLine(to: point)
+      }
+    }
+
+    path.closeSubpath()
+    return path
   }
 }
 
@@ -984,6 +1197,10 @@ enum OnboardingDuration {
     routine.steps.reduce(0) { total, step in
       total + roundedMinutes(for: step.estimatedSeconds)
     }
+  }
+
+  static func clockProgress(forMinutes totalMinutes: Int) -> Double {
+    min(max(Double(totalMinutes) / 60, 0), 1)
   }
 }
 
@@ -1744,24 +1961,35 @@ private extension View {
 }
 
 #if DEBUG
-#Preview {
-  OnboardingFlowView(
+#Preview("예상 루틴 시간 · 24분") {
+  var draft = OnboardingDraft()
+  draft.previewRoutine = Routine(
+    name: "프리뷰 루틴",
+    steps: [
+      RoutineStep(
+        type: .timer,
+        title: "프리뷰 루틴",
+        order: 0,
+        estimatedSeconds: 35 * 60
+      )
+    ]
+  )
+
+  return OnboardingFlowView(
     viewModel: OnboardingViewModel(
-      routineSuggestionService: LocalTemplateSuggestionService.shared,
-      completeOnboardingUseCase: PreviewCompleteOnboardingUseCase(),
-      onCompleted: { _ in }
+      draft: draft,
+      step: .duration,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
     )
   )
 }
 
-private final class PreviewCompleteOnboardingUseCase: CompleteOnboardingUseCaseProtocol {
-  func execute(
-    _ request: CompleteOnboardingRequest
-  ) async throws -> CompleteOnboardingResult {
-    CompleteOnboardingResult(
-      profile: LocalProfile(selectedVoice: request.selectedVoice),
-      routine: try LocalTemplateSuggestionService.shared.makeRoutine(from: request.suggestionInput)
+#Preview("루틴 정리 중") {
+  OnboardingFlowView(
+    viewModel: OnboardingViewModel(
+      step: .organizing,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
     )
-  }
+  )
 }
 #endif
