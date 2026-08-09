@@ -27,7 +27,7 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 ## 현재 연동 범위
 
 2026-08-05 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
-현재 제품 흐름에 연결된 operation은 17개입니다.
+현재 네트워크 계약 또는 제품 흐름에 연결된 operation은 21개입니다.
 
 | 기능 | API | 앱 연결 상태 |
 | --- | --- | --- |
@@ -43,16 +43,19 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 | 계정 프로필·스트릭 | `GET /members/me/profile`, `GET /members/me/streak` | Profile의 읽기 전용 계정 정보에 연결 |
 | 계정 음성 | `GET /tts`, `PATCH /members/me/tts` | 서버 생성 음성 목록과 선택 변경에 연결 |
 | 구독 조회 | `GET /subscriptions/me` | Profile의 읽기 전용 플랜 상태에 연결 |
-| 계정 루틴 보관함 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}` | Profile에서 목록·상세를 읽기 전용으로 표시. 로컬 루틴과 병합·실행하지 않음 |
+| 계정 루틴 보관함·실행 바인딩 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}`, `POST /routine-groups` | Profile에서는 목록·상세를 읽기 전용으로 표시. 로그인한 로컬 루틴의 첫 실행 때는 같은 구성을 서버에 생성해 실행 기록용 ID를 연결 |
+| 루틴 실행·CHECK 판정 | `POST /routine-executions`, `POST /routine-executions/ai-step` | TIMER·INPUT 완료와 건너뛰기는 실행 결과를 전송. CHECK 응답은 서버 판정 후 진행하며 실패 시 기존 로컬 판정으로 대체 |
+| 루틴 TTS 상태 | `GET /routine-tts/{routineGroupId}/tts` | 조회 Service와 DI까지만 연결. 제품의 폴링·다운로드·재생·캐시 교체 호출은 아직 없음 |
 | 서버 상태 | `GET /health` | Target과 계약 테스트만 존재 |
 
-전체 Swagger 기준 operation 커버리지는 `17/31`(`54.8%`)입니다.
+전체 Swagger 기준 operation 커버리지는 `21/31`(`67.7%`)입니다.
 제품 앱에서 연결하면 안 되는 개발 토큰과 화면 없는 health를 제외하면
-`17/29`(`58.6%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
+`20/29`(`69.0%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
 아닙니다.
 
-홈, 루틴 관리, 실행 저장, 편집 가능한 로컬 프로필의 기준 데이터는
-계속 SwiftData입니다. History는 로컬 기록을 기준으로 서버 집계를 보강하고,
+홈, 루틴 관리, 편집 가능한 로컬 프로필의 기준 데이터는 계속 SwiftData입니다.
+실행 저장은 로컬 저장을 유지하면서 로그인 계정에 한 번 전송합니다.
+History는 로컬 기록을 기준으로 서버 집계를 보강하고,
 Profile의 서버 계정 정보는 로컬 설정과 섞지 않는 읽기 전용 snapshot입니다.
 계정 루틴 보관함도 서버 응답을 메모리에만 보관하며, 같은 제목의 그룹을
 합치거나 로컬 `RoutineRepository`에 쓰지 않습니다.
@@ -173,9 +176,10 @@ nonisolated enum ExampleTarget: MoruTargetType {
 DTO에서 `String`으로 받은 뒤 Mapper에서 검증합니다.
 형식이 합의되면 공통 JSONDecoder 전략과 계약 테스트를 추가합니다.
 
-## Local-first 쓰기와 읽기
+## 목표 Local-first 동기화 흐름
 
-쓰기 흐름은 다음과 같습니다.
+향후 일반 동기화 쓰기 흐름은 다음과 같습니다. 현재 빠른 실행 기록 전송에는
+아직 Outbox와 자동 재시도가 없습니다.
 
 ```text
 사용자 변경
@@ -185,7 +189,7 @@ DTO에서 `String`으로 받은 뒤 Mapper에서 검증합니다.
 -> 성공 시 remote link와 sync 상태 갱신
 ```
 
-가져오기 흐름은 다음과 같습니다.
+향후 가져오기 흐름은 다음과 같습니다.
 
 ```text
 서버 응답
@@ -196,9 +200,10 @@ DTO에서 `String`으로 받은 뒤 Mapper에서 검증합니다.
 -> 화면이 SwiftData 변경을 관찰
 ```
 
-현재 v1 Mapper는 `localOnly`만 허용하고
-remote metadata를 제거합니다.
-실제 동기화 전에 다음 SwiftData 스키마에 아래 항목을 추가해야 합니다.
+현재 v1 Mapper는 빠른 실행 바인딩에 필요한 opaque `remoteID`, 마지막 동기화
+시각, revision을 왕복 보존합니다. 다만 별도 account link 테이블이나 동기화
+상태 모델은 없습니다. 실제 동기화 전에 다음 SwiftData 스키마에 아래 항목을
+추가해야 합니다.
 
 - 영속 Outbox
 - account ID를 포함한 local/remote link
@@ -274,24 +279,35 @@ PRO 음성은 활성 PRO 응답이 확인된 경우만 변경합니다.
 APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 필요한 Coordinator를 선택 기능으로 추가합니다.
 
-## 계약 확인 전 보류하는 연동
+## 빠른 쓰기 연동 상태와 보류 범위
 
-- 루틴 그룹 쓰기와 실행용 조회
-  - `POST /routine-groups`, 루틴 추가, `PATCH`, `DELETE`는 연결하지 않습니다.
-  - `GET /routine-groups/active`, `GET /routine-groups/today`도 로컬 루틴과
-    실행 기준을 정하지 않아 연결하지 않습니다.
-  - 로컬 UUID와 서버 `Int64` ID의 영속 매핑이 없습니다.
-  - 수정·재정렬, client mutation ID, idempotency, revision,
-    tombstone, 증분 동기화 계약이 없습니다.
+- 루틴 그룹 생성과 실행 ID 연결
+  - 로그인 사용자가 로컬 루틴을 처음 실행하면 `POST /routine-groups`로 같은
+    단계 구성의 서버 그룹을 만들고, 반환된 group ID를 member ID와 함께
+    `Routine.sync.remoteID`에 저장합니다. 계정별 매핑을 함께 보존하며 다른
+    계정의 group ID는 재사용하지 않습니다. 실행 ID용 미러에는 서버 알람
+    충돌과 오래된 알림을 피하려고 알람 요일·시각·날씨 설정을 보내지 않습니다.
+  - 실행 중에는 서버 detail의 항목 순서·제목·타입을 로컬 step과 대조해 서버
+    routine ID를 메모리에서 사용합니다.
+  - 루틴 추가, `PATCH`, `DELETE`, `GET /routine-groups/active`,
+    `GET /routine-groups/today`는 아직 연결하지 않습니다.
+  - 수정·재정렬, client mutation ID, idempotency, revision, tombstone,
+    증분 동기화 계약도 없습니다.
 - 실행 결과 저장과 AI 단계 판정
-  - 서버 routine ID, 오프라인 outbox, 중복 전송 방지 키가 없습니다.
-  - 실행 중 계정 전환·재시도·부분 완료 정책도 필요합니다.
+  - CHECK 완료 입력은 `POST /routine-executions/ai-step`으로 판정합니다.
+    `shouldProceed=false`이면 서버 응답 문구를 표시하고 현재 항목에 머뭅니다.
+  - TIMER·INPUT 완료와 모든 타입의 건너뛰기는
+    `POST /routine-executions`로 전송합니다.
+  - 로그아웃 상태나 서버 목적지가 없으면 기존 로컬 동작을 유지합니다. 서버
+    오류도 로컬 실행·저장을 막지 않습니다.
+  - 오프라인 outbox, 자동 재시도, 중복 전송 방지 키는 아직 없습니다.
 - 온보딩 상태 조회
   - 현재 Swagger에는 완료 상태를 맞춰 쓰는 mutation이 없습니다.
   - 서버 상태와 로컬 온보딩·초기 루틴 생성 순서의 기준이 필요합니다.
-- 루틴 TTS 조회
-  - 로컬 routine UUID와 서버 routine ID의 연결이 없습니다.
-  - `s3Url` 수명, 다운로드 인증, 캐시 만료·fallback 계약이 필요합니다.
+- 루틴 TTS 재생
+  - `GET /routine-tts/{routineGroupId}/tts` 조회 경계와 DI 조립은 완료했습니다.
+  - 원격 음원 다운로드·재생·캐시 교체는 `s3Url` 수명, 다운로드 인증,
+    생성 세대, fallback 계약이 필요해 아직 연결하지 않습니다.
 - 구독 등록
   - StoreKit 거래 검증, 중복 transaction, 복원, sandbox 정책이 없습니다.
   - `POST /subscriptions`를 결제 UI 없이 단독 호출하지 않습니다.
@@ -310,9 +326,11 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 - 같은 실행 결과를 다시 보내면 실행 기록이 중복 저장됩니다.
 - 요청 중복을 식별할 idempotency key 또는 correlation key가 없습니다.
 
-따라서 네트워크 재시도만으로 중복 쓰기가 생길 수 있습니다. 아래 계약이
-Swagger와 서버 구현에 포함되기 전에는 쓰기 API를 제품 흐름에 연결하지
-않습니다.
+따라서 네트워크 재시도만으로 중복 쓰기가 생길 수 있습니다. 빠른 API 연동을
+위해 현재 플레이어는 자동 재시도·outbox 없이 한 번만 전송하는 범위로 먼저
+연결했습니다. timeout 뒤 성공 여부를 알 수 없고 같은 사용자 동작이 중복
+전송될 가능성은 남아 있습니다. 아래 계약이 Swagger와 서버 구현에 포함되면
+재전송을 추가합니다.
 
 - 생성·수정 요청에 `Idempotency-Key` 또는 `clientMutationId`를 받습니다.
 - 같은 키와 같은 payload를 다시 보내면 새 데이터를 만들지 않고 최초 결과를
@@ -321,6 +339,9 @@ Swagger와 서버 구현에 포함되기 전에는 쓰기 API를 제품 흐름�
 - 루틴 그룹·루틴·step에 앱이 재전송 후에도 사용할 안정적인 client ID를
   지원합니다.
 - 실행 업로드는 batch ID와 `clientExecutionId`로 중복을 판별합니다.
+- 그룹 생성·상세 응답의 `routines`와 각 `routineId`, `title`, `type`,
+  `durationSecond`를 required로 선언하고 요청 순서 보존을 보장합니다. 현재 앱은
+  잘못된 실행 ID 연결을 피하려고 하나라도 없거나 다르면 해당 전송을 중단합니다.
 - timeout 뒤 이전 요청의 성공 여부를 조회할 reconciliation API를 제공합니다.
 - 수정 충돌을 감지할 revision 또는 ETag 계약을 제공합니다.
 - 삭제와 증분 동기화를 위한 tombstone과 delta 조회 계약을 제공합니다.
@@ -333,8 +354,10 @@ Swagger와 서버 구현에 포함되기 전에는 쓰기 API를 제품 흐름�
 이 선택은 서버가 루틴 음성을 생성할 때 쓰며,
 기존 번들 MP3 안내 음성과 미리듣기에 연결하지 않습니다.
 
-루틴별 생성 결과 조회(`GET /routine-tts/{routineGroupId}/tts`)는
-별도 계약입니다. 서버 routine ID와 안전한 캐시 정책이 없어 보류합니다.
+루틴별 생성 결과 조회(`GET /routine-tts/{routineGroupId}/tts`)는 네트워크
+경계까지 구현되어 있습니다. PENDING·FAILED 상태에서도 기존 `s3Url`을
+보존할 수 있고, 모르는 status도 버리지 않습니다. 실제 재생과 캐시 교체는
+안전한 캐시 정책과 생성 세대 계약이 없어 보류합니다.
 
 MP3 또는 음성 URL 계약이 추가되면 아래 흐름으로 구현합니다.
 

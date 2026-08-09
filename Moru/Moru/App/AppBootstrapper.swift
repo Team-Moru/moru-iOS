@@ -125,6 +125,10 @@ final class AppBootstrapper: ObservableObject {
         (any AccountServerRemoteServing)?
       let accountRoutineGroupRemoteService:
         (any AccountRoutineGroupRemoteServing)?
+      let accountRoutineExecutionRemoteService:
+        (any AccountRoutineExecutionRemoteServing)?
+      let accountRoutineTTSRemoteService:
+        (any AccountRoutineTTSRemoteServing)?
       if appCapabilities.shouldAllowServerRequests {
         accountHistoryRemoteService = DefaultAccountHistoryRemoteService(
           apiClient: authenticatedAPIClient
@@ -136,10 +140,20 @@ final class AppBootstrapper: ObservableObject {
           DefaultAccountRoutineGroupRemoteService(
             apiClient: authenticatedAPIClient
           )
+        accountRoutineExecutionRemoteService =
+          DefaultAccountRoutineExecutionRemoteService(
+            apiClient: authenticatedAPIClient
+          )
+        accountRoutineTTSRemoteService =
+          DefaultAccountRoutineTTSRemoteService(
+            apiClient: authenticatedAPIClient
+          )
       } else {
         accountHistoryRemoteService = nil
         accountServerRemoteService = nil
         accountRoutineGroupRemoteService = nil
+        accountRoutineExecutionRemoteService = nil
+        accountRoutineTTSRemoteService = nil
       }
       let dependencies = DependencyContainer.local(
         modelContext: modelContainer.mainContext,
@@ -151,7 +165,11 @@ final class AppBootstrapper: ObservableObject {
         accountHistoryRemoteService: accountHistoryRemoteService,
         accountServerRemoteService: accountServerRemoteService,
         accountRoutineGroupRemoteService:
-          accountRoutineGroupRemoteService
+          accountRoutineGroupRemoteService,
+        accountRoutineExecutionRemoteService:
+          accountRoutineExecutionRemoteService,
+        accountRoutineTTSRemoteService:
+          accountRoutineTTSRemoteService
       )
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()

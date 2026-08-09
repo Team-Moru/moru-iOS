@@ -475,6 +475,13 @@ private actor AccountRoutineGroupRemoteStub:
     self.detailResults = detailResults
   }
 
+  func createRoutineGroup(
+    _ submission: ServerRoutineGroupCreateSubmission,
+    memberID: Int64
+  ) async throws -> ServerRoutineGroupDetail {
+    throw AccountRoutineGroupTestError.unavailable
+  }
+
   func fetchRoutineGroups(
     memberID: Int64
   ) async throws -> [ServerRoutineGroupSummary] {
@@ -516,6 +523,13 @@ private actor DeferredAccountRoutineGroupRemoteStub:
     CheckedContinuation<[ServerRoutineGroupSummary], Error>?
   private var detailContinuation:
     CheckedContinuation<ServerRoutineGroupDetail, Error>?
+
+  func createRoutineGroup(
+    _ submission: ServerRoutineGroupCreateSubmission,
+    memberID: Int64
+  ) async throws -> ServerRoutineGroupDetail {
+    throw AccountRoutineGroupTestError.unavailable
+  }
 
   func fetchRoutineGroups(
     memberID: Int64

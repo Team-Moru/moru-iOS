@@ -10,9 +10,9 @@ struct ConfirmStepContentView: View {
   let isGuidancePlaying: Bool
   let isAutomaticStartBlocked: Bool
   let speechInputController: SpeechInputController
+  let feedbackText: String?
   let waitUntilGuidanceFinishes: () async -> Bool
   let onComplete: (String) -> Void
-  @State private var feedbackText: String?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -49,18 +49,10 @@ struct ConfirmStepContentView: View {
 
       VoiceInputControlView(
         speechInputController: speechInputController,
-        automaticCompletionIntent: .stepCompletion,
-        autoFinishMatch: { transcript in
-          RoutineStepCompletionMatcher.match(transcript, for: step)
-        },
+        automaticCompletionIntent: .dictatedInput,
         isAutomaticStartBlocked: isAutomaticStartBlocked,
         waitUntilGuidanceFinishes: waitUntilGuidanceFinishes
       ) { transcript in
-        guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
-          feedbackText = "완료했다고 들리지 않아요. 다시 말해 주세요."
-          return
-        }
-
         onComplete(transcript)
       }
     }

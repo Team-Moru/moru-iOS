@@ -84,7 +84,8 @@ struct VoiceInputControlView: View {
       scheduleAutomaticFinishIfNeeded(for: update)
     }
     .onChange(of: speechInputController.phase) { _, phase in
-      guard phase != .listening else {
+      if phase == .listening {
+        isAutomaticallyFinishing = false
         return
       }
 

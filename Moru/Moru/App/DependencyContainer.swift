@@ -22,6 +22,10 @@ struct DependencyContainer {
   let accountServerRemoteService: (any AccountServerRemoteServing)?
   let accountRoutineGroupRemoteService:
     (any AccountRoutineGroupRemoteServing)?
+  let accountRoutineExecutionRemoteService:
+    (any AccountRoutineExecutionRemoteServing)?
+  let accountRoutineTTSRemoteService: (any AccountRoutineTTSRemoteServing)?
+  let signedInMemberProvider: (any SignedInMemberProviding)?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -47,6 +51,11 @@ struct DependencyContainer {
     accountServerRemoteService: (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
       (any AccountRoutineGroupRemoteServing)? = nil,
+    accountRoutineExecutionRemoteService:
+      (any AccountRoutineExecutionRemoteServing)? = nil,
+    accountRoutineTTSRemoteService:
+      (any AccountRoutineTTSRemoteServing)? = nil,
+    signedInMemberProvider: (any SignedInMemberProviding)? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -79,6 +88,10 @@ struct DependencyContainer {
     self.accountServerRemoteService = accountServerRemoteService
     self.accountRoutineGroupRemoteService =
       accountRoutineGroupRemoteService
+    self.accountRoutineExecutionRemoteService =
+      accountRoutineExecutionRemoteService
+    self.accountRoutineTTSRemoteService = accountRoutineTTSRemoteService
+    self.signedInMemberProvider = signedInMemberProvider
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -102,7 +115,11 @@ struct DependencyContainer {
     accountServerRemoteService:
       (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
-      (any AccountRoutineGroupRemoteServing)? = nil
+      (any AccountRoutineGroupRemoteServing)? = nil,
+    accountRoutineExecutionRemoteService:
+      (any AccountRoutineExecutionRemoteServing)? = nil,
+    accountRoutineTTSRemoteService:
+      (any AccountRoutineTTSRemoteServing)? = nil
   ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
@@ -184,6 +201,10 @@ struct DependencyContainer {
       accountServerRemoteService: accountServerRemoteService,
       accountRoutineGroupRemoteService:
         accountRoutineGroupRemoteService,
+      accountRoutineExecutionRemoteService:
+        accountRoutineExecutionRemoteService,
+      accountRoutineTTSRemoteService: accountRoutineTTSRemoteService,
+      signedInMemberProvider: signedInMemberProvider,
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
       alarmRuntimeHandler: alarmRuntimeHandler,
@@ -232,6 +253,19 @@ struct DependencyContainer {
     let playbackState = routineGuidancePlaybackState ?? RoutineGuidancePlaybackState()
     let audioSessionCoordinator = routineAudioSessionCoordinator
       ?? RoutineAudioSessionCoordinator(guidancePlayback: guidancePlayer)
+    let remoteReporter: (any RoutineRemoteReporting)?
+    if let routineGroupService = accountRoutineGroupRemoteService,
+       let executionService = accountRoutineExecutionRemoteService,
+       let signedInMemberProvider {
+      remoteReporter = DefaultRoutineRemoteReporter(
+        routineRepository: routineRepository,
+        routineGroupService: routineGroupService,
+        executionService: executionService,
+        signedInMemberProvider: signedInMemberProvider
+      )
+    } else {
+      remoteReporter = nil
+    }
 
     return DefaultRoutinePlayerBuilder(
       resolver: resolver,
@@ -240,7 +274,8 @@ struct DependencyContainer {
       localProfileRepository: localProfileRepository,
       guidancePlayer: guidancePlayer,
       guidancePlaybackState: playbackState,
-      audioSessionCoordinator: audioSessionCoordinator
+      audioSessionCoordinator: audioSessionCoordinator,
+      remoteReporter: remoteReporter
     )
   }
 

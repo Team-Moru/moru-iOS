@@ -245,15 +245,14 @@ struct RoutinePlayerView: View {
             ConfirmStepContentView(
                 step: step,
                 isGuidancePlaying: viewModel.isGuidancePlaying,
-                isAutomaticStartBlocked: viewModel.dialogState != nil,
+                isAutomaticStartBlocked: viewModel.isStepInteractionDisabled,
                 speechInputController: speechInputController,
+                feedbackText: viewModel.checkFeedbackMessage,
                 waitUntilGuidanceFinishes: {
                     await viewModel.waitUntilIntroFinishes(for: step.id)
                 }
             ) { transcript in
-                viewModel.completeCurrentStep(
-                    transcript: transcript
-                )
+                viewModel.submitConfirmStep(transcript: transcript)
             }
             .id(step.id)
 

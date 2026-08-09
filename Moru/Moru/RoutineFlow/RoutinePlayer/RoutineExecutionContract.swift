@@ -18,6 +18,44 @@ struct RegularRoutineExecutionRequest: Equatable {
   let source: Source
 }
 
+struct RoutineRemoteCheckRequest: Equatable {
+  let runID: UUID
+  let routine: Routine
+  let step: RoutineStep
+  let submittedAt: Date
+  let durationSeconds: Int?
+  let memberInput: String
+  let actualWakeTime: Date?
+}
+
+struct RoutineRemoteExecutionRequest: Equatable {
+  let runID: UUID
+  let routine: Routine
+  let step: RoutineStep
+  let submittedAt: Date
+  let durationSeconds: Int?
+  let isCompleted: Bool
+  let memberInput: String?
+  let actualWakeTime: Date?
+}
+
+struct RoutineRemoteCheckResult: Equatable {
+  let aiResponse: String
+  let shouldProceed: Bool
+}
+
+@MainActor
+protocol RoutineRemoteReporting: AnyObject {
+  /// `nil` means this run has no signed-in server destination.
+  func judgeCheck(
+    _ request: RoutineRemoteCheckRequest
+  ) async throws -> RoutineRemoteCheckResult?
+
+  func recordExecution(
+    _ request: RoutineRemoteExecutionRequest
+  ) async throws
+}
+
 struct RoutineCompletionSummary: Equatable {
   let routineID: UUID
   let persistedRunID: UUID?

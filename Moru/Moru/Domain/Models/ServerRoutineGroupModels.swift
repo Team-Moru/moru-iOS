@@ -5,6 +5,30 @@
 
 import Foundation
 
+nonisolated struct ServerRoutineGroupCreateSubmission: Equatable, Sendable {
+  let title: String
+  let description: String?
+
+  /// Raw server values. The caller composes the comma-separated weekdays and time string.
+  let alarmDaysRaw: String?
+  let alarmTimeRaw: String?
+
+  let weatherNotificationEnabled: Bool
+  let routines: [ServerRoutineCreateSubmission]
+}
+
+nonisolated struct ServerRoutineCreateSubmission: Equatable, Sendable {
+  let title: String
+  let type: ServerRoutineCreateType
+  let durationSeconds: Int
+}
+
+nonisolated enum ServerRoutineCreateType: Equatable, Sendable {
+  case check
+  case timer
+  case input
+}
+
 nonisolated struct ServerRoutineGroupSummary: Equatable, Sendable {
   let routineGroupID: Int64
   let title: String?

@@ -391,7 +391,9 @@ Moru
 - Routine 삭제 시 step/alarm은 SwiftData cascade로 삭제하고, `RoutineRun` 기록은 유지합니다.
 - `RoutineRun`은 실행 당시 step snapshot을 포함해야 하며, snapshot 없는 run 저장은 repository에서 거부합니다.
 - soft delete를 뜻하는 `deletedAt`, `includeDeleted`, `pendingDelete` 계약은 v1에서 사용하지 않습니다.
-- v1 sync 컬럼은 `localOnly`/`nil`만 유효합니다. persisted read-path에서도 remote metadata가 보이면 mapper error로 다룹니다.
+- v1 sync status는 `localOnly`만 사용합니다. 빠른 실행 API 바인딩을 위해
+  `remoteID`, `lastSyncedAt`, `remoteRevision`은 opaque metadata로 왕복 보존하지만,
+  이를 일반 양방향 동기화 상태로 해석하지 않습니다.
 - Session ready 조건은 `LocalProfile` 존재입니다. 루틴이나 활성 알람이 없어도 Main empty
   state로 진입하며, 프로필까지 삭제하는 전체 초기화에서만 온보딩으로 돌아갑니다.
 - Feature View/ViewModel은 `SwiftData`, `@Query`, `ModelContext`를 직접 사용하지 않습니다.

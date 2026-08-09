@@ -54,9 +54,12 @@ final class RoutinePlayerViewModel {
     private let finalizationMode: FinalizationMode
     private let resolutionRequest: ResolveRoutineExecutionRequest
     private let guidanceCoordinator: RoutineGuidanceCoordinator
+    private let remoteReporter: (any RoutineRemoteReporting)?
     private let presentationToken: UUID
     private let onEvent: RoutinePlayerEventHandler
     private let startedAt: Date
+    private let runID: UUID
+    private let shouldReportActualWakeTime: Bool
     
     /// 현재 실행 중인 루틴 항목이 시작된 시각
     private var currentStepStartedAt: Date?
@@ -73,9 +76,12 @@ final class RoutinePlayerViewModel {
     private(set) var screenState: ScreenState = .resolving
     private(set) var dialogState: DialogState?
     private(set) var isSavingRun = false
+    private(set) var isSubmittingCheck = false
+    private(set) var checkFeedbackMessage: String?
     private(set) var errorMessage: String?
     var isStepInteractionDisabled: Bool {
-        dialogState != nil || pendingSave != nil || isSavingRun || didRequestExit
+        dialogState != nil || pendingSave != nil || isSavingRun
+            || isSubmittingCheck || didRequestExit
     }
     
     init(
@@ -93,15 +99,19 @@ final class RoutinePlayerViewModel {
             launch: .trial
         )
         self.guidanceCoordinator = guidanceCoordinator
+        self.remoteReporter = nil
         self.presentationToken = presentationToken
         self.onEvent = onEvent
         self.startedAt = Date()
+        self.runID = UUID()
+        self.shouldReportActualWakeTime = false
     }
     
     init(
         request: RegularRoutineExecutionRequest,
         resolver: any ResolveRoutineExecutionUseCaseProtocol,
         finalizer: any RegularRoutineFinalizing,
+        remoteReporter: (any RoutineRemoteReporting)? = nil,
         guidanceCoordinator: RoutineGuidanceCoordinator = RoutineGuidanceCoordinator(),
         presentationToken: UUID,
         onEvent: @escaping RoutinePlayerEventHandler
@@ -118,6 +128,7 @@ final class RoutinePlayerViewModel {
         
         self.resolver = resolver
         self.finalizationMode = .regular(finalizer)
+        self.remoteReporter = remoteReporter
         self.resolutionRequest = ResolveRoutineExecutionRequest(
             routineID: request.routineID,
             launch: launch
@@ -126,6 +137,8 @@ final class RoutinePlayerViewModel {
         self.presentationToken = presentationToken
         self.onEvent = onEvent
         self.startedAt = Date()
+        self.runID = UUID()
+        self.shouldReportActualWakeTime = request.source == .scheduled
     }
     
     var currentStepNumberText: String {
@@ -179,6 +192,7 @@ final class RoutinePlayerViewModel {
             steps = routine.steps.sorted { $0.order < $1.order }
             currentStepIndex = 0
             stepResults = []
+            checkFeedbackMessage = nil
             didEmitRunnableContent = false
             
             guard let firstStep = steps.first else {
@@ -324,11 +338,89 @@ final class RoutinePlayerViewModel {
 
         stepResults.append(result)
 
+        if step.type != .confirm {
+            reportRemoteExecution(
+                step: step,
+                result: result,
+                isLastStep: currentStepIndex == steps.count - 1
+            )
+        }
+
         // 완료된 항목의 시작 시각 초기화
         currentStepStartedAt = nil
 
         screenState = .stepCompleted(step)
         guidanceCoordinator.stepDidComplete(step)
+    }
+
+    func submitConfirmStep(transcript: String) {
+        guard !isStepInteractionDisabled,
+              case .running(let step) = screenState,
+              step.type == .confirm else {
+            return
+        }
+
+        let memberInput = transcript.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard !memberInput.isEmpty else {
+            checkFeedbackMessage = "음성이 들리지 않았어요. 다시 말해 주세요."
+            return
+        }
+
+        guard let remoteReporter,
+              let routine else {
+            applyLocalConfirmResult(memberInput)
+            return
+        }
+
+        let submittedAt = Date()
+        let request = RoutineRemoteCheckRequest(
+            runID: runID,
+            routine: routine,
+            step: step,
+            submittedAt: submittedAt,
+            durationSeconds: currentStepDurationSeconds(
+                completedAt: submittedAt
+            ),
+            memberInput: memberInput,
+            actualWakeTime: actualWakeTimeForCurrentStep()
+        )
+
+        isSubmittingCheck = true
+        checkFeedbackMessage = nil
+
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                let result = try await remoteReporter.judgeCheck(request)
+                guard case .running(let currentStep) = screenState,
+                      currentStep.id == step.id else {
+                    isSubmittingCheck = false
+                    return
+                }
+
+                isSubmittingCheck = false
+                guard let result else {
+                    applyLocalConfirmResult(memberInput)
+                    return
+                }
+
+                if result.shouldProceed {
+                    completeCurrentStep(transcript: memberInput)
+                } else {
+                    checkFeedbackMessage = result.aiResponse
+                }
+            } catch is CancellationError {
+                isSubmittingCheck = false
+            } catch {
+                isSubmittingCheck = false
+                applyLocalConfirmResult(memberInput)
+            }
+        }
     }
     
     /// 현재 항목이 시작된 시각부터 완료 시각까지의 시간을 계산
@@ -367,10 +459,19 @@ final class RoutinePlayerViewModel {
             stepTitle: step.title,
             stepType: step.type,
             completedAt: nil,
-            skipped: true
+            skipped: true,
+            durationSeconds: currentStepDurationSeconds(
+                completedAt: Date()
+            )
         )
         
         stepResults.append(result)
+
+        reportRemoteExecution(
+            step: step,
+            result: result,
+            isLastStep: currentStepIndex == steps.count - 1
+        )
 
         // 건너뛴 항목의 시작 시각 초기화
         currentStepStartedAt = nil
@@ -526,6 +627,7 @@ final class RoutinePlayerViewModel {
         }
 
         currentStepIndex = nextStepIndex
+        checkFeedbackMessage = nil
 
         // 새 루틴 항목의 시작 시각 저장
         currentStepStartedAt = Date()
@@ -597,7 +699,7 @@ final class RoutinePlayerViewModel {
         }
         
         let request = SaveRoutineRunRequest(
-            runID: UUID(),
+            runID: runID,
             routine: routine,
             startedAt: startedAt,
             completedAt: Date(),
@@ -667,5 +769,58 @@ final class RoutinePlayerViewModel {
     
     private func emit(_ event: RoutinePlayerEvent) {
         onEvent(presentationToken, event)
+    }
+
+    private func applyLocalConfirmResult(_ transcript: String) {
+        guard case .running(let step) = screenState,
+              step.type == .confirm else {
+            return
+        }
+
+        guard RoutineStepCompletionMatcher.isCompleted(
+            transcript,
+            for: step
+        ) else {
+            checkFeedbackMessage = "완료했다고 들리지 않아요. 다시 말해 주세요."
+            return
+        }
+
+        checkFeedbackMessage = nil
+        completeCurrentStep(transcript: transcript)
+    }
+
+    private func reportRemoteExecution(
+        step: RoutineStep,
+        result: RoutineStepResult,
+        isLastStep: Bool
+    ) {
+        guard let remoteReporter,
+              let routine else {
+            return
+        }
+
+        let submittedAt = result.completedAt ?? Date()
+        let request = RoutineRemoteExecutionRequest(
+            runID: runID,
+            routine: routine,
+            step: step,
+            submittedAt: submittedAt,
+            durationSeconds: result.durationSeconds,
+            isCompleted: result.isCompleted,
+            memberInput: result.inputText ?? result.transcript,
+            actualWakeTime: shouldReportActualWakeTime && isLastStep
+                ? startedAt
+                : nil
+        )
+
+        Task { @MainActor in
+            try? await remoteReporter.recordExecution(request)
+        }
+    }
+
+    private func actualWakeTimeForCurrentStep() -> Date? {
+        shouldReportActualWakeTime && currentStepIndex == steps.count - 1
+            ? startedAt
+            : nil
     }
 }

@@ -13,6 +13,26 @@ nonisolated final class DefaultAccountRoutineGroupRemoteService:
     self.apiClient = apiClient
   }
 
+  func createRoutineGroup(
+    _ submission: ServerRoutineGroupCreateSubmission,
+    memberID: Int64
+  ) async throws -> ServerRoutineGroupDetail {
+    guard memberID > 0 else {
+      throw AccountRoutineGroupRemoteError.invalidRequest
+    }
+    let request = try submission.makeRequestDTO()
+
+    return try await performAccountRequest {
+      let response = try await apiClient.request(
+        RoutineGroupTarget.create(request),
+        as: RoutineGroupDetailResponseDTO.self,
+        authorizedForMemberID: memberID
+      )
+      try _Concurrency.Task<Never, Never>.checkCancellation()
+      return try response.makeDomainModel()
+    }
+  }
+
   func fetchRoutineGroups(
     memberID: Int64
   ) async throws -> [ServerRoutineGroupSummary] {
@@ -97,11 +117,14 @@ where Element == RoutineGroupSummaryResponseDTO {
 
 nonisolated private extension RoutineGroupDetailResponseDTO {
   func makeDomainModel(
-    expectedRoutineGroupID: Int64
+    expectedRoutineGroupID: Int64? = nil
   ) throws -> ServerRoutineGroupDetail {
     guard let routineGroupID = routineGroupId,
-          routineGroupID > 0,
-          routineGroupID == expectedRoutineGroupID else {
+          routineGroupID > 0 else {
+      throw AccountRoutineGroupRemoteError.invalidResponse
+    }
+    if let expectedRoutineGroupID,
+       routineGroupID != expectedRoutineGroupID {
       throw AccountRoutineGroupRemoteError.invalidResponse
     }
 
@@ -114,6 +137,51 @@ nonisolated private extension RoutineGroupDetailResponseDTO {
       weatherNotificationEnabled: weatherNotificationEnabled,
       routines: try routines?.makeDomainModels()
     )
+  }
+}
+
+nonisolated private extension ServerRoutineGroupCreateSubmission {
+  func makeRequestDTO() throws -> RoutineGroupCreateRequestDTO {
+    guard let title = normalizedRequiredSubmissionText(title) else {
+      throw AccountRoutineGroupRemoteError.invalidRequest
+    }
+
+    let routines = try routines.map { routine in
+      guard let routineTitle = normalizedRequiredSubmissionText(
+        routine.title
+      ),
+      Int32(exactly: routine.durationSeconds) != nil else {
+        throw AccountRoutineGroupRemoteError.invalidRequest
+      }
+
+      return RoutineGroupRoutineCreateRequestDTO(
+        title: routineTitle,
+        type: routine.type.serverValue,
+        durationSecond: routine.durationSeconds
+      )
+    }
+
+    return RoutineGroupCreateRequestDTO(
+      title: title,
+      description: description,
+      alarmDays: alarmDaysRaw,
+      alarmTime: alarmTimeRaw,
+      weatherNotificationEnabled: weatherNotificationEnabled,
+      routines: routines
+    )
+  }
+}
+
+nonisolated private extension ServerRoutineCreateType {
+  var serverValue: String {
+    switch self {
+    case .check:
+      "CHECK"
+    case .timer:
+      "TIMER"
+    case .input:
+      "INPUT"
+    }
   }
 }
 
@@ -202,6 +270,13 @@ nonisolated private func normalizedRoutineGroupText(
     throw AccountRoutineGroupRemoteError.invalidResponse
   }
   return normalized
+}
+
+nonisolated private func normalizedRequiredSubmissionText(
+  _ value: String
+) -> String? {
+  let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+  return normalized.isEmpty ? nil : normalized
 }
 
 nonisolated private func validatedOptionalInt32Value(

@@ -29,6 +29,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   private let guidancePlayer: any RoutineGuidancePlaying
   private let guidancePlaybackState: RoutineGuidancePlaybackState
   private let audioSessionCoordinator: RoutineAudioSessionCoordinator
+  private let remoteReporter: (any RoutineRemoteReporting)?
 
   init(
     resolver: any ResolveRoutineExecutionUseCaseProtocol,
@@ -37,7 +38,8 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
     localProfileRepository: any LocalProfileRepository,
     guidancePlayer: any RoutineGuidancePlaying,
     guidancePlaybackState: RoutineGuidancePlaybackState,
-    audioSessionCoordinator: RoutineAudioSessionCoordinator
+    audioSessionCoordinator: RoutineAudioSessionCoordinator,
+    remoteReporter: (any RoutineRemoteReporting)? = nil
   ) {
     self.resolver = resolver
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
@@ -46,6 +48,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
     self.guidancePlayer = guidancePlayer
     self.guidancePlaybackState = guidancePlaybackState
     self.audioSessionCoordinator = audioSessionCoordinator
+    self.remoteReporter = remoteReporter
   }
 
   func makeTrial(
@@ -82,6 +85,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
         saveRoutineRunUseCase: saveRoutineRunUseCase,
         routineRunRepository: routineRunRepository
       ),
+      remoteReporter: remoteReporter,
       guidanceCoordinator: makeGuidanceCoordinator(),
       presentationToken: presentationToken,
       onEvent: onEvent

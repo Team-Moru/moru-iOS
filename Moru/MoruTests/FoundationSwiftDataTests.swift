@@ -124,7 +124,7 @@ final class FoundationSwiftDataTests: XCTestCase {
   }
 
   @MainActor
-  func testMapperRoundTripKeepsRoutineValuesAndSanitizesSync() throws {
+  func testMapperRoundTripKeepsRoutineValuesAndRemoteBinding() throws {
     let routineID = UUID()
     let stepID = UUID()
     let alarmID = UUID()
@@ -172,10 +172,7 @@ final class FoundationSwiftDataTests: XCTestCase {
     XCTAssertEqual(mapped.steps.first?.type, .timer)
     XCTAssertEqual(mapped.alarmSchedule?.id, alarmID)
     XCTAssertEqual(mapped.alarmSchedule?.weekdays, [.monday, .wednesday])
-    XCTAssertEqual(mapped.sync?.status, .localOnly)
-    XCTAssertNil(mapped.sync?.remoteID)
-    XCTAssertNil(mapped.sync?.lastSyncedAt)
-    XCTAssertNil(mapped.sync?.remoteRevision)
+    XCTAssertEqual(mapped.sync, routine.sync)
   }
 
   @MainActor
@@ -391,12 +388,11 @@ final class FoundationSwiftDataTests: XCTestCase {
     }
 
     let remoteSyncRoutine = makePersistedRoutine(remoteID: "server-id")
-    XCTAssertThrowsError(try SwiftDataMapper.makeDomainRoutine(from: remoteSyncRoutine)) {
-      XCTAssertEqual(
-        $0 as? SwiftDataMappingError,
-        .nonLocalSyncMetadata(field: "remoteID")
-      )
-    }
+    XCTAssertEqual(
+      try SwiftDataMapper.makeDomainRoutine(from: remoteSyncRoutine)
+        .sync?.remoteID,
+      "server-id"
+    )
 
     let malformedAlarmRoutine = makePersistedRoutine(
       alarmSchedule: PersistedAlarmSchedule(

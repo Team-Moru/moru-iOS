@@ -13,7 +13,6 @@ enum SwiftDataMappingError: Error, Equatable, LocalizedError {
   case malformedIntArray(field: String, rawValue: String)
   case unknownStepType(field: String, rawValue: String)
   case unknownSyncStatus(rawValue: String)
-  case nonLocalSyncMetadata(field: String)
   case invalidWeekdayRawValue(field: String, rawValue: Int)
 
   var errorDescription: String? {
@@ -26,8 +25,6 @@ enum SwiftDataMappingError: Error, Equatable, LocalizedError {
       return "Unknown routine step type '\(rawValue)' in \(field)."
     case .unknownSyncStatus(let rawValue):
       return "Unknown sync status '\(rawValue)'."
-    case .nonLocalSyncMetadata(let field):
-      return "Non-local sync metadata is not allowed in v1: \(field)."
     case .invalidWeekdayRawValue(let field, let rawValue):
       return "Invalid weekday raw value '\(rawValue)' in \(field)."
     }
@@ -356,32 +353,16 @@ enum SwiftDataMapper {
       throw SwiftDataMappingError.unknownSyncStatus(rawValue: syncStatusRawValue)
     }
 
-    guard syncStatus == .localOnly else {
-      throw SwiftDataMappingError.unknownSyncStatus(rawValue: syncStatusRawValue)
-    }
-
-    if remoteID != nil {
-      throw SwiftDataMappingError.nonLocalSyncMetadata(field: "remoteID")
-    }
-
-    if lastSyncedAt != nil {
-      throw SwiftDataMappingError.nonLocalSyncMetadata(field: "lastSyncedAt")
-    }
-
-    if remoteRevision != nil {
-      throw SwiftDataMappingError.nonLocalSyncMetadata(field: "remoteRevision")
-    }
-
-    return .localOnly
+    return SyncMetadata(
+      remoteID: remoteID,
+      status: syncStatus,
+      lastSyncedAt: lastSyncedAt,
+      remoteRevision: remoteRevision
+    )
   }
 
   private static func v1Sync(for sync: SyncMetadata?) -> SyncMetadata {
-    return SyncMetadata(
-      remoteID: nil,
-      status: .localOnly,
-      lastSyncedAt: nil,
-      remoteRevision: nil
-    )
+    sync ?? .localOnly
   }
 
   private static func makeStepType(

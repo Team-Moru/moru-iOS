@@ -13,13 +13,32 @@ import Moya
 @MainActor
 final class RoutineGroupRemoteContractTests: XCTestCase {
   func testTargetsMatchSwaggerAndSamplesDecode() throws {
+    let create = RoutineGroupTarget.create(
+      RoutineGroupCreateRequestDTO(
+        title: "아침 루틴",
+        description: nil,
+        alarmDays: "MON,TUE,WED,THU,FRI",
+        alarmTime: "07:30",
+        weatherNotificationEnabled: true,
+        routines: [
+          RoutineGroupRoutineCreateRequestDTO(
+            title: "물 마시기",
+            type: "CHECK",
+            durationSecond: 30
+          ),
+        ]
+      )
+    )
     let list = RoutineGroupTarget.list
     let detail = RoutineGroupTarget.detail(routineGroupID: 12)
 
+    XCTAssertEqual(create.path, "/routine-groups")
     XCTAssertEqual(list.path, "/routine-groups")
     XCTAssertEqual(detail.path, "/routine-groups/12")
+    XCTAssertEqual(create.method, .post)
     XCTAssertEqual(list.method, .get)
     XCTAssertEqual(detail.method, .get)
+    XCTAssertEqual(create.authenticationRequirement, .bearer)
     XCTAssertEqual(list.authenticationRequirement, .bearer)
     XCTAssertEqual(detail.authenticationRequirement, .bearer)
 
@@ -28,8 +47,15 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
         return XCTFail("Expected a body-free GET request.")
       }
     }
+    guard case .requestJSONEncodable = create.task else {
+      return XCTFail("Expected a JSON-encoded POST request.")
+    }
 
     let decoder = JSONDecoder()
+    let createEnvelope = try decoder.decode(
+      APIResponse<RoutineGroupDetailResponseDTO>.self,
+      from: create.sampleData
+    )
     let listEnvelope = try decoder.decode(
       APIResponse<[RoutineGroupSummaryResponseDTO]>.self,
       from: list.sampleData
@@ -39,6 +65,7 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       from: detail.sampleData
     )
 
+    XCTAssertEqual(createEnvelope.result?.routineGroupId, 12)
     XCTAssertEqual(listEnvelope.result?.first?.routineGroupId, 12)
     XCTAssertEqual(detailEnvelope.result?.routineGroupId, 12)
     XCTAssertEqual(
@@ -88,6 +115,114 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
           && $0.value(forHTTPHeaderField: "Authorization")
             == "Bearer access-token"
       }
+    )
+  }
+
+  func testCreatesRoutineGroupWithAccountBindingAndExactSwaggerBody()
+    async throws {
+    let capture = RoutineGroupRequestCapturePlugin()
+    let service = makeStubbedService(additionalPlugins: [capture])
+    let submission = ServerRoutineGroupCreateSubmission(
+      title: "아침 루틴",
+      description: "천천히 하루를 시작해요",
+      alarmDaysRaw: "MON,TUE,WED,THU,FRI",
+      alarmTimeRaw: "07:30",
+      weatherNotificationEnabled: true,
+      routines: [
+        ServerRoutineCreateSubmission(
+          title: "물 마시기",
+          type: .check,
+          durationSeconds: 30
+        ),
+        ServerRoutineCreateSubmission(
+          title: "스트레칭",
+          type: .timer,
+          durationSeconds: 120
+        ),
+        ServerRoutineCreateSubmission(
+          title: "오늘의 다짐",
+          type: .input,
+          durationSeconds: 60
+        ),
+      ]
+    )
+
+    let created = try await service.createRoutineGroup(
+      submission,
+      memberID: 98
+    )
+
+    XCTAssertEqual(created.routineGroupID, 12)
+    XCTAssertEqual(created.title, "아침 루틴")
+
+    let request = try XCTUnwrap(capture.requests.first)
+    XCTAssertEqual(request.url?.path, "/routine-groups")
+    XCTAssertEqual(request.httpMethod, "POST")
+    XCTAssertEqual(
+      request.value(forHTTPHeaderField: "Authorization"),
+      "Bearer access-token"
+    )
+    let body = try XCTUnwrap(request.httpBody)
+    let object = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: body) as? [String: Any]
+    )
+
+    XCTAssertEqual(
+      object.keys.sorted(),
+      [
+        "alarmDays",
+        "alarmTime",
+        "description",
+        "routines",
+        "title",
+        "weatherNotificationEnabled",
+      ]
+    )
+    XCTAssertEqual(object["title"] as? String, "아침 루틴")
+    XCTAssertEqual(
+      object["description"] as? String,
+      "천천히 하루를 시작해요"
+    )
+    XCTAssertEqual(
+      object["alarmDays"] as? String,
+      "MON,TUE,WED,THU,FRI"
+    )
+    XCTAssertEqual(object["alarmTime"] as? String, "07:30")
+    XCTAssertEqual(object["weatherNotificationEnabled"] as? Bool, true)
+
+    let routines = try XCTUnwrap(object["routines"] as? [[String: Any]])
+    XCTAssertEqual(routines.count, 3)
+    XCTAssertEqual(routines.map { $0["type"] as? String }, [
+      "CHECK",
+      "TIMER",
+      "INPUT",
+    ])
+    XCTAssertTrue(
+      routines.allSatisfy {
+        Set($0.keys) == Set(["title", "type", "durationSecond"])
+      }
+    )
+  }
+
+  func testCreateDTOOmitsOptionalSwaggerFieldsWhenAbsent() throws {
+    let request = RoutineGroupCreateRequestDTO(
+      title: "아침 루틴",
+      description: nil,
+      alarmDays: nil,
+      alarmTime: nil,
+      weatherNotificationEnabled: false,
+      routines: []
+    )
+
+    let object = try XCTUnwrap(
+      JSONSerialization.jsonObject(
+        with: JSONEncoder().encode(request)
+      ) as? [String: Any]
+    )
+
+    XCTAssertEqual(
+      object.keys.sorted(),
+      ["routines", "title", "weatherNotificationEnabled"]
     )
   }
 
@@ -517,6 +652,32 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
         memberID: -1
       )
     }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.createRoutineGroup(
+        routineGroupCreateSubmission(),
+        memberID: 0
+      )
+    }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.createRoutineGroup(
+        routineGroupCreateSubmission(title: " \n "),
+        memberID: 98
+      )
+    }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.createRoutineGroup(
+        routineGroupCreateSubmission(routineTitle: " \t "),
+        memberID: 98
+      )
+    }
+    await assertRemoteError(.invalidRequest) {
+      _ = try await service.createRoutineGroup(
+        routineGroupCreateSubmission(
+          durationSeconds: Int(Int32.max) + 1
+        ),
+        memberID: 98
+      )
+    }
 
     XCTAssertEqual(client.callCount, 0)
   }
@@ -652,6 +813,27 @@ nonisolated private func routineGroupSummaryDTO(
   )
 }
 
+nonisolated private func routineGroupCreateSubmission(
+  title: String = "아침 루틴",
+  routineTitle: String = "물 마시기",
+  durationSeconds: Int = 30
+) -> ServerRoutineGroupCreateSubmission {
+  ServerRoutineGroupCreateSubmission(
+    title: title,
+    description: nil,
+    alarmDaysRaw: nil,
+    alarmTimeRaw: nil,
+    weatherNotificationEnabled: false,
+    routines: [
+      ServerRoutineCreateSubmission(
+        title: routineTitle,
+        type: .check,
+        durationSeconds: durationSeconds
+      ),
+    ]
+  )
+}
+
 nonisolated private func routineGroupDetailDTO(
   routineGroupId: Int64? = 12,
   title: String? = "아침 루틴",
@@ -776,6 +958,8 @@ nonisolated private final class RoutineGroupPayloadAPIClient:
 
     let response: Any
     switch target {
+    case .create:
+      response = detail
     case .list:
       response = summaries
     case .detail:

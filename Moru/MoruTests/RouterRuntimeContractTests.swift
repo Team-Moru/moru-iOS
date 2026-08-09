@@ -1074,6 +1074,196 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
+  func testRegularConfirmUsesRemoteJudgmentAndKeepsRejectedStepRunning() async throws {
+    let routine = makeExecutableRoutine()
+    let reporter = RoutineRemoteReporterSpy(
+      checkResult: RoutineRemoteCheckResult(
+        aiResponse: "아직 완료되지 않았어요.",
+        shouldProceed: false
+      )
+    )
+    let viewModel = makeRegularPlayer(
+      routine: routine,
+      remoteReporter: reporter
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.submitConfirmStep(transcript: "물을 조금 마셨어요")
+
+    try await waitUntil { !viewModel.isSubmittingCheck }
+
+    XCTAssertEqual(reporter.checkRequests.count, 1)
+    XCTAssertEqual(
+      reporter.checkRequests.first?.memberInput,
+      "물을 조금 마셨어요"
+    )
+    XCTAssertTrue(reporter.executionRequests.isEmpty)
+    XCTAssertTrue(viewModel.stepResults.isEmpty)
+    XCTAssertEqual(viewModel.checkFeedbackMessage, "아직 완료되지 않았어요.")
+    guard case .running = viewModel.screenState else {
+      XCTFail("A rejected CHECK response must keep the current step running.")
+      return
+    }
+  }
+
+  @MainActor
+  func testRegularConfirmCompletesFromRemoteJudgment() async throws {
+    let routine = makeExecutableRoutine()
+    let reporter = RoutineRemoteReporterSpy(
+      checkResult: RoutineRemoteCheckResult(
+        aiResponse: "좋아요.",
+        shouldProceed: true
+      )
+    )
+    let viewModel = makeRegularPlayer(
+      routine: routine,
+      remoteReporter: reporter
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.submitConfirmStep(transcript: "아침 준비를 끝냈어요")
+
+    try await waitUntil { !viewModel.isSubmittingCheck }
+
+    XCTAssertEqual(viewModel.stepResults.count, 1)
+    XCTAssertEqual(viewModel.stepResults.first?.transcript, "아침 준비를 끝냈어요")
+    XCTAssertTrue(viewModel.stepResults.first?.isCompleted == true)
+    XCTAssertNil(viewModel.checkFeedbackMessage)
+    XCTAssertTrue(reporter.executionRequests.isEmpty)
+    guard case .stepCompleted = viewModel.screenState else {
+      XCTFail("An accepted CHECK response must complete the current step.")
+      return
+    }
+  }
+
+  @MainActor
+  func testRegularConfirmFallsBackToLocalMatcherWithoutServerDestination() async throws {
+    let routine = makeExecutableRoutine()
+    let reporter = RoutineRemoteReporterSpy(checkResult: nil)
+    let viewModel = makeRegularPlayer(
+      routine: routine,
+      remoteReporter: reporter
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.submitConfirmStep(transcript: "완료했어요")
+
+    try await waitUntil { !viewModel.isSubmittingCheck }
+
+    XCTAssertEqual(reporter.checkRequests.count, 1)
+    XCTAssertEqual(viewModel.stepResults.count, 1)
+    XCTAssertEqual(viewModel.stepResults.first?.transcript, "완료했어요")
+    XCTAssertTrue(viewModel.stepResults.first?.isCompleted == true)
+  }
+
+  @MainActor
+  func testRegularInputAndSkipReportOneRunWithPerStepCompletion() async throws {
+    let inputStep = RoutineStep(
+      type: .input,
+      title: "오늘의 다짐",
+      order: 0
+    )
+    let timerStep = RoutineStep(
+      type: .timer,
+      title: "스트레칭",
+      order: 1,
+      estimatedSeconds: 30
+    )
+    let routine = makeExecutableRoutine(steps: [inputStep, timerStep])
+    let reporter = RoutineRemoteReporterSpy(checkResult: nil)
+    let viewModel = makeRegularPlayer(
+      routine: routine,
+      remoteReporter: reporter
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep(
+      inputText: "차분하게 시작할게요",
+      transcript: "차분하게 시작할게요"
+    )
+    try await waitUntil { reporter.executionRequests.count == 1 }
+
+    viewModel.finishStepCompletedScreen()
+    viewModel.skipCurrentStep()
+    try await waitUntil { reporter.executionRequests.count == 2 }
+
+    let completed = reporter.executionRequests[0]
+    let skipped = reporter.executionRequests[1]
+    XCTAssertEqual(completed.step.id, inputStep.id)
+    XCTAssertTrue(completed.isCompleted)
+    XCTAssertEqual(completed.memberInput, "차분하게 시작할게요")
+    XCTAssertNil(completed.actualWakeTime)
+    XCTAssertEqual(skipped.step.id, timerStep.id)
+    XCTAssertFalse(skipped.isCompleted)
+    XCTAssertNil(skipped.memberInput)
+    XCTAssertNil(skipped.actualWakeTime)
+    XCTAssertEqual(completed.runID, skipped.runID)
+  }
+
+  @MainActor
+  func testOnlyScheduledLastStepReportsActualWakeTime() async throws {
+    let inputStep = RoutineStep(
+      type: .input,
+      title: "기상 확인",
+      order: 0
+    )
+    let routine = makeExecutableRoutine(steps: [inputStep])
+    let reporter = RoutineRemoteReporterSpy(checkResult: nil)
+    let viewModel = makeRegularPlayer(
+      routine: routine,
+      source: .scheduled,
+      remoteReporter: reporter
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep(
+      inputText: "일어났어요",
+      transcript: "일어났어요"
+    )
+    try await waitUntil { reporter.executionRequests.count == 1 }
+
+    XCTAssertNotNil(reporter.executionRequests.first?.actualWakeTime)
+  }
+
+  @MainActor
+  private func makeRegularPlayer(
+    routine: Routine,
+    source: RegularRoutineExecutionRequest.Source = .manual,
+    remoteReporter: any RoutineRemoteReporting
+  ) -> RoutinePlayerViewModel {
+    RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: source
+      ),
+      resolver: RoutineExecutionResolverSpy(resolution: .available(routine)),
+      finalizer: SavingRegularRoutineFinalizer(saver: RoutineRunSaverSpy()),
+      remoteReporter: remoteReporter,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+  }
+
+  @MainActor
+  private func waitUntil(
+    timeout: Duration = .seconds(1),
+    condition: @escaping @MainActor () -> Bool
+  ) async throws {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+
+    while !condition() {
+      guard clock.now < deadline else {
+        return XCTFail("Timed out waiting for routine remote reporting.")
+      }
+
+      try await _Concurrency.Task<Never, Never>.sleep(
+        for: .milliseconds(10)
+      )
+    }
+  }
+
+  @MainActor
   private func requestEarlyExit(
     _ exit: RoutinePlayerExit,
     from viewModel: RoutinePlayerViewModel
@@ -1316,6 +1506,31 @@ private final class RoutinePlayerEventRecorder {
     presentationTokens.append(presentationToken)
     events.append(event)
     onRecord(event)
+  }
+}
+
+@MainActor
+private final class RoutineRemoteReporterSpy: RoutineRemoteReporting {
+  private let checkResult: RoutineRemoteCheckResult?
+
+  private(set) var checkRequests: [RoutineRemoteCheckRequest] = []
+  private(set) var executionRequests: [RoutineRemoteExecutionRequest] = []
+
+  init(checkResult: RoutineRemoteCheckResult?) {
+    self.checkResult = checkResult
+  }
+
+  func judgeCheck(
+    _ request: RoutineRemoteCheckRequest
+  ) async throws -> RoutineRemoteCheckResult? {
+    checkRequests.append(request)
+    return checkResult
+  }
+
+  func recordExecution(
+    _ request: RoutineRemoteExecutionRequest
+  ) async throws {
+    executionRequests.append(request)
   }
 }
 

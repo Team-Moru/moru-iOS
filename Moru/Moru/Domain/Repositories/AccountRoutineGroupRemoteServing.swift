@@ -6,6 +6,11 @@
 import Foundation
 
 nonisolated protocol AccountRoutineGroupRemoteServing: Sendable {
+  func createRoutineGroup(
+    _ submission: ServerRoutineGroupCreateSubmission,
+    memberID: Int64
+  ) async throws -> ServerRoutineGroupDetail
+
   func fetchRoutineGroups(
     memberID: Int64
   ) async throws -> [ServerRoutineGroupSummary]
