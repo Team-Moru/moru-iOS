@@ -328,12 +328,10 @@ final class OptionalLoginEntryTests: XCTestCase {
     XCTAssertEqual(
       identifiers,
       [
-        AccountEntryAccessibility.titleIdentifier,
-        AccountEntryAccessibility.guidanceIdentifier,
         AccountEntryAccessibility.statusIdentifier,
-        AccountEntryAccessibility.appleIdentifier,
         AccountEntryAccessibility.googleIdentifier,
         AccountEntryAccessibility.kakaoIdentifier,
+        AccountEntryAccessibility.appleIdentifier,
         AccountEntryAccessibility.guestIdentifier,
         AccountEntryAccessibility.mainIdentifier,
         AccountEntryAccessibility.privacyIdentifier,

@@ -177,12 +177,10 @@ nonisolated enum AccountEntryAccessibility {
   static let supportIdentifier = "account-entry.support"
 
   static let voiceOverOrder = [
-    titleIdentifier,
-    guidanceIdentifier,
     statusIdentifier,
-    appleIdentifier,
     googleIdentifier,
     kakaoIdentifier,
+    appleIdentifier,
     guestIdentifier,
     mainIdentifier,
     privacyIdentifier,
@@ -239,30 +237,36 @@ struct AccountEntryView: View {
       ZStack {
         accountEntryBackground
 
-        VStack(spacing: 0) {
-          Spacer()
-            .frame(height: max(160, proxy.size.height * 0.275))
+        ScrollView(showsIndicators: false) {
+          VStack(spacing: 0) {
+            Spacer()
+              .frame(height: max(160, proxy.size.height * 0.275))
 
-          brand
-            .accessibilitySortPriority(9)
+            brand
+              .accessibilitySortPriority(9)
 
-          Spacer(minLength: 24)
+            Spacer(minLength: 24)
 
-          VStack(spacing: MoruPilotSpacing.sixteen) {
-            if viewModel.status != .idle {
-              statusView
-                .accessibilitySortPriority(6)
+            VStack(spacing: MoruPilotSpacing.sixteen) {
+              if viewModel.status != .idle {
+                statusView
+                  .accessibilitySortPriority(6)
+              }
+
+              providerButtons
+
+              continueWithoutLoginButton
+                .accessibilitySortPriority(2)
+
+              policyLinks
+                .accessibilityElement(children: .contain)
+                .accessibilitySortPriority(1)
             }
-
-            providerButtons
-
-            continueWithoutLoginButton
-              .accessibilitySortPriority(2)
+            .padding(.horizontal, MoruPilotSpacing.twenty)
+            .padding(.bottom, max(56, proxy.safeAreaInsets.bottom + 48))
           }
-          .padding(.horizontal, MoruPilotSpacing.twenty)
-          .padding(.bottom, max(56, proxy.safeAreaInsets.bottom + 48))
+          .frame(maxWidth: .infinity, minHeight: proxy.size.height)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
     .accessibilityElement(children: .contain)
@@ -382,26 +386,16 @@ struct AccountEntryView: View {
   private var providerButtons: some View {
     HStack(spacing: MoruPilotSpacing.twenty) {
       googleButton
-        .accessibilitySortPriority(4)
-
       kakaoButton
-        .accessibilitySortPriority(3)
-
       appleButton
-        .accessibilitySortPriority(5)
     }
     .frame(maxWidth: .infinity)
+    .accessibilityElement(children: .contain)
+    .accessibilitySortPriority(5)
   }
 
   private var appleButton: some View {
     ZStack {
-      AccountEntrySocialIconButton(
-        provider: .apple,
-        isLoading: viewModel.activeProvider == .apple,
-        isDisabled: appleButtonDisabled
-      ) {}
-      .accessibilityHidden(true)
-
       SignInWithAppleButton(.continue) { request in
         guard viewModel.authorizationWillBegin(provider: .apple) else {
           return
@@ -420,11 +414,18 @@ struct AccountEntryView: View {
       .signInWithAppleButtonStyle(.black)
       .frame(width: 56, height: 56)
       .clipShape(Circle())
-      .opacity(0.02)
       .disabled(appleButtonDisabled)
       .accessibilityLabel("Apple로 계속하기")
       .accessibilityHint(appleAccessibilityHint)
       .accessibilityIdentifier(AccountEntryAccessibility.appleIdentifier)
+
+      AccountEntrySocialIconButton(
+        provider: .apple,
+        isLoading: viewModel.activeProvider == .apple,
+        isDisabled: appleButtonDisabled
+      ) {}
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
     }
     .frame(width: 56, height: 56)
   }
@@ -470,7 +471,7 @@ struct AccountEntryView: View {
   }
 
   private var continueWithoutLoginButton: some View {
-    Button("이미 계정이 있어요") {
+    Button("로그인 없이 시작하기") {
       onContinueWithoutLogin()
     }
     .font(AppFont.pretendardMedium(size: 14, relativeTo: .callout))
@@ -513,14 +514,12 @@ struct AccountEntryView: View {
           url: policyConfiguration.mainURL,
           identifier: AccountEntryAccessibility.mainIdentifier
         )
-        .accessibilitySortPriority(3)
 
         policyLink(
           title: "개인정보처리방침",
           url: policyConfiguration.privacyPolicyURL,
           identifier: AccountEntryAccessibility.privacyIdentifier
         )
-        .accessibilitySortPriority(2)
       }
 
       HStack(spacing: MoruPilotSpacing.sixteen) {
@@ -529,14 +528,12 @@ struct AccountEntryView: View {
           url: policyConfiguration.termsOfServiceURL,
           identifier: AccountEntryAccessibility.termsIdentifier
         )
-        .accessibilitySortPriority(1)
 
         policyLink(
           title: "고객지원",
           url: policyConfiguration.supportURL,
           identifier: AccountEntryAccessibility.supportIdentifier
         )
-        .accessibilitySortPriority(0)
       }
 
       if !policyConfiguration.isReady {
