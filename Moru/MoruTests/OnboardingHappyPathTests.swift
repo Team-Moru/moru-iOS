@@ -316,6 +316,15 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(OnboardingDuration.roundedMinutes(for: routine.steps[1].estimatedSeconds), 1)
     XCTAssertEqual(OnboardingDuration.totalMinutes(for: routine), 3)
   }
+
+  @MainActor
+  func testOnboardingClockProgressReflectsExpectedRoutineMinutes() {
+    XCTAssertEqual(OnboardingDuration.clockProgress(forMinutes: 24), 0.4)
+    XCTAssertEqual(OnboardingDuration.clockProgress(forMinutes: 60), 1)
+    XCTAssertEqual(OnboardingDuration.clockProgress(forMinutes: 90), 1)
+    XCTAssertEqual(OnboardingDuration.clockProgress(forMinutes: -1), 0)
+  }
+
   @MainActor
   func testSwiftDataRelaunchPersistenceAfterOnboardingCompletion() async throws {
     let temporaryDirectory = FileManager.default.temporaryDirectory
