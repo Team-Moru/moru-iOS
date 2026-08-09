@@ -493,7 +493,7 @@ private struct RoutineDurationClockView: View {
         .fill(AppColor.grayWhite.opacity(0.8))
         .frame(width: 4, height: 76)
         .offset(y: -38)
-        .rotationEffect(.degrees(-90 + Double(displayedProgress) * 360))
+        .rotationEffect(.degrees(Double(displayedProgress) * 360))
 
       Circle()
         .fill(MoruPilotColor.accentSoft)
