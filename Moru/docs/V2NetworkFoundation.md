@@ -182,7 +182,7 @@ DTO에서 `String`으로 받은 뒤 Mapper에서 검증합니다.
 -> SwiftData에 먼저 저장
 -> 로그인 상태면 같은 transaction에 typed Outbox intent 저장
 -> `waitingForServerContract`로 보관
--> 현재는 sender가 없으므로 서버 write를 호출하지 않음
+-> contract-gated sender core만 있고 production transport/trigger는 없어 서버 write를 호출하지 않음
 ```
 
 가져오기 흐름은 다음과 같습니다.
@@ -215,7 +215,7 @@ remote metadata를 제거합니다. 서버 식별자를 기존 모델의 문자�
 
 현재 CRUD는 로그인 중에만 Outbox intent까지 저장할 수 있습니다. 그러나
 서버가 client entity ID, idempotency, reconciliation, 안전한 삭제와 단일 활성
-계약을 제공하기 전에는 sender를 구현하거나 자동 양방향 동기화를 켜지 않습니다.
+계약을 제공하기 전에는 production transport나 자동 양방향 동기화를 켜지 않습니다.
 현재 Outbox 항목은 `waitingForServerContract`로만 저장하며 자동 전송하지
 않습니다. timeout처럼 서버 반영 여부를 알 수 없는 결과는
 `needsReconciliation`로 전환하고 자동 재시도하지 않습니다.

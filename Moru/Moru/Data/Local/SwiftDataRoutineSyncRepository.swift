@@ -257,7 +257,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       if persisted.payloadVersion == mutation.payloadVersion, persisted.payload == payload {
         return try makeMutation(persisted)
       }
-      if persisted.stateRawValue == RoutineSyncMutationState.needsReconciliation.rawValue {
+      if persisted.stateRawValue == RoutineSyncMutationState.needsReconciliation.rawValue,
+         try makeAttempt(persisted) == nil {
         throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: persisted.id)
       }
 
@@ -267,7 +268,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       persisted.generation = max(1, persisted.generation + 1)
       // An older snapshot is still in-flight. Do not overwrite it or make the
       // newer desired value deliverable until that result is settled.
-      if persisted.stateRawValue != RoutineSyncMutationState.attempting.rawValue {
+      if persisted.stateRawValue != RoutineSyncMutationState.attempting.rawValue,
+         persisted.stateRawValue != RoutineSyncMutationState.needsReconciliation.rawValue {
         persisted.stateRawValue = initialState(for: mutation.operation).rawValue
       }
       persisted.updatedAt = date
@@ -400,6 +402,40 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     return attempt
   }
 
+  func admitEligibleMutations(
+    memberID: Int64,
+    contract: RoutineSyncServerContract,
+    at date: Date = Date()
+  ) throws -> [RoutineSyncMutation] {
+    try validate(memberID: memberID)
+    guard contract.serverNamespace == serverNamespace else { return [] }
+    let persisted = try persistedMutations(memberID: memberID)
+    _ = try persisted.map(makeMutation)
+    var admitted: [PersistedRoutineSyncMutation] = []
+    do {
+      for mutation in persisted {
+        guard mutation.stateRawValue == RoutineSyncMutationState.waitingForServerContract.rawValue,
+              let operation = RoutineSyncOperation(rawValue: mutation.operationRawValue),
+              contract.supports(operation),
+              try dependenciesAreSatisfied(for: mutation, among: persisted, memberID: memberID)
+        else { continue }
+        mutation.stateRawValue = RoutineSyncMutationState.queued.rawValue
+        mutation.updatedAt = date
+        admitted.append(mutation)
+      }
+      guard !admitted.isEmpty else { return [] }
+      try modelContext.save()
+      return try admitted.map(makeMutation).sorted {
+        $0.createdAt == $1.createdAt
+          ? $0.id.uuidString < $1.id.uuidString
+          : $0.createdAt < $1.createdAt
+      }
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
+  }
+
   func recoverInterruptedAttempts(at date: Date = Date()) throws {
     let attempting = try allPersistedMutations().filter {
       $0.stateRawValue == RoutineSyncMutationState.attempting.rawValue
@@ -429,6 +465,67 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     persisted.stateRawValue = RoutineSyncMutationState.needsReconciliation.rawValue
     persisted.updatedAt = date
     try saveOrRollback()
+  }
+
+  func resolveNotCommitted(
+    id: UUID,
+    expectedGenerationID: UUID,
+    at date: Date = Date()
+  ) throws {
+    guard let persisted = try persistedMutation(id: id),
+          persisted.attemptedGenerationID == expectedGenerationID,
+          try makeAttempt(persisted) != nil else { return }
+    do {
+      let operation = try operation(of: persisted)
+      switch operation {
+      case .createRoutineGroup:
+        if try hasDeleteSuccessor(
+          operation: .deleteRoutineGroup,
+          localEntityID: persisted.localEntityID,
+          among: try persistedMutations(memberID: persisted.memberID)
+        ) {
+          try stageDiscardNeverCommittedGroup(
+            memberID: persisted.memberID,
+            groupLocalID: persisted.localEntityID
+          )
+          try modelContext.save()
+          return
+        }
+        guard case .createRoutineGroup(let desired) = try typedCommand(
+          from: persisted.payload
+        ) else {
+          throw RoutineSyncRepositoryError.invalidPayload
+        }
+        try stageDiscardUnprojectableExecutions(
+          memberID: persisted.memberID,
+          groupLocalID: desired.localID,
+          desiredRoutineLocalIDs: Set(desired.routines.map(\.localID))
+        )
+      case .addRoutine:
+        if try hasDeleteSuccessor(
+          operation: .deleteRoutine,
+          localEntityID: persisted.localEntityID,
+          among: try persistedMutations(memberID: persisted.memberID)
+        ) {
+          try stageDiscardNeverCommittedRoutine(
+            memberID: persisted.memberID,
+            routineLocalID: persisted.localEntityID
+          )
+          try modelContext.save()
+          return
+        }
+      case .setRoutineGroupActive, .deleteRoutineGroup, .deleteRoutine,
+           .saveRoutineExecution:
+        break
+      }
+      clearAttempt(persisted)
+      persisted.stateRawValue = initialState(for: operation).rawValue
+      persisted.updatedAt = date
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
   }
 
   func removeCompleted(id: UUID, expectedGenerationID: UUID) throws {
@@ -834,6 +931,232 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         ),
         at: date
       )
+    }
+  }
+
+  private func dependenciesAreSatisfied(
+    for mutation: PersistedRoutineSyncMutation,
+    among mutations: [PersistedRoutineSyncMutation],
+    memberID: Int64
+  ) throws -> Bool {
+    guard let command = try? typedCommand(from: mutation.payload) else {
+      return false
+    }
+    let others = mutations.filter { $0.id != mutation.id }
+
+    func hasMutation(
+      operation: RoutineSyncOperation,
+      entityKind: RoutineSyncEntityKind,
+      localEntityID: UUID
+    ) -> Bool {
+      others.contains {
+        $0.operationRawValue == operation.rawValue
+          && $0.entityKindRawValue == entityKind.rawValue
+          && $0.localEntityID == localEntityID
+      }
+    }
+
+    func hasCreate(_ groupLocalID: UUID) -> Bool {
+      hasMutation(
+        operation: .createRoutineGroup,
+        entityKind: .routineGroup,
+        localEntityID: groupLocalID
+      )
+    }
+
+    func hasExecution(groupLocalID: UUID? = nil, routineLocalID: UUID? = nil) -> Bool {
+      others.contains { candidate in
+        guard candidate.operationRawValue == RoutineSyncOperation.saveRoutineExecution.rawValue,
+              case .saveRoutineExecution(let execution) = try? typedCommand(
+                from: candidate.payload
+              ) else { return false }
+        return (groupLocalID == nil || execution.groupLocalID == groupLocalID)
+          && (routineLocalID == nil || execution.routineLocalID == routineLocalID)
+      }
+    }
+
+    switch command {
+    case .createRoutineGroup(let group):
+      return try binding(
+        memberID: memberID,
+        entityKind: .routineGroup,
+        localEntityID: group.localID
+      ) == nil
+
+    case .addRoutine(let groupLocalID, _):
+      guard !hasCreate(groupLocalID) else { return false }
+      return try binding(
+        memberID: memberID,
+        entityKind: .routineGroup,
+        localEntityID: groupLocalID
+      ) != nil
+
+    case .selectActiveRoutineGroup(let selectedGroupLocalID):
+      guard let selectedGroupLocalID else { return true }
+      guard !hasCreate(selectedGroupLocalID) else { return false }
+      return try binding(
+        memberID: memberID,
+        entityKind: .routineGroup,
+        localEntityID: selectedGroupLocalID
+      ) != nil
+
+    case .deleteRoutineGroup(let groupLocalID):
+      guard !hasCreate(groupLocalID), try binding(
+        memberID: memberID,
+        entityKind: .routineGroup,
+        localEntityID: groupLocalID
+      ) != nil else { return false }
+      for candidate in others {
+        guard let otherCommand = try? typedCommand(from: candidate.payload) else {
+          return false
+        }
+        switch otherCommand {
+        case .addRoutine(let candidateGroupID, _) where candidateGroupID == groupLocalID:
+          return false
+        case .deleteRoutine(let candidateGroupID, let candidateRoutineID):
+          if candidateGroupID == groupLocalID {
+            return false
+          }
+          if candidateGroupID == nil,
+             let childBinding = try binding(
+               memberID: memberID,
+               entityKind: .routine,
+               localEntityID: candidateRoutineID
+             ), childBinding.parentEntityKind == .routineGroup,
+             childBinding.parentLocalEntityID == groupLocalID {
+            return false
+          }
+        case .saveRoutineExecution(let execution) where execution.groupLocalID == groupLocalID:
+          return false
+        case .selectActiveRoutineGroup:
+          return false
+        default:
+          continue
+        }
+      }
+      return true
+
+    case .deleteRoutine(let groupLocalID, let routineLocalID):
+      guard let routineBinding = try binding(
+        memberID: memberID,
+        entityKind: .routine,
+        localEntityID: routineLocalID
+      ), !hasMutation(
+        operation: .addRoutine,
+        entityKind: .routine,
+        localEntityID: routineLocalID
+      ), !hasExecution(routineLocalID: routineLocalID) else { return false }
+      if let groupLocalID {
+        return !hasCreate(groupLocalID)
+          && routineBinding.parentEntityKind == .routineGroup
+          && routineBinding.parentLocalEntityID == groupLocalID
+      }
+      return true
+
+    case .saveRoutineExecution(let execution):
+      guard !hasCreate(execution.groupLocalID), !hasMutation(
+        operation: .addRoutine,
+        entityKind: .routine,
+        localEntityID: execution.routineLocalID
+      ) else { return false }
+      guard let routineBinding = try binding(
+        memberID: memberID,
+        entityKind: .routine,
+        localEntityID: execution.routineLocalID
+      ) else { return false }
+      return routineBinding.parentEntityKind == .routineGroup
+        && routineBinding.parentLocalEntityID == execution.groupLocalID
+    }
+  }
+
+  private func hasDeleteSuccessor(
+    operation: RoutineSyncOperation,
+    localEntityID: UUID,
+    among mutations: [PersistedRoutineSyncMutation]
+  ) throws -> Bool {
+    try mutations.contains { mutation in
+      _ = try makeMutation(mutation)
+      return mutation.operationRawValue == operation.rawValue
+        && mutation.localEntityID == localEntityID
+    }
+  }
+
+  private func stageDiscardNeverCommittedGroup(
+    memberID: Int64,
+    groupLocalID: UUID
+  ) throws {
+    for mutation in try persistedMutations(memberID: memberID) {
+      guard let command = try? typedCommand(from: mutation.payload) else { continue }
+      let related: Bool
+      switch command {
+      case .createRoutineGroup(let group):
+        related = group.localID == groupLocalID
+      case .addRoutine(let candidateGroupID, _):
+        related = candidateGroupID == groupLocalID
+      case .selectActiveRoutineGroup(let selectedGroupID):
+        related = selectedGroupID == groupLocalID
+      case .deleteRoutineGroup(let candidateGroupID):
+        related = candidateGroupID == groupLocalID
+      case .deleteRoutine(let candidateGroupID, _):
+        related = candidateGroupID == groupLocalID
+      case .saveRoutineExecution(let execution):
+        related = execution.groupLocalID == groupLocalID
+      }
+      guard related else { continue }
+      let state = try makeMutation(mutation).state
+      let isCreatePredecessor = mutation.operationRawValue
+        == RoutineSyncOperation.createRoutineGroup.rawValue
+      guard isCreatePredecessor || state == .waitingForServerContract || state == .queued else {
+        throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: mutation.id)
+      }
+      modelContext.delete(mutation)
+    }
+  }
+
+  private func stageDiscardNeverCommittedRoutine(
+    memberID: Int64,
+    routineLocalID: UUID
+  ) throws {
+    for mutation in try persistedMutations(memberID: memberID) {
+      guard let command = try? typedCommand(from: mutation.payload) else { continue }
+      let related: Bool
+      switch command {
+      case .addRoutine(_, let routine):
+        related = routine.localID == routineLocalID
+      case .deleteRoutine(_, let candidateRoutineID):
+        related = candidateRoutineID == routineLocalID
+      case .saveRoutineExecution(let execution):
+        related = execution.routineLocalID == routineLocalID
+      case .createRoutineGroup, .selectActiveRoutineGroup, .deleteRoutineGroup:
+        related = false
+      }
+      guard related else { continue }
+      let state = try makeMutation(mutation).state
+      let isAddPredecessor = mutation.operationRawValue == RoutineSyncOperation.addRoutine.rawValue
+      guard isAddPredecessor || state == .waitingForServerContract || state == .queued else {
+        throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: mutation.id)
+      }
+      modelContext.delete(mutation)
+    }
+  }
+
+  private func stageDiscardUnprojectableExecutions(
+    memberID: Int64,
+    groupLocalID: UUID,
+    desiredRoutineLocalIDs: Set<UUID>
+  ) throws {
+    for mutation in try persistedMutations(memberID: memberID) {
+      guard case .saveRoutineExecution(let execution) = try? typedCommand(
+        from: mutation.payload
+      ), execution.groupLocalID == groupLocalID,
+        !desiredRoutineLocalIDs.contains(execution.routineLocalID) else { continue }
+      let state = try makeMutation(mutation).state
+      guard state == .waitingForServerContract || state == .queued else {
+        throw RoutineSyncRepositoryError.reconciliationRequired(
+          existingMutationID: mutation.id
+        )
+      }
+      modelContext.delete(mutation)
     }
   }
 

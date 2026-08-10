@@ -509,20 +509,127 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
-  func testDeleteRollbackKeepsLocalAndOutboxWhenCancellationCannotBeSafelyStaged() throws {
+  func testDeletingGroupDuringCreateAttemptKeepsLocalDeleteAndStagesSuccessor() throws {
     let fixture = try makeFixture(memberID: 7)
     let routine = makeRoutine(name: "보류", steps: [makeStep()], isActive: false)
     try fixture.routines.saveRoutine(routine)
     let mutation = try XCTUnwrap(try fixture.sync.mutations(memberID: 7).first)
-    try fixture.sync.markNeedsReconciliation(
-      id: mutation.id,
-      expectedGenerationID: mutation.generationID,
+    _ = try fixture.sync.admitEligibleMutations(
+      memberID: 7,
+      contract: verifiedServerContract,
       at: Date(timeIntervalSince1970: 20)
     )
+    _ = try XCTUnwrap(
+      fixture.sync.claimForDelivery(
+        id: mutation.id,
+        at: Date(timeIntervalSince1970: 21)
+      )
+    )
 
-    XCTAssertThrowsError(try fixture.routines.deleteRoutine(id: routine.id))
-    XCTAssertNotNil(try fixture.routines.routine(id: routine.id))
-    XCTAssertEqual(try fixture.sync.mutations(memberID: 7).first?.id, mutation.id)
+    try fixture.routines.deleteRoutine(id: routine.id)
+
+    XCTAssertNil(try fixture.routines.routine(id: routine.id))
+    let remaining = try fixture.sync.mutations(memberID: 7)
+    XCTAssertEqual(Set(remaining.map(\.operation)), [.createRoutineGroup, .deleteRoutineGroup])
+    XCTAssertEqual(
+      remaining.first { $0.operation == .createRoutineGroup }?.state,
+      .attempting
+    )
+    XCTAssertEqual(
+      remaining.first { $0.operation == .deleteRoutineGroup }?.state,
+      .waitingForServerContract
+    )
+  }
+
+  @MainActor
+  func testDeletingChildDuringAddAttemptStagesDeleteAfterAdd() throws {
+    let fixture = try makeFixture(memberID: nil)
+    let retained = makeStep(title: "기존", order: 0)
+    var routine = makeRoutine(name: "그룹", steps: [retained], isActive: false)
+    try fixture.routines.saveRoutine(routine)
+    fixture.member.signedInMemberID = 7
+    _ = try fixture.sync.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: routine.id,
+      at: Date(timeIntervalSince1970: 10)
+    )
+    let added = makeStep(title: "추가 중", order: 1)
+    routine.steps.append(added)
+    routine.updatedAt = Date(timeIntervalSince1970: 20)
+    try fixture.routines.saveRoutine(routine)
+    let add = try XCTUnwrap(try fixture.sync.mutations(memberID: 7).first)
+    _ = try fixture.sync.admitEligibleMutations(
+      memberID: 7,
+      contract: verifiedServerContract,
+      at: Date(timeIntervalSince1970: 21)
+    )
+    _ = try XCTUnwrap(
+      fixture.sync.claimForDelivery(id: add.id, at: Date(timeIntervalSince1970: 22))
+    )
+
+    routine.steps.removeAll { $0.id == added.id }
+    routine.updatedAt = Date(timeIntervalSince1970: 30)
+    try fixture.routines.saveRoutine(routine)
+
+    XCTAssertEqual(try fixture.routines.routine(id: routine.id)?.steps, [retained])
+    let remaining = try fixture.sync.mutations(memberID: 7)
+    XCTAssertEqual(Set(remaining.map(\.operation)), [.addRoutine, .deleteRoutine])
+    XCTAssertEqual(remaining.first { $0.operation == .addRoutine }?.state, .attempting)
+    XCTAssertEqual(
+      remaining.first { $0.operation == .deleteRoutine }?.state,
+      .waitingForServerContract
+    )
+  }
+
+  @MainActor
+  func testPartialCreateMappingPreservesLatestCRUDChildGraph() throws {
+    let fixture = try makeFixture(memberID: 7)
+    let original = makeStep(title: "원래", order: 0)
+    var routine = makeRoutine(name: "부분 매핑", steps: [original], isActive: false)
+    try fixture.routines.saveRoutine(routine)
+    let create = try XCTUnwrap(try fixture.sync.mutations(memberID: 7).first)
+    _ = try fixture.sync.admitEligibleMutations(
+      memberID: 7,
+      contract: verifiedServerContract,
+      at: Date(timeIntervalSince1970: 10)
+    )
+    _ = try XCTUnwrap(
+      fixture.sync.claimForDelivery(id: create.id, at: Date(timeIntervalSince1970: 11))
+    )
+    try fixture.sync.completeCreateRoutineGroup(
+      id: create.id,
+      expectedGenerationID: create.generationID,
+      assignments: [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: routine.id,
+          remoteID: 41
+        )
+      ],
+      childMappingsComplete: false,
+      at: Date(timeIntervalSince1970: 12)
+    )
+
+    let added = makeStep(title: "나중 추가", order: 1)
+    routine.steps.append(added)
+    routine.updatedAt = Date(timeIntervalSince1970: 20)
+    try fixture.routines.saveRoutine(routine)
+    let reconciled = try XCTUnwrap(
+      try fixture.sync.mutation(
+        memberID: 7,
+        operation: .createRoutineGroup,
+        entityKind: .routineGroup,
+        localEntityID: routine.id
+      )
+    )
+    XCTAssertEqual(reconciled.state, .needsReconciliation)
+    XCTAssertEqual(
+      try decodedCommand(reconciled),
+      .createRoutineGroup(RoutineSyncGroupSnapshot(routine: routine))
+    )
   }
 
   @MainActor
@@ -676,6 +783,10 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
 
   private func decodedCommand(_ mutation: RoutineSyncMutation) throws -> RoutineSyncCommand {
     try JSONDecoder().decode(RoutineSyncCommand.self, from: mutation.payload)
+  }
+
+  private var verifiedServerContract: RoutineSyncServerContract {
+    RoutineSyncServerContract(capabilities: .allRequired, isE2EVerified: true)
   }
 }
 
