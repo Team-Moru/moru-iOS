@@ -120,11 +120,11 @@ final class RecommendedRoutineCreationTests: XCTestCase {
   }
 
   @MainActor
-  func testWeekdayConflictCanBeResolvedThroughExistingMutationPath()
+  func testNonOverlappingActiveRoutineRequiresConfirmationAndPreservesExistingSchedule()
     async throws {
     let existingRoutine = makeRoutine(
       name: "기존 루틴",
-      weekdays: [.monday, .wednesday]
+      weekdays: [.monday]
     )
     let repository = MockRoutineRepository(routines: [existingRoutine])
     let useCase = RecommendedRoutineCreationUseCase(
@@ -134,24 +134,29 @@ final class RecommendedRoutineCreationTests: XCTestCase {
       from: RoutineSuggestionInput(
         goalTags: ["health"],
         selectedKeywords: ["스트레칭"],
-        weekdays: [.wednesday, .friday]
+        weekdays: [.friday]
       )
     )
     let request = RecommendedRoutineCreationRequest(
       routine: suggestedRoutine,
       alarmHour: 7,
       alarmMinute: 20,
-      selectedWeekdays: [.wednesday, .friday]
+      selectedWeekdays: [.friday]
     )
 
-    XCTAssertEqual(
-      try useCase.weekdayConflict(for: request),
-      [.wednesday]
-    )
+    let conflict = try XCTUnwrap(try useCase.activeRoutineConflict(for: request))
+    XCTAssertEqual(conflict.activeRoutineIDs, [existingRoutine.id])
+
+    do {
+      _ = try await useCase.execute(request)
+      XCTFail("An active routine replacement must be confirmed.")
+    } catch let error as RoutineSettingError {
+      XCTAssertEqual(error, .activeRoutineReplacementRequired)
+    }
 
     _ = try await useCase.execute(
       request,
-      resolvingWeekdayConflict: true
+      replacingActiveRoutine: true
     )
 
     let savedExisting = try XCTUnwrap(
@@ -160,17 +165,22 @@ final class RecommendedRoutineCreationTests: XCTestCase {
     let savedRecommended = try XCTUnwrap(
       try repository.routine(id: suggestedRoutine.id)
     )
+    XCTAssertFalse(savedExisting.isActive)
+    XCTAssertFalse(savedExisting.alarmSchedule?.isEnabled ?? true)
     XCTAssertEqual(savedExisting.alarmSchedule?.weekdays, [.monday])
+    XCTAssertTrue(savedRecommended.isActive)
     XCTAssertEqual(
       savedRecommended.alarmSchedule?.weekdays,
-      [.wednesday, .friday]
+      [.friday]
     )
   }
 
   @MainActor
   func testConflictResolutionIgnoresDuplicateSaveRequests() async {
     let useCase = RecommendedRoutineCreationUseCaseSpy()
-    useCase.conflictingWeekdays = [.monday]
+    useCase.activeRoutineConflict = RoutineActivationConflictState(
+      activeRoutineIDs: [UUID()]
+    )
     let viewModel = OnboardingViewModel(
       flowMode: .recommendedAddition,
       step: .alarm,
@@ -180,14 +190,37 @@ final class RecommendedRoutineCreationTests: XCTestCase {
 
     XCTAssertTrue(viewModel.refreshPreview())
     await viewModel.completeButtonDidTap()
-    XCTAssertNotNil(viewModel.weekdayConflict)
+    XCTAssertNotNil(viewModel.activeRoutineConflict)
 
-    viewModel.resolveWeekdayConflictButtonDidTap()
-    viewModel.resolveWeekdayConflictButtonDidTap()
+    viewModel.replaceActiveRoutineButtonDidTap()
+    viewModel.replaceActiveRoutineButtonDidTap()
     await Task.yield()
     await Task.yield()
 
     XCTAssertEqual(useCase.executeRequests.count, 1)
+  }
+
+  @MainActor
+  func testKeepingExistingActiveRoutineDoesNotWriteRecommendedRoutine() async {
+    let useCase = RecommendedRoutineCreationUseCaseSpy()
+    useCase.activeRoutineConflict = RoutineActivationConflictState(
+      activeRoutineIDs: [UUID()]
+    )
+    let viewModel = OnboardingViewModel(
+      flowMode: .recommendedAddition,
+      step: .alarm,
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      recommendedRoutineCreationUseCase: useCase
+    )
+
+    XCTAssertTrue(viewModel.refreshPreview())
+    await viewModel.completeButtonDidTap()
+    XCTAssertNotNil(viewModel.activeRoutineConflict)
+
+    viewModel.keepExistingActiveRoutineButtonDidTap()
+
+    XCTAssertNil(viewModel.activeRoutineConflict)
+    XCTAssertEqual(useCase.executeRequests.count, 0)
   }
 
   @MainActor
@@ -213,7 +246,7 @@ final class RecommendedRoutineCreationTests: XCTestCase {
 
     let result = try await useCase.execute(
       request,
-      resolvingWeekdayConflict: false
+      replacingActiveRoutine: false
     )
 
     XCTAssertTrue(result.requiresAlarmRepair)
@@ -282,7 +315,7 @@ final class RecommendedRoutineCreationTests: XCTestCase {
           alarmMinute: 25,
           selectedWeekdays: [.tuesday, .thursday]
         ),
-        resolvingWeekdayConflict: false
+        replacingActiveRoutine: false
       )
     }
 
@@ -361,27 +394,27 @@ private final class RecommendedRoutineCreationUseCaseSpy:
   private(set) var executeRequests: [
     (
       request: RecommendedRoutineCreationRequest,
-      resolvingWeekdayConflict: Bool
+      replacingActiveRoutine: Bool
     )
   ] = []
-  var conflictingWeekdays: Set<Weekday> = []
+  var activeRoutineConflict: RoutineActivationConflictState?
   let result = RecommendedRoutineCreationResult(
     routineID: UUID(),
     requiresAlarmRepair: false
   )
 
-  func weekdayConflict(
+  func activeRoutineConflict(
     for request: RecommendedRoutineCreationRequest
-  ) throws -> Set<Weekday> {
+  ) throws -> RoutineActivationConflictState? {
     conflictRequests.append(request)
-    return conflictingWeekdays
+    return activeRoutineConflict
   }
 
   func execute(
     _ request: RecommendedRoutineCreationRequest,
-    resolvingWeekdayConflict: Bool
+    replacingActiveRoutine: Bool
   ) async throws -> RecommendedRoutineCreationResult {
-    executeRequests.append((request, resolvingWeekdayConflict))
+    executeRequests.append((request, replacingActiveRoutine))
     return result
   }
 }

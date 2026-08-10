@@ -63,10 +63,10 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       "월 화 수 목 금・09시 00분"
     )
     XCTAssertEqual(
-      RoutineManagementCopy.weekdayConflictMessage(
-        RoutineWeekdayConflictState(conflictingWeekdays: [.wednesday])
+      RoutineManagementCopy.activeRoutineReplacementMessage(
+        RoutineActivationConflictState(activeRoutineIDs: [UUID()])
       ),
-      "수요일로 알림이 설정된\n다른 루틴이 이미 있어요.\n해당 루틴으로 요일을 변경하시겠어요?"
+      "다른 사용 중인 루틴이 1개 있어요.\n이 루틴으로 바꾸면 기존 루틴과 알람이 꺼져요.\n기존 요일 설정은 그대로 남아요."
     )
   }
 
@@ -174,11 +174,11 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
     case .weekdayConflict:
       AnyView(
         dialogStage(
-          title: "다른 루틴에서 사용 중",
-          message: RoutineManagementCopy.weekdayConflictMessage(
-            RoutineWeekdayConflictState(conflictingWeekdays: [.wednesday])
+          title: "다른 루틴을 끌까요?",
+          message: RoutineManagementCopy.activeRoutineReplacementMessage(
+            RoutineActivationConflictState(activeRoutineIDs: [UUID()])
           ),
-          primaryTitle: "괜찮아요",
+          primaryTitle: "취소",
           secondaryTitle: "변경하기"
         )
       )
@@ -223,7 +223,7 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       draft: draft,
       initialScheduleExpanded: initialScheduleExpanded,
       onSave: { _ in true },
-      onResolveWeekdayConflict: { _ in true },
+      onReplaceActiveRoutine: { _ in true },
       onDelete: { _ in true }
     )
   }
@@ -509,9 +509,9 @@ private enum RoutineManagementVisualBaseline {
     "step-edit-light-M.png":
       "AAAAAEBBggaTBMgAwAPEAxACZSMDAwIAAADAAMIA6ALAhOMY4RjhGIAEgADDBMMk4IDEzMDAggCDAgAAEAFABA==",
     "weekday-conflict-light-AX3.png":
-      "AAAAAAYDyXTZbNl0ZlRo2QqPOys7IzuLj0ePRxE/OzcNhw2HHUckuzSzMacAxyDjRednp2Sx83jBdOBgYgEAAA==",
+      "AAAgAMgUyWzZZGk0Ag8ABz03HXcMB42HlSMlIw1HLUMpMzRjNmMGhxtHG0ccpw4HEOMYw2YJ4XDBdOBgYgEAAA==",
     "weekday-conflict-light-M.png":
-      "AAAAAEBBggaTBMgAwAPEAxADYiMwAsgAgA6MRxpHD0ecRxEHEGcZZ1Af0gRYDlANoQJQDVAN5QDAxMDEYAFABA==",
+      "AAAAAEBBggaTBMgAwAPEAxADYiMwAsgAgA6MBx9HHSe8ox7HEGcZZ1Af0gRYDlANoQJQDVAN5QDAxMDEYAFABA==",
   ]
 }
 

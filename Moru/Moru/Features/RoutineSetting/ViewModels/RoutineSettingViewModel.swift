@@ -111,11 +111,11 @@ final class RoutineSettingViewModel {
   }
 
   @discardableResult
-  func saveDraftResolvingWeekdayConflict(_ draft: RoutineDraftState) async -> Bool {
+  func saveDraftReplacingActiveRoutine(_ draft: RoutineDraftState) async -> Bool {
     do {
       let result = try await routineSettingUseCase.saveRoutine(
         from: makeMutation(from: draft),
-        resolvingWeekdayConflict: true
+        replacingActiveRoutine: true
       )
       load()
       reportAlarmRepairIfNeeded(result)
@@ -126,22 +126,24 @@ final class RoutineSettingViewModel {
     }
   }
 
-  func weekdayConflict(for draft: RoutineDraftState) -> RoutineWeekdayConflictState? {
+  func activeRoutineConflict(
+    for draft: RoutineDraftState
+  ) -> RoutineActivationConflictState? {
     guard draft.isActive else {
       return nil
     }
 
-    guard let conflictingWeekdays = try? routineSettingUseCase.weekdayConflict(
+    guard let activeRoutineIDs = try? routineSettingUseCase.activeRoutineConflictIDs(
       for: makeMutation(from: draft)
     ) else {
       return nil
     }
 
-    guard !conflictingWeekdays.isEmpty else {
+    guard !activeRoutineIDs.isEmpty else {
       return nil
     }
 
-    return RoutineWeekdayConflictState(conflictingWeekdays: conflictingWeekdays)
+    return RoutineActivationConflictState(activeRoutineIDs: activeRoutineIDs)
   }
 
   @discardableResult
@@ -160,22 +162,24 @@ final class RoutineSettingViewModel {
     }
   }
 
-  func activationConflict(for routineID: UUID) -> RoutineWeekdayConflictState? {
+  func activeRoutineConflict(
+    forActivationOf routineID: UUID
+  ) -> RoutineActivationConflictState? {
     guard var draft = makeDraft(for: routineID) else {
       return nil
     }
 
     draft.isActive = true
-    return weekdayConflict(for: draft)
+    return activeRoutineConflict(for: draft)
   }
 
   @discardableResult
-  func activateRoutineResolvingWeekdayConflict(id: UUID) async -> Bool {
+  func activateRoutineReplacingActiveRoutine(id: UUID) async -> Bool {
     do {
       let result = try await routineSettingUseCase.updateActivation(
         routineID: id,
         isActive: true,
-        resolvingWeekdayConflict: true
+        replacingActiveRoutine: true
       )
       load()
       reportAlarmRepairIfNeeded(result)

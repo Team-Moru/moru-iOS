@@ -18,24 +18,24 @@ struct RoutineCreationSheet: View {
   private let dependencies: DependencyContainer
   private let directDraft: RoutineDraftState
   private let onSave: (RoutineDraftState) async -> Bool
-  private let onResolveWeekdayConflict: (RoutineDraftState) async -> Bool
-  private let weekdayConflictState:
-    (RoutineDraftState) -> RoutineWeekdayConflictState?
+  private let onReplaceActiveRoutine: (RoutineDraftState) async -> Bool
+  private let activeRoutineConflictState:
+    (RoutineDraftState) -> RoutineActivationConflictState?
 
   init(
     dependencies: DependencyContainer,
     directDraft: RoutineDraftState,
     initialMode: RoutineCreationFlowMode? = nil,
     onSave: @escaping (RoutineDraftState) async -> Bool,
-    onResolveWeekdayConflict: @escaping (RoutineDraftState) async -> Bool,
-    weekdayConflictState:
-      @escaping (RoutineDraftState) -> RoutineWeekdayConflictState?
+    onReplaceActiveRoutine: @escaping (RoutineDraftState) async -> Bool,
+    activeRoutineConflictState:
+      @escaping (RoutineDraftState) -> RoutineActivationConflictState?
   ) {
     self.dependencies = dependencies
     self.directDraft = directDraft
     self.onSave = onSave
-    self.onResolveWeekdayConflict = onResolveWeekdayConflict
-    self.weekdayConflictState = weekdayConflictState
+    self.onReplaceActiveRoutine = onReplaceActiveRoutine
+    self.activeRoutineConflictState = activeRoutineConflictState
     _selectedMode = State(initialValue: initialMode)
   }
 
@@ -48,8 +48,8 @@ struct RoutineCreationSheet: View {
         RoutineEditorView(
           draft: directDraft,
           onSave: onSave,
-          onResolveWeekdayConflict: onResolveWeekdayConflict,
-          weekdayConflictState: weekdayConflictState
+          onReplaceActiveRoutine: onReplaceActiveRoutine,
+          activeRoutineConflictState: activeRoutineConflictState
         )
       case .onboarding:
         EmptyView()

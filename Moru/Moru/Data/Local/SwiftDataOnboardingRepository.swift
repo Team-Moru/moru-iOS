@@ -10,9 +10,17 @@ import SwiftData
 
 nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
   private let modelContext: ModelContext
+  private let routineSyncRepository: (any RoutineSyncRepository)?
+  private weak var signedInMemberProvider: (any SignedInMemberProviding)?
 
-  init(modelContext: ModelContext) {
+  init(
+    modelContext: ModelContext,
+    routineSyncRepository: (any RoutineSyncRepository)? = nil,
+    signedInMemberProvider: (any SignedInMemberProviding)? = nil
+  ) {
     self.modelContext = modelContext
+    self.routineSyncRepository = routineSyncRepository
+    self.signedInMemberProvider = signedInMemberProvider
   }
 
   @MainActor
@@ -33,10 +41,43 @@ nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
         modelContext.insert(SwiftDataMapper.makePersistedProfile(from: profile))
       }
 
-      if let persistedRoutine = try persistedRoutine(id: routine.id) {
+      let existingRoutine = try persistedRoutine(id: routine.id)
+      if let persistedRoutine = existingRoutine {
         SwiftDataMapper.update(persistedRoutine, with: routine, in: modelContext)
       } else {
         modelContext.insert(SwiftDataMapper.makePersistedRoutine(from: routine))
+      }
+
+      if routine.isActive {
+        try deactivateOtherActiveRoutines(except: routine.id, at: Date())
+      }
+
+      if let memberID = signedInMemberProvider?.signedInMemberID,
+         let routineSyncRepository {
+        let hasPendingCreate = try routineSyncRepository.mutation(
+          memberID: memberID,
+          operation: .createRoutineGroup,
+          entityKind: .routineGroup,
+          localEntityID: routine.id
+        ) != nil
+        if existingRoutine == nil || hasPendingCreate {
+          try routineSyncRepository.stageEnqueue(
+            EnqueuedRoutineSyncMutation(
+              memberID: memberID,
+              command: .createRoutineGroup(RoutineSyncGroupSnapshot(routine: routine))
+            ),
+            at: Date()
+          )
+          if routine.isActive {
+            try routineSyncRepository.stageEnqueue(
+              EnqueuedRoutineSyncMutation(
+                memberID: memberID,
+                command: .selectActiveRoutineGroup(selectedGroupLocalID: routine.id)
+              ),
+              at: Date()
+            )
+          }
+        }
       }
 
       try modelContext.save()
@@ -59,5 +100,21 @@ nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
     )
     descriptor.fetchLimit = 1
     return try modelContext.fetch(descriptor).first
+  }
+
+  @MainActor
+  private func deactivateOtherActiveRoutines(except routineID: UUID, at date: Date) throws {
+    let activeRoutines = try modelContext.fetch(
+      FetchDescriptor<PersistedRoutine>(predicate: #Predicate { $0.isActive })
+    )
+    for persisted in activeRoutines where persisted.id != routineID {
+      var routine = try SwiftDataMapper.makeDomainRoutine(from: persisted)
+      routine.isActive = false
+      // Keep its weekday settings but prevent another platform alarm from
+      // remaining armed while a different group becomes the single active one.
+      routine.alarmSchedule?.isEnabled = false
+      routine.updatedAt = date
+      SwiftDataMapper.update(persisted, with: routine, in: modelContext)
+    }
   }
 }

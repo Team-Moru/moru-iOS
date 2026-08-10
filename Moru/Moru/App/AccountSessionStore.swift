@@ -260,6 +260,81 @@ final class AccountSessionStore: ObservableObject {
     )
   }
 
+  /// Used only after a persisted, server-confirmed withdrawal cleanup. A
+  /// marker for account A must never remove newer account B's credentials.
+  @discardableResult
+  func removeStoredSessionIfMatching(memberID: Int64) throws -> Bool {
+    try removeLocalAccountSessionIfMatching(memberID: memberID)
+  }
+
+  /// Removes only the exact member captured before an async account-lifecycle
+  /// operation. If another account became active or replaced Keychain while
+  /// awaiting a provider callback, it deliberately does nothing.
+  @discardableResult
+  func removeLocalAccountSessionIfMatching(memberID: Int64) throws -> Bool {
+    let activeMemberID: Int64? = if case .signedIn(let account) = state {
+      account.memberID
+    } else {
+      nil
+    }
+    let storedCredentials = try credentialStore.load()
+    let storedMemberID = storedCredentials?.memberID
+
+    // Never touch an unrelated current session or its persisted credentials.
+    guard storedMemberID == nil || storedMemberID == memberID,
+          activeMemberID == nil || activeMemberID == memberID else {
+      return false
+    }
+    guard storedMemberID == memberID || activeMemberID == memberID else {
+      return false
+    }
+
+    if storedMemberID == memberID {
+      restorationGuard.blockRestoration()
+      do {
+        try credentialStore.remove()
+        restorationGuard.allowRestoration()
+      } catch {
+        if activeMemberID == memberID {
+          accessTokenProvider.remove()
+          state = .signedOut
+        }
+        throw error
+      }
+    }
+
+    if activeMemberID == memberID {
+      accessTokenProvider.remove()
+      state = .signedOut
+    }
+    return true
+  }
+
+  func isCurrentSession(matching memberID: Int64) -> Bool {
+    guard case .signedIn(let account) = state else {
+      return false
+    }
+    return account.memberID == memberID
+  }
+
+  /// Reads only the member identity needed to decide whether an ambiguous
+  /// withdrawal marker applies. It never returns credential/token material.
+  func hasStoredSession(matching memberIDs: [Int64]) throws -> Bool {
+    guard !memberIDs.isEmpty,
+          let credentials = try credentialStore.load() else {
+      return false
+    }
+    return memberIDs.contains(credentials.memberID)
+  }
+
+  /// Stops this launch from restoring credentials without deleting them.
+  /// Used when withdrawal state is ambiguous and only a later reconciliation
+  /// can decide whether the account still exists.
+  func deferRestorationWithoutDeletingCredentials() {
+    accessTokenProvider.remove()
+    state = .signedOut
+  }
+
   func removeLocalAccountSession() throws {
     restorationGuard.blockRestoration()
     let removalError: Error?

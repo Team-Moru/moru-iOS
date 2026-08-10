@@ -22,6 +22,7 @@ struct DependencyContainer {
   let accountServerRemoteService: (any AccountServerRemoteServing)?
   let accountRoutineGroupRemoteService:
     (any AccountRoutineGroupRemoteServing)?
+  let routineSyncRepository: (any RoutineSyncRepository)?
   let alarmPlatformStateRepository: (any AlarmPlatformStateRepository)?
   let alarmScheduleMutator: (any AlarmScheduleMutating)?
   let alarmRuntimeHandler: (any AlarmRuntimeHandling)?
@@ -47,6 +48,7 @@ struct DependencyContainer {
     accountServerRemoteService: (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
       (any AccountRoutineGroupRemoteServing)? = nil,
+    routineSyncRepository: (any RoutineSyncRepository)? = nil,
     alarmPlatformStateRepository: (any AlarmPlatformStateRepository)? = nil,
     alarmScheduleMutator: (any AlarmScheduleMutating)? = nil,
     alarmRuntimeHandler: (any AlarmRuntimeHandling)? = nil,
@@ -79,6 +81,7 @@ struct DependencyContainer {
     self.accountServerRemoteService = accountServerRemoteService
     self.accountRoutineGroupRemoteService =
       accountRoutineGroupRemoteService
+    self.routineSyncRepository = routineSyncRepository
     self.alarmPlatformStateRepository = alarmPlatformStateRepository
     self.alarmScheduleMutator = alarmScheduleMutator
     self.alarmRuntimeHandler = alarmRuntimeHandler
@@ -116,9 +119,18 @@ struct DependencyContainer {
     let voiceAvailabilityProbe = BundledVoiceAvailabilityProbe(
       resourceLoader: audioResourceLoader
     )
-    let routineRepository = SwiftDataRoutineRepository(modelContext: modelContext)
-    let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
+    let routineSyncRepository = SwiftDataRoutineSyncRepository(
       modelContext: modelContext
+    )
+    let routineRepository = SwiftDataRoutineRepository(
+      modelContext: modelContext,
+      routineSyncRepository: routineSyncRepository,
+      signedInMemberProvider: signedInMemberProvider
+    )
+    let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
+      modelContext: modelContext,
+      routineSyncRepository: routineSyncRepository,
+      signedInMemberProvider: signedInMemberProvider
     )
     let alarmStateRepository = SwiftDataAlarmPlatformStateRepository(
       modelContext: modelContext
@@ -170,7 +182,11 @@ struct DependencyContainer {
       routineRepository: routineRepository,
       routineRunRepository: swiftDataRoutineRunRepository,
       localProfileRepository: SwiftDataLocalProfileRepository(modelContext: modelContext),
-      onboardingRepository: SwiftDataOnboardingRepository(modelContext: modelContext),
+      onboardingRepository: SwiftDataOnboardingRepository(
+        modelContext: modelContext,
+        routineSyncRepository: routineSyncRepository,
+        signedInMemberProvider: signedInMemberProvider
+      ),
       routineSuggestionService: localSuggestionService,
       routineSuggestionCoordinator: routineSuggestionCoordinator,
       onboardingRecommendationCoordinator:
@@ -184,6 +200,7 @@ struct DependencyContainer {
       accountServerRemoteService: accountServerRemoteService,
       accountRoutineGroupRemoteService:
         accountRoutineGroupRemoteService,
+      routineSyncRepository: routineSyncRepository,
       alarmPlatformStateRepository: alarmStateRepository,
       alarmScheduleMutator: alarmScheduleMutator,
       alarmRuntimeHandler: alarmRuntimeHandler,

@@ -43,7 +43,7 @@ final class OnboardingViewModel: ObservableObject {
     }
   }
 
-  private(set) var weekdayConflict: RoutineWeekdayConflictState? {
+  private(set) var activeRoutineConflict: RoutineActivationConflictState? {
     willSet {
       objectWillChange.send()
     }
@@ -357,17 +357,17 @@ final class OnboardingViewModel: ObservableObject {
     cancelSuggestion()
   }
 
-  func keepExistingWeekdayScheduleButtonDidTap() {
-    weekdayConflict = nil
+  func keepExistingActiveRoutineButtonDidTap() {
+    activeRoutineConflict = nil
   }
 
-  func resolveWeekdayConflictButtonDidTap() {
+  func replaceActiveRoutineButtonDidTap() {
     guard flowMode == .recommendedAddition, !isSaving, !didComplete else {
       return
     }
 
     Task {
-      await saveRecommendedRoutine(resolvingWeekdayConflict: true)
+      await saveRecommendedRoutine(replacingActiveRoutine: true)
     }
   }
 
@@ -479,7 +479,7 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     guard flowMode == .onboarding else {
-      await saveRecommendedRoutine(resolvingWeekdayConflict: false)
+      await saveRecommendedRoutine(replacingActiveRoutine: false)
       return
     }
 
@@ -548,7 +548,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   private func saveRecommendedRoutine(
-    resolvingWeekdayConflict: Bool
+    replacingActiveRoutine: Bool
   ) async {
     guard !isSaving, !didComplete else {
       return
@@ -570,14 +570,11 @@ final class OnboardingViewModel: ObservableObject {
       includeFortune: draft.includeFortune
     )
 
-    if !resolvingWeekdayConflict {
+    if !replacingActiveRoutine {
       do {
-        let conflictingWeekdays = try recommendedRoutineCreationUseCase
-          .weekdayConflict(for: request)
-        if !conflictingWeekdays.isEmpty {
-          weekdayConflict = RoutineWeekdayConflictState(
-            conflictingWeekdays: conflictingWeekdays
-          )
+        if let conflict = try recommendedRoutineCreationUseCase
+          .activeRoutineConflict(for: request) {
+          activeRoutineConflict = conflict
           return
         }
       } catch {
@@ -588,12 +585,12 @@ final class OnboardingViewModel: ObservableObject {
 
     isSaving = true
     errorMessage = nil
-    weekdayConflict = nil
+    activeRoutineConflict = nil
 
     do {
       let result = try await recommendedRoutineCreationUseCase.execute(
         request,
-        resolvingWeekdayConflict: resolvingWeekdayConflict
+        replacingActiveRoutine: replacingActiveRoutine
       )
       didComplete = true
       isSaving = false

@@ -38,13 +38,13 @@ enum RecommendedRoutineCreationError: Error, Equatable, LocalizedError {
 
 @MainActor
 protocol RecommendedRoutineCreationUseCaseProtocol: AnyObject {
-  func weekdayConflict(
+  func activeRoutineConflict(
     for request: RecommendedRoutineCreationRequest
-  ) throws -> Set<Weekday>
+  ) throws -> RoutineActivationConflictState?
 
   func execute(
     _ request: RecommendedRoutineCreationRequest,
-    resolvingWeekdayConflict: Bool
+    replacingActiveRoutine: Bool
   ) async throws -> RecommendedRoutineCreationResult
 }
 
@@ -63,23 +63,29 @@ final class RecommendedRoutineCreationUseCase:
     )
   }
 
-  func weekdayConflict(
+  func activeRoutineConflict(
     for request: RecommendedRoutineCreationRequest
-  ) throws -> Set<Weekday> {
+  ) throws -> RoutineActivationConflictState? {
     try validate(request)
-    return try routineSettingUseCase.weekdayConflict(
+    let activeRoutineIDs = try routineSettingUseCase.activeRoutineConflictIDs(
       for: makeMutation(from: request)
     )
+
+    guard !activeRoutineIDs.isEmpty else {
+      return nil
+    }
+
+    return RoutineActivationConflictState(activeRoutineIDs: activeRoutineIDs)
   }
 
   func execute(
     _ request: RecommendedRoutineCreationRequest,
-    resolvingWeekdayConflict: Bool = false
+    replacingActiveRoutine: Bool = false
   ) async throws -> RecommendedRoutineCreationResult {
     try validate(request)
     let result = try await routineSettingUseCase.saveRoutine(
       from: makeMutation(from: request),
-      resolvingWeekdayConflict: resolvingWeekdayConflict
+      replacingActiveRoutine: replacingActiveRoutine
     )
 
     return RecommendedRoutineCreationResult(

@@ -23,7 +23,7 @@ struct RoutineEditorView: View {
   @State private var isStepAddSheetPresented = false
   @State private var isScheduleExpanded: Bool
   @State private var isDeleteDialogPresented = false
-  @State private var weekdayConflict: RoutineWeekdayConflictState?
+  @State private var activeRoutineConflict: RoutineActivationConflictState?
   @State private var selectedEditStepIndex: Int? = nil
   @State private var isStepEditSheetPresented = false
   @State private var saveErrorMessage: String?
@@ -34,24 +34,26 @@ struct RoutineEditorView: View {
   @State private var stepFrames: [UUID: CGRect] = [:]
 
   let onSave: (RoutineDraftState) async -> Bool
-  let onResolveWeekdayConflict: (RoutineDraftState) async -> Bool
+  let onReplaceActiveRoutine: (RoutineDraftState) async -> Bool
   let onDelete: ((UUID) async -> Bool)?
-  let weekdayConflictState: (RoutineDraftState) -> RoutineWeekdayConflictState?
+  let activeRoutineConflictState:
+    (RoutineDraftState) -> RoutineActivationConflictState?
 
   init(
     draft: RoutineDraftState,
     initialScheduleExpanded: Bool = false,
     onSave: @escaping (RoutineDraftState) async -> Bool,
-    onResolveWeekdayConflict: @escaping (RoutineDraftState) async -> Bool,
+    onReplaceActiveRoutine: @escaping (RoutineDraftState) async -> Bool,
     onDelete: ((UUID) async -> Bool)? = nil,
-    weekdayConflictState: @escaping (RoutineDraftState) -> RoutineWeekdayConflictState? = { _ in nil }
+    activeRoutineConflictState:
+      @escaping (RoutineDraftState) -> RoutineActivationConflictState? = { _ in nil }
   ) {
     self._draft = State(initialValue: draft)
     self._isScheduleExpanded = State(initialValue: initialScheduleExpanded)
     self.onSave = onSave
-    self.onResolveWeekdayConflict = onResolveWeekdayConflict
+    self.onReplaceActiveRoutine = onReplaceActiveRoutine
     self.onDelete = onDelete
-    self.weekdayConflictState = weekdayConflictState
+    self.activeRoutineConflictState = activeRoutineConflictState
   }
 
   var body: some View {
@@ -91,8 +93,8 @@ struct RoutineEditorView: View {
               return
             }
 
-            if let conflict = weekdayConflictState(draft) {
-              weekdayConflict = conflict
+            if let conflict = activeRoutineConflictState(draft) {
+              activeRoutineConflict = conflict
               return
             }
 
@@ -163,8 +165,8 @@ struct RoutineEditorView: View {
           deleteDialogOverlay
         }
 
-        if let weekdayConflict {
-          weekdayConflictDialogOverlay(weekdayConflict)
+        if let activeRoutineConflict {
+          activeRoutineConflictDialogOverlay(activeRoutineConflict)
         }
       }
     }
@@ -427,23 +429,25 @@ struct RoutineEditorView: View {
     }
   }
 
-  private func weekdayConflictDialogOverlay(_ conflict: RoutineWeekdayConflictState) -> some View {
+  private func activeRoutineConflictDialogOverlay(
+    _ conflict: RoutineActivationConflictState
+  ) -> some View {
     ZStack {
       AppColor.grayBlack
         .opacity(0.22)
         .ignoresSafeArea()
 
       MoruDialog(
-        title: "다른 루틴에서 사용 중",
-        message: RoutineManagementCopy.weekdayConflictMessage(conflict),
-        primaryTitle: "괜찮아요",
+        title: "다른 루틴을 끌까요?",
+        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
+        primaryTitle: "취소",
         secondaryTitle: "변경하기",
         primaryAction: {
-          weekdayConflict = nil
+          activeRoutineConflict = nil
         },
         secondaryAction: {
           Task {
-            await resolveWeekdayConflictAndDismissIfNeeded()
+            await replaceActiveRoutineAndDismissIfNeeded()
           }
         }
       )
@@ -460,14 +464,14 @@ struct RoutineEditorView: View {
     }
   }
 
-  private func resolveWeekdayConflictAndDismissIfNeeded() async {
+  private func replaceActiveRoutineAndDismissIfNeeded() async {
     saveErrorMessage = nil
 
-    if await onResolveWeekdayConflict(draft) {
-      weekdayConflict = nil
+    if await onReplaceActiveRoutine(draft) {
+      activeRoutineConflict = nil
       dismiss()
     } else {
-      weekdayConflict = nil
+      activeRoutineConflict = nil
       saveErrorMessage = "루틴을 저장하지 못했어요. 다시 시도해 주세요."
     }
   }
@@ -620,7 +624,7 @@ struct RoutineEditorView: View {
       ]
     ),
     onSave: { _ in true },
-    onResolveWeekdayConflict: { _ in true }
+    onReplaceActiveRoutine: { _ in true }
   )
 }
 #endif

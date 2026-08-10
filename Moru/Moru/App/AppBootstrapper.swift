@@ -38,12 +38,70 @@ enum AppBootstrapState {
 }
 
 @MainActor
+protocol AppBootstrapPreflightPreparing {
+  func prepare(dependencies: DependencyContainer) async
+}
+
+@MainActor
+struct DefaultAppBootstrapPreflight: AppBootstrapPreflightPreparing {
+  func prepare(dependencies: DependencyContainer) async {
+    // Repair happens before account restoration. The repository therefore sees
+    // no signed-in member and can only perform a local SwiftData batch save.
+    _ = try? RoutineActivationBootstrapRepair.repairIfNeeded(
+      in: dependencies.routineRepository
+    )
+
+    guard let alarmPlatformStateRepository =
+            dependencies.alarmPlatformStateRepository,
+          let alarmScheduleMutator = dependencies.alarmScheduleMutator else {
+      return
+    }
+    await Self.cancelDisabledAlarmRecordsIfNeeded(
+      routineRepository: dependencies.routineRepository,
+      alarmPlatformStateRepository: alarmPlatformStateRepository,
+      alarmScheduleMutator: alarmScheduleMutator
+    )
+  }
+
+  static func cancelDisabledAlarmRecordsIfNeeded(
+    routineRepository: any RoutineRepository,
+    alarmPlatformStateRepository: any AlarmPlatformStateRepository,
+    alarmScheduleMutator: any AlarmScheduleMutating
+  ) async {
+    guard let routines = try? routineRepository.fetchRoutines(),
+          let records = try? alarmPlatformStateRepository.fetchRecords() else {
+      return
+    }
+
+    let retainedScheduleIDs = Set(records.map(\.scheduleID))
+    let routinesNeedingCancellation = routines.filter { routine in
+      guard let schedule = routine.alarmSchedule,
+            retainedScheduleIDs.contains(schedule.id) else {
+        return false
+      }
+      return !routine.isActive || !schedule.isEnabled
+    }
+    guard !routinesNeedingCancellation.isEmpty else {
+      return
+    }
+
+    // Unlike full reconcile, this never requests authorization or schedules a
+    // winner while launch UI is loading. Cancellation failure is persisted by
+    // the normal mutation coordinator as repairRequired and retried next boot.
+    _ = try? await alarmScheduleMutator.apply(
+      .synchronize(routines: routinesNeedingCancellation)
+    )
+  }
+}
+
+@MainActor
 final class AppBootstrapper: ObservableObject {
   @Published private(set) var state: AppBootstrapState = .idle
 
   private let modelContainerFactory: () throws -> ModelContainer
   private let accountSessionStoreFactory: () -> AccountSessionStore
   private let appCapabilities: AppCapabilities
+  private let preflight: any AppBootstrapPreflightPreparing
 
   init(
     modelContainerFactory: @escaping () throws -> ModelContainer = {
@@ -56,11 +114,13 @@ final class AppBootstrapper: ObservableObject {
         restorationGuard: UserDefaultsAccountSessionRestorationGuard()
       )
     },
-    appCapabilities: AppCapabilities = .production
+    appCapabilities: AppCapabilities = .production,
+    preflight: any AppBootstrapPreflightPreparing = DefaultAppBootstrapPreflight()
   ) {
     self.modelContainerFactory = modelContainerFactory
     self.accountSessionStoreFactory = accountSessionStoreFactory
     self.appCapabilities = appCapabilities
+    self.preflight = preflight
   }
 
   func start() {
@@ -83,8 +143,13 @@ final class AppBootstrapper: ObservableObject {
     state = .loading
 
     do {
-      let modelContainer = try modelContainerFactory()
       let accountSessionStore = accountSessionStoreFactory()
+      if appCapabilities.shouldRestoreAccountSession {
+        // Publish this synchronously with start(). Credential loading still
+        // waits for pending-cleanup recovery below.
+        accountSessionStore.prepareForRestoration()
+      }
+      let modelContainer = try modelContainerFactory()
       let tokenRefreshRemoteDataSource = DefaultAuthRemoteDataSource(
         apiClient: DefaultAPIClient(
           serverRequestsEnabled: appCapabilities.shouldAllowServerRequests
@@ -153,6 +218,9 @@ final class AppBootstrapper: ObservableObject {
         accountRoutineGroupRemoteService:
           accountRoutineGroupRemoteService
       )
+      // There is no sender today, but a process that died after a future
+      // sender claim must never quietly retry the same unknown request.
+      try? dependencies.routineSyncRepository?.recoverInterruptedAttempts(at: Date())
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
       let socialLoginCoordinator = SocialLoginCoordinator(
@@ -176,10 +244,18 @@ final class AppBootstrapper: ObservableObject {
           .kakao: kakaoAuthorizationSession,
         ]
       )
+      let accountScopedDataCleaner: any AccountScopedDataCleaning
+      if let routineSyncRepository = dependencies.routineSyncRepository {
+        accountScopedDataCleaner = SwiftDataRoutineSyncAccountCleaner(
+          repository: routineSyncRepository
+        )
+      } else {
+        accountScopedDataCleaner = NoAccountScopedDataCleaner()
+      }
       let accountLifecycleService = DefaultAccountLifecycleService(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
-        accountScopedDataCleaner: NoAccountScopedDataCleaner(),
+        accountScopedDataCleaner: accountScopedDataCleaner,
         providerSessionSignOut: providerSessionSignOut
       )
       let navigationCoordinator = AppNavigationCoordinator()
@@ -190,31 +266,28 @@ final class AppBootstrapper: ObservableObject {
       authCallbackRouter.register(kakaoAuthorizationSession, for: .kakao)
       let onboardingBuilder = dependencies.makeOnboardingBuilder()
       let routinePlayerBuilder = dependencies.makeRoutinePlayerBuilder()
-
-      if appCapabilities.shouldRestoreAccountSession {
-        accountSessionStore.prepareForRestoration()
-      }
-
-      state = .ready(
-        BootstrappedApp(
-          modelContainer: modelContainer,
-          dependencies: dependencies,
-          sessionStore: sessionStore,
-          accountSessionStore: accountSessionStore,
-          appleCredentialMonitor: appleCredentialMonitor,
-          socialLoginCoordinator: socialLoginCoordinator,
-          googleAuthorizationSession: googleAuthorizationSession,
-          kakaoAuthorizationSession: kakaoAuthorizationSession,
-          accountLifecycleService: accountLifecycleService,
-          appCapabilities: appCapabilities,
-          authCallbackRouter: authCallbackRouter,
-          navigationCoordinator: navigationCoordinator,
-          onboardingBuilder: onboardingBuilder,
-          routinePlayerBuilder: routinePlayerBuilder
-        )
+      let app = BootstrappedApp(
+        modelContainer: modelContainer,
+        dependencies: dependencies,
+        sessionStore: sessionStore,
+        accountSessionStore: accountSessionStore,
+        appleCredentialMonitor: appleCredentialMonitor,
+        socialLoginCoordinator: socialLoginCoordinator,
+        googleAuthorizationSession: googleAuthorizationSession,
+        kakaoAuthorizationSession: kakaoAuthorizationSession,
+        accountLifecycleService: accountLifecycleService,
+        appCapabilities: appCapabilities,
+        authCallbackRouter: authCallbackRouter,
+        navigationCoordinator: navigationCoordinator,
+        onboardingBuilder: onboardingBuilder,
+        routinePlayerBuilder: routinePlayerBuilder
       )
 
-      restoreAccountSessionIfAvailable(accountSessionStore)
+      finishBootstrap(
+        app,
+        accountSessionStore: accountSessionStore,
+        accountScopedDataCleaner: accountScopedDataCleaner
+      )
     } catch {
       state = .failed(
         AppBootstrapFailure(
@@ -224,16 +297,72 @@ final class AppBootstrapper: ObservableObject {
     }
   }
 
-  private func restoreAccountSessionIfAvailable(
-    _ accountSessionStore: AccountSessionStore
+  private func finishBootstrap(
+    _ app: BootstrappedApp,
+    accountSessionStore: AccountSessionStore,
+    accountScopedDataCleaner: any AccountScopedDataCleaning
   ) {
+    Task { @MainActor in
+      let shouldRestoreAccount = await shouldRestoreAccountSession(
+        accountSessionStore,
+        accountScopedDataCleaner: accountScopedDataCleaner
+      )
+      await preflight.prepare(dependencies: app.dependencies)
+      state = .ready(app)
+
+      guard shouldRestoreAccount else {
+        return
+      }
+
+      // Keep ready/restoring observable before Keychain I/O changes state.
+      Task { @MainActor in
+        await Task.yield()
+        accountSessionStore.restore()
+      }
+    }
+  }
+
+  private func shouldRestoreAccountSession(
+    _ accountSessionStore: AccountSessionStore,
+    accountScopedDataCleaner: any AccountScopedDataCleaning
+  ) async -> Bool {
     guard appCapabilities.shouldRestoreAccountSession else {
-      return
+      return false
     }
 
-    Task { @MainActor in
-      await Task.yield()
-      accountSessionStore.restore()
+    let recovery: PendingAccountCleanupRecovery
+    do {
+      recovery = try await accountScopedDataCleaner.recoverPendingAccountCleanups()
+      for memberID in recovery.completedMemberIDs {
+        _ = try accountSessionStore.removeStoredSessionIfMatching(
+          memberID: memberID
+        )
+        try await accountScopedDataCleaner.finalizePendingAccountCleanup(
+          memberID: memberID
+        )
+      }
+    } catch {
+      // Confirmed cleanup that cannot finish must not revive a potentially
+      // withdrawn account. Credentials remain untouched for later recovery.
+      accountSessionStore.deferRestorationWithoutDeletingCredentials()
+      return false
     }
+
+    do {
+      let hasAmbiguousStoredSession = try accountSessionStore.hasStoredSession(
+        matching: recovery.ambiguousMemberIDs
+      )
+      guard !hasAmbiguousStoredSession else {
+        // An attempting marker is not proof of withdrawal. Keep credentials,
+        // but do not restore that exact account into an uncertain session.
+        accountSessionStore.deferRestorationWithoutDeletingCredentials()
+        return false
+      }
+    } catch {
+      accountSessionStore.deferRestorationWithoutDeletingCredentials()
+      return false
+    }
+
+    return true
   }
 }
