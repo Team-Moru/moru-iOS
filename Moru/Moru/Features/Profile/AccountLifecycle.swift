@@ -7,10 +7,30 @@ import Foundation
 
 nonisolated protocol AccountScopedDataCleaning: Sendable {
   func removeAccountScopedData(memberID: Int64) async throws
+  func preparePendingAccountCleanup(memberID: Int64) async throws
+  func beginPendingAccountCleanupAttempt(memberID: Int64) async throws
+  func confirmPendingAccountCleanup(memberID: Int64) async throws
+  func cancelPendingAccountCleanup(memberID: Int64) async throws
+  func completePendingAccountCleanup(memberID: Int64) async throws
+  func finalizePendingAccountCleanup(memberID: Int64) async throws
+  func recoverPendingAccountCleanups() async throws -> PendingAccountCleanupRecovery
 }
 
-/// P5 has no account-scoped SwiftData models. P6 replaces this boundary with its
-/// Outbox and server preference cleanup implementation.
+nonisolated extension AccountScopedDataCleaning {
+  func preparePendingAccountCleanup(memberID: Int64) async throws {}
+  func beginPendingAccountCleanupAttempt(memberID: Int64) async throws {}
+  func confirmPendingAccountCleanup(memberID: Int64) async throws {}
+  func cancelPendingAccountCleanup(memberID: Int64) async throws {}
+  func completePendingAccountCleanup(memberID: Int64) async throws {
+    try await removeAccountScopedData(memberID: memberID)
+  }
+  func finalizePendingAccountCleanup(memberID: Int64) async throws {}
+  func recoverPendingAccountCleanups() async throws -> PendingAccountCleanupRecovery {
+    .none
+  }
+}
+
+/// Preview and test graphs without account-scoped persistence use this cleaner.
 nonisolated struct NoAccountScopedDataCleaner: AccountScopedDataCleaning {
   func removeAccountScopedData(memberID: Int64) async throws {}
 }
@@ -115,35 +135,91 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
       throw AccountLifecycleError.sessionUnavailable
     }
 
-    _ = try await authRemoteDataSource.withdraw()
-    var cleanupFailed = false
-
     do {
-      try await providerSessionSignOut.signOut(
-        provider: credentials.provider,
-        reason: .withdrawal
+      try await accountScopedDataCleaner.preparePendingAccountCleanup(
+        memberID: credentials.memberID
       )
-    } catch {
-      cleanupFailed = true
-    }
-
-    do {
-      try await accountScopedDataCleaner.removeAccountScopedData(
+      // This save is the boundary: after it succeeds, a process crash or
+      // transport error is deliberately treated as an ambiguous withdrawal.
+      try await accountScopedDataCleaner.beginPendingAccountCleanupAttempt(
         memberID: credentials.memberID
       )
     } catch {
-      cleanupFailed = true
+      throw AccountLifecycleError.localCleanupFailed
     }
 
     do {
-      try accountSessionStore.removeLocalAccountSession()
+      _ = try await authRemoteDataSource.withdraw()
+    } catch {
+      if isDefinitivePreCommitFailure(error) {
+        try? await accountScopedDataCleaner.cancelPendingAccountCleanup(
+          memberID: credentials.memberID
+        )
+      }
+      throw error
+    }
+
+    do {
+      try await accountScopedDataCleaner.confirmPendingAccountCleanup(
+        memberID: credentials.memberID
+      )
+      try await accountScopedDataCleaner.completePendingAccountCleanup(
+        memberID: credentials.memberID
+      )
+    } catch {
+      // Remote deletion may have succeeded. Keep the marker and this exact
+      // session intact so startup can retry only the local, confirmed cleanup.
+      throw AccountLifecycleError.localCleanupFailed
+    }
+
+    var cleanupFailed = false
+
+    if accountSessionStore.isCurrentSession(matching: credentials.memberID) {
+      do {
+        try await providerSessionSignOut.signOut(
+          provider: credentials.provider,
+          reason: .withdrawal
+        )
+      } catch {
+        cleanupFailed = true
+      }
+    }
+
+    var sessionCleanupSettled = false
+    do {
+      // A provider await may have allowed a new account B to replace A. A
+      // false result is safe: B was intentionally left untouched, while A's
+      // server-confirmed cleanup marker may still be finalized.
+      _ = try accountSessionStore.removeLocalAccountSessionIfMatching(
+        memberID: credentials.memberID
+      )
+      sessionCleanupSettled = true
     } catch {
       cleanupFailed = true
+    }
+
+    if sessionCleanupSettled {
+      do {
+        try await accountScopedDataCleaner.finalizePendingAccountCleanup(
+          memberID: credentials.memberID
+        )
+      } catch {
+        cleanupFailed = true
+      }
     }
 
     if cleanupFailed {
       throw AccountLifecycleError.localCleanupFailed
     }
+  }
+
+  private func isDefinitivePreCommitFailure(_ error: Error) -> Bool {
+    guard case .server(let statusCode, _, _) = error as? APIError else {
+      return false
+    }
+    return (400..<500).contains(statusCode)
+      && statusCode != 408
+      && statusCode != 429
   }
 }
 

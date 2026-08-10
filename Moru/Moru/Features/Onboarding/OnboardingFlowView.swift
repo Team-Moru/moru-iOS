@@ -58,8 +58,8 @@ struct OnboardingFlowView: View {
         : ""
     )
     .overlay {
-      if let weekdayConflict = viewModel.weekdayConflict {
-        weekdayConflictDialogOverlay(weekdayConflict)
+      if let activeRoutineConflict = viewModel.activeRoutineConflict {
+        activeRoutineConflictDialogOverlay(activeRoutineConflict)
       }
     }
     .onDisappear(perform: viewModel.viewDidDisappear)
@@ -101,8 +101,8 @@ struct OnboardingFlowView: View {
     }
   }
 
-  private func weekdayConflictDialogOverlay(
-    _ conflict: RoutineWeekdayConflictState
+  private func activeRoutineConflictDialogOverlay(
+    _ conflict: RoutineActivationConflictState
   ) -> some View {
     ZStack {
       AppColor.grayBlack
@@ -110,16 +110,12 @@ struct OnboardingFlowView: View {
         .ignoresSafeArea()
 
       MoruDialog(
-        title: "다른 루틴에서 사용 중",
-        message: [
-          "\(conflict.weekdayText)은 알림이 설정된",
-          "다른 루틴이 이미 있어요.",
-          "추천 루틴으로 요일을 변경하시겠어요?",
-        ].joined(separator: "\n"),
-        primaryTitle: "괜찮아요",
+        title: "다른 루틴을 끌까요?",
+        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
+        primaryTitle: "취소",
         secondaryTitle: "변경하기",
-        primaryAction: viewModel.keepExistingWeekdayScheduleButtonDidTap,
-        secondaryAction: viewModel.resolveWeekdayConflictButtonDidTap
+        primaryAction: viewModel.keepExistingActiveRoutineButtonDidTap,
+        secondaryAction: viewModel.replaceActiveRoutineButtonDidTap
       )
     }
   }

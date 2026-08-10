@@ -169,7 +169,7 @@ final class AccountLifecycleTests: XCTestCase {
   }
 
   @MainActor
-  func testWithdrawalCleanupFailureStillEndsDeletedServerSession() async {
+  func testWithdrawalCleanupFailureKeepsSessionForConfirmedCleanupRecovery() async {
     let fixture = makeFixture(cleanupError: AccountLifecycleTestError.cleanupFailed)
 
     do {
@@ -183,11 +183,208 @@ final class AccountLifecycleTests: XCTestCase {
 
     XCTAssertEqual(
       fixture.events.values,
-      ["remote withdrawal", "account cleanup 92", "credential remove"]
+      ["remote withdrawal", "account cleanup 92"]
+    )
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertEqual(fixture.tokenProvider.accessToken, "access-token")
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true))
+    )
+  }
+
+  @MainActor
+  func testWithdrawalPersistsEveryCleanupPhaseBeforeRemovingMatchingCredentials() async throws {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let fixture = makePhaseFixture(events: events, cleaner: cleaner)
+
+    try await fixture.service.withdraw()
+
+    XCTAssertEqual(
+      events.values,
+      [
+        "prepare",
+        "attempting",
+        "remote withdrawal",
+        "confirmed",
+        "localDataCleaned",
+        "provider withdrawal",
+        "credential remove",
+        "finalize",
+      ]
     )
     XCTAssertNil(fixture.credentialStore.credentials)
-    XCTAssertNil(fixture.tokenProvider.accessToken)
     XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testWithdrawalPrepareOrAttemptFailureNeverCallsRemoteWithdrawal() async {
+    for phase in [
+      AccountLifecycleCleanupPhase.prepare,
+      .attempting,
+    ] {
+      let events = AccountLifecycleEventRecorder()
+      let cleaner = PhaseAwareAccountLifecycleDataCleaner(
+        events: events,
+        failingPhase: phase
+      )
+      let fixture = makePhaseFixture(events: events, cleaner: cleaner)
+
+      do {
+        try await fixture.service.withdraw()
+        XCTFail("Expected local cleanup failure for \(phase)")
+      } catch let error as AccountLifecycleError {
+        XCTAssertEqual(error, .localCleanupFailed)
+      } catch {
+        XCTFail("Expected AccountLifecycleError, got \(error)")
+      }
+
+      XCTAssertFalse(events.values.contains("remote withdrawal"))
+      XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+      XCTAssertEqual(
+        fixture.accountSessionStore.state,
+        .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true))
+      )
+    }
+  }
+
+  @MainActor
+  func testDefinitiveWithdrawalFailureCancelsMarkerAndKeepsSession() async {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let fixture = makePhaseFixture(
+      events: events,
+      cleaner: cleaner,
+      withdrawalError: APIError.server(statusCode: 400, code: "BAD", message: "no")
+    )
+
+    do {
+      try await fixture.service.withdraw()
+      XCTFail("Expected definitive remote failure")
+    } catch {}
+
+    XCTAssertEqual(
+      events.values,
+      ["prepare", "attempting", "remote withdrawal", "cancelled"]
+    )
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+  }
+
+  @MainActor
+  func testAmbiguousTransportWithdrawalKeepsAttemptingMarkerAndSession() async {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let fixture = makePhaseFixture(
+      events: events,
+      cleaner: cleaner,
+      withdrawalError: APIError.transport(code: -1001, message: "timeout")
+    )
+
+    do {
+      try await fixture.service.withdraw()
+      XCTFail("Expected ambiguous transport failure")
+    } catch {}
+
+    XCTAssertEqual(events.values, ["prepare", "attempting", "remote withdrawal"])
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertEqual(cleaner.completedPhases, [.prepare, .attempting])
+  }
+
+  @MainActor
+  func testConfirmedCleanupFailurePreservesCredentialsAndSkipsProviderSignOut() async {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(
+      events: events,
+      failingPhase: .localDataCleaned
+    )
+    let fixture = makePhaseFixture(events: events, cleaner: cleaner)
+
+    do {
+      try await fixture.service.withdraw()
+      XCTFail("Expected confirmed local cleanup failure")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .localCleanupFailed)
+    } catch {
+      XCTFail("Expected AccountLifecycleError, got \(error)")
+    }
+
+    XCTAssertEqual(
+      events.values,
+      ["prepare", "attempting", "remote withdrawal", "confirmed", "localDataCleaned"]
+    )
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertEqual(fixture.accountSessionStore.state, .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true)))
+  }
+
+  @MainActor
+  func testWithdrawalDoesNotDeleteNewAccountThatReplacesCapturedAccountDuringProviderAwait() async throws {
+    let events = AccountLifecycleEventRecorder()
+    let capturedCredentials = makeCredentials()
+    let replacementCredentials = AccountCredentials(
+      memberID: 93,
+      accessToken: "account-b-access",
+      refreshToken: "account-b-refresh",
+      onboardingCompleted: false,
+      provider: .google
+    )
+    let credentialStore = AccountLifecycleCredentialStore(
+      credentials: capturedCredentials,
+      events: events
+    )
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider,
+      restorationGuard: InMemoryAccountSessionRestorationGuard()
+    )
+    sessionStore.restore()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let service = DefaultAccountLifecycleService(
+      authRemoteDataSource: AccountLifecycleAuthRemoteDataSource(
+        events: events,
+        logoutError: nil,
+        withdrawalError: nil
+      ),
+      accountSessionStore: sessionStore,
+      accountScopedDataCleaner: cleaner,
+      providerSessionSignOut: AccountLifecycleAccountSwitchingProvider(
+        accountSessionStore: sessionStore,
+        replacementCredentials: replacementCredentials,
+        events: events
+      )
+    )
+
+    try await service.withdraw()
+
+    XCTAssertEqual(credentialStore.credentials, replacementCredentials)
+    XCTAssertEqual(tokenProvider.accessToken, replacementCredentials.accessToken)
+    XCTAssertEqual(
+      sessionStore.state,
+      .signedIn(
+        SignedInAccount(
+          memberID: replacementCredentials.memberID,
+          onboardingCompleted: replacementCredentials.onboardingCompleted,
+          provider: replacementCredentials.provider
+        )
+      )
+    )
+    XCTAssertEqual(
+      cleaner.completedPhases,
+      [.prepare, .attempting, .confirmed, .localDataCleaned, .finalize]
+    )
+    XCTAssertEqual(
+      events.values,
+      [
+        "prepare",
+        "attempting",
+        "remote withdrawal",
+        "confirmed",
+        "localDataCleaned",
+        "provider switches account",
+        "finalize",
+      ]
+    )
   }
 
   @MainActor
@@ -343,6 +540,23 @@ final class AccountLifecycleTests: XCTestCase {
   }
 
   @MainActor
+  func testMemberScopedStoredSessionRemovalNeverDeletesAnotherAccount() throws {
+    let fixture = makeFixture()
+
+    XCTAssertFalse(
+      try fixture.accountSessionStore.removeStoredSessionIfMatching(memberID: 93)
+    )
+    XCTAssertEqual(fixture.credentialStore.credentials?.memberID, 92)
+    XCTAssertEqual(fixture.tokenProvider.accessToken, "access-token")
+
+    XCTAssertTrue(
+      try fixture.accountSessionStore.removeStoredSessionIfMatching(memberID: 92)
+    )
+    XCTAssertNil(fixture.credentialStore.credentials)
+    XCTAssertNil(fixture.tokenProvider.accessToken)
+  }
+
+  @MainActor
   private func makeFixture(
     logoutError: Error? = nil,
     withdrawalError: Error? = nil,
@@ -389,6 +603,41 @@ final class AccountLifecycleTests: XCTestCase {
       tokenProvider: tokenProvider,
       accountSessionStore: accountSessionStore,
       events: events
+    )
+  }
+
+  @MainActor
+  private func makePhaseFixture(
+    events: AccountLifecycleEventRecorder,
+    cleaner: PhaseAwareAccountLifecycleDataCleaner,
+    withdrawalError: Error? = nil
+  ) -> AccountLifecyclePhaseFixture {
+    let credentialStore = AccountLifecycleCredentialStore(
+      credentials: makeCredentials(),
+      events: events
+    )
+    let tokenProvider = MemoryAccessTokenProvider()
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider,
+      restorationGuard: InMemoryAccountSessionRestorationGuard()
+    )
+    accountSessionStore.restore()
+    let remote = AccountLifecycleAuthRemoteDataSource(
+      events: events,
+      logoutError: nil,
+      withdrawalError: withdrawalError
+    )
+    let service = DefaultAccountLifecycleService(
+      authRemoteDataSource: remote,
+      accountSessionStore: accountSessionStore,
+      accountScopedDataCleaner: cleaner,
+      providerSessionSignOut: AccountLifecyclePhaseProvider(events: events)
+    )
+    return AccountLifecyclePhaseFixture(
+      service: service,
+      credentialStore: credentialStore,
+      accountSessionStore: accountSessionStore
     )
   }
 
@@ -497,6 +746,22 @@ private struct AccountLifecycleFixture {
   let tokenProvider: MemoryAccessTokenProvider
   let accountSessionStore: AccountSessionStore
   let events: AccountLifecycleEventRecorder
+}
+
+@MainActor
+private struct AccountLifecyclePhaseFixture {
+  let service: DefaultAccountLifecycleService
+  let credentialStore: AccountLifecycleCredentialStore
+  let accountSessionStore: AccountSessionStore
+}
+
+private enum AccountLifecycleCleanupPhase: Equatable {
+  case prepare
+  case attempting
+  case confirmed
+  case localDataCleaned
+  case cancelled
+  case finalize
 }
 
 private enum AccountLifecycleTestError: Error {
@@ -627,6 +892,120 @@ private actor AccountLifecycleAuthRemoteDataSource: AuthRemoteDataSource {
     }
 
     return WithdrawalResponseDTO(message: "withdrawn")
+  }
+}
+
+@MainActor
+private final class AccountLifecyclePhaseProvider:
+  SocialProviderSessionSigningOut {
+  private let events: AccountLifecycleEventRecorder
+
+  init(events: AccountLifecycleEventRecorder) {
+    self.events = events
+  }
+
+  func signOut(
+    provider: AuthProvider,
+    reason: SocialProviderSessionSignOutReason
+  ) async throws {
+    if reason == .withdrawal {
+      events.record("provider withdrawal")
+    }
+  }
+}
+
+@MainActor
+private final class AccountLifecycleAccountSwitchingProvider:
+  SocialProviderSessionSigningOut {
+  private let accountSessionStore: AccountSessionStore
+  private let replacementCredentials: AccountCredentials
+  private let events: AccountLifecycleEventRecorder
+
+  init(
+    accountSessionStore: AccountSessionStore,
+    replacementCredentials: AccountCredentials,
+    events: AccountLifecycleEventRecorder
+  ) {
+    self.accountSessionStore = accountSessionStore
+    self.replacementCredentials = replacementCredentials
+    self.events = events
+  }
+
+  func signOut(
+    provider: AuthProvider,
+    reason: SocialProviderSessionSignOutReason
+  ) async throws {
+    events.record("provider switches account")
+    try accountSessionStore.establishSession(credentials: replacementCredentials)
+    await Task.yield()
+  }
+}
+
+nonisolated private final class PhaseAwareAccountLifecycleDataCleaner:
+  AccountScopedDataCleaning,
+  @unchecked Sendable {
+  private let lock = NSLock()
+  private let events: AccountLifecycleEventRecorder
+  private let failingPhase: AccountLifecycleCleanupPhase?
+  private var phases: [AccountLifecycleCleanupPhase] = []
+
+  init(
+    events: AccountLifecycleEventRecorder,
+    failingPhase: AccountLifecycleCleanupPhase? = nil
+  ) {
+    self.events = events
+    self.failingPhase = failingPhase
+  }
+
+  var completedPhases: [AccountLifecycleCleanupPhase] {
+    lock.lock()
+    defer { lock.unlock() }
+    return phases
+  }
+
+  func removeAccountScopedData(memberID: Int64) async throws {
+    try record(.localDataCleaned, event: "localDataCleaned")
+  }
+
+  func preparePendingAccountCleanup(memberID: Int64) async throws {
+    try record(.prepare, event: "prepare")
+  }
+
+  func beginPendingAccountCleanupAttempt(memberID: Int64) async throws {
+    try record(.attempting, event: "attempting")
+  }
+
+  func confirmPendingAccountCleanup(memberID: Int64) async throws {
+    try record(.confirmed, event: "confirmed")
+  }
+
+  func cancelPendingAccountCleanup(memberID: Int64) async throws {
+    try record(.cancelled, event: "cancelled")
+  }
+
+  func completePendingAccountCleanup(memberID: Int64) async throws {
+    try record(.localDataCleaned, event: "localDataCleaned")
+  }
+
+  func finalizePendingAccountCleanup(memberID: Int64) async throws {
+    try record(.finalize, event: "finalize")
+  }
+
+  func recoverPendingAccountCleanups() async throws -> PendingAccountCleanupRecovery {
+    .none
+  }
+
+  private func record(
+    _ phase: AccountLifecycleCleanupPhase,
+    event: String
+  ) throws {
+    events.record(event)
+    lock.lock()
+    phases.append(phase)
+    lock.unlock()
+    if failingPhase == phase {
+      throw AccountLifecycleTestError.cleanupFailed
+    }
   }
 }
 

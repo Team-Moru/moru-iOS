@@ -38,13 +38,13 @@ enum RoutineManagementCopy {
     "\(weekdaySummary(weekdays))・\(String(format: "%02d시 %02d분", hour, minute))"
   }
 
-  static func weekdayConflictMessage(
-    _ conflict: RoutineWeekdayConflictState
+  static func activeRoutineReplacementMessage(
+    _ conflict: RoutineActivationConflictState
   ) -> String {
     [
-      "\(conflict.weekdayText)로 알림이 설정된",
-      "다른 루틴이 이미 있어요.",
-      "해당 루틴으로 요일을 변경하시겠어요?",
+      "다른 사용 중인 루틴이 \(conflict.activeRoutineCount)개 있어요.",
+      "이 루틴으로 바꾸면 기존 루틴과 알람이 꺼져요.",
+      "기존 요일 설정은 그대로 남아요.",
     ].joined(separator: "\n")
   }
 

@@ -357,3 +357,143 @@ final class PersistedSnoozedAlarm {
     self.createdAt = createdAt
   }
 }
+
+@Model
+final class PersistedRoutineServerBinding {
+  @Attribute(.unique) var bindingKey: String
+  @Attribute(.unique) var remoteBindingKey: String
+  @Attribute(.unique) var id: UUID
+  var serverNamespaceRawValue: String
+  var memberID: Int64
+  var entityKindRawValue: String
+  var localEntityID: UUID
+  var remoteID: Int64
+  var remoteRevision: String?
+  var parentEntityKindRawValue: String?
+  var parentLocalEntityID: UUID?
+  var createdAt: Date
+  var updatedAt: Date
+
+  init(
+    bindingKey: String,
+    remoteBindingKey: String,
+    id: UUID,
+    serverNamespaceRawValue: String,
+    memberID: Int64,
+    entityKindRawValue: String,
+    localEntityID: UUID,
+    remoteID: Int64,
+    remoteRevision: String?,
+    parentEntityKindRawValue: String? = nil,
+    parentLocalEntityID: UUID? = nil,
+    createdAt: Date,
+    updatedAt: Date
+  ) {
+    self.bindingKey = bindingKey
+    self.remoteBindingKey = remoteBindingKey
+    self.id = id
+    self.serverNamespaceRawValue = serverNamespaceRawValue
+    self.memberID = memberID
+    self.entityKindRawValue = entityKindRawValue
+    self.localEntityID = localEntityID
+    self.remoteID = remoteID
+    self.remoteRevision = remoteRevision
+    self.parentEntityKindRawValue = parentEntityKindRawValue
+    self.parentLocalEntityID = parentLocalEntityID
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+  }
+}
+
+@Model
+final class PersistedRoutineSyncMutation {
+  @Attribute(.unique) var operationKey: String
+  @Attribute(.unique) var id: UUID
+  var serverNamespaceRawValue: String
+  var memberID: Int64
+  var operationRawValue: String
+  var entityKindRawValue: String
+  var localEntityID: UUID
+  var generationID: UUID
+  var generation: Int
+  var payloadVersion: Int
+  var payload: Data
+  var stateRawValue: String
+  var attemptedGenerationID: UUID?
+  var attemptedGeneration: Int?
+  var attemptedPayloadVersion: Int?
+  var attemptedPayload: Data?
+  var attemptedAt: Date?
+  var createdAt: Date
+  var updatedAt: Date
+
+  init(
+    operationKey: String,
+    id: UUID,
+    serverNamespaceRawValue: String,
+    memberID: Int64,
+    operationRawValue: String,
+    entityKindRawValue: String,
+    localEntityID: UUID,
+    generationID: UUID,
+    generation: Int,
+    payloadVersion: Int,
+    payload: Data,
+    stateRawValue: String,
+    attemptedGenerationID: UUID? = nil,
+    attemptedGeneration: Int? = nil,
+    attemptedPayloadVersion: Int? = nil,
+    attemptedPayload: Data? = nil,
+    attemptedAt: Date? = nil,
+    createdAt: Date,
+    updatedAt: Date
+  ) {
+    self.operationKey = operationKey
+    self.id = id
+    self.serverNamespaceRawValue = serverNamespaceRawValue
+    self.memberID = memberID
+    self.operationRawValue = operationRawValue
+    self.entityKindRawValue = entityKindRawValue
+    self.localEntityID = localEntityID
+    self.generationID = generationID
+    self.generation = generation
+    self.payloadVersion = payloadVersion
+    self.payload = payload
+    self.stateRawValue = stateRawValue
+    self.attemptedGenerationID = attemptedGenerationID
+    self.attemptedGeneration = attemptedGeneration
+    self.attemptedPayloadVersion = attemptedPayloadVersion
+    self.attemptedPayload = attemptedPayload
+    self.attemptedAt = attemptedAt
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+  }
+}
+
+/// Written before remote account withdrawal. It is intentionally keyed by
+/// namespace and account so a retry cannot clear another environment/account.
+@Model
+final class PersistedPendingAccountCleanup {
+  @Attribute(.unique) var cleanupKey: String
+  @Attribute(.unique) var id: UUID
+  var serverNamespaceRawValue: String
+  var memberID: Int64
+  var phaseRawValue: String
+  var createdAt: Date
+
+  init(
+    cleanupKey: String,
+    id: UUID,
+    serverNamespaceRawValue: String,
+    memberID: Int64,
+    phaseRawValue: String,
+    createdAt: Date
+  ) {
+    self.cleanupKey = cleanupKey
+    self.id = id
+    self.serverNamespaceRawValue = serverNamespaceRawValue
+    self.memberID = memberID
+    self.phaseRawValue = phaseRawValue
+    self.createdAt = createdAt
+  }
+}

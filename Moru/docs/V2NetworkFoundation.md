@@ -180,9 +180,9 @@ DTO에서 `String`으로 받은 뒤 Mapper에서 검증합니다.
 ```text
 사용자 변경
 -> SwiftData에 먼저 저장
--> Outbox에 업로드 작업 저장
--> 로그인/네트워크 가능 시 서버 전송
--> 성공 시 remote link와 sync 상태 갱신
+-> 로그인 상태면 같은 transaction에 typed Outbox intent 저장
+-> `waitingForServerContract`로 보관
+-> 현재는 sender가 없으므로 서버 write를 호출하지 않음
 ```
 
 가져오기 흐름은 다음과 같습니다.
@@ -196,23 +196,32 @@ DTO에서 `String`으로 받은 뒤 Mapper에서 검증합니다.
 -> 화면이 SwiftData 변경을 관찰
 ```
 
-현재 v1 Mapper는 `localOnly`만 허용하고
-remote metadata를 제거합니다.
-실제 동기화 전에 다음 SwiftData 스키마에 아래 항목을 추가해야 합니다.
+기존 Routine/Run Mapper는 계속 `localOnly`만 허용하고
+remote metadata를 제거합니다. 서버 식별자를 기존 모델의 문자열 필드에
+혼합하지 않습니다.
 
-- 영속 Outbox
-- account ID를 포함한 local/remote link
-- pending upload/delete 상태 또는 tombstone
-- retry 횟수와 마지막 오류
+`MoruSchemaV4`는 다음 account-scoped 동기화 기반을 별도 모델로 추가합니다.
 
-현재 최신 스키마 이름은 `MoruSchemaV3`입니다.
-다음 스키마는 `MoruSchemaV4`를 사용합니다.
+- `PersistedRoutineServerBinding`
+  - server namespace, account, entity kind, local UUID별 remote Int64 ID
+  - 기존 local UUID 자체를 stable client UUID로 사용
+- `PersistedRoutineSyncMutation`
+  - typed command별 영속 Outbox와 payload generation
+  - 동일 payload는 같은 로컬 `generationID`를 유지
+  - payload가 바뀌면 coalesce하고 새 generation과 ID를 발급
+
+현재 최신 스키마 이름은 `MoruSchemaV4`입니다.
 제품 버전과 SwiftData 스키마 타입 이름을 혼동하지 않습니다.
 
-서버가 client entity ID, idempotency, revision,
-삭제 및 증분 조회 계약을 제공하기 전에는
-자동 양방향 동기화를 구현하지 않습니다.
-v2.0은 사용자 선택형 백업/가져오기를 우선합니다.
+현재 CRUD는 로그인 중에만 Outbox intent까지 저장할 수 있습니다. 그러나
+서버가 client entity ID, idempotency, reconciliation, 안전한 삭제와 단일 활성
+계약을 제공하기 전에는 sender를 구현하거나 자동 양방향 동기화를 켜지 않습니다.
+현재 Outbox 항목은 `waitingForServerContract`로만 저장하며 자동 전송하지
+않습니다. timeout처럼 서버 반영 여부를 알 수 없는 결과는
+`needsReconciliation`로 전환하고 자동 재시도하지 않습니다.
+
+데이터 원본은 SwiftData입니다. 서버는 계정 백업·공유·통계용 projection입니다.
+현재 서버 요청이 로컬 필드 전부를 받지 않으므로 완전 백업으로 간주하지 않습니다.
 
 ## 인증과 세션
 
@@ -277,14 +286,20 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 ## 계약 확인 전 보류하는 연동
 
 - 루틴 그룹 쓰기와 실행용 조회
-  - `POST /routine-groups`, 루틴 추가, `PATCH`, `DELETE`는 연결하지 않습니다.
+  - `POST /routine-groups`, `POST /routine-groups/{routineGroupId}/routines`,
+    `PATCH /routine-groups/{routineGroupId}/active`,
+    `DELETE /routine-groups/{routineGroupId}`, `DELETE /routines/{routineId}`,
+    `POST /routine-executions`는 sender에 연결하지 않습니다.
   - `GET /routine-groups/active`, `GET /routine-groups/today`도 로컬 루틴과
     실행 기준을 정하지 않아 연결하지 않습니다.
-  - 로컬 UUID와 서버 `Int64` ID의 영속 매핑이 없습니다.
+  - 로컬 UUID와 서버 `Int64` ID의 account-scoped mapping/Outbox 기반은
+    `MoruSchemaV4`에 있습니다. 다만 서버가 stable client ID를 돌려주지 않아
+    새 그룹의 자식 ID를 제목·순서로 추측해 연결하지 않습니다.
   - 수정·재정렬, client mutation ID, idempotency, revision,
-    tombstone, 증분 동기화 계약이 없습니다.
+    tombstone, 증분 동기화 계약은 서버에 없습니다.
 - 실행 결과 저장과 AI 단계 판정
-  - 서버 routine ID, 오프라인 outbox, 중복 전송 방지 키가 없습니다.
+  - 실행 결과용 Outbox 기반은 있지만, 서버 routine ID, 응답 client ID,
+    중복 전송 방지 키가 없습니다.
   - 실행 중 계정 전환·재시도·부분 완료 정책도 필요합니다.
 - 온보딩 상태 조회
   - 현재 Swagger에는 완료 상태를 맞춰 쓰는 mutation이 없습니다.
@@ -303,27 +318,13 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 
 ## 쓰기 연동 전 서버 계약
 
-현재 백엔드 동작을 직접 확인한 결과는 다음과 같습니다.
-
-- 같은 루틴 그룹 생성 요청을 두 번 보내면 서로 다른 그룹 두 개가 생성됩니다.
-- 같은 루틴 추가 요청을 두 번 보내면 루틴 두 개가 생성됩니다.
-- 같은 실행 결과를 다시 보내면 실행 기록이 중복 저장됩니다.
-- 요청 중복을 식별할 idempotency key 또는 correlation key가 없습니다.
-
-따라서 네트워크 재시도만으로 중복 쓰기가 생길 수 있습니다. 아래 계약이
-Swagger와 서버 구현에 포함되기 전에는 쓰기 API를 제품 흐름에 연결하지
-않습니다.
-
-- 생성·수정 요청에 `Idempotency-Key` 또는 `clientMutationId`를 받습니다.
-- 같은 키와 같은 payload를 다시 보내면 새 데이터를 만들지 않고 최초 결과를
-  재사용합니다.
-- 같은 키에 다른 payload가 오면 `409 Conflict`로 거절합니다.
-- 루틴 그룹·루틴·step에 앱이 재전송 후에도 사용할 안정적인 client ID를
-  지원합니다.
-- 실행 업로드는 batch ID와 `clientExecutionId`로 중복을 판별합니다.
-- timeout 뒤 이전 요청의 성공 여부를 조회할 reconciliation API를 제공합니다.
-- 수정 충돌을 감지할 revision 또는 ETag 계약을 제공합니다.
-- 삭제와 증분 동기화를 위한 tombstone과 delta 조회 계약을 제공합니다.
+2026-08-10 live Swagger에는 루틴 mutation용 `Idempotency-Key`, stable client
+ID echo, reconciliation 조회, revision/ETag가 선언되어 있지 않습니다.
+따라서 재시도만으로 중복 생성·실행 기록이 생길 수 있으며, sender는 의도적으로
+차단합니다. 상세 P0/P1/P2 요청과 수용 기준은
+[서버 루틴 동기화 계약 요청서](ServerRoutineSyncContractRequest.md)에 둡니다.
+P0이 Swagger와 실서버에 배포되고 E2E로 검증되기 전에는 어떤 새 루틴 write도
+제품 흐름에서 호출하지 않습니다.
 
 ## TTS 경계
 

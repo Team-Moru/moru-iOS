@@ -192,7 +192,74 @@ final class AlarmSchedulingFoundationTests: XCTestCase {
   }
 
   @MainActor
-  func testRoutineConflictMutationReschedulesAffectedBatch() async throws {
+  func testPreflightCancellationFailurePersistsRepairAndStillReachesReady()
+    async throws {
+    let fixture = makeFixture()
+    var disabledRoutine = makeRoutine()
+    disabledRoutine.isActive = false
+    disabledRoutine.alarmSchedule?.isEnabled = false
+    fixture.routineRepository.routines = [disabledRoutine]
+    let schedule = try XCTUnwrap(disabledRoutine.alarmSchedule)
+    let platformIdentifier = "stale-platform-alarm"
+    try fixture.stateRepository.saveRecord(
+      AlarmDeliveryRecord(
+        request: AlarmScheduleRequest(
+          routineID: disabledRoutine.id,
+          scheduleID: schedule.id,
+          routineName: disabledRoutine.name,
+          hour: schedule.hour,
+          minute: schedule.minute,
+          weekdays: schedule.weekdays,
+          soundName: schedule.soundName
+        ),
+        backend: .alarmKit,
+        state: .scheduled,
+        platformIdentifiers: [platformIdentifier],
+        lastErrorMessage: nil,
+        updatedAt: Date()
+      )
+    )
+    fixture.primary.identifiers.insert(platformIdentifier)
+    fixture.primary.cancelError = AlarmSchedulingTestError.unavailable
+    let preflight = AlarmCancellationFailureBootstrapPreflight(
+      routineRepository: fixture.routineRepository,
+      stateRepository: fixture.stateRepository,
+      alarmMutator: fixture.coordinator
+    )
+    let bootstrapper = AppBootstrapper(
+      modelContainerFactory: {
+        try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+      },
+      appCapabilities: .localOnly,
+      preflight: preflight
+    )
+
+    bootstrapper.start()
+
+    for _ in 0..<100 {
+      if case .ready = bootstrapper.state {
+        break
+      }
+      await Task.yield()
+    }
+
+    guard case .ready = bootstrapper.state else {
+      return XCTFail("Cancellation repair must not block app readiness.")
+    }
+    XCTAssertEqual(
+      fixture.stateRepository.records[schedule.id]?.state,
+      .repairRequired
+    )
+    XCTAssertEqual(
+      fixture.primary.cancellationBatches,
+      [[platformIdentifier]]
+    )
+    XCTAssertTrue(fixture.primary.scheduleRequests.isEmpty)
+    XCTAssertTrue(fixture.fallback.scheduleRequests.isEmpty)
+  }
+
+  @MainActor
+  func testReplacingActiveRoutineDisablesAllExistingAlarmsAndPreservesWeekdays() async throws {
     let fixture = makeFixture()
     let first = makeRoutine(
       name: "기존 루틴",
@@ -224,7 +291,7 @@ final class AlarmSchedulingFoundationTests: XCTestCase {
         ],
         isActive: true
       ),
-      resolvingWeekdayConflict: true
+      replacingActiveRoutine: true
     )
 
     let savedFirst = try XCTUnwrap(
@@ -233,9 +300,12 @@ final class AlarmSchedulingFoundationTests: XCTestCase {
     let savedNew = try XCTUnwrap(
       fixture.routineRepository.routines.first { $0.id == newRoutineID }
     )
-    XCTAssertEqual(savedFirst.alarmSchedule?.weekdays, [.monday])
+    XCTAssertFalse(savedFirst.isActive)
+    XCTAssertFalse(savedFirst.alarmSchedule?.isEnabled ?? true)
+    XCTAssertEqual(savedFirst.alarmSchedule?.weekdays, [.monday, .wednesday])
+    XCTAssertTrue(savedNew.isActive)
     XCTAssertEqual(savedNew.alarmSchedule?.weekdays, [.wednesday, .friday])
-    XCTAssertEqual(fixture.primary.scheduleRequests.count, 3)
+    XCTAssertEqual(fixture.primary.scheduleRequests.count, 2)
     XCTAssertTrue(
       fixture.primary.cancellationBatches.joined().contains(
         first.alarmSchedule!.id.uuidString.lowercased()
@@ -862,5 +932,31 @@ private final class AlarmSchedulingTestRoutineRepository: RoutineRepository {
 
   func deleteRoutine(id: UUID) throws {
     routines.removeAll { $0.id == id }
+  }
+}
+
+@MainActor
+private final class AlarmCancellationFailureBootstrapPreflight:
+  AppBootstrapPreflightPreparing {
+  private let routineRepository: any RoutineRepository
+  private let stateRepository: any AlarmPlatformStateRepository
+  private let alarmMutator: any AlarmScheduleMutating
+
+  init(
+    routineRepository: any RoutineRepository,
+    stateRepository: any AlarmPlatformStateRepository,
+    alarmMutator: any AlarmScheduleMutating
+  ) {
+    self.routineRepository = routineRepository
+    self.stateRepository = stateRepository
+    self.alarmMutator = alarmMutator
+  }
+
+  func prepare(dependencies: DependencyContainer) async {
+    await DefaultAppBootstrapPreflight.cancelDisabledAlarmRecordsIfNeeded(
+      routineRepository: routineRepository,
+      alarmPlatformStateRepository: stateRepository,
+      alarmScheduleMutator: alarmMutator
+    )
   }
 }

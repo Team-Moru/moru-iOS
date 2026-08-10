@@ -18,7 +18,7 @@ struct RoutineSettingView: View {
   @State private var creationDraft: RoutineDraftState?
   @State private var didHandleEntryPoint = false
   @State private var activationConflictRoutineID: UUID?
-  @State private var activationConflict: RoutineWeekdayConflictState?
+  @State private var activationConflict: RoutineActivationConflictState?
 
   private let entryPoint: RoutineSettingEntryPoint
   private let dependencies: DependencyContainer
@@ -93,12 +93,12 @@ struct RoutineSettingView: View {
     .sheet(item: $editorDraft) { draft in
       RoutineEditorView(draft: draft) { savedDraft in
         await viewModel.saveDraft(savedDraft)
-      } onResolveWeekdayConflict: { savedDraft in
-        await viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
+      } onReplaceActiveRoutine: { savedDraft in
+        await viewModel.saveDraftReplacingActiveRoutine(savedDraft)
       } onDelete: { routineID in
         await viewModel.deleteRoutine(id: routineID)
-      } weekdayConflictState: { draft in
-        viewModel.weekdayConflict(for: draft)
+      } activeRoutineConflictState: { draft in
+        viewModel.activeRoutineConflict(for: draft)
       }
     }
     .sheet(
@@ -110,10 +110,10 @@ struct RoutineSettingView: View {
         directDraft: directDraft
       ) { savedDraft in
         await viewModel.saveDraft(savedDraft)
-      } onResolveWeekdayConflict: { savedDraft in
-        await viewModel.saveDraftResolvingWeekdayConflict(savedDraft)
-      } weekdayConflictState: { draft in
-        viewModel.weekdayConflict(for: draft)
+      } onReplaceActiveRoutine: { savedDraft in
+        await viewModel.saveDraftReplacingActiveRoutine(savedDraft)
+      } activeRoutineConflictState: { draft in
+        viewModel.activeRoutineConflict(for: draft)
       }
     }
   }
@@ -309,7 +309,7 @@ struct RoutineSettingView: View {
       return
     }
 
-    if let conflict = viewModel.activationConflict(for: routineID) {
+    if let conflict = viewModel.activeRoutineConflict(forActivationOf: routineID) {
       activationConflictRoutineID = routineID
       activationConflict = conflict
     } else {
@@ -320,7 +320,7 @@ struct RoutineSettingView: View {
   }
 
   private func activationConflictDialogOverlay(
-    _ conflict: RoutineWeekdayConflictState
+    _ conflict: RoutineActivationConflictState
   ) -> some View {
     ZStack {
       AppColor.grayBlack
@@ -328,9 +328,9 @@ struct RoutineSettingView: View {
         .ignoresSafeArea()
 
       MoruDialog(
-        title: "다른 루틴에서 사용 중",
-        message: RoutineManagementCopy.weekdayConflictMessage(conflict),
-        primaryTitle: "괜찮아요",
+        title: "다른 루틴을 끌까요?",
+        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
+        primaryTitle: "취소",
         secondaryTitle: "변경하기",
         primaryAction: {
           activationConflict = nil
@@ -339,7 +339,7 @@ struct RoutineSettingView: View {
         secondaryAction: {
           if let activationConflictRoutineID {
             Task {
-              await viewModel.activateRoutineResolvingWeekdayConflict(
+              await viewModel.activateRoutineReplacingActiveRoutine(
                 id: activationConflictRoutineID
               )
             }

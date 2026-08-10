@@ -36,7 +36,7 @@ final class RoutineSettingViewModelTests: XCTestCase {
   }
 
   @MainActor
-  func testActivationChangePersistsAndReloadsRoutineState() async throws {
+  func testDeactivationAllowsZeroActiveRoutines() async throws {
     let viewModel = RoutineSettingViewModel(dependencies: .homePreview)
     viewModel.load()
     let routineID = try XCTUnwrap(viewModel.state.routines.first?.id)
@@ -50,6 +50,7 @@ final class RoutineSettingViewModelTests: XCTestCase {
     XCTAssertFalse(
       try XCTUnwrap(viewModel.state.routines.first { $0.id == routineID }).isActive
     )
+    XCTAssertTrue(viewModel.state.routines.allSatisfy { !$0.isActive })
   }
 
   @MainActor

@@ -32,6 +32,10 @@ struct RoutineStepMutation {
   var isRequired: Bool = true
 }
 
+enum RoutineSettingError: Error, Equatable {
+  case activeRoutineReplacementRequired
+}
+
 @MainActor
 struct RoutineSettingUseCase {
   private let routineRepository: any RoutineRepository
@@ -47,11 +51,17 @@ struct RoutineSettingUseCase {
 
   func saveRoutine(
     from mutation: RoutineSettingMutation,
-    resolvingWeekdayConflict: Bool = false
+    replacingActiveRoutine: Bool = false
   ) async throws -> AlarmMutationResult {
+    let conflictingIDs = try activeRoutineConflictIDs(for: mutation)
+
     let routines: [Routine]
-    if resolvingWeekdayConflict {
-      routines = try routinesByResolvingWeekdayConflict(for: mutation)
+    if !conflictingIDs.isEmpty {
+      guard replacingActiveRoutine else {
+        throw RoutineSettingError.activeRoutineReplacementRequired
+      }
+
+      routines = try routinesByReplacingActiveRoutine(for: mutation)
       try routineRepository.saveRoutines(routines)
     } else {
       let routine = try makeRoutine(from: mutation)
@@ -62,40 +72,46 @@ struct RoutineSettingUseCase {
     return await synchronizeAlarmSchedules(for: routines)
   }
 
-  func weekdayConflict(for mutation: RoutineSettingMutation) throws -> Set<Weekday> {
+  func activeRoutineConflictIDs(
+    for mutation: RoutineSettingMutation
+  ) throws -> Set<UUID> {
     guard mutation.isActive else {
       return []
     }
 
     let routines = try routineRepository.fetchRoutines()
-    let selectedWeekdays = mutation.selectedWeekdays
-
-    return routines.reduce(into: Set<Weekday>()) { result, routine in
+    return routines.reduce(into: Set<UUID>()) { result, routine in
       guard routine.id != mutation.routineID,
-            routine.isActive,
-            let schedule = routine.alarmSchedule,
-            schedule.isEnabled else {
+            routine.isActive else {
         return
       }
 
-      result.formUnion(selectedWeekdays.intersection(Set(schedule.weekdays)))
+      result.insert(routine.id)
     }
   }
 
   func updateActivation(
     routineID: UUID,
     isActive: Bool,
-    resolvingWeekdayConflict: Bool = false
+    replacingActiveRoutine: Bool = false
   ) async throws -> AlarmMutationResult {
     guard var routine = try routineRepository.routine(id: routineID) else {
       return .empty
     }
 
-    if resolvingWeekdayConflict {
+    if isActive {
       let mutation = makeMutation(from: routine, isActive: true)
-      let routines = try routinesByResolvingWeekdayConflict(for: mutation)
-      try routineRepository.saveRoutines(routines)
-      return await synchronizeAlarmSchedules(for: routines)
+      let conflictingIDs = try activeRoutineConflictIDs(for: mutation)
+
+      if !conflictingIDs.isEmpty {
+        guard replacingActiveRoutine else {
+          throw RoutineSettingError.activeRoutineReplacementRequired
+        }
+
+        let routines = try routinesByReplacingActiveRoutine(for: mutation)
+        try routineRepository.saveRoutines(routines)
+        return await synchronizeAlarmSchedules(for: routines)
+      }
     }
 
     routine.isActive = isActive
@@ -132,10 +148,12 @@ struct RoutineSettingUseCase {
     }
   }
 
-  private func routinesByResolvingWeekdayConflict(
+  private func routinesByReplacingActiveRoutine(
     for mutation: RoutineSettingMutation
   ) throws -> [Routine] {
-    var routines = try routinesWithWeekdayConflictRemoved(for: mutation)
+    var routines = try routinesWithOtherActiveRoutinesDisabled(
+      excluding: mutation.routineID
+    )
     let routine = try makeRoutine(from: mutation)
 
     if let index = routines.firstIndex(where: { $0.id == routine.id }) {
@@ -147,41 +165,24 @@ struct RoutineSettingUseCase {
     return routines
   }
 
-  private func routinesWithWeekdayConflictRemoved(
-    for mutation: RoutineSettingMutation
+  private func routinesWithOtherActiveRoutinesDisabled(
+    excluding routineID: UUID?
   ) throws -> [Routine] {
     var routines = try routineRepository.fetchRoutines()
 
-    guard mutation.isActive else {
-      return routines
-    }
-
-    let selectedWeekdays = mutation.selectedWeekdays
-
     for index in routines.indices {
       var routine = routines[index]
-      guard routine.id != mutation.routineID,
-            routine.isActive,
-            var schedule = routine.alarmSchedule,
-            schedule.isEnabled else {
+      guard routine.id != routineID,
+            routine.isActive else {
         continue
       }
 
-      let originalWeekdays = schedule.weekdays
-      let remainingWeekdays = originalWeekdays.filter { !selectedWeekdays.contains($0) }
-
-      guard remainingWeekdays.count != originalWeekdays.count else {
-        continue
-      }
-
-      if remainingWeekdays.isEmpty {
+      if var schedule = routine.alarmSchedule {
         schedule.isEnabled = false
-        routine.isActive = false
-      } else {
-        schedule.weekdays = remainingWeekdays
+        routine.alarmSchedule = schedule
       }
 
-      routine.alarmSchedule = schedule
+      routine.isActive = false
       routine.updatedAt = Date()
       routines[index] = routine
     }

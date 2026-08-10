@@ -406,6 +406,57 @@ final class AccountSessionFoundationTests: XCTestCase {
     )
   }
 
+  func testMemberScopedLiveRemovalNeverDeletesReplacementAccountAndClearsCapturedInMemoryAccount() throws {
+    let captured = makeCredentials()
+    let replacement = AccountCredentials(
+      memberID: captured.memberID + 1,
+      accessToken: "replacement-access",
+      refreshToken: "replacement-refresh",
+      onboardingCompleted: false,
+      provider: .google
+    )
+    let store = MutableSessionCredentialStore(credentials: captured)
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: store,
+      accessTokenProvider: tokenProvider
+    )
+    try sessionStore.establishSession(credentials: captured)
+    try sessionStore.establishSession(credentials: replacement)
+
+    XCTAssertFalse(
+      try sessionStore.removeLocalAccountSessionIfMatching(memberID: captured.memberID)
+    )
+    XCTAssertEqual(store.credentials, replacement)
+    XCTAssertEqual(tokenProvider.accessToken, replacement.accessToken)
+    XCTAssertEqual(
+      sessionStore.state,
+      .signedIn(
+        SignedInAccount(
+          memberID: replacement.memberID,
+          onboardingCompleted: replacement.onboardingCompleted,
+          provider: replacement.provider
+        )
+      )
+    )
+
+    let capturedOnlyStore = MutableSessionCredentialStore(credentials: captured)
+    let capturedOnlySession = AccountSessionStore(
+      credentialStore: capturedOnlyStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    try capturedOnlySession.establishSession(credentials: captured)
+    try capturedOnlyStore.remove()
+
+    XCTAssertTrue(
+      try capturedOnlySession.removeLocalAccountSessionIfMatching(
+        memberID: captured.memberID
+      )
+    )
+    XCTAssertEqual(capturedOnlySession.state, .signedOut)
+    XCTAssertNil(capturedOnlySession.accessTokenProvider.accessToken)
+  }
+
   func testCapabilitiesRequireEnabledSignedInAccount() {
     let signedIn = AccountSessionState.signedIn(
       SignedInAccount(memberID: 7, onboardingCompleted: true)
@@ -453,12 +504,19 @@ final class AccountSessionFoundationTests: XCTestCase {
 
     bootstrapper.start()
 
+    XCTAssertEqual(accountSessionStore.state, .restoring)
+    XCTAssertEqual(credentialStore.loadCount, 0)
+
+    try await waitUntil {
+      if case .ready = bootstrapper.state {
+        return true
+      }
+      return false
+    }
     guard case .ready(let app) = bootstrapper.state else {
-      return XCTFail("Local app graph should be ready before account restoration.")
+      return XCTFail("Local app graph should become ready after preflight.")
     }
     XCTAssertEqual(app.sessionStore.phase, .onboardingRequired)
-    XCTAssertEqual(app.accountSessionStore.state, .restoring)
-    XCTAssertEqual(credentialStore.loadCount, 0)
 
     try await waitUntil {
       credentialStore.loadCount == 1
@@ -495,10 +553,127 @@ final class AccountSessionFoundationTests: XCTestCase {
     )
 
     bootstrapper.start()
-    await Task.yield()
+    try await waitUntil {
+      if case .ready = bootstrapper.state {
+        return true
+      }
+      return false
+    }
 
     XCTAssertEqual(credentialStore.loadCount, 0)
     XCTAssertEqual(accountSessionStore.state, .signedOut)
+  }
+
+  func testBootstrapAwaitsPreflightBeforePublishingReady() async throws {
+    let preflight = BlockingBootstrapPreflight()
+    let bootstrapper = AppBootstrapper(
+      modelContainerFactory: {
+        try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+      },
+      appCapabilities: .localOnly,
+      preflight: preflight
+    )
+
+    bootstrapper.start()
+
+    let didStartPreflight = await preflight.waitUntilStarted()
+    XCTAssertTrue(didStartPreflight)
+    guard case .loading = bootstrapper.state else {
+      return XCTFail("Bootstrap must stay loading while preflight is running.")
+    }
+
+    preflight.finish()
+    try await waitUntil {
+      if case .ready = bootstrapper.state {
+        return true
+      }
+      return false
+    }
+    XCTAssertEqual(preflight.events, ["started", "finished"])
+  }
+
+  func testAmbiguousCleanupForStoredAccountDefersRestorationWithoutDeletingCredentials()
+    async throws {
+    let credentials = makeCredentials()
+    let credentialStore = StubCredentialStore(loadResult: .success(credentials))
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let syncRepository = SwiftDataRoutineSyncRepository(
+      modelContext: container.mainContext
+    )
+    try syncRepository.preparePendingAccountCleanup(
+      memberID: credentials.memberID,
+      at: Date()
+    )
+    try syncRepository.beginPendingAccountCleanupAttempt(
+      memberID: credentials.memberID
+    )
+    let bootstrapper = AppBootstrapper(
+      modelContainerFactory: { container },
+      accountSessionStoreFactory: { accountSessionStore },
+      appCapabilities: .production
+    )
+
+    bootstrapper.start()
+    XCTAssertEqual(accountSessionStore.state, .restoring)
+
+    try await waitUntil {
+      if case .ready = bootstrapper.state {
+        return accountSessionStore.state == .signedOut
+      }
+      return false
+    }
+
+    XCTAssertEqual(credentialStore.removeCount, 0)
+    XCTAssertEqual(credentialStore.loadCount, 1)
+    XCTAssertNil(accountSessionStore.accessTokenProvider.accessToken)
+  }
+
+  func testAmbiguousCleanupForAnotherMemberDoesNotBlockStoredAccountRestoration()
+    async throws {
+    let credentials = makeCredentials()
+    let credentialStore = StubCredentialStore(loadResult: .success(credentials))
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let syncRepository = SwiftDataRoutineSyncRepository(
+      modelContext: container.mainContext
+    )
+    try syncRepository.preparePendingAccountCleanup(
+      memberID: credentials.memberID + 1,
+      at: Date()
+    )
+    try syncRepository.beginPendingAccountCleanupAttempt(
+      memberID: credentials.memberID + 1
+    )
+    let bootstrapper = AppBootstrapper(
+      modelContainerFactory: { container },
+      accountSessionStoreFactory: { accountSessionStore },
+      appCapabilities: .production
+    )
+
+    bootstrapper.start()
+
+    try await waitUntil {
+      accountSessionStore.state == .signedIn(
+        SignedInAccount(
+          memberID: credentials.memberID,
+          onboardingCompleted: credentials.onboardingCompleted
+        )
+      )
+    }
+
+    XCTAssertEqual(credentialStore.removeCount, 0)
+    XCTAssertEqual(accountSessionStore.signedInMemberID, credentials.memberID)
+    XCTAssertEqual(
+      accountSessionStore.accessTokenProvider.accessToken,
+      credentials.accessToken
+    )
   }
 
   private func makeCredentials() -> AccountCredentials {
@@ -562,6 +737,7 @@ nonisolated private final class StubCredentialStore:
   private let lock = NSLock()
   private let loadResult: Result<AccountCredentials?, Error>
   private var storedLoadCount = 0
+  private var storedRemoveCount = 0
   private var storedSavedCredentials: AccountCredentials?
 
   init(loadResult: Result<AccountCredentials?, Error>) {
@@ -580,6 +756,12 @@ nonisolated private final class StubCredentialStore:
     return storedSavedCredentials
   }
 
+  var removeCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedRemoveCount
+  }
+
   func load() throws -> AccountCredentials? {
     lock.lock()
     storedLoadCount += 1
@@ -593,5 +775,68 @@ nonisolated private final class StubCredentialStore:
     lock.unlock()
   }
 
-  func remove() throws {}
+  func remove() throws {
+    lock.lock()
+    storedRemoveCount += 1
+    lock.unlock()
+  }
+}
+
+nonisolated private final class MutableSessionCredentialStore:
+  CredentialStore,
+  @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedCredentials: AccountCredentials?
+
+  init(credentials: AccountCredentials?) {
+    storedCredentials = credentials
+  }
+
+  var credentials: AccountCredentials? {
+    lock.lock()
+    defer { lock.unlock() }
+    return storedCredentials
+  }
+
+  func load() throws -> AccountCredentials? {
+    credentials
+  }
+
+  func save(_ credentials: AccountCredentials) throws {
+    lock.lock()
+    storedCredentials = credentials
+    lock.unlock()
+  }
+
+  func remove() throws {
+    lock.lock()
+    storedCredentials = nil
+    lock.unlock()
+  }
+}
+
+@MainActor
+private final class BlockingBootstrapPreflight: AppBootstrapPreflightPreparing {
+  private var continuation: CheckedContinuation<Void, Never>?
+  private(set) var events: [String] = []
+
+  func prepare(dependencies: DependencyContainer) async {
+    events.append("started")
+    await withCheckedContinuation { continuation in
+      self.continuation = continuation
+    }
+    events.append("finished")
+  }
+
+  func waitUntilStarted() async -> Bool {
+    for _ in 0..<100 where continuation == nil {
+      await Task.yield()
+    }
+    return continuation != nil
+  }
+
+  func finish() {
+    continuation?.resume()
+    continuation = nil
+  }
 }

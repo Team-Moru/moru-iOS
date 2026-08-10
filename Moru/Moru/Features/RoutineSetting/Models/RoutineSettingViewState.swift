@@ -86,19 +86,11 @@ struct RoutineSettingItemState: Equatable, Identifiable {
   }
 }
 
-struct RoutineWeekdayConflictState: Equatable {
-  var conflictingWeekdays: Set<Weekday>
+struct RoutineActivationConflictState: Equatable {
+  let activeRoutineIDs: Set<UUID>
 
-  var weekdayText: String {
-    let sortedWeekdays = conflictingWeekdays.sortedByDisplayOrder()
-
-    guard sortedWeekdays.count != Weekday.allCases.count else {
-      return "모든 요일"
-    }
-
-    return sortedWeekdays
-      .map { "\($0.shortTitle)요일" }
-      .joined(separator: ", ")
+  var activeRoutineCount: Int {
+    activeRoutineIDs.count
   }
 }
 
