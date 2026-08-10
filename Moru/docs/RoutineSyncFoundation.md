@@ -117,11 +117,19 @@ revision, reconciliation 조회를 받지 않습니다. 따라서 모든 새 Out
 `clientEntityID`와 함께 검증되지 않으면 그 mutation은
 `needsReconciliation`으로 남깁니다.
 
-현재 앱은 CRUD intent를 Outbox에 저장하지만, 네트워크 sender는 연결하지
-않습니다. 모든 새 항목은 `waitingForServerContract`이며, 아래 P0 계약이
+현재 앱은 CRUD intent를 Outbox에 저장하고 contract-gated sender core까지
+제공하지만, production HTTP transport와 실행 trigger는 연결하지 않습니다.
+모든 새 항목은 `waitingForServerContract`이며, 아래 P0 계약이
 Swagger와 실서버에 배포되고 E2E로 검증되기 전에는 어떤 서버 write도
 호출하지 않습니다. timeout, 5xx, decode 실패, 취소, 요청 중 계정 변경처럼
 성공 여부가 모호한 결과도 자동 재전송하지 않습니다.
+
+`RoutineSyncServerContract`는 전체 P0 capability와 `isE2EVerified`를
+동시에 확인합니다. 하나라도 부족하면 admission 결과는 0개입니다.
+검증된 계약이 주입된 테스트에서만 `waitingForServerContract`를 `queued`로
+승격하며, `RoutineSyncSender`는 Outbox `generationID`를 그대로 미래의
+`Idempotency-Key`로 사용합니다. production DI에는 이 sender나 transport가
+없으므로 현재 server write 호출 수는 계속 0회입니다.
 
 ## 트랜잭션 경계
 
@@ -186,16 +194,28 @@ P0이 Swagger와 실서버에 반영되고 E2E로 검증된 뒤에만 활성화�
 핵심은 `Idempotency-Key`, stable client ID 반환, timeout 뒤 reconciliation,
 재전송 안전한 삭제, 단일 활성의 원자적 서버 계약입니다.
 
-### sender 활성화 전 iOS 후속 P0
+### sender 활성화 전 iOS P0 상태
+
+완료:
 
 - `createRoutineGroup` 또는 `addRoutine`이 `attempting`/`needsReconciliation`
-  인 동안 사용자가 해당 로컬 그룹·자식을 삭제하거나 활성 선택을 바꾸면, 현재는
-  모호한 선행 요청 뒤에 mutation 순서를 추측하지 않기 위해 로컬 변경을
-  fail-safe rollback한다. sender를 켜기 전에는 선행 create/add의 settlement까지
-  삭제·활성 변경을 보류하는 dependency-blocked successor 설계와 회귀 테스트가
-  필요하다.
-- 그룹 binding만 저장된 partial mapping 뒤 로컬의 원하는 자식 구조가 바뀔 수 있다.
-  reconciliation settlement는 제목·순서로 자식 remote ID를 추측하지 않고 최신
-  desired child graph를 보존한 뒤, 검증된 mapping을 바탕으로 필요한 add/delete
-  successor를 해석·생성해야 한다. 이 흐름과 늦은 응답 조합의 sender 테스트가
-  준비되기 전에는 sender를 활성화하지 않는다.
+  인 동안 로컬 그룹·자식을 삭제해도 로컬 변경을 rollback하지 않는다. 선행
+  mutation은 그대로 보존하고 delete를 dependency-blocked successor로 기록한다.
+- partial group-only mapping 뒤에도 최신 desired child graph를 create mutation의
+  새 generation에 보존한다. attempted snapshot은 덮지 않으며, 검증된 mapping이
+  도착하면 add/delete successor로 해석한다.
+- create → add/active → execution → delete 순서는 binding과 선행 Outbox 존재 여부로
+  admission한다. 서버 capability와 E2E 검증 플래그가 완전하지 않으면 어떤 row도
+  `queued`가 되지 않는다.
+- sender core는 claim 전에 exact generation을 고정하고, 모호한 transport 결과를
+  `needsReconciliation`로 보내며 자동 재시도하지 않는다. reconciliation이
+  미커밋을 증명한 경우에만 같은 generation을 다시 admission할 수 있다.
+
+남음:
+
+- P0이 배포된 Swagger DTO와 HTTP header를 구현하는 production transport
+- idempotency key reconciliation endpoint adapter
+- 실서버 E2E suite의 통과 결과를 production contract로 공급하는 release gate
+- foreground/network 회복 시 한 번씩 sender를 실행하는 trigger와 계정 변경 E2E
+
+위 항목과 서버 P0가 모두 완료되기 전에는 production sender를 활성화하지 않는다.

@@ -1720,6 +1720,435 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
+  func testAdmissionRequiresVerifiedCompleteServerContract() throws {
+    let repository = try makeRepository()
+    let groupID = UUID()
+    _ = try repository.enqueue(
+      command: createGroupCommand(groupID: groupID, children: []),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+
+    XCTAssertTrue(try repository.admitEligibleMutations(
+      memberID: 7,
+      contract: .unavailable,
+      at: Date(timeIntervalSince1970: 2)
+    ).isEmpty)
+    XCTAssertTrue(try repository.admitEligibleMutations(
+      memberID: 7,
+      contract: RoutineSyncServerContract(
+        capabilities: .allRequired,
+        isE2EVerified: false
+      ),
+      at: Date(timeIntervalSince1970: 3)
+    ).isEmpty)
+    XCTAssertTrue(try repository.admitEligibleMutations(
+      memberID: 7,
+      contract: RoutineSyncServerContract(
+        capabilities: .allRequired.subtracting(.replaySafeDelete),
+        isE2EVerified: true
+      ),
+      at: Date(timeIntervalSince1970: 3)
+    ).isEmpty)
+    XCTAssertEqual(try repository.mutations(memberID: 7).first?.state, .waitingForServerContract)
+
+    let admitted = try repository.admitEligibleMutations(
+      memberID: 7,
+      contract: verifiedServerContract,
+      at: Date(timeIntervalSince1970: 4)
+    )
+    XCTAssertEqual(admitted.count, 1)
+    XCTAssertEqual(admitted.first?.operation, .createRoutineGroup)
+    XCTAssertEqual(admitted.first?.state, .queued)
+  }
+
+  @MainActor
+  func testAdmissionHonorsCreateAddExecutionDependencyOrder() throws {
+    let repository = try makeRepository()
+    let groupID = UUID()
+    let routineID = UUID()
+    let resultID = UUID()
+    let create = try repository.enqueue(
+      command: createGroupCommand(groupID: groupID, children: []),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let add = try repository.enqueue(
+      command: .addRoutine(
+        groupLocalID: groupID,
+        routine: RoutineSyncRoutineSnapshot(
+          localID: routineID,
+          title: "단계",
+          type: "confirm",
+          durationSeconds: nil,
+          order: 0
+        )
+      ),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+    let execution = try repository.enqueue(
+      command: .saveRoutineExecution(
+        RoutineSyncExecutionSnapshot(
+          runLocalID: UUID(),
+          groupLocalID: groupID,
+          routineLocalID: routineID,
+          runStartedAt: Date(timeIntervalSince1970: 1),
+          runCompletedAt: Date(timeIntervalSince1970: 2),
+          timeZoneIdentifier: "UTC",
+          result: RoutineSyncExecutionResultSnapshot(
+            localID: resultID,
+            completedAt: Date(timeIntervalSince1970: 2),
+            skipped: false,
+            durationSeconds: 1,
+            inputText: nil,
+            transcript: nil
+          )
+        )
+      ),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+
+    XCTAssertEqual(
+      try repository.admitEligibleMutations(
+        memberID: 7,
+        contract: verifiedServerContract,
+        at: Date(timeIntervalSince1970: 4)
+      ).map(\.id),
+      [create.id]
+    )
+    try repository.completeCreateRoutineGroup(
+      id: create.id,
+      expectedGenerationID: create.generationID,
+      assignments: [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: groupID,
+          remoteID: 41
+        )
+      ],
+      childMappingsComplete: true,
+      at: Date(timeIntervalSince1970: 5)
+    )
+
+    XCTAssertEqual(
+      try repository.admitEligibleMutations(
+        memberID: 7,
+        contract: verifiedServerContract,
+        at: Date(timeIntervalSince1970: 6)
+      ).map(\.id),
+      [add.id]
+    )
+    _ = try XCTUnwrap(repository.claimForDelivery(id: add.id, at: Date(timeIntervalSince1970: 7)))
+    try repository.completeMutation(
+      id: add.id,
+      expectedGenerationID: add.generationID,
+      assignments: [
+        RoutineServerBindingAssignment(
+          entityKind: .routine,
+          localEntityID: routineID,
+          remoteID: 51,
+          parentEntityKind: .routineGroup,
+          parentLocalEntityID: groupID
+        )
+      ],
+      at: Date(timeIntervalSince1970: 8)
+    )
+
+    XCTAssertEqual(
+      try repository.admitEligibleMutations(
+        memberID: 7,
+        contract: verifiedServerContract,
+        at: Date(timeIntervalSince1970: 9)
+      ).map(\.id),
+      [execution.id]
+    )
+  }
+
+  @MainActor
+  func testAdmissionSettlesActiveAndExecutionBeforeChildAndGroupDeletes() throws {
+    let repository = try makeRepository()
+    let groupID = UUID()
+    let routineID = UUID()
+    let resultID = UUID()
+    _ = try repository.recordRemoteIDs(
+      [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: groupID,
+          remoteID: 41
+        ),
+        RoutineServerBindingAssignment(
+          entityKind: .routine,
+          localEntityID: routineID,
+          remoteID: 51,
+          parentEntityKind: .routineGroup,
+          parentLocalEntityID: groupID
+        ),
+      ],
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let active = try repository.enqueue(
+      command: .selectActiveRoutineGroup(selectedGroupLocalID: nil),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+    let execution = try repository.enqueue(
+      command: .saveRoutineExecution(
+        RoutineSyncExecutionSnapshot(
+          runLocalID: UUID(),
+          groupLocalID: groupID,
+          routineLocalID: routineID,
+          runStartedAt: Date(timeIntervalSince1970: 2),
+          runCompletedAt: Date(timeIntervalSince1970: 3),
+          timeZoneIdentifier: "UTC",
+          result: RoutineSyncExecutionResultSnapshot(
+            localID: resultID,
+            completedAt: Date(timeIntervalSince1970: 3),
+            skipped: false,
+            durationSeconds: 1,
+            inputText: nil,
+            transcript: nil
+          )
+        )
+      ),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+    let deleteRoutine = try repository.enqueue(
+      command: .deleteRoutine(groupLocalID: groupID, routineLocalID: routineID),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 4)
+    )
+    let deleteGroup = try repository.enqueue(
+      command: .deleteRoutineGroup(groupLocalID: groupID),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 5)
+    )
+
+    XCTAssertEqual(
+      try repository.admitEligibleMutations(
+        memberID: 7,
+        contract: verifiedServerContract,
+        at: Date(timeIntervalSince1970: 6)
+      ).map(\.id),
+      [active.id, execution.id]
+    )
+    try repository.removeCompleted(
+      id: active.id,
+      expectedGenerationID: active.generationID
+    )
+    try repository.completeMutation(
+      id: execution.id,
+      expectedGenerationID: execution.generationID,
+      assignments: [
+        RoutineServerBindingAssignment(
+          entityKind: .routineExecution,
+          localEntityID: resultID,
+          remoteID: 61,
+          parentEntityKind: .routine,
+          parentLocalEntityID: routineID
+        )
+      ],
+      at: Date(timeIntervalSince1970: 7)
+    )
+
+    XCTAssertEqual(
+      try repository.admitEligibleMutations(
+        memberID: 7,
+        contract: verifiedServerContract,
+        at: Date(timeIntervalSince1970: 8)
+      ).map(\.id),
+      [deleteRoutine.id]
+    )
+    try repository.completeDelete(
+      id: deleteRoutine.id,
+      expectedGenerationID: deleteRoutine.generationID,
+      at: Date(timeIntervalSince1970: 9)
+    )
+    XCTAssertEqual(
+      try repository.admitEligibleMutations(
+        memberID: 7,
+        contract: verifiedServerContract,
+        at: Date(timeIntervalSince1970: 10)
+      ).map(\.id),
+      [deleteGroup.id]
+    )
+  }
+
+  @MainActor
+  func testReconciliationKeepsAttemptAndCoalescesLatestDesiredCreateGraph() throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataRoutineSyncRepository(modelContext: container.mainContext)
+    let groupID = UUID()
+    let firstChildID = UUID()
+    let addedChildID = UUID()
+    let first = try enqueueClaimedCreate(
+      repository: repository,
+      context: container.mainContext,
+      command: createGroupCommand(groupID: groupID, children: [firstChildID])
+    )
+    try repository.completeCreateRoutineGroup(
+      id: first.id,
+      expectedGenerationID: first.generationID,
+      assignments: [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: groupID,
+          remoteID: 41
+        )
+      ],
+      childMappingsComplete: false,
+      at: Date(timeIntervalSince1970: 3)
+    )
+
+    let desired = try repository.enqueue(
+      command: createGroupCommand(
+        groupID: groupID,
+        children: [firstChildID, addedChildID]
+      ),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 4)
+    )
+    XCTAssertEqual(desired.state, .needsReconciliation)
+    XCTAssertEqual(desired.attempt?.generationID, first.generationID)
+    XCTAssertNotEqual(desired.generationID, first.generationID)
+
+    try repository.completeCreateRoutineGroup(
+      id: first.id,
+      expectedGenerationID: first.generationID,
+      assignments: [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: groupID,
+          remoteID: 41
+        ),
+        RoutineServerBindingAssignment(
+          entityKind: .routine,
+          localEntityID: firstChildID,
+          remoteID: 51,
+          parentEntityKind: .routineGroup,
+          parentLocalEntityID: groupID
+        ),
+      ],
+      childMappingsComplete: true,
+      at: Date(timeIntervalSince1970: 5)
+    )
+
+    let successor = try XCTUnwrap(try repository.mutations(memberID: 7).first)
+    XCTAssertEqual(successor.operation, .addRoutine)
+    XCTAssertEqual(successor.localEntityID, addedChildID)
+  }
+
+  @MainActor
+  func testNotCommittedCreateCollapsesDependencyBlockedDeleteGraph() throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataRoutineSyncRepository(modelContext: container.mainContext)
+    let groupID = UUID()
+    let childID = UUID()
+    let first = try enqueueClaimedCreate(
+      repository: repository,
+      context: container.mainContext,
+      command: createGroupCommand(groupID: groupID, children: [childID])
+    )
+    try repository.markNeedsReconciliation(
+      id: first.id,
+      expectedGenerationID: first.generationID,
+      at: Date(timeIntervalSince1970: 3)
+    )
+    _ = try repository.enqueue(
+      command: .deleteRoutineGroup(groupLocalID: groupID),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 4)
+    )
+
+    try repository.resolveNotCommitted(
+      id: first.id,
+      expectedGenerationID: first.generationID,
+      at: Date(timeIntervalSince1970: 5)
+    )
+
+    XCTAssertTrue(try repository.mutations(memberID: 7).isEmpty)
+  }
+
+  @MainActor
+  func testNotCommittedCreateDropsExecutionForChildRemovedFromDesiredGraph() throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataRoutineSyncRepository(modelContext: container.mainContext)
+    let groupID = UUID()
+    let childID = UUID()
+    let resultID = UUID()
+    let first = try enqueueClaimedCreate(
+      repository: repository,
+      context: container.mainContext,
+      command: createGroupCommand(groupID: groupID, children: [childID])
+    )
+    _ = try repository.enqueue(
+      command: .saveRoutineExecution(
+        RoutineSyncExecutionSnapshot(
+          runLocalID: UUID(),
+          groupLocalID: groupID,
+          routineLocalID: childID,
+          runStartedAt: Date(timeIntervalSince1970: 1),
+          runCompletedAt: Date(timeIntervalSince1970: 2),
+          timeZoneIdentifier: "UTC",
+          result: RoutineSyncExecutionResultSnapshot(
+            localID: resultID,
+            completedAt: Date(timeIntervalSince1970: 2),
+            skipped: false,
+            durationSeconds: 1,
+            inputText: nil,
+            transcript: nil
+          )
+        )
+      ),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+    let desired = try repository.enqueue(
+      command: createGroupCommand(groupID: groupID, children: []),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 4)
+    )
+
+    try repository.resolveNotCommitted(
+      id: first.id,
+      expectedGenerationID: first.generationID,
+      at: Date(timeIntervalSince1970: 5)
+    )
+
+    let remaining = try repository.mutations(memberID: 7)
+    XCTAssertEqual(remaining.count, 1)
+    XCTAssertEqual(remaining.first?.id, first.id)
+    XCTAssertEqual(remaining.first?.generationID, desired.generationID)
+    XCTAssertEqual(remaining.first?.state, .waitingForServerContract)
+    XCTAssertNil(remaining.first?.attempt)
+  }
+
+  @MainActor
+  func testAdmissionRejectsVerifiedContractFromDifferentNamespace() throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataRoutineSyncRepository(
+      modelContext: container.mainContext,
+      serverNamespace: .staging
+    )
+    _ = try repository.enqueue(
+      command: createGroupCommand(groupID: UUID(), children: []),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+
+    XCTAssertTrue(try repository.admitEligibleMutations(
+      memberID: 7,
+      contract: verifiedServerContract,
+      at: Date(timeIntervalSince1970: 2)
+    ).isEmpty)
+    XCTAssertEqual(try repository.mutations(memberID: 7).first?.state, .waitingForServerContract)
+  }
+
+  @MainActor
   private func makeRepository() throws -> SwiftDataRoutineSyncRepository {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     return SwiftDataRoutineSyncRepository(modelContainer: container)
@@ -1780,6 +2209,13 @@ final class RoutineSyncFoundationTests: XCTestCase {
       entityKind: .routineGroup,
       localEntityID: localID,
       payload: payload
+    )
+  }
+
+  private var verifiedServerContract: RoutineSyncServerContract {
+    RoutineSyncServerContract(
+      capabilities: .allRequired,
+      isE2EVerified: true
     )
   }
 }

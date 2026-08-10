@@ -156,8 +156,25 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
           entityKind: .routineGroup,
           localEntityID: routine.id
         )
-        let removedBoundActiveRoutine = binding != nil && routine.isActive
+        let pendingCreate = try routineSyncRepository?.mutation(
+          memberID: memberID,
+          operation: .createRoutineGroup,
+          entityKind: .routineGroup,
+          localEntityID: routine.id
+        )
         if binding != nil {
+          try routineSyncRepository?.stageEnqueue(
+            EnqueuedRoutineSyncMutation(
+              memberID: memberID,
+              command: .deleteRoutineGroup(groupLocalID: routine.id)
+            ),
+            at: Date()
+          )
+        } else if let pendingCreate,
+                  pendingCreate.state == .attempting
+                    || pendingCreate.state == .needsReconciliation {
+          // The server may already contain this group. Preserve the ambiguous
+          // create and record desired absence as a dependency-blocked delete.
           try routineSyncRepository?.stageEnqueue(
             EnqueuedRoutineSyncMutation(
               memberID: memberID,
@@ -172,25 +189,25 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
             entityKind: .routineGroup,
             localEntityID: routine.id
           )
-          // A local-only group has no server identity. Its unsent children and
-          // execution snapshots cannot become deliverable after the group is
-          // deleted, so remove them in this same local transaction. (An
-          // in-flight/reconciliation row still fails closed through
-          // `stageCancel`.)
+          // A never-attempted local group has no server identity, so all of
+          // its dependent unsent intents can disappear with it.
           try stageCancelPendingDescendantIntents(
             groupLocalID: routine.id,
             memberID: memberID
           )
+        }
+        if routine.isActive,
+           binding != nil || pendingCreate?.state == .attempting
+             || pendingCreate?.state == .needsReconciliation {
+          try stageActiveSelection(
+            memberID: memberID,
+            allowRemoteClear: true,
+            at: Date()
+          )
+        } else if binding == nil {
           _ = try routineSyncRepository?.stageCancelActiveSelection(
             memberID: memberID,
             selectedGroupLocalID: routine.id
-          )
-        }
-        if routine.isActive, binding != nil {
-          try stageActiveSelection(
-            memberID: memberID,
-            allowRemoteClear: removedBoundActiveRoutine,
-            at: Date()
           )
         }
       }
@@ -214,13 +231,13 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       entityKind: .routineGroup,
       localEntityID: current.id
     )
-    if groupBinding == nil {
-      if try routineSyncRepository.mutation(
-        memberID: memberID,
-        operation: .createRoutineGroup,
-        entityKind: .routineGroup,
-        localEntityID: current.id
-      ) != nil {
+    if let pendingCreate = try routineSyncRepository.mutation(
+      memberID: memberID,
+      operation: .createRoutineGroup,
+      entityKind: .routineGroup,
+      localEntityID: current.id
+    ) {
+      if pendingCreate.state == .waitingForServerContract || pendingCreate.state == .queued {
         let currentStepIDs = Set(current.steps.map(\.id))
         for removedStep in previous.steps where !currentStepIDs.contains(removedStep.id) {
           // A pending group-create snapshot can still describe this child, but
@@ -233,14 +250,19 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
             memberID: memberID
           )
         }
-        try routineSyncRepository.stageEnqueue(
-          EnqueuedRoutineSyncMutation(
-            memberID: memberID,
-            command: .createRoutineGroup(RoutineSyncGroupSnapshot(routine: current))
-          ),
-          at: date
-        )
       }
+      // During an attempt or reconciliation this rotates only the desired
+      // generation. The exact attempted snapshot remains durable.
+      try routineSyncRepository.stageEnqueue(
+        EnqueuedRoutineSyncMutation(
+          memberID: memberID,
+          command: .createRoutineGroup(RoutineSyncGroupSnapshot(routine: current))
+        ),
+        at: date
+      )
+      return
+    }
+    if groupBinding == nil {
       // Existing local-only groups are deliberately not backfilled at login.
       return
     }
@@ -322,17 +344,40 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
           at: date
         )
       } else {
-        _ = try routineSyncRepository.stageCancel(
+        let pendingAdd = try routineSyncRepository.mutation(
           memberID: memberID,
           operation: .addRoutine,
           entityKind: .routine,
           localEntityID: step.id
         )
-        try stageCancelPendingExecutionIntents(
-          groupLocalID: current.id,
-          routineLocalID: step.id,
-          memberID: memberID
-        )
+        if let pendingAdd,
+           pendingAdd.state == .attempting || pendingAdd.state == .needsReconciliation {
+          // The add may have committed. Keep dependent execution history and
+          // record deletion behind the unresolved add instead of rolling back
+          // the local edit.
+          try routineSyncRepository.stageEnqueue(
+            EnqueuedRoutineSyncMutation(
+              memberID: memberID,
+              command: .deleteRoutine(
+                groupLocalID: current.id,
+                routineLocalID: step.id
+              )
+            ),
+            at: date
+          )
+        } else {
+          _ = try routineSyncRepository.stageCancel(
+            memberID: memberID,
+            operation: .addRoutine,
+            entityKind: .routine,
+            localEntityID: step.id
+          )
+          try stageCancelPendingExecutionIntents(
+            groupLocalID: current.id,
+            routineLocalID: step.id,
+            memberID: memberID
+          )
+        }
       }
     }
     // Name, schedule, prior step contents, and ordering have no server PATCH

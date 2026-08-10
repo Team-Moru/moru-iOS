@@ -95,12 +95,30 @@ protocol RoutineSyncRepository: AnyObject {
     at date: Date
   ) throws
 
+  /// Resolves a server-backed reconciliation result proving that the exact
+  /// attempted generation never committed. A transport error alone must not
+  /// call this method because its outcome remains ambiguous.
+  func resolveNotCommitted(
+    id: UUID,
+    expectedGenerationID: UUID,
+    at date: Date
+  ) throws
+
   /// Claims only a row already admitted to delivery. Current production rows
   /// are never admitted, so this API cannot itself trigger network activity.
   func claimForDelivery(
     id: UUID,
     at date: Date
   ) throws -> RoutineSyncAttempt?
+
+  /// Moves only contract-covered, dependency-ready rows from waiting to
+  /// queued. Production must not supply a verified contract until live server
+  /// E2E tests cover the declared capabilities.
+  func admitEligibleMutations(
+    memberID: Int64,
+    contract: RoutineSyncServerContract,
+    at date: Date
+  ) throws -> [RoutineSyncMutation]
 
   func recoverInterruptedAttempts(at date: Date) throws
 

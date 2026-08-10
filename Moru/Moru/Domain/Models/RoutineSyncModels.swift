@@ -116,6 +116,62 @@ nonisolated enum RoutineSyncDeliveryPolicy: String, Sendable {
   case requiresIdempotencyOrReconciliation
 }
 
+/// Server features that must be verified together before any routine Outbox
+/// row can become deliverable. Declaring a header in Swagger is insufficient:
+/// production admission also requires the matching E2E contract suite.
+nonisolated struct RoutineSyncServerCapabilities: OptionSet, Equatable, Sendable {
+  let rawValue: UInt16
+
+  init(rawValue: UInt16) {
+    self.rawValue = rawValue
+  }
+
+  static let idempotencyKey = Self(rawValue: 1 << 0)
+  static let reconciliationLookup = Self(rawValue: 1 << 1)
+  static let requiredResponseIDs = Self(rawValue: 1 << 2)
+  static let clientEntityID = Self(rawValue: 1 << 3)
+  static let clientExecutionID = Self(rawValue: 1 << 4)
+  static let executionUpsert = Self(rawValue: 1 << 5)
+  static let replaySafeDelete = Self(rawValue: 1 << 6)
+  static let atomicSingleActive = Self(rawValue: 1 << 7)
+
+  static let allRequired: Self = [
+    .idempotencyKey,
+    .reconciliationLookup,
+    .requiredResponseIDs,
+    .clientEntityID,
+    .clientExecutionID,
+    .executionUpsert,
+    .replaySafeDelete,
+    .atomicSingleActive,
+  ]
+}
+
+nonisolated struct RoutineSyncServerContract: Equatable, Sendable {
+  let serverNamespace: RoutineSyncServerNamespace
+  let capabilities: RoutineSyncServerCapabilities
+  let isE2EVerified: Bool
+
+  init(
+    serverNamespace: RoutineSyncServerNamespace = .production,
+    capabilities: RoutineSyncServerCapabilities,
+    isE2EVerified: Bool
+  ) {
+    self.serverNamespace = serverNamespace
+    self.capabilities = capabilities
+    self.isE2EVerified = isE2EVerified
+  }
+
+  static let unavailable = Self(capabilities: [], isE2EVerified: false)
+
+  func supports(_: RoutineSyncOperation) -> Bool {
+    guard isE2EVerified else { return false }
+    // Admission is intentionally all-or-nothing. Sending a create while its
+    // delete or execution contract is unavailable can strand server data.
+    return capabilities.intersection(.allRequired) == .allRequired
+  }
+}
+
 nonisolated enum RoutineSyncMutationState: String, CaseIterable, Sendable {
   /// A future dispatch admission policy may move a safe operation here.
   case queued
