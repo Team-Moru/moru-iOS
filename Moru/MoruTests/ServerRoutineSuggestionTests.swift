@@ -530,6 +530,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     await gate.waitUntilRequested()
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertTrue(viewModel.isSuggesting)
+    XCTAssertEqual(viewModel.organizingProgress, .identifyingItems)
 
     await gate.finish(with: makeRoutine(name: "서버가 정리한 루틴"))
     try await waitUntil {
@@ -537,6 +538,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     }
 
     XCTAssertFalse(viewModel.isSuggesting)
+    XCTAssertEqual(viewModel.organizingProgress, .completed)
     XCTAssertEqual(viewModel.draft.previewRoutine?.name, "서버가 정리한 루틴")
     XCTAssertEqual(viewModel.draft.suggestionSource, .server)
   }

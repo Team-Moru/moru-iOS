@@ -615,6 +615,14 @@ private struct RoutineOrganizingView: View {
   @ObservedObject var viewModel: OnboardingViewModel
 
   var body: some View {
+    RoutineOrganizingContent(progress: viewModel.organizingProgress)
+  }
+}
+
+private struct RoutineOrganizingContent: View {
+  let progress: RoutineOrganizingProgress
+
+  var body: some View {
     VStack(spacing: 0) {
       OrganizingRoutineOrbView()
         .frame(width: 200, height: 200)
@@ -631,17 +639,46 @@ private struct RoutineOrganizingView: View {
         .foregroundStyle(MoruPilotColor.textTertiary)
         .padding(.top, MoruPilotSpacing.twelve)
 
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
-        OnboardingChecklistRow(title: "루틴 항목 파악", isDone: true)
-        OnboardingChecklistRow(title: "유형 분류", isDone: true)
-        OnboardingChecklistRow(title: "시간 배분 중", isDone: false)
-      }
-      .padding(.top, AppSpacing.fortyEight)
+      RoutineOrganizingChecklist(progress: progress)
+        .padding(.top, AppSpacing.fortyEight)
 
       Spacer(minLength: MoruPilotSpacing.twenty)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .padding(.horizontal, MoruPilotSpacing.twenty)
+  }
+}
+
+private struct RoutineOrganizingChecklist: View {
+  let progress: RoutineOrganizingProgress
+
+  private let items = [
+    "루틴 항목 파악",
+    "유형 분류",
+    "시간 배분",
+  ]
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+      ForEach(Array(items.enumerated()), id: \.offset) { index, title in
+        OnboardingChecklistRow(
+          title: title,
+          status: status(for: index)
+        )
+      }
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("루틴 정리 진행 상황")
+  }
+
+  private func status(for index: Int) -> OnboardingChecklistStatus {
+    if progress == .completed || index < progress.rawValue {
+      return .completed
+    }
+    if index == progress.rawValue {
+      return .active
+    }
+    return .pending
   }
 }
 
@@ -1403,23 +1440,65 @@ private struct RoutineCountSummary: View {
   }
 }
 
+private enum OnboardingChecklistStatus: Equatable {
+  case pending
+  case active
+  case completed
+}
+
 private struct OnboardingChecklistRow: View {
   let title: String
-  let isDone: Bool
+  let status: OnboardingChecklistStatus
 
   var body: some View {
     HStack(spacing: AppSpacing.xs) {
-      Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
-        .font(.system(size: 18, weight: .semibold))
-        .foregroundStyle(
-          isDone ? MoruPilotColor.accent : MoruPilotColor.textTertiary
-        )
+      statusIcon
+        .frame(width: 20, height: 20)
 
-      Text(title)
+      Text(status == .active ? "\(title) 중" : title)
         .onboardingTextStyle(.c1.weight(.semiBold))
         .foregroundStyle(
-          isDone ? MoruPilotColor.textPrimary : MoruPilotColor.textSecondary
+          status == .completed
+            ? MoruPilotColor.textPrimary
+            : MoruPilotColor.textSecondary
         )
+        .contentTransition(.opacity)
+    }
+    .animation(.snappy(duration: 0.38), value: status)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(title)
+    .accessibilityValue(accessibilityValue)
+  }
+
+  @ViewBuilder
+  private var statusIcon: some View {
+    switch status {
+    case .pending:
+      Image(systemName: "circle")
+        .font(.system(size: 18, weight: .semibold))
+        .foregroundStyle(MoruPilotColor.textTertiary)
+        .transition(.opacity.combined(with: .scale(scale: 0.72)))
+    case .active:
+      ProgressView()
+        .controlSize(.small)
+        .tint(MoruPilotColor.accent)
+        .transition(.opacity.combined(with: .scale(scale: 0.72)))
+    case .completed:
+      Image(systemName: "checkmark.circle.fill")
+        .font(.system(size: 18, weight: .semibold))
+        .foregroundStyle(MoruPilotColor.accent)
+        .transition(.opacity.combined(with: .scale(scale: 0.55)))
+    }
+  }
+
+  private var accessibilityValue: String {
+    switch status {
+    case .pending:
+      return "대기 중"
+    case .active:
+      return "진행 중"
+    case .completed:
+      return "완료"
     }
   }
 }
@@ -1980,12 +2059,33 @@ private extension View {
   )
 }
 
-#Preview("루틴 정리 중") {
-  OnboardingFlowView(
-    viewModel: OnboardingViewModel(
-      step: .organizing,
-      routineSuggestionService: LocalTemplateSuggestionService.shared
-    )
-  )
+#Preview("루틴 정리 진행 애니메이션") {
+  RoutineOrganizingProgressPreview()
+}
+
+@MainActor
+private struct RoutineOrganizingProgressPreview: View {
+  @State private var progress: RoutineOrganizingProgress = .identifyingItems
+
+  var body: some View {
+    RoutineOrganizingContent(progress: progress)
+      .task {
+        while !Task.isCancelled {
+          for phase in RoutineOrganizingProgress.allCases {
+            withAnimation(.snappy(duration: 0.38)) {
+              progress = phase
+            }
+            try? await _Concurrency.Task<Never, Never>.sleep(
+              for: phase == .completed ? .seconds(1.4) : .seconds(1)
+            )
+          }
+
+          progress = .identifyingItems
+          try? await _Concurrency.Task<Never, Never>.sleep(
+            for: .milliseconds(600)
+          )
+        }
+      }
+  }
 }
 #endif

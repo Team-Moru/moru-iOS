@@ -8,6 +8,13 @@
 import Combine
 import Foundation
 
+enum RoutineOrganizingProgress: Int, CaseIterable, Equatable {
+  case identifyingItems
+  case classifyingTypes
+  case allocatingTime
+  case completed
+}
+
 @MainActor
 final class OnboardingViewModel: ObservableObject {
   let objectWillChange = ObservableObjectPublisher()
@@ -32,6 +39,13 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   private(set) var isSuggesting: Bool = false {
+    willSet {
+      objectWillChange.send()
+    }
+  }
+
+  private(set) var organizingProgress: RoutineOrganizingProgress =
+    .identifyingItems {
     willSet {
       objectWillChange.send()
     }
@@ -429,6 +443,9 @@ final class OnboardingViewModel: ObservableObject {
     suggestionRequestID = requestID
     suggestionTask = requestTask
     isSuggesting = true
+    if step == .organizing {
+      organizingProgress = .identifyingItems
+    }
     draft.previewRoutine = nil
     draft.suggestionSource = nil
     errorMessage = nil
@@ -450,14 +467,17 @@ final class OnboardingViewModel: ObservableObject {
 
       draft.previewRoutine = result.routine
       draft.suggestionSource = result.source
-      finishSuggestion(requestID: requestID)
 
       guard hasValidatedPreviewRoutine else {
+        finishSuggestion(requestID: requestID)
         draft.previewRoutine = nil
         draft.suggestionSource = nil
         errorMessage = "루틴 항목을 불러올 수 없어요."
         return false
       }
+
+      try await presentOrganizingResult(requestID: requestID)
+      finishSuggestion(requestID: requestID)
 
       return true
     } catch is CancellationError {
@@ -665,5 +685,41 @@ final class OnboardingViewModel: ObservableObject {
     suggestionTask = nil
     suggestionRequestID = nil
     isSuggesting = false
+  }
+
+  private func presentOrganizingResult(requestID: UUID) async throws {
+    guard step == .organizing else {
+      return
+    }
+
+    try await presentOrganizingProgress(
+      .classifyingTypes,
+      requestID: requestID,
+      for: .milliseconds(180)
+    )
+    try await presentOrganizingProgress(
+      .allocatingTime,
+      requestID: requestID,
+      for: .milliseconds(180)
+    )
+    try await presentOrganizingProgress(
+      .completed,
+      requestID: requestID,
+      for: .milliseconds(260)
+    )
+  }
+
+  private func presentOrganizingProgress(
+    _ progress: RoutineOrganizingProgress,
+    requestID: UUID,
+    for duration: Duration
+  ) async throws {
+    try Task.checkCancellation()
+    guard suggestionRequestID == requestID, step == .organizing else {
+      throw CancellationError()
+    }
+
+    organizingProgress = progress
+    try await _Concurrency.Task<Never, Never>.sleep(for: duration)
   }
 }
