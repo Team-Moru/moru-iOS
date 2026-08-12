@@ -14,8 +14,7 @@ enum OnboardingCopy {
   static let organizingTitle = "루틴을 정리하고 있어요"
   static let organizingSubtitle = "잠시만 기다려주세요 ∙∙∙"
   static let reviewTitle = "정리된\n루틴이에요"
-  static let alarmSoundName = "레디얼"
-  static let alarmSoundGuidance = "사운드바를 드래그해 기기 음량을 조절할 수 있어요."
+  static let alarmSoundGuidance = "알람 소리와 음량은 iPhone 설정을 따라요."
   static let voiceSubtitle =
     "아침마다 들을 앱 내장 목소리예요. 들어보고 골라보세요."
 
