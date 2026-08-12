@@ -11,7 +11,7 @@ struct ConfirmStepContentView: View {
   let isAutomaticStartBlocked: Bool
   let speechInputController: SpeechInputController
   let waitUntilGuidanceFinishes: () async -> Bool
-  let onComplete: (String) -> Void
+  let onComplete: (String?) -> Void
   @State private var feedbackText: String?
 
   var body: some View {
@@ -63,8 +63,22 @@ struct ConfirmStepContentView: View {
 
         onComplete(transcript)
       }
+
+      MoruButton("완료했어요", style: .secondary) {
+        speechInputController.cancel()
+        onComplete(nil)
+      }
+      .accessibilityHint("음성 입력 없이 이 단계를 완료합니다")
     }
     .padding(.horizontal, 20)
+    .onChange(of: speechInputController.latestTranscriptUpdate) { _, update in
+      guard let update,
+            ConfirmTranscriptMatcher.hasNegativeIntent(update.text) else {
+        return
+      }
+
+      feedbackText = "아직이군요. 천천히 마무리한 뒤 \"완료했어요\"라고 말해 주세요."
+    }
   }
 
   private var stepTitleSection: some View {
