@@ -5,8 +5,6 @@
 //  Created by Codex on 7/6/26.
 //
 
-import AVFAudio
-import MediaPlayer
 import SwiftUI
 
 @MainActor
@@ -815,6 +813,13 @@ private struct OnboardingAlarmSettingView: View {
               .foregroundStyle(MoruPilotColor.textSecondary)
 
             OnboardingAlarmOptionsCard(viewModel: viewModel)
+
+            Text(OnboardingCopy.alarmSoundGuidance)
+              .onboardingTextStyle(.c1)
+              .foregroundStyle(MoruPilotColor.textTertiary)
+              .multilineTextAlignment(.center)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(maxWidth: .infinity)
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(
@@ -837,8 +842,6 @@ private struct OnboardingAlarmOptionsCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: cardSpacing) {
-      soundHeader
-      systemVolumeControl
       settingRow(
         title: "날씨 알려주기",
         isOn: Binding(
@@ -873,7 +876,6 @@ private struct OnboardingAlarmOptionsCard: View {
       y: 4
     )
     .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 0 : 5)
-    .accessibilityHint(OnboardingCopy.alarmSoundGuidance)
   }
 
   private var cardSpacing: CGFloat {
@@ -888,66 +890,6 @@ private struct OnboardingAlarmOptionsCard: View {
 
   private var verticalCardPadding: CGFloat {
     dynamicTypeSize.isAccessibilitySize ? MoruPilotSpacing.twenty : MoruPilotSpacing.twelve
-  }
-
-  @ViewBuilder
-  private var soundHeader: some View {
-    if dynamicTypeSize.isAccessibilitySize {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-        HStack(spacing: MoruPilotSpacing.twelve) {
-          soundTitle
-          Spacer(minLength: MoruPilotSpacing.eight)
-          alarmSoundName
-        }
-
-        Text("다음")
-          .onboardingTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
-          .frame(maxWidth: .infinity)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    } else {
-      ZStack {
-        HStack(spacing: MoruPilotSpacing.twelve) {
-          soundTitle
-          Spacer(minLength: MoruPilotSpacing.eight)
-          alarmSoundName
-        }
-
-        Text("다음")
-          .onboardingTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
-      }
-      .frame(maxWidth: .infinity)
-    }
-  }
-
-  private var soundTitle: some View {
-    Text("사운드")
-      .onboardingTextStyle(.b4.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textSecondary)
-  }
-
-  private var alarmSoundName: some View {
-    Text("\(OnboardingCopy.alarmSoundName) >")
-      .onboardingTextStyle(.b4.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textSecondary)
-      .lineLimit(1)
-  }
-
-  private var systemVolumeControl: some View {
-    HStack(spacing: MoruPilotSpacing.eight) {
-      Image(systemName: "speaker.wave.1")
-        .font(.system(size: 22, weight: .medium))
-        .foregroundStyle(MoruPilotColor.accent)
-        .frame(width: 26, height: 28)
-        .accessibilityHidden(true)
-
-      OnboardingSystemVolumeSlider()
-        .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
-        .accessibilityLabel("알람 음량")
-        .accessibilityHint("좌우로 조절해 기기 음량을 변경합니다.")
-    }
   }
 
   private func settingRow(
@@ -987,118 +929,6 @@ private struct OnboardingAlarmOptionsCard: View {
     .accessibilityElement(children: .contain)
     .accessibilityLabel(title)
     .accessibilityValue(isOn.wrappedValue ? "켬" : "끔")
-  }
-}
-
-struct OnboardingSystemVolumeSlider: UIViewRepresentable {
-  func makeUIView(context: Context) -> OnboardingSystemVolumeControlView {
-    OnboardingSystemVolumeControlView(frame: .zero)
-  }
-
-  func updateUIView(
-    _ volumeView: OnboardingSystemVolumeControlView,
-    context: Context
-  ) {
-    volumeView.refreshFromSystemVolume()
-  }
-}
-
-final class OnboardingSystemVolumeControlView: UIView {
-  let slider = UISlider(frame: .zero)
-  private let systemVolumeView = MPVolumeView(frame: .zero)
-
-  override init(frame: CGRect) {
-    super.init(frame: frame)
-    configureView()
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) has not been implemented")
-  }
-
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    systemVolumeView.frame = CGRect(x: -2, y: -2, width: 1, height: 1)
-    refreshFromSystemVolume()
-  }
-
-  func refreshFromSystemVolume() {
-    guard !slider.isTracking else {
-      return
-    }
-
-    slider.value = AVAudioSession.sharedInstance().outputVolume
-  }
-
-  func setVolumeForTesting(_ value: Float) {
-    slider.value = value
-    applySliderValue(slider)
-  }
-
-  private func configureView() {
-    clipsToBounds = true
-
-    slider.translatesAutoresizingMaskIntoConstraints = false
-    slider.isEnabled = true
-    slider.isContinuous = true
-    slider.minimumValue = 0
-    slider.maximumValue = 1
-    slider.minimumTrackTintColor = UIColor(MoruPilotColor.accent)
-    slider.maximumTrackTintColor = UIColor(MoruPilotColor.accentTint)
-    slider.thumbTintColor = UIColor(MoruPilotColor.accent)
-    let thumbConfiguration = UIImage.SymbolConfiguration(
-      pointSize: 18,
-      weight: .regular
-    )
-    let thumbImage = UIImage(
-      systemName: "circle.fill",
-      withConfiguration: thumbConfiguration
-    )?.withTintColor(
-      UIColor(MoruPilotColor.accent),
-      renderingMode: .alwaysOriginal
-    )
-    slider.setThumbImage(thumbImage, for: .normal)
-    slider.setThumbImage(thumbImage, for: .highlighted)
-    slider.value = AVAudioSession.sharedInstance().outputVolume
-    slider.addTarget(self, action: #selector(applySliderValue), for: .valueChanged)
-
-    systemVolumeView.showsVolumeSlider = true
-    systemVolumeView.isUserInteractionEnabled = false
-    systemVolumeView.alpha = 0.01
-
-    addSubview(systemVolumeView)
-    addSubview(slider)
-    NSLayoutConstraint.activate([
-      slider.leadingAnchor.constraint(equalTo: leadingAnchor),
-      slider.trailingAnchor.constraint(equalTo: trailingAnchor),
-      slider.centerYAnchor.constraint(equalTo: centerYAnchor),
-    ])
-  }
-
-  @objc
-  private func applySliderValue(_ sender: UISlider) {
-    systemVolumeView.layoutIfNeeded()
-    guard let systemSlider = findSlider(in: systemVolumeView) else {
-      return
-    }
-
-    systemSlider.setValue(sender.value, animated: false)
-    systemSlider.sendActions(for: .valueChanged)
-  }
-
-  private func findSlider(in view: UIView) -> UISlider? {
-    if let slider = view as? UISlider {
-      return slider
-    }
-
-    for subview in view.subviews {
-      if let slider = findSlider(in: subview) {
-        return slider
-      }
-    }
-
-    return nil
   }
 }
 

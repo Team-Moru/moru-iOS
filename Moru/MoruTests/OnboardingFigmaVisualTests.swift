@@ -173,21 +173,11 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     XCTAssertFalse(copy.contains("운세"))
   }
 
-  func testAlarmSoundGuidanceCopyAndVisualContract() throws {
+  func testAlarmSystemSoundGuidanceAndVisualContract() throws {
     XCTAssertEqual(
       OnboardingCopy.alarmSoundGuidance,
-      "사운드바를 드래그해 기기 음량을 조절할 수 있어요."
+      "알람 소리와 음량은 iPhone 설정을 따라요."
     )
-    XCTAssertEqual(OnboardingCopy.alarmSoundName, "레디얼")
-
-    let volumeControl = OnboardingSystemVolumeControlView(
-      frame: CGRect(x: 0, y: 0, width: 300, height: 36)
-    )
-    volumeControl.layoutIfNeeded()
-    XCTAssertTrue(volumeControl.isUserInteractionEnabled)
-    XCTAssertTrue(volumeControl.slider.isEnabled)
-    volumeControl.setVolumeForTesting(0.72)
-    XCTAssertEqual(volumeControl.slider.value, 0.72, accuracy: 0.001)
 
     try assertStateRendersDeterministically(.alarm)
   }
