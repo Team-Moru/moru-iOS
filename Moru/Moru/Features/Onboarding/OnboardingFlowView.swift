@@ -620,7 +620,7 @@ private struct RoutineOrganizingView: View {
 }
 
 private struct RoutineOrganizingContent: View {
-  let progress: RoutineOrganizingProgress
+  let progress: RoutineOrganizingPresentationPhase
 
   var body: some View {
     VStack(spacing: 0) {
@@ -650,12 +650,12 @@ private struct RoutineOrganizingContent: View {
 }
 
 private struct RoutineOrganizingChecklist: View {
-  let progress: RoutineOrganizingProgress
+  let progress: RoutineOrganizingPresentationPhase
 
   private let items = [
-    "루틴 항목 파악",
-    "유형 분류",
-    "시간 배분",
+    "루틴 구성 준비",
+    "추천 결과 정리",
+    "확인 화면 준비",
   ]
 
   var body: some View {
@@ -702,34 +702,11 @@ private struct OrganizingRoutineOrbView: View {
       let time = reduceMotion
         ? 0
         : context.date.timeIntervalSinceReferenceDate
-      let slowBreath = CGFloat(sin(time * 2.15))
-      let counterBreath = CGFloat(cos(time * 2.55))
       let coreBreath = CGFloat(sin(time * 2.35))
 
       ZStack {
         ripple(time: time, offset: 0)
         ripple(time: time, offset: 0.5)
-
-        OrganicOrbWaveShape(
-          phase: time * 1.8,
-          amplitude: 0.085,
-          lobeCount: 5
-        )
-        .stroke(waveGradient, lineWidth: 7)
-        .frame(width: 156, height: 156)
-        .scaleEffect(1.02 + 0.065 * slowBreath)
-        .blur(radius: 6)
-        .opacity(0.42)
-
-        OrganicOrbWaveShape(
-          phase: -time * 1.5,
-          amplitude: 0.06,
-          lobeCount: 7
-        )
-        .stroke(waveGradient, lineWidth: 2.5)
-        .frame(width: 154, height: 154)
-        .scaleEffect(1 + 0.05 * counterBreath)
-        .opacity(0.62)
 
         Image(AppImage.moruImageHalo)
           .resizable()
@@ -751,41 +728,6 @@ private struct OrganizingRoutineOrbView: View {
       .scaleEffect(0.84 + progress * 0.45)
       .opacity((1 - progress) * 0.34)
       .blur(radius: 2 + progress * 4)
-  }
-}
-
-private struct OrganicOrbWaveShape: Shape {
-  let phase: Double
-  let amplitude: CGFloat
-  let lobeCount: Double
-
-  func path(in rect: CGRect) -> Path {
-    let center = CGPoint(x: rect.midX, y: rect.midY)
-    let baseRadius = min(rect.width, rect.height) / 2
-    let segmentCount = 180
-    var path = Path()
-
-    for segment in 0...segmentCount {
-      let ratio = Double(segment) / Double(segmentCount)
-      let angle = ratio * 2 * Double.pi
-      let primaryWave = sin(angle * lobeCount + phase)
-      let secondaryWave = sin(angle * (lobeCount + 2) - phase * 0.7)
-      let wave = CGFloat(primaryWave * 0.7 + secondaryWave * 0.3)
-      let radius = baseRadius * (1 + amplitude * wave)
-      let point = CGPoint(
-        x: center.x + radius * CGFloat(cos(angle)),
-        y: center.y + radius * CGFloat(sin(angle))
-      )
-
-      if segment == 0 {
-        path.move(to: point)
-      } else {
-        path.addLine(to: point)
-      }
-    }
-
-    path.closeSubpath()
-    return path
   }
 }
 
@@ -1447,6 +1389,8 @@ private enum OnboardingChecklistStatus: Equatable {
 }
 
 private struct OnboardingChecklistRow: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
   let title: String
   let status: OnboardingChecklistStatus
 
@@ -1464,7 +1408,14 @@ private struct OnboardingChecklistRow: View {
         )
         .contentTransition(.opacity)
     }
-    .animation(.snappy(duration: 0.38), value: status)
+    .animation(
+      reduceMotion
+        ? nil
+        : .easeInOut(
+          duration: RoutineOrganizingPresentationTiming.statusAnimationDuration
+        ),
+      value: status
+    )
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(title)
     .accessibilityValue(accessibilityValue)
@@ -1479,10 +1430,16 @@ private struct OnboardingChecklistRow: View {
         .foregroundStyle(MoruPilotColor.textTertiary)
         .transition(.opacity.combined(with: .scale(scale: 0.72)))
     case .active:
-      ProgressView()
-        .controlSize(.small)
-        .tint(MoruPilotColor.accent)
-        .transition(.opacity.combined(with: .scale(scale: 0.72)))
+      if reduceMotion {
+        Image(systemName: "circle.fill")
+          .font(.system(size: 12, weight: .semibold))
+          .foregroundStyle(MoruPilotColor.accent)
+      } else {
+        ProgressView()
+          .controlSize(.small)
+          .tint(MoruPilotColor.accent)
+          .transition(.opacity.combined(with: .scale(scale: 0.72)))
+      }
     case .completed:
       Image(systemName: "checkmark.circle.fill")
         .font(.system(size: 18, weight: .semibold))
@@ -2065,13 +2022,14 @@ private extension View {
 
 @MainActor
 private struct RoutineOrganizingProgressPreview: View {
-  @State private var progress: RoutineOrganizingProgress = .identifyingItems
+  @State private var progress: RoutineOrganizingPresentationPhase =
+    .preparingRoutine
 
   var body: some View {
     RoutineOrganizingContent(progress: progress)
       .task {
         while !Task.isCancelled {
-          for phase in RoutineOrganizingProgress.allCases {
+          for phase in RoutineOrganizingPresentationPhase.allCases {
             withAnimation(.snappy(duration: 0.38)) {
               progress = phase
             }
@@ -2080,7 +2038,7 @@ private struct RoutineOrganizingProgressPreview: View {
             )
           }
 
-          progress = .identifyingItems
+          progress = .preparingRoutine
           try? await _Concurrency.Task<Never, Never>.sleep(
             for: .milliseconds(600)
           )
