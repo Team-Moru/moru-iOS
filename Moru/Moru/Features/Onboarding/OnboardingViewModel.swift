@@ -8,6 +8,20 @@
 import Combine
 import Foundation
 
+// Client-side presentation phases. They pace onboarding UI and are not server telemetry.
+enum RoutineOrganizingPresentationPhase: Int, CaseIterable, Equatable {
+  case preparingRoutine
+  case organizingRecommendation
+  case preparingReview
+  case completed
+}
+
+enum RoutineOrganizingPresentationTiming {
+  static let statusAnimationDuration = 0.28
+  static let phaseDwell: Duration = .milliseconds(700)
+  static let completedDwell: Duration = .milliseconds(700)
+}
+
 @MainActor
 final class OnboardingViewModel: ObservableObject {
   let objectWillChange = ObservableObjectPublisher()
@@ -32,6 +46,13 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   private(set) var isSuggesting: Bool = false {
+    willSet {
+      objectWillChange.send()
+    }
+  }
+
+  private(set) var organizingProgress: RoutineOrganizingPresentationPhase =
+    .preparingRoutine {
     willSet {
       objectWillChange.send()
     }
@@ -65,6 +86,7 @@ final class OnboardingViewModel: ObservableObject {
   private var didComplete = false
   private var suggestionRequestID: UUID?
   private var suggestionTask: Task<RoutineSuggestionResult, Error>?
+  private var organizingPresentationTask: Task<Void, Never>?
   private var suggestionFlowID: UUID?
   private var suggestionFlowTask: Task<Void, Never>?
 
@@ -429,6 +451,9 @@ final class OnboardingViewModel: ObservableObject {
     suggestionRequestID = requestID
     suggestionTask = requestTask
     isSuggesting = true
+    if step == .organizing {
+      startOrganizingPresentation(requestID: requestID)
+    }
     draft.previewRoutine = nil
     draft.suggestionSource = nil
     errorMessage = nil
@@ -450,14 +475,17 @@ final class OnboardingViewModel: ObservableObject {
 
       draft.previewRoutine = result.routine
       draft.suggestionSource = result.source
-      finishSuggestion(requestID: requestID)
 
       guard hasValidatedPreviewRoutine else {
+        finishSuggestion(requestID: requestID)
         draft.previewRoutine = nil
         draft.suggestionSource = nil
         errorMessage = "루틴 항목을 불러올 수 없어요."
         return false
       }
+
+      try await completeOrganizingPresentation(requestID: requestID)
+      finishSuggestion(requestID: requestID)
 
       return true
     } catch is CancellationError {
@@ -644,6 +672,8 @@ final class OnboardingViewModel: ObservableObject {
     suggestionFlowID = nil
     suggestionTask?.cancel()
     suggestionTask = nil
+    organizingPresentationTask?.cancel()
+    organizingPresentationTask = nil
     suggestionRequestID = nil
     isSuggesting = false
   }
@@ -663,7 +693,89 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     suggestionTask = nil
+    organizingPresentationTask?.cancel()
+    organizingPresentationTask = nil
     suggestionRequestID = nil
     isSuggesting = false
+  }
+
+  private func startOrganizingPresentation(requestID: UUID) {
+    organizingPresentationTask?.cancel()
+    organizingProgress = .preparingRoutine
+    organizingPresentationTask = Task { @MainActor [weak self] in
+      guard let self else {
+        return
+      }
+
+      do {
+        try await self.pauseOrganizingPresentation(
+          requestID: requestID,
+          for: RoutineOrganizingPresentationTiming.phaseDwell
+        )
+        try self.updateOrganizingPresentation(
+          .organizingRecommendation,
+          requestID: requestID
+        )
+        try await self.pauseOrganizingPresentation(
+          requestID: requestID,
+          for: RoutineOrganizingPresentationTiming.phaseDwell
+        )
+        try self.updateOrganizingPresentation(
+          .preparingReview,
+          requestID: requestID
+        )
+        try await self.pauseOrganizingPresentation(
+          requestID: requestID,
+          for: RoutineOrganizingPresentationTiming.phaseDwell
+        )
+      } catch is CancellationError {
+        return
+      } catch {
+        return
+      }
+    }
+  }
+
+  private func completeOrganizingPresentation(requestID: UUID) async throws {
+    guard step == .organizing else {
+      return
+    }
+
+    if let organizingPresentationTask {
+      await organizingPresentationTask.value
+    }
+
+    try updateOrganizingPresentation(
+      .completed,
+      requestID: requestID
+    )
+    try await pauseOrganizingPresentation(
+      requestID: requestID,
+      for: RoutineOrganizingPresentationTiming.completedDwell
+    )
+  }
+
+  private func updateOrganizingPresentation(
+    _ progress: RoutineOrganizingPresentationPhase,
+    requestID: UUID
+  ) throws {
+    try Task.checkCancellation()
+    guard suggestionRequestID == requestID, step == .organizing else {
+      throw CancellationError()
+    }
+
+    organizingProgress = progress
+  }
+
+  private func pauseOrganizingPresentation(
+    requestID: UUID,
+    for duration: Duration
+  ) async throws {
+    try Task.checkCancellation()
+    guard suggestionRequestID == requestID, step == .organizing else {
+      throw CancellationError()
+    }
+
+    try await _Concurrency.Task<Never, Never>.sleep(for: duration)
   }
 }

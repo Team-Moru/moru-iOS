@@ -530,15 +530,95 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     await gate.waitUntilRequested()
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertTrue(viewModel.isSuggesting)
+    XCTAssertEqual(viewModel.organizingProgress, .preparingRoutine)
+    try await waitUntil(timeout: .seconds(2)) {
+      viewModel.organizingProgress == .organizingRecommendation
+    }
+    XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertTrue(viewModel.isSuggesting)
+    try await waitUntil(timeout: .seconds(2)) {
+      viewModel.organizingProgress == .preparingReview
+    }
+    XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertTrue(viewModel.isSuggesting)
 
     await gate.finish(with: makeRoutine(name: "서버가 정리한 루틴"))
-    try await waitUntil {
+    try await waitUntil(timeout: .seconds(2)) {
       viewModel.step == .review
     }
 
     XCTAssertFalse(viewModel.isSuggesting)
+    XCTAssertEqual(viewModel.organizingProgress, .completed)
     XCTAssertEqual(viewModel.draft.previewRoutine?.name, "서버가 정리한 루틴")
     XCTAssertEqual(viewModel.draft.suggestionSource, .server)
+  }
+
+  func testFreeformOrganizingScreenFinishesPresentationForFastSuggestion()
+    async throws {
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: RoutineSuggestionServerStub(
+        result: .success(makeRoutine(name: "빠른 서버 루틴"))
+      ),
+      localService: RoutineSuggestionLocalStub(),
+      signedInMemberProvider: account
+    )
+    let viewModel = OnboardingViewModel(
+      draft: OnboardingDraft(freeformText: "빠른 응답도 단계별로 보여줘요"),
+      step: .freeform,
+      routineSuggestionService: RoutineSuggestionLocalStub(),
+      routineSuggestionCoordinator: coordinator
+    )
+
+    viewModel.primaryButtonDidTap()
+    try await waitUntil(timeout: .seconds(2)) {
+      viewModel.organizingProgress == .organizingRecommendation
+    }
+    XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertTrue(viewModel.isSuggesting)
+    try await waitUntil(timeout: .seconds(2)) {
+      viewModel.organizingProgress == .preparingReview
+    }
+    XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertTrue(viewModel.isSuggesting)
+    try await waitUntil(timeout: .seconds(2)) {
+      viewModel.organizingProgress == .completed
+    }
+    XCTAssertEqual(viewModel.step, .organizing)
+
+    try await waitUntil(timeout: .seconds(2)) {
+      viewModel.step == .review
+    }
+
+    XCTAssertFalse(viewModel.isSuggesting)
+    XCTAssertEqual(viewModel.draft.previewRoutine?.name, "빠른 서버 루틴")
+  }
+
+  func testCancellingOrganizingScreenStopsPresentationPhases() async throws {
+    let coordinator = SequencedRoutineSuggestionCoordinator(
+      result: RoutineSuggestionResult(
+        routine: makeRoutine(name: "취소될 서버 루틴"),
+        source: .server
+      )
+    )
+    let viewModel = OnboardingViewModel(
+      draft: OnboardingDraft(freeformText: "정리 중에 화면을 닫아요"),
+      step: .freeform,
+      routineSuggestionService: RoutineSuggestionLocalStub(),
+      routineSuggestionCoordinator: coordinator
+    )
+
+    viewModel.primaryButtonDidTap()
+    try await waitUntil(timeout: .seconds(2)) {
+      viewModel.organizingProgress == .organizingRecommendation
+    }
+
+    viewModel.viewDidDisappear()
+    try await _Concurrency.Task<Never, Never>.sleep(for: .seconds(1))
+
+    XCTAssertFalse(viewModel.isSuggesting)
+    XCTAssertEqual(viewModel.organizingProgress, .organizingRecommendation)
+    XCTAssertEqual(coordinator.cancellationCount, 1)
   }
 
   func testImmediateDisappearanceAfterCTAStopsRequestBeforeItStarts()
