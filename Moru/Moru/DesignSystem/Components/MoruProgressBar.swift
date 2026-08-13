@@ -13,17 +13,20 @@ struct MoruProgressBar: View {
   let current: Int
   let total: Int
   let componentStyle: MoruPilotComponentStyle
+  let showsLabel: Bool
 
   private let figmaGaugeWidth: CGFloat = 352
 
   init(
     current: Int,
     total: Int,
-    componentStyle: MoruPilotComponentStyle = .legacy
+    componentStyle: MoruPilotComponentStyle = .legacy,
+    showsLabel: Bool = true
   ) {
     self.current = current
     self.total = total
     self.componentStyle = componentStyle
+    self.showsLabel = showsLabel
   }
 
   private var progress: CGFloat {
@@ -46,7 +49,9 @@ struct MoruProgressBar: View {
       .frame(height: 5)
       .frame(maxWidth: figmaGaugeWidth)
 
-      progressLabel
+      if showsLabel {
+        progressLabel
+      }
     }
   }
 
