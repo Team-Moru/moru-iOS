@@ -82,6 +82,14 @@ enum MoruSchemaV4: VersionedSchema {
   }
 }
 
+enum MoruSchemaV5: VersionedSchema {
+  static let versionIdentifier = Schema.Version(5, 0, 0)
+
+  static var models: [any PersistentModel.Type] {
+    MoruSchemaV4.models + [PersistedRoutineSyncAttemptArtifact.self]
+  }
+}
+
 enum MoruMigrationPlan: SchemaMigrationPlan {
   static var schemas: [any VersionedSchema.Type] {
     [
@@ -89,6 +97,7 @@ enum MoruMigrationPlan: SchemaMigrationPlan {
       MoruSchemaV2.self,
       MoruSchemaV3.self,
       MoruSchemaV4.self,
+      MoruSchemaV5.self,
     ]
   }
 
@@ -97,6 +106,7 @@ enum MoruMigrationPlan: SchemaMigrationPlan {
       .lightweight(fromVersion: MoruSchemaV1.self, toVersion: MoruSchemaV2.self),
       .lightweight(fromVersion: MoruSchemaV2.self, toVersion: MoruSchemaV3.self),
       .lightweight(fromVersion: MoruSchemaV3.self, toVersion: MoruSchemaV4.self),
+      .lightweight(fromVersion: MoruSchemaV4.self, toVersion: MoruSchemaV5.self),
     ]
   }
 }
@@ -107,7 +117,7 @@ extension ModelContainer {
     isStoredInMemoryOnly: Bool = false,
     storeURL: URL? = nil
   ) throws -> ModelContainer {
-    let schema = Schema(versionedSchema: MoruSchemaV4.self)
+    let schema = Schema(versionedSchema: MoruSchemaV5.self)
     let configuration: ModelConfiguration
 
     if let storeURL {

@@ -3,12 +3,20 @@
 //  Moru
 //
 
-extension AccountSessionStore: SignedInMemberProviding {
+extension AccountSessionStore:
+  SignedInMemberProviding,
+  CurrentAccountSessionIdentityProviding {
   var signedInMemberID: Int64? {
     guard case .signedIn(let account) = state else {
       return nil
     }
 
     return account.memberID
+  }
+
+  var currentAccountSessionIdentity: AccountSessionIdentity? {
+    currentAuthorizationContext().map {
+      AccountSessionIdentity(memberID: $0.memberID, sessionID: $0.sessionID)
+    }
   }
 }

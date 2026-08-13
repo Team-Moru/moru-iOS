@@ -145,6 +145,15 @@ nonisolated struct RoutineSyncServerCapabilities: OptionSet, Equatable, Sendable
     .replaySafeDelete,
     .atomicSingleActive,
   ]
+
+  /// Capabilities verified on the production deployment used by P0 routine
+  /// writes. Lookup/upsert/single-active are deliberately absent.
+  static let productionP0: Self = [
+    .idempotencyKey,
+    .requiredResponseIDs,
+    .clientEntityID,
+    .replaySafeDelete,
+  ]
 }
 
 nonisolated struct RoutineSyncServerContract: Equatable, Sendable {
@@ -164,11 +173,25 @@ nonisolated struct RoutineSyncServerContract: Equatable, Sendable {
 
   static let unavailable = Self(capabilities: [], isE2EVerified: false)
 
-  func supports(_: RoutineSyncOperation) -> Bool {
+  static let productionP0 = Self(
+    capabilities: .productionP0,
+    isE2EVerified: true
+  )
+
+  func supports(_ operation: RoutineSyncOperation) -> Bool {
     guard isE2EVerified else { return false }
-    // Admission is intentionally all-or-nothing. Sending a create while its
-    // delete or execution contract is unavailable can strand server data.
-    return capabilities.intersection(.allRequired) == .allRequired
+    let required: RoutineSyncServerCapabilities
+    switch operation {
+    case .createRoutineGroup, .addRoutine:
+      required = [.idempotencyKey, .requiredResponseIDs, .clientEntityID]
+    case .deleteRoutineGroup, .deleteRoutine:
+      required = [.idempotencyKey, .requiredResponseIDs, .replaySafeDelete]
+    case .saveRoutineExecution:
+      required = [.idempotencyKey, .requiredResponseIDs]
+    case .setRoutineGroupActive:
+      required = [.idempotencyKey, .atomicSingleActive]
+    }
+    return capabilities.intersection(required) == required
   }
 }
 
@@ -184,6 +207,10 @@ nonisolated enum RoutineSyncMutationState: String, CaseIterable, Sendable {
   /// A request may have reached the server, but the client cannot prove whether
   /// it committed. Manual or server-backed reconciliation is required.
   case needsReconciliation
+  /// The exact attempted request is outside the server's completed-result
+  /// retention window or hit an unclassifiable/key-reuse conflict. It must
+  /// never be sent automatically with a new key.
+  case blocked
 }
 
 /// Typed, versioned intent stored by the local outbox. It deliberately holds
@@ -365,7 +392,46 @@ nonisolated struct RoutineSyncAttempt: Equatable, Sendable {
   let generation: Int
   let payloadVersion: Int
   let payload: Data
+  let wireRequest: RoutineSyncWireRequest?
   let attemptedAt: Date
+}
+
+nonisolated enum RoutineSyncHTTPMethod: String, Codable, Equatable, Sendable {
+  case post = "POST"
+  case delete = "DELETE"
+}
+
+/// Exact HTTP mutation artifact. Authentication is intentionally excluded;
+/// path, method, and body are persisted before the first network write and
+/// reused byte-for-byte for every replay.
+nonisolated struct RoutineSyncWireRequest: Codable, Equatable, Sendable {
+  let method: RoutineSyncHTTPMethod
+  let path: String
+  let body: Data
+
+  init(method: RoutineSyncHTTPMethod, path: String, body: Data) {
+    self.method = method
+    self.path = path
+    self.body = body
+  }
+}
+
+nonisolated enum RoutineSyncBlockReason: String, Codable, Equatable, Sendable {
+  case resultTTLExpired
+  case processingRetryExhausted
+  case idempotencyPayloadConflict
+  case unknownConflict
+  case definitiveServerRejection
+  case invalidStoredRequest
+}
+
+nonisolated extension RoutineSyncAttempt {
+  static let automaticReplayLifetime: TimeInterval = 24 * 60 * 60
+
+  func isWithinAutomaticReplayWindow(at date: Date) -> Bool {
+    date.timeIntervalSince(attemptedAt) >= 0
+      && date.timeIntervalSince(attemptedAt) < Self.automaticReplayLifetime
+  }
 }
 
 nonisolated enum PendingAccountCleanupPhase: String, Sendable {
@@ -417,6 +483,9 @@ nonisolated struct RoutineSyncMutation: Equatable, Sendable {
   let payload: Data
   let state: RoutineSyncMutationState
   let attempt: RoutineSyncAttempt?
+  let nextAttemptAt: Date?
+  let processingConflictCount: Int
+  let blockReason: RoutineSyncBlockReason?
   let createdAt: Date
   let updatedAt: Date
 }

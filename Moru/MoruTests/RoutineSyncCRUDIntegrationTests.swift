@@ -92,6 +92,84 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testNeverAttemptedBlockedCreateDoesNotRollbackLocalDeletion() throws {
+    let fixture = try makeFixture(memberID: 7)
+    let routine = makeRoutine(
+      name: "invalid server snapshot",
+      steps: [makeStep()],
+      isActive: false
+    )
+    try fixture.routines.saveRoutine(routine)
+    let create = try XCTUnwrap(try fixture.sync.mutations(memberID: 7).first)
+    try fixture.sync.blockAttempt(
+      id: create.id,
+      expectedGenerationID: create.generationID,
+      reason: .invalidStoredRequest,
+      at: Date(timeIntervalSince1970: 10)
+    )
+    let blocked = try XCTUnwrap(try fixture.sync.mutations(memberID: 7).first)
+    XCTAssertEqual(blocked.state, .blocked)
+    XCTAssertNil(blocked.attempt)
+
+    try fixture.routines.deleteRoutine(id: routine.id)
+
+    XCTAssertNil(try fixture.routines.routine(id: routine.id))
+    XCTAssertTrue(try fixture.sync.mutations(memberID: 7).isEmpty)
+  }
+
+  @MainActor
+  func testAttemptedBlockedCreatePreservesDependentDeleteWithoutLocalRollback()
+    throws {
+    let fixture = try makeFixture(memberID: 7)
+    let routine = makeRoutine(
+      name: "ambiguous remote create",
+      steps: [makeStep()],
+      isActive: false
+    )
+    try fixture.routines.saveRoutine(routine)
+    let create = try XCTUnwrap(
+      try fixture.sync.admitEligibleMutations(
+        memberID: 7,
+        contract: .productionP0,
+        at: Date(timeIntervalSince1970: 10)
+      ).first
+    )
+    let command = try decodedCommand(create)
+    let wire = try ProductionRoutineSyncRequestPreparer(
+      repository: fixture.sync
+    ).makeWireRequest(for: command, mutation: create)
+    let attempt = try XCTUnwrap(
+      fixture.sync.claimForDelivery(
+        id: create.id,
+        wireRequest: wire,
+        at: Date(timeIntervalSince1970: 11)
+      )
+    )
+    try fixture.sync.blockAttempt(
+      id: create.id,
+      expectedGenerationID: attempt.generationID,
+      reason: .resultTTLExpired,
+      at: Date(timeIntervalSince1970: 12)
+    )
+
+    try fixture.routines.deleteRoutine(id: routine.id)
+
+    XCTAssertNil(try fixture.routines.routine(id: routine.id))
+    let remaining = try fixture.sync.mutations(memberID: 7)
+    XCTAssertEqual(
+      Set(remaining.map(\.operation)),
+      [.createRoutineGroup, .deleteRoutineGroup]
+    )
+    XCTAssertEqual(
+      remaining.first { $0.operation == .createRoutineGroup }?.state,
+      .blocked
+    )
+    XCTAssertNotNil(
+      remaining.first { $0.operation == .createRoutineGroup }?.attempt
+    )
+  }
+
+  @MainActor
   func testRemovingChildFromPendingCreateCoalescesSnapshotAndCancelsExecution() throws {
     let fixture = try makeFixture(memberID: 7)
     let retainedStep = makeStep(title: "유지", order: 0)
@@ -585,7 +663,67 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
-  func testPartialCreateMappingPreservesLatestCRUDChildGraph() throws {
+  func testAttemptedBlockedAddPreservesChildDeleteWithoutLocalRollback()
+    throws {
+    let fixture = try makeFixture(memberID: nil)
+    let retained = makeStep(title: "existing", order: 0)
+    var routine = makeRoutine(
+      name: "bound group",
+      steps: [retained],
+      isActive: false
+    )
+    try fixture.routines.saveRoutine(routine)
+    fixture.member.signedInMemberID = 7
+    _ = try fixture.sync.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: routine.id,
+      at: Date(timeIntervalSince1970: 10)
+    )
+    let added = makeStep(title: "ambiguous add", order: 1)
+    routine.steps.append(added)
+    try fixture.routines.saveRoutine(routine)
+    let add = try XCTUnwrap(
+      try fixture.sync.admitEligibleMutations(
+        memberID: 7,
+        contract: .productionP0,
+        at: Date(timeIntervalSince1970: 20)
+      ).first
+    )
+    let command = try decodedCommand(add)
+    let wire = try ProductionRoutineSyncRequestPreparer(
+      repository: fixture.sync
+    ).makeWireRequest(for: command, mutation: add)
+    let attempt = try XCTUnwrap(
+      fixture.sync.claimForDelivery(
+        id: add.id,
+        wireRequest: wire,
+        at: Date(timeIntervalSince1970: 21)
+      )
+    )
+    try fixture.sync.blockAttempt(
+      id: add.id,
+      expectedGenerationID: attempt.generationID,
+      reason: .unknownConflict,
+      at: Date(timeIntervalSince1970: 22)
+    )
+
+    routine.steps.removeAll { $0.id == added.id }
+    try fixture.routines.saveRoutine(routine)
+
+    XCTAssertEqual(try fixture.routines.routine(id: routine.id)?.steps, [retained])
+    let remaining = try fixture.sync.mutations(memberID: 7)
+    XCTAssertEqual(Set(remaining.map(\.operation)), [.addRoutine, .deleteRoutine])
+    XCTAssertEqual(
+      remaining.first { $0.operation == .addRoutine }?.state,
+      .blocked
+    )
+  }
+
+  @MainActor
+  func testPartialCreateMappingRejectsWithoutChangingLatestCRUDChildGraph() throws {
     let fixture = try makeFixture(memberID: 7)
     let original = makeStep(title: "원래", order: 0)
     var routine = makeRoutine(name: "부분 매핑", steps: [original], isActive: false)
@@ -599,19 +737,26 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
     _ = try XCTUnwrap(
       fixture.sync.claimForDelivery(id: create.id, at: Date(timeIntervalSince1970: 11))
     )
-    try fixture.sync.completeCreateRoutineGroup(
-      id: create.id,
-      expectedGenerationID: create.generationID,
-      assignments: [
-        RoutineServerBindingAssignment(
-          entityKind: .routineGroup,
-          localEntityID: routine.id,
-          remoteID: 41
-        )
-      ],
-      childMappingsComplete: false,
-      at: Date(timeIntervalSince1970: 12)
-    )
+    XCTAssertThrowsError(
+      try fixture.sync.completeCreateRoutineGroup(
+        id: create.id,
+        expectedGenerationID: create.generationID,
+        assignments: [
+          RoutineServerBindingAssignment(
+            entityKind: .routineGroup,
+            localEntityID: routine.id,
+            remoteID: 41
+          )
+        ],
+        childMappingsComplete: false,
+        at: Date(timeIntervalSince1970: 12)
+      )
+    ) { error in
+      XCTAssertEqual(
+        error as? RoutineSyncRepositoryError,
+        .incompleteChildMapping
+      )
+    }
 
     let added = makeStep(title: "나중 추가", order: 1)
     routine.steps.append(added)
@@ -625,7 +770,7 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
         localEntityID: routine.id
       )
     )
-    XCTAssertEqual(reconciled.state, .needsReconciliation)
+    XCTAssertEqual(reconciled.state, .attempting)
     XCTAssertEqual(
       try decodedCommand(reconciled),
       .createRoutineGroup(RoutineSyncGroupSnapshot(routine: routine))
@@ -735,6 +880,64 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testRepositoryWakeHappensOnlyAfterSuccessfulSwiftDataCommit() throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let member = RoutineSyncCRUDMemberProvider(memberID: nil)
+    let sync = SwiftDataRoutineSyncRepository(modelContext: container.mainContext)
+    let relay = RoutineSyncWakeupRelay()
+    let probe = RoutineSyncWakeProbe()
+    relay.setHandler {
+      probe.count += 1
+      let verificationContext = ModelContext(container)
+      probe.persistedRoutineCount = (try? verificationContext.fetch(
+        FetchDescriptor<PersistedRoutine>()
+      ).count) ?? -1
+    }
+    let repository = SwiftDataRoutineRepository(
+      modelContext: container.mainContext,
+      routineSyncRepository: sync,
+      signedInMemberProvider: member,
+      routineSyncWakeupRelay: relay
+    )
+    var routine = makeRoutine(
+      name: "commit-before-wake",
+      steps: [makeStep()],
+      isActive: false
+    )
+
+    try repository.saveRoutine(routine)
+    XCTAssertEqual(probe.count, 1)
+    XCTAssertEqual(probe.persistedRoutineCount, 1)
+
+    member.signedInMemberID = 7
+    _ = try sync.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: routine.id
+    )
+    let conflictingStep = makeStep(title: "conflict", order: 1)
+    _ = try sync.recordRemoteIDs(
+      [
+        RoutineServerBindingAssignment(
+          entityKind: .routine,
+          localEntityID: conflictingStep.id,
+          remoteID: 51,
+          parentEntityKind: .routineGroup,
+          parentLocalEntityID: UUID()
+        )
+      ],
+      memberID: 7
+    )
+    routine.steps.append(conflictingStep)
+
+    XCTAssertThrowsError(try repository.saveRoutine(routine))
+    XCTAssertEqual(probe.count, 1)
+    XCTAssertEqual(try repository.routine(id: routine.id)?.steps.count, 1)
+  }
+
+  @MainActor
   private func makeFixture(memberID: Int64?) throws -> RoutineSyncCRUDFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let member = RoutineSyncCRUDMemberProvider(memberID: memberID)
@@ -797,6 +1000,12 @@ private final class RoutineSyncCRUDMemberProvider: SignedInMemberProviding {
   init(memberID: Int64?) {
     signedInMemberID = memberID
   }
+}
+
+@MainActor
+private final class RoutineSyncWakeProbe {
+  var count = 0
+  var persistedRoutineCount = -1
 }
 
 private struct RoutineSyncCRUDFixture {

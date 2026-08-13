@@ -111,6 +111,18 @@ protocol RoutineSyncRepository: AnyObject {
     at date: Date
   ) throws -> RoutineSyncAttempt?
 
+  func claimForDelivery(
+    id: UUID,
+    wireRequest: RoutineSyncWireRequest,
+    at date: Date
+  ) throws -> RoutineSyncAttempt?
+
+  func claimForExactReplay(
+    id: UUID,
+    expectedGenerationID: UUID,
+    at date: Date
+  ) throws -> RoutineSyncAttempt?
+
   /// Moves only contract-covered, dependency-ready rows from waiting to
   /// queued. Production must not supply a verified contract until live server
   /// E2E tests cover the declared capabilities.
@@ -121,6 +133,32 @@ protocol RoutineSyncRepository: AnyObject {
   ) throws -> [RoutineSyncMutation]
 
   func recoverInterruptedAttempts(at date: Date) throws
+
+  /// Makes an ambiguous attempt eligible for exact replay while it remains
+  /// inside the production idempotency result-retention window. Expired or
+  /// terminal conflicts remain blocked with their immutable attempt intact.
+  func prepareExactReplay(
+    id: UUID,
+    expectedGenerationID: UUID,
+    at date: Date
+  ) throws -> Bool
+
+  func blockAttempt(
+    id: UUID,
+    expectedGenerationID: UUID,
+    reason: RoutineSyncBlockReason,
+    at date: Date
+  ) throws
+
+  /// Persists bounded server-processing backoff. Returns false after the
+  /// configured limit and leaves the immutable request blocked.
+  func scheduleProcessingConflictReplay(
+    id: UUID,
+    expectedGenerationID: UUID,
+    retryAt: Date,
+    maximumConflicts: Int,
+    at date: Date
+  ) throws -> Bool
 
   /// Resolves a create response in the same save as its bindings. `false`
   /// permits a verified group-only binding but leaves the mutation requiring

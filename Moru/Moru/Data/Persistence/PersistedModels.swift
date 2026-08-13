@@ -470,6 +470,53 @@ final class PersistedRoutineSyncMutation {
   }
 }
 
+/// V5 exact HTTP artifact for one immutable Outbox attempt. This separate
+/// model leaves the deployed V4 mutation schema unchanged and gives the
+/// migration a fail-closed representation for pre-V5 ambiguous attempts.
+@Model
+final class PersistedRoutineSyncAttemptArtifact {
+  @Attribute(.unique) var mutationID: UUID
+  @Attribute(.unique) var id: UUID
+  var serverNamespaceRawValue: String
+  var memberID: Int64
+  var generationID: UUID
+  var httpMethodRawValue: String
+  var path: String
+  var body: Data
+  var firstAttemptedAt: Date
+  var nextAttemptAt: Date?
+  var processingConflictCount: Int
+  var blockReasonRawValue: String?
+
+  init(
+    mutationID: UUID,
+    id: UUID = UUID(),
+    serverNamespaceRawValue: String,
+    memberID: Int64,
+    generationID: UUID,
+    httpMethodRawValue: String,
+    path: String,
+    body: Data,
+    firstAttemptedAt: Date,
+    nextAttemptAt: Date? = nil,
+    processingConflictCount: Int = 0,
+    blockReasonRawValue: String? = nil
+  ) {
+    self.mutationID = mutationID
+    self.id = id
+    self.serverNamespaceRawValue = serverNamespaceRawValue
+    self.memberID = memberID
+    self.generationID = generationID
+    self.httpMethodRawValue = httpMethodRawValue
+    self.path = path
+    self.body = body
+    self.firstAttemptedAt = firstAttemptedAt
+    self.nextAttemptAt = nextAttemptAt
+    self.processingConflictCount = processingConflictCount
+    self.blockReasonRawValue = blockReasonRawValue
+  }
+}
+
 /// Written before remote account withdrawal. It is intentionally keyed by
 /// namespace and account so a retry cannot clear another environment/account.
 @Model

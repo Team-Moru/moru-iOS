@@ -25,9 +25,22 @@ nonisolated protocol AccountBoundAPIClient: APIClient {
     as payloadType: Payload.Type,
     authorizedForMemberID memberID: Int64
   ) async throws -> Payload
+
+  func requestData<Target: MoruTargetType>(
+    _ target: Target,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> Data
 }
 
 nonisolated extension AccountBoundAPIClient {
+  func requestData<Target: MoruTargetType>(
+    _: Target,
+    authorizedFor _: AccountSessionIdentity
+  ) async throws -> Data {
+    // Existing test/service clients cannot silently bypass the session gate.
+    throw AccountAuthorizationContextError.memberMismatch
+  }
+
   func requestOptional<
     Target: MoruTargetType,
     Payload: Decodable & Sendable
@@ -86,6 +99,33 @@ actor DefaultAPIClient: AccountBoundAPIClient {
     try validateStatus(response)
 
     return try successfulPayload(payloadType, from: response)
+  }
+
+  func requestData<Target: MoruTargetType>(
+    _ target: Target,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> Data {
+    try ensureServerRequestsEnabled()
+    let authorizationContext = try authorizationContext(
+      for: target,
+      identity: identity
+    )
+    let response: HTTPResponseSnapshot
+
+    do {
+      response = try await perform(
+        target,
+        accessToken: authorizationContext.accessToken,
+        authorizationContext: authorizationContext
+      )
+    } catch {
+      try validateAuthorizationContext(authorizationContext)
+      throw error
+    }
+
+    try validateAuthorizationContext(authorizationContext)
+    try validateStatus(response)
+    return response.data
   }
 
   func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
@@ -301,6 +341,20 @@ actor DefaultAPIClient: AccountBoundAPIClient {
       throw AccountAuthorizationContextError.memberMismatch
     }
 
+    return context
+  }
+
+  private func authorizationContext<Target: MoruTargetType>(
+    for target: Target,
+    identity: AccountSessionIdentity
+  ) throws -> AccountAuthorizationContext {
+    let context = try authorizationContext(
+      for: target,
+      memberID: identity.memberID
+    )
+    guard context.sessionID == identity.sessionID else {
+      throw AccountAuthorizationContextError.memberMismatch
+    }
     return context
   }
 

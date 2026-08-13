@@ -12,15 +12,18 @@ nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
   private let modelContext: ModelContext
   private let routineSyncRepository: (any RoutineSyncRepository)?
   private weak var signedInMemberProvider: (any SignedInMemberProviding)?
+  private let routineSyncWakeupRelay: RoutineSyncWakeupRelay?
 
   init(
     modelContext: ModelContext,
     routineSyncRepository: (any RoutineSyncRepository)? = nil,
-    signedInMemberProvider: (any SignedInMemberProviding)? = nil
+    signedInMemberProvider: (any SignedInMemberProviding)? = nil,
+    routineSyncWakeupRelay: RoutineSyncWakeupRelay? = nil
   ) {
     self.modelContext = modelContext
     self.routineSyncRepository = routineSyncRepository
     self.signedInMemberProvider = signedInMemberProvider
+    self.routineSyncWakeupRelay = routineSyncWakeupRelay
   }
 
   @MainActor
@@ -81,6 +84,7 @@ nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
       }
 
       try modelContext.save()
+      routineSyncWakeupRelay?.wake()
     } catch {
       modelContext.rollback()
       throw error
