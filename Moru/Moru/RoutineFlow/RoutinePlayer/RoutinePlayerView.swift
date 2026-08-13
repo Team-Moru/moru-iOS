@@ -176,28 +176,6 @@ struct RoutinePlayerView: View {
 
                     stepContent(for: step)
 
-                    if step.type != .confirm {
-                        Spacer(minLength: 16)
-
-                        Button {
-                            viewModel.requestSkipStep()
-                        } label: {
-                            Text("건너뛰기")
-                                .font(
-                                    AppFont.pretendardMedium(
-                                        size: 14,
-                                        relativeTo: .caption
-                                    )
-                                )
-                                .foregroundStyle(AppColor.gray300)
-                                .frame(maxWidth: .infinity)
-                                .frame(minHeight: 52)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 40)
-                        .padding(.bottom, 20)
-                    }
                 }
                 .frame(
                     minHeight: geometry.size.height,
@@ -266,10 +244,14 @@ struct RoutinePlayerView: View {
         case .timer:
             TimerStepContentView(
                 step: step,
-                isGuidancePlaying: viewModel.isGuidancePlaying
-            ) {
-                viewModel.completeCurrentStep()
-            }
+                isGuidancePlaying: viewModel.isGuidancePlaying,
+                onComplete: {
+                    viewModel.completeCurrentStep()
+                },
+                onSkip: {
+                    viewModel.requestSkipStep()
+                }
+            )
             .id(step.id)
 
         case .input:
@@ -280,13 +262,17 @@ struct RoutinePlayerView: View {
                 speechInputController: speechInputController,
                 waitUntilGuidanceFinishes: {
                     await viewModel.waitUntilIntroFinishes(for: step.id)
+                },
+                onComplete: { transcript in
+                    viewModel.completeCurrentStep(
+                        inputText: transcript,
+                        transcript: transcript
+                    )
+                },
+                onSkip: {
+                    viewModel.requestSkipStep()
                 }
-            ) { transcript in
-                viewModel.completeCurrentStep(
-                    inputText: transcript,
-                    transcript: transcript
-                )
-            }
+            )
             .id(step.id)
         }
     }

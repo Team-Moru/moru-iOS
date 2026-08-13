@@ -11,7 +11,8 @@ struct InputStepContentView: View {
   let isAutomaticStartBlocked: Bool
   let speechInputController: SpeechInputController
   let waitUntilGuidanceFinishes: () async -> Bool
-  let onComplete: (String) -> Void
+  let onComplete: (String?) -> Void
+  let onSkip: () -> Void
   @State private var feedbackText: String?
 
   var body: some View {
@@ -46,6 +47,7 @@ struct InputStepContentView: View {
             .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
             .foregroundStyle(AppColor.gray500)
             .multilineTextAlignment(.center)
+            .lineSpacing(4)
         }
 
         Spacer()
@@ -66,6 +68,43 @@ struct InputStepContentView: View {
 
         onComplete(transcript)
       }
+
+      HStack(spacing: 0) {
+        Button {
+          speechInputController.cancel()
+          onComplete(nil)
+        } label: {
+          Text("완료했어요")
+            .font(
+              AppFont.pretendardMedium(
+                size: 14,
+                relativeTo: .caption
+              )
+            )
+            .foregroundStyle(AppColor.gray400)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("음성 입력 없이 이 단계를 완료합니다")
+
+        Button(action: onSkip) {
+          Text("건너뛰기")
+            .font(
+              AppFont.pretendardMedium(
+                size: 14,
+                relativeTo: .caption
+              )
+            )
+            .foregroundStyle(AppColor.gray300)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(.horizontal, 20)
     }
     .padding(.horizontal, 20)
   }
