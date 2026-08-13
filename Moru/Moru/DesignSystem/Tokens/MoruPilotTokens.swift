@@ -22,6 +22,11 @@ enum MoruPilotColor {
     green: 192 / 255,
     blue: 158 / 255
   )
+  static let profileSurface = Color(
+    red: 245 / 255,
+    green: 248 / 255,
+    blue: 252 / 255
+  )
   static let progressTrack = Color(
     red: 246 / 255,
     green: 248 / 255,
