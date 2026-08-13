@@ -413,10 +413,6 @@ private struct SuggestedRoutinePreviewView: View {
     ) {
       if let routine = viewModel.validatedPreviewRoutine {
         VStack(spacing: AppSpacing.lg) {
-          RoutineSuggestionSourceNotice(
-            source: viewModel.draft.suggestionSource
-          )
-
           RoutineMetaPill(
             goalTitle: viewModel.draft.primaryGoalTitle,
             stepCount: routine.steps.count,
@@ -773,10 +769,6 @@ private struct RoutineReviewView: View {
     ) {
       if let routine = viewModel.validatedPreviewRoutine {
         VStack(spacing: AppSpacing.md) {
-          RoutineSuggestionSourceNotice(
-            source: viewModel.draft.suggestionSource
-          )
-
           if viewModel.allowsReviewEditing {
             EditableRoutineReviewForm(
               viewModel: viewModel,
@@ -1063,30 +1055,6 @@ private struct PreviewUnavailableState: View {
         .stroke(MoruPilotColor.border, lineWidth: 1)
     )
     .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
-  }
-}
-
-private struct RoutineSuggestionSourceNotice: View {
-  let source: RoutineSuggestionSource?
-
-  var body: some View {
-    if let source {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-        Text(source.displayTitle)
-          .onboardingTextStyle(.c1.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textPrimary)
-
-        Text(source.displayMessage)
-          .onboardingTextStyle(.c2)
-          .foregroundStyle(MoruPilotColor.textSecondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(MoruPilotSpacing.twelve)
-      .background(MoruPilotColor.accentSurface)
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
-      .accessibilityIdentifier("routine.suggestion.source")
-    }
   }
 }
 

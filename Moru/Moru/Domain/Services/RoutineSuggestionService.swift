@@ -57,6 +57,8 @@ enum RoutineSuggestionError: Error, Equatable {
 }
 
 final class LocalTemplateSuggestionService: RoutineSuggestionService {
+  private static let maximumSuggestedStepCount = 4
+
   private let presetProvider: any RoutinePresetProviding
 
   init(presetProvider: any RoutinePresetProviding) {
@@ -118,12 +120,21 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
       throw RoutineSuggestionError.noPresetItems(goal: definition.goal)
     }
 
+    let prioritizedItems = selectedItems.filter(\.isCommon)
+      + selectedItems.filter { !$0.isCommon }
+    let suggestedItemIDs = Set(
+      prioritizedItems
+        .prefix(Self.maximumSuggestedStepCount)
+        .map(\.id)
+    )
+    let suggestedItems = selectedItems.filter { suggestedItemIDs.contains($0.id) }
+
     return LocalRoutineTemplate(
       priority: definition.priority,
       matchSignals: definition.matchSignals,
       name: definition.name,
       summary: definition.summary,
-      steps: selectedItems.enumerated().map { index, item in
+      steps: suggestedItems.enumerated().map { index, item in
         item.makeStep(order: index)
       }
     )

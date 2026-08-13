@@ -18,27 +18,6 @@ enum RoutineSuggestionFallbackReason: Equatable {
 enum RoutineSuggestionSource: Equatable {
   case server
   case localFallback(RoutineSuggestionFallbackReason)
-
-  var displayTitle: String {
-    switch self {
-    case .server:
-      return "서버 맞춤 추천"
-    case .localFallback:
-      return "기기 내 추천"
-    }
-  }
-
-  var displayMessage: String {
-    switch self {
-    case .server:
-      return "서버가 만든 초안이에요. 저장 전 내용을 확인해 주세요."
-    case .localFallback:
-      return [
-        "서버 연결 없이 만든 초안이에요.",
-        "저장 전 내용을 확인해 주세요.",
-      ].joined(separator: " ")
-    }
-  }
 }
 
 struct RoutineSuggestionResult: Equatable {

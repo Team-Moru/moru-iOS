@@ -395,7 +395,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       XCTAssertEqual(activeRoutine.id, routineID)
       XCTAssertTrue(activeRoutine.isActive)
       XCTAssertEqual(activeRoutine.alarmSchedule?.isEnabled, true)
-      XCTAssertEqual(activeRoutine.steps.count, 10)
+      XCTAssertEqual(activeRoutine.steps.count, 4)
     }
   }
 
