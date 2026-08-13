@@ -30,6 +30,14 @@ nonisolated protocol AccountBoundAPIClient: APIClient {
     _ target: Target,
     authorizedFor identity: AccountSessionIdentity
   ) async throws -> Data
+
+  /// Sends exactly one HTTP request for a non-idempotent operation. A 401 is
+  /// returned to the caller without the normal token-refresh replay.
+  func requestOnce<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> Payload
 }
 
 nonisolated extension AccountBoundAPIClient {
@@ -38,6 +46,16 @@ nonisolated extension AccountBoundAPIClient {
     authorizedFor _: AccountSessionIdentity
   ) async throws -> Data {
     // Existing test/service clients cannot silently bypass the session gate.
+    throw AccountAuthorizationContextError.memberMismatch
+  }
+
+  func requestOnce<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _: Target,
+    as _: Payload.Type,
+    authorizedFor _: AccountSessionIdentity
+  ) async throws -> Payload {
+    // Existing clients cannot silently downgrade an exact-session,
+    // single-attempt request to member-only authorization.
     throw AccountAuthorizationContextError.memberMismatch
   }
 
@@ -68,6 +86,7 @@ actor DefaultAPIClient: AccountBoundAPIClient {
   private let accessTokenRefresher: (any AccessTokenRefreshing)?
   private let serverRequestsEnabled: Bool
   private let decoder: JSONDecoder
+  private let requestCancellationFactory: @Sendable () -> RequestCancellation
 
   init(
     configuration: NetworkConfiguration = .production,
@@ -75,13 +94,17 @@ actor DefaultAPIClient: AccountBoundAPIClient {
     accessTokenRefresher: (any AccessTokenRefreshing)? = nil,
     serverRequestsEnabled: Bool = true,
     decoder: sending JSONDecoder = JSONDecoder(),
-    providerFactory: MoyaProviderFactory = MoyaProviderFactory()
+    providerFactory: MoyaProviderFactory = MoyaProviderFactory(),
+    requestCancellationFactory: @escaping @Sendable () -> RequestCancellation = {
+      RequestCancellation()
+    }
   ) {
     self.configuration = configuration
     self.tokenProvider = tokenProvider
     self.accessTokenRefresher = accessTokenRefresher
     self.serverRequestsEnabled = serverRequestsEnabled
     self.decoder = decoder
+    self.requestCancellationFactory = requestCancellationFactory
     self.provider = providerFactory.makeProvider(
       configuration: configuration
     )
@@ -126,6 +149,40 @@ actor DefaultAPIClient: AccountBoundAPIClient {
     try validateAuthorizationContext(authorizationContext)
     try validateStatus(response)
     return response.data
+  }
+
+  func requestOnce<
+    Target: MoruTargetType,
+    Payload: Decodable & Sendable
+  >(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> Payload {
+    try ensureServerRequestsEnabled()
+    let authorizationContext = try authorizationContext(
+      for: target,
+      identity: identity
+    )
+
+    do {
+      // This path intentionally bypasses `perform`, whose 401 handling may
+      // refresh credentials and replay a target. AI-step has no idempotency
+      // contract, so every application submission must remain one HTTP call.
+      let response = try await send(
+        target,
+        accessToken: authorizationContext.accessToken
+      )
+      try validateAuthorizationContext(authorizationContext)
+      try validateStatus(response)
+      let payload = try successfulPayload(payloadType, from: response)
+      try validateAuthorizationContext(authorizationContext)
+      return payload
+    } catch {
+      try _Concurrency.Task<Never, Never>.checkCancellation()
+      try validateAuthorizationContext(authorizationContext)
+      throw error
+    }
   }
 
   func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
@@ -279,7 +336,7 @@ actor DefaultAPIClient: AccountBoundAPIClient {
     _ target: Target,
     accessToken: String?
   ) async throws -> HTTPResponseSnapshot {
-    let cancellation = RequestCancellation()
+    let cancellation = requestCancellationFactory()
     let adaptedTarget = MoyaTargetAdapter(
       target: target,
       baseURL: configuration.baseURL,
@@ -287,7 +344,13 @@ actor DefaultAPIClient: AccountBoundAPIClient {
     )
 
     return try await withTaskCancellationHandler {
-      try await withCheckedThrowingContinuation { continuation in
+      // Do not create a request when cancellation won the actor-hop race.
+      // This is required for non-idempotent targets where even a promptly
+      // cancelled POST may already have reached the server.
+      guard !_Concurrency.Task<Never, Never>.isCancelled else {
+        throw APIError.cancelled
+      }
+      return try await withCheckedThrowingContinuation { continuation in
         let request = provider.request(MultiTarget(adaptedTarget)) { result in
           switch result {
           case .success(let response):
@@ -467,10 +530,17 @@ nonisolated private struct HTTPResponseSnapshot: Sendable {
   let data: Data
 }
 
-nonisolated private final class RequestCancellation: @unchecked Sendable {
+/// Synchronizes task cancellation with Moya request creation. Internal so the
+/// cancel-before-store race can be contract-tested without starting I/O.
+nonisolated final class RequestCancellation: @unchecked Sendable {
   private let lock = NSLock()
+  private let onCancel: @Sendable () -> Void
   private var request: Cancellable?
   private var isCancelled = false
+
+  init(onCancel: @escaping @Sendable () -> Void = {}) {
+    self.onCancel = onCancel
+  }
 
   func store(_ request: Cancellable) {
     lock.lock()
@@ -500,6 +570,7 @@ nonisolated private final class RequestCancellation: @unchecked Sendable {
     request = nil
     lock.unlock()
 
+    onCancel()
     requestToCancel?.cancel()
   }
 }
