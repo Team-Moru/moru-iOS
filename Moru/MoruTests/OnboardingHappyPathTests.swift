@@ -216,6 +216,18 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
+  func testBackButtonSkipsNonInteractiveOrganizingStepFromReview() {
+    let viewModel = OnboardingViewModel(
+      step: .review,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+
+    viewModel.backButtonDidTap()
+
+    XCTAssertEqual(viewModel.step, .freeform)
+  }
+
+  @MainActor
   func testOnboardingViewModelRetriesPreviewBeforeAdvancing() {
     let suggestionService = RetriableSuggestionService()
     let viewModel = OnboardingViewModel(
