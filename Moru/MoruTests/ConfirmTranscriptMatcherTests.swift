@@ -9,7 +9,23 @@ import XCTest
 @MainActor
 final class ConfirmTranscriptMatcherTests: XCTestCase {
   func testPositiveFinalTranscriptsConfirmRoutineStep() {
-    let transcripts = ["완료했어요", "끝", "다 했어", "됐어", "네", "응"]
+    let transcripts = [
+      "완료했어요",
+      "완료했습니다",
+      "끝",
+      "다 했어",
+      "끝냈어요",
+      "마쳤어",
+      "됐어",
+      "네",
+      "넵",
+      "예",
+      "응",
+      "그래",
+      "맞아",
+      "좋아",
+      "오케이"
+    ]
 
     XCTAssertTrue(transcripts.allSatisfy(ConfirmTranscriptMatcher.isConfirmed))
   }
@@ -24,6 +40,20 @@ final class ConfirmTranscriptMatcherTests: XCTestCase {
 
     XCTAssertTrue(
       transcripts.allSatisfy { !ConfirmTranscriptMatcher.isConfirmed($0) }
+    )
+  }
+
+  func testNegativeTranscriptKeepsNegativeFeedbackAfterManualFinish() {
+    XCTAssertEqual(
+      ConfirmStepFeedback.completionFailure(for: "아직 안 했어"),
+      ConfirmStepFeedback.negativeResponse
+    )
+  }
+
+  func testUnrecognizedTranscriptUsesGenericCompletionFeedback() {
+    XCTAssertEqual(
+      ConfirmStepFeedback.completionFailure(for: "잘 안 들려요"),
+      ConfirmStepFeedback.unrecognizedCompletion
     )
   }
 

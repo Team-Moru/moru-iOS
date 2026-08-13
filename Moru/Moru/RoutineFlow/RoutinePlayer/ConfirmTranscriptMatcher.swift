@@ -37,18 +37,35 @@ enum ConfirmTranscriptMatcher {
     "됐다"
   ]
 
-  private static let standaloneAffirmations = ["네", "응"]
+  private static let standaloneAffirmations = [
+    "네",
+    "넵",
+    "예",
+    "응",
+    "그래",
+    "맞아",
+    "좋아",
+    "오케이",
+    "okay",
+    "ok"
+  ]
   private static let explicitCompletionCommands = [
     "완료",
     "완료했어",
     "완료했어요",
     "다했어",
     "다했어요",
+    "다했습니다",
     "끝",
     "끝났어",
     "끝났어요",
+    "끝냈어",
+    "끝냈어요",
+    "마쳤어",
+    "마쳤어요",
     "됐어",
-    "됐어요"
+    "됐어요",
+    "완료했습니다"
   ]
 
   static func isConfirmed(_ transcript: String) -> Bool {

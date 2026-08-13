@@ -5,13 +5,25 @@
 
 import SwiftUI
 
+enum ConfirmStepFeedback {
+  static let negativeResponse = "아직이군요. 천천히 마무리한 뒤 \"완료했어요\"라고 말해 주세요."
+  static let unrecognizedCompletion = "완료했다고 들리지 않아요. 다시 말해 주세요."
+
+  static func completionFailure(for transcript: String) -> String {
+    ConfirmTranscriptMatcher.hasNegativeIntent(transcript)
+      ? negativeResponse
+      : unrecognizedCompletion
+  }
+}
+
 struct ConfirmStepContentView: View {
   let step: RoutineStep
   let isGuidancePlaying: Bool
   let isAutomaticStartBlocked: Bool
   let speechInputController: SpeechInputController
   let waitUntilGuidanceFinishes: () async -> Bool
-  let onComplete: (String) -> Void
+  let onComplete: (String?) -> Void
+  let onSkip: () -> Void
   @State private var feedbackText: String?
 
   var body: some View {
@@ -57,14 +69,59 @@ struct ConfirmStepContentView: View {
         waitUntilGuidanceFinishes: waitUntilGuidanceFinishes
       ) { transcript in
         guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
-          feedbackText = "완료했다고 들리지 않아요. 다시 말해 주세요."
+          feedbackText = ConfirmStepFeedback.completionFailure(for: transcript)
           return
         }
 
         onComplete(transcript)
       }
+
+      HStack(spacing: 0) {
+        Button {
+          speechInputController.cancel()
+          onComplete(nil)
+        } label: {
+          Text("완료했어요")
+            .font(
+              AppFont.pretendardMedium(
+                size: 14,
+                relativeTo: .caption
+              )
+            )
+            .foregroundStyle(AppColor.gray400)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("음성 입력 없이 이 단계를 완료합니다")
+
+        Button(action: onSkip) {
+          Text("건너뛰기")
+            .font(
+              AppFont.pretendardMedium(
+                size: 14,
+                relativeTo: .caption
+              )
+            )
+            .foregroundStyle(AppColor.gray300)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+      }
+      .padding(.horizontal, 20)
     }
     .padding(.horizontal, 20)
+    .onChange(of: speechInputController.latestTranscriptUpdate) { _, update in
+      guard let update,
+            ConfirmTranscriptMatcher.hasNegativeIntent(update.text) else {
+        return
+      }
+
+      feedbackText = ConfirmStepFeedback.negativeResponse
+    }
   }
 
   private var stepTitleSection: some View {

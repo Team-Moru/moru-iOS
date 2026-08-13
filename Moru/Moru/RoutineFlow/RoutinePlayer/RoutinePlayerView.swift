@@ -176,26 +176,28 @@ struct RoutinePlayerView: View {
 
                     stepContent(for: step)
 
-                    Spacer(minLength: 16)
+                    if step.type != .confirm {
+                        Spacer(minLength: 16)
 
-                    Button {
-                        viewModel.requestSkipStep()
-                    } label: {
-                        Text("건너뛰기")
-                            .font(
-                                AppFont.pretendardMedium(
-                                    size: 14,
-                                    relativeTo: .caption
+                        Button {
+                            viewModel.requestSkipStep()
+                        } label: {
+                            Text("건너뛰기")
+                                .font(
+                                    AppFont.pretendardMedium(
+                                        size: 14,
+                                        relativeTo: .caption
+                                    )
                                 )
-                            )
-                            .foregroundStyle(AppColor.gray300)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: 52)
-                            .contentShape(Rectangle())
+                                .foregroundStyle(AppColor.gray300)
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: 52)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 40)
+                        .padding(.bottom, 20)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 20)
                 }
                 .frame(
                     minHeight: geometry.size.height,
@@ -249,12 +251,16 @@ struct RoutinePlayerView: View {
                 speechInputController: speechInputController,
                 waitUntilGuidanceFinishes: {
                     await viewModel.waitUntilIntroFinishes(for: step.id)
+                },
+                onComplete: { transcript in
+                    viewModel.completeCurrentStep(
+                        transcript: transcript
+                    )
+                },
+                onSkip: {
+                    viewModel.requestSkipStep()
                 }
-            ) { transcript in
-                viewModel.completeCurrentStep(
-                    transcript: transcript
-                )
-            }
+            )
             .id(step.id)
 
         case .timer:
