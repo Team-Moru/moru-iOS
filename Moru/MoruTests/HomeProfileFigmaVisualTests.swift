@@ -25,11 +25,73 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     XCTAssertEqual(ProfileCopy.title, "설정")
     XCTAssertEqual(ProfileCopy.voiceSettings, "음성 설정")
     XCTAssertEqual(ProfileCopy.moruVoice, "모루 말투")
+    XCTAssertEqual(ProfileCopy.account, "계정")
+    XCTAssertEqual(ProfileCopy.socialLogin, "소셜 로그인")
+    XCTAssertEqual(ProfileCopy.dataManagement, "데이터 관리")
+    XCTAssertEqual(ProfileCopy.resetLocalData, "로컬 데이터 초기화")
   }
 
   func testWeatherCardHeightContract() {
     XCTAssertEqual(HomeFigmaLayout.weatherCardHeight, 84)
     XCTAssertEqual(HomeFigmaLayout.actionableWeatherCardHeight, 104)
+  }
+
+  func testSignedInProfileRendersConnectionStatusAtReferenceViewport() throws {
+    let credentialStore = HomeProfileCaptureCredentialStore()
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    try accountSessionStore.establishSession(
+      credentials: AccountCredentials(
+        memberID: 68,
+        accessToken: "capture-access-token",
+        refreshToken: "capture-refresh-token",
+        onboardingCompleted: true,
+        provider: .kakao
+      )
+    )
+
+    let viewModel = ProfileViewModel(
+      profileSettingsUseCase: HomeProfileCaptureProfileUseCase(
+        result: ProfileSettingsLoadResult(
+          profile: LocalProfile(displayName: "김모루", selectedVoice: .aoede),
+          fallbackNotice: nil
+        )
+      ),
+      voicePreviewPlayer: HomeProfileCaptureVoicePlayer(),
+      alarmService: HomeProfileCaptureAlarmService(status: .configured),
+      resetUseCase: HomeProfileCaptureResetUseCase(),
+      resetAvailability: { true },
+      onOpenSettings: {},
+      onResetSucceeded: {}
+    )
+    viewModel.loadProfileSettings()
+
+    let screen = MainTabView(
+      home: AnyView(EmptyView()),
+      routineSetting: RoutineSettingView(dependencies: .mock()),
+      history: AnyView(EmptyView()),
+      profile: AnyView(
+        ProfileView(
+          viewModel: viewModel,
+          accountSessionStore: accountSessionStore,
+          automaticallyLoads: false
+        )
+      ),
+      selection: .constant(.my),
+      historyReloadToken: 0
+    )
+    let image = try MoruVisualCaptureFixture.render(
+      screen,
+      filename: "profile-kakao-connected-light-M.png",
+      variant: .lightMedium,
+      outputDirectory: URL(
+        fileURLWithPath: "/private/tmp/moru-profile-social-connection"
+      )
+    )
+
+    XCTAssertEqual(image.size, CGSize(width: 393, height: 852))
   }
 
   func testHomeAndProfileStatesRenderDeterministicallyAtReferenceVariants() async throws {
@@ -541,4 +603,22 @@ private final class HomeProfileCaptureAlarmService: ProfileAlarmServicing {
 @MainActor
 private final class HomeProfileCaptureResetUseCase: ResetLocalDataUseCaseProtocol {
   func execute() async throws {}
+}
+
+private final class HomeProfileCaptureCredentialStore:
+  CredentialStore,
+  @unchecked Sendable {
+  private var credentials: AccountCredentials?
+
+  func load() throws -> AccountCredentials? {
+    credentials
+  }
+
+  func save(_ credentials: AccountCredentials) throws {
+    self.credentials = credentials
+  }
+
+  func remove() throws {
+    credentials = nil
+  }
 }

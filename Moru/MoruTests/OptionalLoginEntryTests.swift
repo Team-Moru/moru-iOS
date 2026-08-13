@@ -348,7 +348,7 @@ final class OptionalLoginEntryTests: XCTestCase {
   func testProfileProviderNamesRemainExplicit() {
     XCTAssertEqual(ProfileView.providerDisplayName(.apple), "Apple")
     XCTAssertEqual(ProfileView.providerDisplayName(.google), "Google")
-    XCTAssertEqual(ProfileView.providerDisplayName(.kakao), "Kakao")
+    XCTAssertEqual(ProfileView.providerDisplayName(.kakao), "카카오")
     XCTAssertEqual(
       ProfileView.providerDisplayName(.unknown("future")),
       "MORU"

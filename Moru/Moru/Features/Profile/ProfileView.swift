@@ -214,28 +214,23 @@ struct ProfileView: View {
       VStack(alignment: .leading, spacing: 0) {
         profileTitle
 
-        displayNameCard(content.profile)
+        profileCard(content.profile)
           .padding(.top, MoruPilotSpacing.twelve)
-
-        if appCapabilities.shouldShowAccountUI {
-          settingsSection(title: "계정") {
-            accountCard
-          }
-          .padding(.top, MoruPilotSpacing.twentyEight)
-        }
 
         settingsSection(title: ProfileCopy.voiceSettings) {
           voiceCard(content)
         }
         .padding(.top, MoruPilotSpacing.thirtyEight)
 
-        settingsSection(title: ProfileCopy.alarmSettings) {
-          alarmStatusCard
+        if appCapabilities.shouldShowAccountUI {
+          settingsSection(title: ProfileCopy.account) {
+            accountCard
+          }
+          .padding(.top, MoruPilotSpacing.twentyEight)
         }
-        .padding(.top, MoruPilotSpacing.twentyEight)
 
         settingsSection(title: ProfileCopy.dataManagement) {
-          resetCard
+          dataManagementCard
         }
         .padding(.top, MoruPilotSpacing.twentyEight)
       }
@@ -264,79 +259,82 @@ struct ProfileView: View {
     }
   }
 
-  private func displayNameCard(_ profile: LocalProfile) -> some View {
-    Button {
-      displayNameDraft = profile.displayName
-      isDisplayNameEditorPresented = true
-    } label: {
-      HStack(spacing: 14) {
-        Circle()
-          .fill(MoruPilotColor.accent)
-          .frame(width: 58, height: 58)
-          .overlay {
-            Text(profileInitial(for: profile.displayName))
-              .profileFigmaTextStyle(.b2.weight(.semiBold))
-              .foregroundStyle(AppColor.grayWhite)
-              .accessibilityHidden(true)
-          }
+  private func profileCard(_ profile: LocalProfile) -> some View {
+    HStack(spacing: 14) {
+      profileAvatar(for: profile)
 
-        VStack(alignment: .leading, spacing: 0) {
-          Text(profile.displayName)
-            .profileFigmaTextStyle(.b2.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textStrong)
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-            .layoutPriority(1)
+      VStack(alignment: .leading, spacing: 0) {
+        Text(profile.displayName)
+          .profileFigmaTextStyle(.b2.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
+          .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+          .layoutPriority(1)
 
-          Text(ProfileCopy.localProfile)
-            .profileFigmaTextStyle(.b4)
-            .foregroundStyle(MoruPilotColor.textSecondary)
-        }
-
-        Spacer(minLength: MoruPilotSpacing.eight)
+        Text(profileSubtitle)
+          .profileFigmaTextStyle(.b4)
+          .foregroundStyle(MoruPilotColor.textSecondary)
       }
-      .padding(.horizontal, MoruPilotSpacing.sixteen)
-      .padding(.vertical, MoruPilotSpacing.eight)
-      .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-      .profilePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+
+      Spacer(minLength: MoruPilotSpacing.eight)
     }
-    .buttonStyle(.plain)
-    .accessibilityLabel("표시 이름, \(profile.displayName)")
-    .accessibilityHint("표시 이름을 변경합니다.")
-    .accessibilityIdentifier("profile.name")
+    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .padding(.vertical, MoruPilotSpacing.eight)
+    .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
+    .profilePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(profile.displayName), \(profileSubtitle)")
+    .accessibilityIdentifier("profile.summary")
+  }
+
+  @ViewBuilder
+  private func profileAvatar(for profile: LocalProfile) -> some View {
+    if case .signedIn = accountSessionStore.state {
+      Circle()
+        .fill(MoruPilotColor.accent)
+        .frame(width: 58, height: 58)
+        .overlay {
+          Text(profileInitial(for: profile.displayName))
+            .profileFigmaTextStyle(.b2.weight(.semiBold))
+            .foregroundStyle(AppColor.grayWhite)
+        }
+        .accessibilityHidden(true)
+    } else {
+      MoruBrandBadge(size: 58)
+    }
   }
 
   private func profileInitial(for displayName: String) -> String {
     String(displayName.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1))
   }
 
+  private var profileSubtitle: String {
+    switch accountSessionStore.state {
+    case .signedIn(let account):
+      "\(Self.providerDisplayName(account.provider)) 계정 연결됨"
+    case .restoring:
+      "계정 확인 중"
+    case .signedOut, .failure:
+      ProfileCopy.socialLogin
+    }
+  }
+
   @ViewBuilder
   private var accountCard: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       switch accountSessionStore.state {
       case .signedOut:
-        accountConnectButton(
-          detail: "로그인 없이도 모든 로컬 루틴과 기록을 "
-            + "계속 사용할 수 있어요."
-        )
+        accountConnectButton
       case .restoring:
-        settingsRow(
-          title: "계정 확인 중",
-          detail: "저장된 계정 연결을 확인하고 있어요.",
-          systemImage: "person.crop.circle.badge.clock",
-          showsChevron: false
-        )
+        figmaNavigationRow(title: "계정 확인 중", showsChevron: false)
         .overlay(alignment: .trailing) {
           ProgressView()
             .padding(.trailing, MoruPilotSpacing.sixteen)
             .accessibilityLabel("계정 연결 확인 중")
         }
-      case .signedIn(let account):
-        signedInAccountActions(account)
+      case .signedIn:
+        signedInAccountActions
       case .failure:
-        accountConnectButton(
-          detail: "계정 정보를 복구하지 못했어요. "
-            + "Apple, Google 또는 Kakao로 다시 연결할 수 있어요."
-        )
+        accountConnectButton
       }
 
       if viewModel.isAccountLinkInProgress {
@@ -369,62 +367,14 @@ struct ProfileView: View {
     .accessibilityIdentifier(Self.accountCardAccessibilityIdentifier)
   }
 
-  private func signedInAccountActions(
-    _ account: SignedInAccount
-  ) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-      settingsRow(
-        title: "\(Self.providerDisplayName(account.provider)) 계정 연결됨",
-        detail: "계정 연결은 선택형 서버 기능에만 사용돼요.",
-        systemImage: "person.crop.circle.badge.checkmark",
-        showsChevron: false
-      )
-      .accessibilityLabel(
-        "\(Self.providerDisplayName(account.provider)) 계정 연결됨"
-      )
-      .accessibilityHint("로컬 루틴과 기록은 기기에 계속 저장됩니다.")
-
-      AccountServerSettingsSummaryView(
-        viewModel: accountServerViewModel,
-        memberID: account.memberID,
-        onOpenVoiceSelection: {
-          isServerVoiceSelectionPresented = true
-        }
-      )
-
-      if Self.shouldShowAccountRoutineArchive(
-        accountState: accountSessionStore.state,
-        hasRemoteService:
-          accountRoutineGroupListViewModel.isRemoteServiceAvailable
-      ) {
-        Button {
-          routineArchiveNavigation.presentArchive()
-        } label: {
-          settingsRow(
-            title: "서버 루틴 보관함",
-            detail: "계정에 저장된 루틴을 보기만 할 수 있어요.",
-            systemImage: "archivebox.fill"
-          )
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint(
-          "이 기기의 루틴과 합치거나 실행하지 않고 서버 데이터를 봅니다."
-        )
-        .accessibilityIdentifier(
-          Self.accountRoutineArchiveAccessibilityIdentifier
-        )
-      }
-
+  private var signedInAccountActions: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       Button {
         Task {
           await viewModel.logoutButtonDidTap()
         }
       } label: {
-        settingsRow(
-          title: "로그아웃",
-          detail: "계정 연결만 종료하며 로컬 데이터는 유지해요.",
-          systemImage: "rectangle.portrait.and.arrow.right"
-        )
+        figmaNavigationRow(title: ProfileCopy.logout)
       }
       .buttonStyle(.plain)
       .disabled(viewModel.isAccountLifecycleInProgress)
@@ -436,11 +386,7 @@ struct ProfileView: View {
       Button(role: .destructive) {
         isWithdrawalConfirmationPresented = true
       } label: {
-        settingsRow(
-          title: "회원 탈퇴",
-          detail: "서버 계정을 삭제해요. 로컬 데이터 초기화와는 별도예요.",
-          systemImage: "person.crop.circle.badge.minus"
-        )
+        figmaNavigationRow(title: ProfileCopy.withdraw)
       }
       .buttonStyle(.plain)
       .disabled(viewModel.isAccountLifecycleInProgress)
@@ -456,7 +402,7 @@ struct ProfileView: View {
     case .google:
       "Google"
     case .kakao:
-      "Kakao"
+      "카카오"
     case .unknown:
       "MORU"
     }
@@ -481,19 +427,15 @@ struct ProfileView: View {
     }
   }
 
-  private func accountConnectButton(detail: String) -> some View {
+  private var accountConnectButton: some View {
     Button {
       isAppleSignInPresented = true
     } label: {
-      settingsRow(
-        title: "계정 연결",
-        detail: detail,
-        systemImage: "person.crop.circle.badge.plus"
-      )
+      figmaNavigationRow(title: ProfileCopy.socialLogin)
     }
     .buttonStyle(.plain)
     .disabled(viewModel.isAccountLinkInProgress)
-    .accessibilityLabel("계정 연결")
+    .accessibilityLabel(ProfileCopy.socialLogin)
     .accessibilityHint("선택 사항입니다. 로그인 방법을 선택합니다.")
     .accessibilityIdentifier(Self.accountConnectAccessibilityIdentifier)
   }
@@ -503,16 +445,10 @@ struct ProfileView: View {
       Button {
         isVoiceSelectionPresented = true
       } label: {
-        settingsRow(
-          title: ProfileCopy.moruVoice,
-          detail: content.profile.selectedVoice.displayName,
-          systemImage: "speaker.wave.2.fill"
-        )
+        figmaNavigationRow(title: ProfileCopy.moruVoice)
       }
       .buttonStyle(.plain)
-      .accessibilityLabel(
-        "\(ProfileCopy.moruVoice), \(content.profile.selectedVoice.displayName)"
-      )
+      .accessibilityLabel(ProfileCopy.moruVoice)
       .accessibilityHint("앱 내장 목소리를 선택하고 미리 듣습니다.")
       .accessibilityIdentifier("profile.voice.chooser")
 
@@ -526,58 +462,12 @@ struct ProfileView: View {
     }
   }
 
-  private var alarmStatusCard: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-      settingsRow(
-        title: "알람 상태",
-        detail: alarmStatusMessage,
-        systemImage: "alarm.fill",
-        showsChevron: false
-      )
-      .accessibilityIdentifier("profile.alarm.status")
-
-      HStack {
-        switch viewModel.alarmStatus {
-        case .configured:
-          EmptyView()
-        case .fallbackConfigured:
-          Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
-            .buttonStyle(.bordered)
-        case .permissionNotDetermined:
-          Button("알람 권한 확인") {
-            Task {
-              await viewModel.alarmAuthorizationButtonDidTap()
-            }
-          }
-          .buttonStyle(.bordered)
-          .disabled(viewModel.isAlarmRequestInProgress)
-        case .permissionOff:
-          Button("설정 열기", action: viewModel.alarmSettingsButtonDidTap)
-            .buttonStyle(.bordered)
-        case .repairRequired, .unavailable:
-          Button("예약 다시 시도") {
-            Task {
-              await viewModel.alarmRetryButtonDidTap()
-            }
-          }
-          .buttonStyle(.bordered)
-          .disabled(viewModel.isAlarmRequestInProgress)
-        }
-      }
-      .tint(MoruPilotColor.accent)
-    }
-  }
-
-  private var resetCard: some View {
+  private var dataManagementCard: some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
       Button(role: .destructive) {
         isResetConfirmationPresented = true
       } label: {
-        settingsRow(
-          title: "로컬 데이터 초기화",
-          detail: "프로필, 루틴과 수행 기록을 이 기기에서 삭제해요.",
-          systemImage: "trash.fill"
-        )
+        figmaNavigationRow(title: ProfileCopy.resetLocalData)
       }
       .buttonStyle(.plain)
       .disabled(!viewModel.isResetAvailable)
@@ -599,24 +489,6 @@ struct ProfileView: View {
       if let message = viewModel.resetErrorMessage {
         profileMessage(message, color: AppColor.coral300)
       }
-    }
-  }
-
-  private var alarmStatusMessage: String {
-    switch viewModel.alarmStatus {
-    case .configured:
-      "알람이 정상적으로 설정되어 있어요."
-    case .fallbackConfigured:
-      "일반 알림으로 예약돼요. "
-        + "무음·집중 모드에서는 울리지 않을 수 있어요."
-    case .permissionNotDetermined:
-      "알람 권한을 아직 확인하지 않았어요."
-    case .permissionOff:
-      "알람 권한이 꺼져 있어요."
-    case .repairRequired:
-      "일부 루틴의 알람 예약이 필요해요."
-    case .unavailable:
-      "알람 상태를 확인할 수 없어요."
     }
   }
 
@@ -735,114 +607,117 @@ struct ProfileView: View {
   }
 
   private var appleSignInSheet: some View {
-    NavigationStack {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
-        Text("계정 연결")
-          .profileFigmaTextStyle(.b2.weight(.semiBold))
+    ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: 0) {
+        accountConnectionHeader
+
+        Text(ProfileCopy.accountConnection)
+          .profileFigmaTextStyle(.h3.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
+          .padding(.top, MoruPilotSpacing.twenty + MoruPilotSpacing.four)
 
-        Text(
-          "계정 연결은 선택 사항이에요. 취소하거나 연결에 실패해도 "
-            + "기존 루틴과 기록은 그대로 사용할 수 있어요."
-        )
-        .profileFigmaTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-
-        SignInWithAppleButton(.continue) { request in
-          _ = appleAuthorizationSession.configure(request)
-        } onCompletion: { result in
-          let outcome = appleAuthorizationSession.outcome(for: result)
-          isAppleSignInPresented = false
-
-          Task {
-            await viewModel.appleAuthorizationDidComplete(outcome)
-          }
-        }
-        .signInWithAppleButtonStyle(.black)
-        .frame(maxWidth: .infinity, minHeight: 50)
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
-        .disabled(viewModel.isAccountLinkInProgress)
-        .accessibilityLabel("Apple로 계속하기")
-        .accessibilityHint("Apple 인증을 시작합니다.")
-        .accessibilityIdentifier(Self.appleSignInAccessibilityIdentifier)
-
-        GoogleSignInButton {
-          Task {
-            let outcome = await googleAuthorizationSession.authorize()
-            isAppleSignInPresented = false
-            await viewModel.googleAuthorizationDidComplete(outcome)
-          }
-        }
-        .frame(maxWidth: .infinity, minHeight: 50)
-        .disabled(
-          viewModel.isAccountLinkInProgress
-            || !googleAuthorizationSession.isConfigured
-        )
-        .accessibilityLabel("Google로 계속하기")
-        .accessibilityHint("Google 인증을 시작합니다.")
-        .accessibilityIdentifier(Self.googleSignInAccessibilityIdentifier)
-
-        if !googleAuthorizationSession.isConfigured {
-          Text(
-            "Google 로그인 설정이 준비되지 않았어요. "
-              + "공개 OAuth client ID 구성이 필요합니다."
-          )
-          .profileFigmaTextStyle(.c1)
+        Text(ProfileCopy.accountConnectionDescription)
+          .profileFigmaTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textSecondary)
+          .padding(.top, MoruPilotSpacing.twelve)
           .fixedSize(horizontal: false, vertical: true)
-          .accessibilityIdentifier("profile.account.google-config-required")
-        }
 
-        Button {
-          Task {
-            let outcome = await kakaoAuthorizationSession.authorize()
+        VStack(spacing: MoruPilotSpacing.twelve) {
+          SignInWithAppleButton(.continue) { request in
+            _ = appleAuthorizationSession.configure(request)
+          } onCompletion: { result in
+            let outcome = appleAuthorizationSession.outcome(for: result)
             isAppleSignInPresented = false
-            await viewModel.kakaoAuthorizationDidComplete(outcome)
+
+            Task {
+              await viewModel.appleAuthorizationDidComplete(outcome)
+            }
           }
+          .signInWithAppleButtonStyle(.black)
+          .frame(maxWidth: .infinity, minHeight: 64)
+          .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
+          .disabled(viewModel.isAccountLinkInProgress)
+          .accessibilityLabel("Apple로 계속하기")
+          .accessibilityHint("Apple 인증을 시작합니다.")
+          .accessibilityIdentifier(Self.appleSignInAccessibilityIdentifier)
+
+          GoogleSignInButton {
+            Task {
+              let outcome = await googleAuthorizationSession.authorize()
+              isAppleSignInPresented = false
+              await viewModel.googleAuthorizationDidComplete(outcome)
+            }
+          }
+          .frame(maxWidth: .infinity, minHeight: 52)
+          .disabled(
+            viewModel.isAccountLinkInProgress
+              || !googleAuthorizationSession.isConfigured
+          )
+          .accessibilityLabel("Google로 계속하기")
+          .accessibilityHint("Google 인증을 시작합니다.")
+          .accessibilityIdentifier(Self.googleSignInAccessibilityIdentifier)
+
+          Button {
+            Task {
+              let outcome = await kakaoAuthorizationSession.authorize()
+              isAppleSignInPresented = false
+              await viewModel.kakaoAuthorizationDidComplete(outcome)
+            }
+          } label: {
+            Image("KakaoLoginButton")
+              .resizable()
+              .scaledToFit()
+              .frame(maxWidth: .infinity, minHeight: 52, maxHeight: 52)
+          }
+          .buttonStyle(.plain)
+          .disabled(
+            viewModel.isAccountLinkInProgress
+              || !kakaoAuthorizationSession.isConfigured
+          )
+          .accessibilityLabel("카카오로 계속하기")
+          .accessibilityHint("카카오 인증을 시작합니다.")
+          .accessibilityIdentifier(Self.kakaoSignInAccessibilityIdentifier)
+        }
+        .padding(.top, MoruPilotSpacing.eight)
+      }
+      .padding(.horizontal, MoruPilotSpacing.twentyEight)
+      .padding(.bottom, MoruPilotSpacing.twentyEight)
+    }
+    .background(MoruPilotColor.profileSurface)
+    .presentationDetents([
+      .height(dynamicTypeSize.isAccessibilitySize ? 608 : 420),
+    ])
+    .presentationDragIndicator(.visible)
+    .presentationCornerRadius(32)
+    .presentationBackground(MoruPilotColor.profileSurface)
+    .accessibilityIdentifier("profile.account.sheet")
+  }
+
+  private var accountConnectionHeader: some View {
+    ZStack {
+      Text(ProfileCopy.accountConnection)
+        .profileFigmaTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
+        .frame(maxWidth: .infinity)
+
+      HStack {
+        Button {
+          isAppleSignInPresented = false
         } label: {
-          Image("KakaoLoginButton")
-            .resizable()
-            .scaledToFit()
-            .frame(maxWidth: .infinity, minHeight: 50, maxHeight: 50)
+          Text(ProfileCopy.close)
+            .profileFigmaTextStyle(.b4.weight(.semiBold))
+            .foregroundStyle(MoruPilotColor.textPrimary)
+            .padding(.horizontal, MoruPilotSpacing.sixteen)
+            .frame(minHeight: 48)
+            .background(AppColor.gray100, in: Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(
-          viewModel.isAccountLinkInProgress
-            || !kakaoAuthorizationSession.isConfigured
-        )
-        .accessibilityLabel("Kakao로 계속하기")
-        .accessibilityHint("Kakao 인증을 시작합니다.")
-        .accessibilityIdentifier(Self.kakaoSignInAccessibilityIdentifier)
-
-        if !kakaoAuthorizationSession.isConfigured {
-          Text(
-            "Kakao 로그인 설정이 준비되지 않았어요. "
-              + "공개 Native app key와 URL scheme 구성이 필요합니다."
-          )
-          .profileFigmaTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
-          .fixedSize(horizontal: false, vertical: true)
-          .accessibilityIdentifier("profile.account.kakao-config-required")
-        }
+        .accessibilityLabel(ProfileCopy.close)
 
         Spacer(minLength: 0)
       }
-      .padding(MoruPilotSpacing.twenty)
-      .background(MoruPilotColor.canvas.ignoresSafeArea())
-      .navigationTitle("계정 연결")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("닫기") {
-            isAppleSignInPresented = false
-          }
-        }
-      }
     }
-    .presentationDetents([.medium])
-    .presentationDragIndicator(.visible)
-    .accessibilityIdentifier("profile.account.sheet")
+    .frame(maxWidth: .infinity, minHeight: 40)
   }
 
   private func voiceRow(_ voice: VoiceProfile) -> some View {
@@ -925,32 +800,15 @@ struct ProfileView: View {
       .fixedSize(horizontal: false, vertical: true)
   }
 
-  private func settingsRow(
+  private func figmaNavigationRow(
     title: String,
-    detail: String,
-    systemImage: String,
     showsChevron: Bool = true
   ) -> some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
-      Image(systemName: systemImage)
-        .font(.system(size: 10, weight: .semibold))
-        .foregroundStyle(AppColor.grayWhite)
-        .frame(width: 20, height: 20)
-        .background(MoruPilotColor.accentSoft)
-        .clipShape(Circle())
-        .accessibilityHidden(true)
-
-      VStack(alignment: .leading, spacing: 0) {
-        Text(title)
-          .profileFigmaTextStyle(.b4)
-          .foregroundStyle(MoruPilotColor.textPrimary)
-          .fixedSize(horizontal: false, vertical: true)
-
-        Text(detail)
-          .profileFigmaTextStyle(.c2)
-          .foregroundStyle(MoruPilotColor.textSecondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
+    HStack {
+      Text(title)
+        .profileFigmaTextStyle(.b4)
+        .foregroundStyle(MoruPilotColor.textPrimary)
+        .fixedSize(horizontal: false, vertical: true)
 
       Spacer(minLength: MoruPilotSpacing.eight)
 
@@ -962,6 +820,32 @@ struct ProfileView: View {
     .padding(.vertical, MoruPilotSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     .profilePilotSurface(cornerRadius: MoruPilotSpacing.twelve)
+  }
+}
+
+private struct MoruBrandBadge: View {
+  let size: CGFloat
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .fill(AppColor.grayWhite)
+
+      Image(AppImage.moruSplashBrand)
+        .resizable()
+        .scaledToFit()
+        .frame(width: size * 2.36, height: size * 1.09)
+        .offset(y: size * 0.34)
+        .frame(width: size, height: size)
+        .clipped()
+    }
+    .frame(width: size, height: size)
+    .clipShape(Circle())
+    .overlay {
+      Circle()
+        .stroke(AppColor.grayWhite.opacity(0.68), lineWidth: 1)
+    }
+    .accessibilityHidden(true)
   }
 }
 
@@ -990,6 +874,14 @@ private extension View {
   }
 
   func profilePilotSurface(cornerRadius: CGFloat) -> some View {
-    homePilotSurface(cornerRadius: cornerRadius)
+    background(
+      RoundedRectangle(cornerRadius: cornerRadius)
+        .fill(MoruPilotColor.profileSurface)
+    )
+    .overlay {
+      RoundedRectangle(cornerRadius: cornerRadius)
+        .stroke(MoruPilotColor.border, lineWidth: 1)
+    }
+    .shadow(color: MoruPilotColor.shadow, radius: 7.5)
   }
 }

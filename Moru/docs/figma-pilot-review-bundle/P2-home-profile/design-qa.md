@@ -36,6 +36,20 @@
 - 수정 후 14상태 × Medium/AX3 × repeat를 다시 캡처해 byte-identical과
   영구 clipping 부재를 확인했다.
 
+### Pass 4
+
+- P2: 마이 탭에 선택 음성·알람 상태·서버 계정 요약이 함께 노출되어 최신
+  Profile reference의 단순한 정보 구조와 달랐다.
+  - 수정: `음성 설정`, `계정`, `데이터 관리`만 남기고, 음성 행에는
+    `모루 말투`만 표시했다.
+- P2: 비로그인 프로필이 `로컬 프로필`로 표시되고 계정 연결 화면이
+  navigation sheet 형태라 reference의 연결 흐름과 달랐다.
+  - 수정: splash MORU 마크와 `소셜 로그인`을 사용하고, Apple·Google·카카오
+    인증 버튼을 피그마 형태의 bottom sheet에 배치했다. 연결 상태는
+    `카카오 계정 연결됨`처럼 provider별로 표시한다.
+- 수정 후 signed-out Profile 상태와 카카오 연결 Profile 상태를 iPhone 16,
+  Light/Medium viewport에서 다시 캡처했다.
+
 ## 최종 평가
 
 - Typography: Medium은 Figma size/weight/exact line-height, AX3는 자연
@@ -47,11 +61,11 @@
   glass surface가 승인 token을 사용한다.
 - Imagery/icons: streak 불꽃은 Figma scale 3 export다. tab과 설정 action은
   기존 design-system/SF Symbols를 사용하며 emoji·code-native 대체 이미지는 없다.
-- Copy/content: `좋은 아침이에요,`, `오늘의 루틴`, `현재 사용 중인 루틴`,
-  `설정`, `음성 설정`, `모루 말투`를 확인했다. 동적 데이터는 Figma sample보다
-  실제 model을 우선한다.
-- States/interactions: routine 시작·편집·생성, weather refresh, profile 편집,
-  voice 선택·미리듣기, alarm action, data reset 계약을 유지한다.
+- Copy/content: `설정`, `음성 설정`, `모루 말투`, `계정`, `소셜 로그인`,
+  `데이터 관리`, `로컬 데이터 초기화`를 확인했다. 연결된 계정은
+  `~ 계정 연결됨` 형식을 사용한다.
+- States/interactions: routine 시작·편집·생성, weather refresh, voice 선택·미리듣기,
+  Apple·Google·카카오 계정 연결, 로그아웃·회원탈퇴, data reset 계약을 유지한다.
 - Accessibility: AX3에서 content card는 높이로 확장되고 scroll로 접근 가능하다.
   semantic Button과 기존 accessibility identifier를 유지하고 glow는 숨겼다.
 
