@@ -23,6 +23,7 @@ struct ConfirmStepContentView: View {
   let speechInputController: SpeechInputController
   let waitUntilGuidanceFinishes: () async -> Bool
   let onComplete: (String?) -> Void
+  let onSkip: () -> Void
   @State private var feedbackText: String?
 
   var body: some View {
@@ -75,24 +76,45 @@ struct ConfirmStepContentView: View {
         onComplete(transcript)
       }
 
-      Button {
-        speechInputController.cancel()
-        onComplete(nil)
-      } label: {
-        Text("완료했어요")
-          .font(
-            AppFont.pretendardMedium(
-              size: 14,
-              relativeTo: .caption
+      HStack(spacing: 0) {
+        Button {
+          speechInputController.cancel()
+          onComplete(nil)
+        } label: {
+          Text("완료했어요")
+            .font(
+              AppFont.pretendardMedium(
+                size: 14,
+                relativeTo: .caption
+              )
             )
-          )
-          .foregroundStyle(AppColor.gray300)
-          .frame(maxWidth: .infinity)
-          .frame(minHeight: 52)
-          .contentShape(Rectangle())
+            .foregroundStyle(AppColor.gray400)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("음성 입력 없이 이 단계를 완료합니다")
+
+        Rectangle()
+          .fill(AppColor.gray250)
+          .frame(width: 1, height: 16)
+
+        Button(action: onSkip) {
+          Text("건너뛰기")
+            .font(
+              AppFont.pretendardMedium(
+                size: 14,
+                relativeTo: .caption
+              )
+            )
+            .foregroundStyle(AppColor.gray300)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 52)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
       }
-      .buttonStyle(.plain)
-      .accessibilityHint("음성 입력 없이 이 단계를 완료합니다")
       .padding(.horizontal, 20)
     }
     .padding(.horizontal, 20)
