@@ -26,8 +26,8 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 
 ## 현재 연동 범위
 
-2026-08-05 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
-현재 제품 흐름에 연결된 operation은 18개입니다.
+2026-08-13 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
+현재 제품 흐름에 연결된 operation은 20개입니다.
 
 | 기능 | API | 앱 연결 상태 |
 | --- | --- | --- |
@@ -45,11 +45,12 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 | 계정 음성 | `GET /tts`, `PATCH /members/me/tts` | 서버 생성 음성 목록과 선택 변경에 연결 |
 | 구독 조회 | `GET /subscriptions/me` | Profile의 읽기 전용 플랜 상태에 연결 |
 | 계정 루틴 보관함 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}` | Profile에서 목록·상세를 읽기 전용으로 표시. 로컬 루틴과 병합·실행하지 않음 |
+| Home 진행률 | `GET /routine-groups/active`, `GET /routine-groups/today` | account binding 전체가 일치할 때만 local-first Home snapshot을 메모리에서 보강 |
 | 서버 상태 | `GET /health` | Target과 계약 테스트만 존재 |
 
-전체 Swagger 기준 operation 커버리지는 `18/31`(`58.1%`)입니다.
+전체 Swagger 기준 operation 커버리지는 `20/31`(`64.5%`)입니다.
 제품 앱에서 연결하면 안 되는 개발 토큰과 화면 없는 health를 제외하면
-`18/29`(`62.1%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
+`20/29`(`69.0%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
 아닙니다.
 
 홈, 루틴 관리, 실행 저장, 편집 가능한 로컬 프로필의 기준 데이터는
@@ -57,6 +58,11 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 Profile의 서버 계정 정보는 로컬 설정과 섞지 않는 읽기 전용 snapshot입니다.
 계정 루틴 보관함도 서버 응답을 메모리에만 보관하며, 같은 제목의 그룹을
 합치거나 로컬 `RoutineRepository`에 쓰지 않습니다.
+Home Active/Today도 SwiftData를 변경하지 않습니다. 같은 member와 session의
+응답이고, 서버 그룹과 모든 자식 ID가 기존 account-scoped binding과 완전히
+일치할 때만 화면 snapshot을 보강합니다. local/server active 불일치, 부분 binding,
+두 조회의 불일치, pending execution Outbox가 있으면 로컬 진행률을 유지합니다.
+서버 제목·예상 시간으로 로컬 루틴 정의를 덮어쓰지 않습니다.
 서버 API가 존재하더라도 로컬 ID와 서버 ID의 매핑, 충돌, 시간대,
 멱등성 계약이 확정되지 않은 기능은 임의로 연결하지 않습니다.
 
@@ -298,19 +304,32 @@ PRO 음성은 활성 PRO 응답이 확인된 경우만 변경합니다.
 항목을 선택했을 때만 상세를 요청합니다. 응답은 읽기 전용이며 로컬 루틴의
 추가·수정·실행 또는 알람 설정으로 이어지지 않습니다.
 
+Home은 로컬 루틴과 실행 결과를 먼저 표시한 뒤 Active/Today를 병렬 조회합니다.
+로그아웃, 오프라인, timeout, 서버 오류에서는 로컬 화면을 그대로 유지합니다.
+서버 진행률은 로컬 값을 감소시키지 않으며, 해당 그룹의 execution Outbox가
+남아 있으면 오래된 서버 projection을 전부 사용하지 않습니다. 다른 member 전환과
+같은 member 재로그인 뒤 도착한 이전 session 응답도 게시하지 않습니다. 로컬 Home
+로드부터 두 응답 완료까지 device와 `Asia/Seoul`의 하루 구간이 같을 때만 결합해
+자정 또는 시간대 경계를 건너는 projection도 로컬 fallback으로 처리합니다.
+
+2026-08-13 서버 `main` `514164dd5792434de1ed890832c8f2fe1e3eb2b9`에서
+두 조회의 no-active는 HTTP `404`, code `ROUTINE4005`, message
+`사용 중인 루틴이 없습니다.`이고 `result`는 생략됩니다. iOS는 이 정확한
+상태만 no-active로 처리합니다. 성공 응답의 누락 또는 malformed `result`는
+empty로 바꾸지 않습니다. 같은 날 live OpenAPI는 두 operation의 `200`만 선언해
+이 `404` 계약을 아직 문서화하지 않는 위험이 남아 있습니다.
+
 서버 기능을 조립할 때도 Local Repository는 교체하지 않습니다.
 APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 필요한 Coordinator를 선택 기능으로 추가합니다.
 
 ## 계약 확인 전 보류하는 연동
 
-- 루틴 그룹 쓰기와 실행용 조회
+- 루틴 그룹 쓰기
   - `POST /routine-groups`, `POST /routine-groups/{routineGroupId}/routines`,
     `PATCH /routine-groups/{routineGroupId}/active`,
     `DELETE /routine-groups/{routineGroupId}`, `DELETE /routines/{routineId}`,
     `POST /routine-executions`는 sender에 연결하지 않습니다.
-  - `GET /routine-groups/active`, `GET /routine-groups/today`도 로컬 루틴과
-    실행 기준을 정하지 않아 연결하지 않습니다.
   - 로컬 UUID와 서버 `Int64` ID의 account-scoped mapping/Outbox 기반은
     `MoruSchemaV4`에 있습니다. 다만 서버가 stable client ID를 돌려주지 않아
     새 그룹의 자식 ID를 제목·순서로 추측해 연결하지 않습니다.

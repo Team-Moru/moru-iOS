@@ -11,6 +11,8 @@ import Moya
 nonisolated enum RoutineGroupTarget: MoruTargetType {
   case list
   case detail(routineGroupID: Int64)
+  case active
+  case today
 
   var path: String {
     switch self {
@@ -18,6 +20,10 @@ nonisolated enum RoutineGroupTarget: MoruTargetType {
       "/routine-groups"
     case .detail(let routineGroupID):
       "/routine-groups/\(routineGroupID)"
+    case .active:
+      "/routine-groups/active"
+    case .today:
+      "/routine-groups/today"
     }
   }
 
@@ -83,6 +89,51 @@ nonisolated enum RoutineGroupTarget: MoruTargetType {
                 ]
               }
             ]
+          }
+        }
+        """.utf8
+      )
+    case .active:
+      Data(
+        """
+        {
+          "isSuccess": true,
+          "code": "COMMON200",
+          "message": "성공입니다.",
+          "result": {
+            "routineGroupId": 12,
+            "title": "아침 루틴",
+            "totalDurationSec": 180,
+            "completionRate": 50,
+            "routines": [
+              {
+                "routineId": 31,
+                "title": "물 마시기",
+                "isCompleted": true,
+                "completedTimeSec": 30
+              },
+              {
+                "routineId": 32,
+                "title": "스트레칭",
+                "isCompleted": false,
+                "completedTimeSec": null
+              }
+            ]
+          }
+        }
+        """.utf8
+      )
+    case .today:
+      Data(
+        """
+        {
+          "isSuccess": true,
+          "code": "COMMON200",
+          "message": "성공입니다.",
+          "result": {
+            "completedCount": 1,
+            "totalCount": 2,
+            "completionRate": 50
           }
         }
         """.utf8

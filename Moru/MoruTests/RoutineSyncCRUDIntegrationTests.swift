@@ -1017,7 +1017,7 @@ private struct RoutineSyncCRUDFixture {
   let onboarding: SwiftDataOnboardingRepository
 }
 
-private actor RoutineSyncCountingAPIClient: AccountBoundAPIClient {
+private actor RoutineSyncCountingAPIClient: AccountBoundRawResponseClient {
   private var count = 0
 
   func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
@@ -1043,6 +1043,14 @@ private actor RoutineSyncCountingAPIClient: AccountBoundAPIClient {
   }
 
   func requestData<Target: MoruTargetType>(_ target: Target) async throws -> Data {
+    count += 1
+    throw APIError.transport(code: -1, message: "Unexpected routine API request")
+  }
+
+  func requestResponse<Target: MoruTargetType>(
+    _ target: Target,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> AccountBoundHTTPResponse {
     count += 1
     throw APIError.transport(code: -1, message: "Unexpected routine API request")
   }

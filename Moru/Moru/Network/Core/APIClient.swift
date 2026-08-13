@@ -40,6 +40,18 @@ nonisolated protocol AccountBoundAPIClient: APIClient {
   ) async throws -> Payload
 }
 
+nonisolated protocol AccountBoundRawResponseClient: AccountBoundAPIClient {
+  func requestResponse<Target: MoruTargetType>(
+    _ target: Target,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> AccountBoundHTTPResponse
+}
+
+nonisolated struct AccountBoundHTTPResponse: Equatable, Sendable {
+  let statusCode: Int
+  let data: Data
+}
+
 nonisolated extension AccountBoundAPIClient {
   func requestData<Target: MoruTargetType>(
     _: Target,
@@ -79,7 +91,7 @@ nonisolated extension AccountBoundAPIClient {
   }
 }
 
-actor DefaultAPIClient: AccountBoundAPIClient {
+actor DefaultAPIClient: AccountBoundRawResponseClient {
   private let provider: MoyaProvider<MultiTarget>
   private let configuration: NetworkConfiguration
   private let tokenProvider: any AccessTokenProviding
@@ -122,6 +134,35 @@ actor DefaultAPIClient: AccountBoundAPIClient {
     try validateStatus(response)
 
     return try successfulPayload(payloadType, from: response)
+  }
+
+  func requestResponse<Target: MoruTargetType>(
+    _ target: Target,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> AccountBoundHTTPResponse {
+    try ensureServerRequestsEnabled()
+    let authorizationContext = try authorizationContext(
+      for: target,
+      identity: identity
+    )
+    let response: HTTPResponseSnapshot
+
+    do {
+      response = try await perform(
+        target,
+        accessToken: authorizationContext.accessToken,
+        authorizationContext: authorizationContext
+      )
+    } catch {
+      try validateAuthorizationContext(authorizationContext)
+      throw error
+    }
+
+    try validateAuthorizationContext(authorizationContext)
+    return AccountBoundHTTPResponse(
+      statusCode: response.statusCode,
+      data: response.data
+    )
   }
 
   func requestData<Target: MoruTargetType>(

@@ -1,6 +1,7 @@
 # 서버 루틴 동기화 계약 요청서
 
-기준: [2026-08-10 live Swagger](https://moru-api.duckdns.org/v3/api-docs)
+기준: [2026-08-13 live Swagger](https://moru-api.duckdns.org/v3/api-docs)와
+서버 `main` `514164dd5792434de1ed890832c8f2fe1e3eb2b9`
 
 ## 목적과 전제
 
@@ -120,8 +121,11 @@ GET /routine-sync/mutations/{idempotencyKey}
   새 그룹 하나를 활성화합니다.
 - 응답은 새 활성 `routineGroupId`와 비활성화된 ID 목록을 반환합니다.
 - `isActive: false`는 활성 그룹이 0개인 상태를 허용합니다.
-- `GET /routine-groups/active`는 활성 항목이 없을 때의 계약을 명시합니다.
-  권장값은 성공 공통 응답의 `result: null`입니다.
+- 서버 `main`에서 `GET /routine-groups/active`와 `GET /routine-groups/today`의
+  활성 항목 없음은 HTTP `404`, code `ROUTINE4005`, message
+  `사용 중인 루틴이 없습니다.`이며 `result`는 생략됩니다.
+- live OpenAPI에도 이 `404` 응답과 오류 schema를 선언합니다. 현재 문서는
+  `200`만 노출하므로 iOS 계약 테스트는 서버 `main` 구현을 함께 고정합니다.
 
 ## P1 — 편집·실행의 완전한 동기화 전
 

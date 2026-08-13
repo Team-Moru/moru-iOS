@@ -50,3 +50,24 @@ nonisolated struct ServerRoutineNestedStep: Equatable, Sendable {
   let content: String?
   let orderIndex: Int?
 }
+
+nonisolated struct ServerActiveRoutineGroup: Equatable, Sendable {
+  let routineGroupID: Int64
+  let title: String
+  let totalDurationSeconds: Int
+  let completionRate: Double
+  let routines: [ServerActiveRoutine]
+}
+
+nonisolated struct ServerActiveRoutine: Equatable, Sendable {
+  let routineID: Int64
+  let title: String
+  let isCompleted: Bool
+  let completedTimeSeconds: Int?
+}
+
+nonisolated struct ServerTodayRoutineGroupSummary: Equatable, Sendable {
+  let completedCount: Int
+  let totalCount: Int
+  let completionRate: Double
+}

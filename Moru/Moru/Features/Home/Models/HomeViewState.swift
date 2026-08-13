@@ -58,6 +58,14 @@ enum HomeWeatherState: Equatable {
   case unavailable(HomeWeatherError)
 }
 
+enum HomeRoutineServerState: Equatable {
+  case notConfigured
+  case loading
+  case applied
+  case noActive
+  case fallback(HomeRoutineServerFallbackReason)
+}
+
 enum HomeViewState: Equatable {
   case loading(previousContent: HomeContentState?)
   case content(HomeContentState)

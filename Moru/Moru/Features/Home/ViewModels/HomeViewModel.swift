@@ -13,42 +13,62 @@ import Observation
 @Observable
 final class HomeViewModel {
   private let loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol
+  private let enrichHomeRoutinesUseCase:
+    (any EnrichHomeRoutinesUseCaseProtocol)?
   private let weatherRepository: (any HomeWeatherRepository)?
   private let weatherService: (any HomeWeatherService)?
   private let now: @Sendable () -> Date
   private var activeWeatherRequestID: UUID?
   private var weatherTask: Task<Void, Never>?
   private var isWeatherRequestInProgress = false
+  private var routineServerTask: Task<Void, Never>?
+  private var routineServerRequestID: UUID?
 
   #if DEBUG
   var onStaleWeatherResultDiscarded: ((UUID) -> Void)?
+  var onStaleRoutineServerResultDiscarded: (() -> Void)?
   #endif
 
   var state: HomeViewState
   private(set) var weatherState: HomeWeatherState
+  private(set) var routineServerState: HomeRoutineServerState
 
   init(
     loadHomeRoutinesUseCase: any LoadHomeRoutinesUseCaseProtocol,
+    enrichHomeRoutinesUseCase:
+      (any EnrichHomeRoutinesUseCaseProtocol)? = nil,
     weatherRepository: (any HomeWeatherRepository)? = nil,
     weatherService: (any HomeWeatherService)? = nil,
     initialWeatherState: HomeWeatherState = .notRequested,
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
+    self.enrichHomeRoutinesUseCase = enrichHomeRoutinesUseCase
     self.weatherRepository = weatherRepository
     self.weatherService = weatherService
     self.now = now
     self.state = .loading(previousContent: nil)
     self.weatherState = initialWeatherState
+    self.routineServerState = enrichHomeRoutinesUseCase == nil
+      ? .notConfigured
+      : .loading
   }
 
   func load() {
+    routineServerTask?.cancel()
+    routineServerTask = nil
+    routineServerRequestID = nil
     let previousContent = state.routineContent
     state = .loading(previousContent: previousContent)
 
     do {
-      state = makeViewState(from: try loadHomeRoutinesUseCase.execute())
+      let result = try loadHomeRoutinesUseCase.execute()
+      state = makeViewState(from: result)
+      startRoutineServerEnrichment(for: result)
     } catch {
+      routineServerState = enrichHomeRoutinesUseCase == nil
+        ? .notConfigured
+        : .fallback(.localSyncStateUnavailable)
       state = .failed(
         .localRoutineDataUnavailable(diagnostic: String(reflecting: error)),
         previousContent: previousContent
@@ -58,6 +78,189 @@ final class HomeViewModel {
 
   func retry() {
     load()
+  }
+
+  private func startRoutineServerEnrichment(
+    for result: HomeRoutineLoadResult
+  ) {
+    guard let enrichHomeRoutinesUseCase else {
+      routineServerState = .notConfigured
+      return
+    }
+
+    let requestID = UUID()
+    routineServerRequestID = requestID
+    routineServerState = .loading
+    routineServerTask = Task { [weak self] in
+      do {
+        let enrichment = try await enrichHomeRoutinesUseCase.execute(
+          localResult: result
+        )
+        guard let self else {
+          return
+        }
+        guard self.routineServerRequestID == requestID,
+              !Task.isCancelled else {
+          #if DEBUG
+          self.onStaleRoutineServerResultDiscarded?()
+          #endif
+          return
+        }
+        self.apply(enrichment)
+        self.routineServerTask = nil
+        self.routineServerRequestID = nil
+      } catch is CancellationError {
+        return
+      } catch {
+        guard let self,
+              self.routineServerRequestID == requestID,
+              !Task.isCancelled else {
+          return
+        }
+        self.routineServerState = .fallback(.remoteUnavailable)
+        self.routineServerTask = nil
+        self.routineServerRequestID = nil
+      }
+    }
+  }
+
+  private func apply(_ enrichment: HomeRoutineServerEnrichment) {
+    switch enrichment {
+    case .applied(let snapshot):
+      if apply(snapshot) {
+        routineServerState = .applied
+      }
+    case .noActive:
+      routineServerState = .noActive
+    case .fallback(let reason):
+      routineServerState = .fallback(reason)
+    }
+  }
+
+  @discardableResult
+  private func apply(_ snapshot: HomeBoundActiveRoutineSnapshot) -> Bool {
+    guard var content = state.routineContent else {
+      return false
+    }
+
+    let mergedRoutine: HomeRoutineState
+    if content.todayRoutine?.id == snapshot.localRoutineID,
+       let todayRoutine = content.todayRoutine {
+      guard hasExactStepIdentity(snapshot, routine: todayRoutine) else {
+        routineServerState = .fallback(.activeRoutineIdentityMismatch)
+        return false
+      }
+      let appliedRoutine = applying(snapshot, to: todayRoutine)
+      content.todayRoutine = appliedRoutine
+      mergedRoutine = appliedRoutine
+    } else if let index = content.activeRoutines.firstIndex(
+      where: { $0.id == snapshot.localRoutineID }
+    ) {
+      guard hasExactStepIdentity(
+        snapshot,
+        routine: content.activeRoutines[index]
+      ) else {
+        routineServerState = .fallback(.activeRoutineIdentityMismatch)
+        return false
+      }
+      let appliedRoutine = applying(
+        snapshot,
+        to: content.activeRoutines[index]
+      )
+      content.activeRoutines[index] = appliedRoutine
+      mergedRoutine = appliedRoutine
+    } else {
+      routineServerState = .fallback(.activeGroupIdentityMismatch)
+      return false
+    }
+
+    let localTodayCompletedCount = mergedRoutine.steps
+      .filter(\.isCompleted).count
+    let completedCount = max(
+      localTodayCompletedCount,
+      snapshot.today.completedCount
+    )
+    let progress = max(
+      max(content.todayProgress.progress, mergedRoutine.progress),
+      max(
+        snapshot.today.completionRate,
+        self.progress(
+          completed: completedCount,
+          total: snapshot.today.totalCount
+        )
+      )
+    )
+    content.todayProgress = HomeProgressState(
+      percentText: percentageText(progress),
+      completedText:
+        "\(completedCount)/\(snapshot.today.totalCount) 완료",
+      progress: progress
+    )
+    state = content.activeRoutines.isEmpty && content.todayRoutine == nil
+      ? .empty(content)
+      : .content(content)
+    return true
+  }
+
+  private func hasExactStepIdentity(
+    _ snapshot: HomeBoundActiveRoutineSnapshot,
+    routine: HomeRoutineState
+  ) -> Bool {
+    let visibleStepIDs = Set(routine.steps.map(\.id))
+    let boundStepIDs = Set(snapshot.routines.map(\.localStepID))
+    return visibleStepIDs.count == routine.steps.count
+      && boundStepIDs.count == snapshot.routines.count
+      && visibleStepIDs == boundStepIDs
+  }
+
+  private func applying(
+    _ snapshot: HomeBoundActiveRoutineSnapshot,
+    to routine: HomeRoutineState
+  ) -> HomeRoutineState {
+    var routine = routine
+    let progressByStepID = Dictionary(
+      uniqueKeysWithValues: snapshot.routines.map { ($0.localStepID, $0) }
+    )
+    routine.steps = routine.steps.map { step in
+      guard let remote = progressByStepID[step.id] else {
+        return step
+      }
+      var step = step
+      step.isCompleted = step.isCompleted || remote.isCompleted
+      if remote.isCompleted,
+         let seconds = remote.completedTimeSeconds {
+        step.detail = durationText(seconds)
+      }
+      return step
+    }
+    let completedCount = routine.steps.filter(\.isCompleted).count
+    let mergedProgress = max(
+      routine.progress,
+      max(
+        snapshot.completionRate,
+        progress(completed: completedCount, total: snapshot.routines.count)
+      )
+    )
+
+    routine.statusText = statusText(
+      completed: completedCount,
+      total: snapshot.routines.count
+    )
+    routine.completionText =
+      "\(completedCount)/\(snapshot.routines.count) 완료"
+    routine.progressText = percentageText(mergedProgress)
+    routine.progress = mergedProgress
+    return routine
+  }
+
+  private func percentageText(_ value: Double) -> String {
+    "\(Int((value * 100).rounded()))%"
+  }
+
+  private func durationText(_ seconds: Int) -> String {
+    let minutes = seconds / 60
+    let remainder = seconds % 60
+    return "\(minutes):\(String(format: "%02d", remainder))"
   }
 
   func requestWeather() {

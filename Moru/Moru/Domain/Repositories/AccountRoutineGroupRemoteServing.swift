@@ -14,6 +14,14 @@ nonisolated protocol AccountRoutineGroupRemoteServing: Sendable {
     routineGroupID: Int64,
     memberID: Int64
   ) async throws -> ServerRoutineGroupDetail
+
+  func fetchActiveRoutineGroup(
+    identity: AccountSessionIdentity
+  ) async throws -> ServerActiveRoutineGroup?
+
+  func fetchTodayRoutineGroupSummary(
+    identity: AccountSessionIdentity
+  ) async throws -> ServerTodayRoutineGroupSummary?
 }
 
 nonisolated enum AccountRoutineGroupRemoteError:
