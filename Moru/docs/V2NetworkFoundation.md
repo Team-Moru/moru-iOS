@@ -27,7 +27,7 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 ## 현재 연동 범위
 
 2026-08-13 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
-현재 제품 흐름에 연결된 operation은 20개입니다.
+현재 제품 흐름에 연결된 operation은 19개입니다.
 
 | 기능 | API | 앱 연결 상태 |
 | --- | --- | --- |
@@ -43,14 +43,13 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 | History 기상 패턴 | `GET /routine-executions/wake-pattern` | 로컬 계산값이 없을 때만 서버 값으로 보강 |
 | 계정 프로필·스트릭 | `GET /members/me/profile`, `GET /members/me/streak` | Profile의 읽기 전용 계정 정보에 연결 |
 | 계정 음성 | `GET /tts`, `PATCH /members/me/tts` | 서버 생성 음성 목록과 선택 변경에 연결 |
-| 구독 조회 | `GET /subscriptions/me` | Profile의 읽기 전용 플랜 상태에 연결 |
 | 계정 루틴 보관함 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}` | Profile에서 목록·상세를 읽기 전용으로 표시. 로컬 루틴과 병합·실행하지 않음 |
 | Home 진행률 | `GET /routine-groups/active`, `GET /routine-groups/today` | account binding 전체가 일치할 때만 local-first Home snapshot을 메모리에서 보강 |
 | 서버 상태 | `GET /health` | Target과 계약 테스트만 존재 |
 
-전체 Swagger 기준 operation 커버리지는 `20/31`(`64.5%`)입니다.
+전체 Swagger 기준 operation 커버리지는 `19/31`(`61.3%`)입니다.
 제품 앱에서 연결하면 안 되는 개발 토큰과 화면 없는 health를 제외하면
-`20/29`(`69.0%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
+`19/29`(`65.5%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
 아닙니다.
 
 홈, 루틴 관리, 실행 저장, 편집 가능한 로컬 프로필의 기준 데이터는
@@ -298,8 +297,8 @@ History의 주간·월간·기상 요청은 서로 독립적으로 실패할 수
 날짜에만 진입합니다. 계정 전환 뒤 도착한 응답은 화면에 게시하지 않습니다.
 
 Profile은 로컬 닉네임·번들 안내 음성과 서버 닉네임·서버 생성 음성을
-별도 상태로 표시합니다. 구독 조회 실패를 FREE로 간주하지 않으며,
-PRO 음성은 활성 PRO 응답이 확인된 경우만 변경합니다.
+별도 상태로 표시합니다. 서버 생성 음성은 `GET /tts` 응답 중
+`proOnly`가 `false`인 항목만 선택 목록에 표시합니다.
 계정 루틴 보관함은 로그인한 사용자가 직접 진입했을 때만 목록을 요청하고,
 항목을 선택했을 때만 상세를 요청합니다. 응답은 읽기 전용이며 로컬 루틴의
 추가·수정·실행 또는 알람 설정으로 이어지지 않습니다.
@@ -346,9 +345,10 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 - 루틴 TTS 조회
   - 로컬 routine UUID와 서버 routine ID의 연결이 없습니다.
   - `s3Url` 수명, 다운로드 인증, 캐시 만료·fallback 계약이 필요합니다.
-- 구독 등록
+- 구독
   - StoreKit 거래 검증, 중복 transaction, 복원, sandbox 정책이 없습니다.
-  - `POST /subscriptions`를 결제 UI 없이 단독 호출하지 않습니다.
+  - 이번 출시에서는 `GET /subscriptions/me`와 `POST /subscriptions`를
+    제품 흐름에서 호출하지 않습니다.
 - 프로필 이미지
   - 조회 응답은 key만 제공하며 URL 해석·수정 API가 없습니다.
 - 서버 음성과 번들 안내 음성 통합

@@ -43,18 +43,3 @@ nonisolated struct ServerTTSSelection: Equatable, Sendable {
   let voiceCode: String
   let displayName: String
 }
-
-nonisolated struct ServerSubscriptionInfo: Equatable, Sendable {
-  let plan: ServerSubscriptionPlan
-
-  /// Exact server values. Time-zone-free values must not be interpreted locally.
-  let startedAtRaw: String?
-  let expiresAtRaw: String?
-  let isActive: Bool
-}
-
-nonisolated enum ServerSubscriptionPlan: Equatable, Sendable {
-  case free
-  case pro
-  case unknown(String)
-}

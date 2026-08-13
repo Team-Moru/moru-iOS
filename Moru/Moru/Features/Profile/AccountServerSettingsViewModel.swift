@@ -40,8 +40,6 @@ final class AccountServerSettingsViewModel {
     AccountServerResourceState<ServerAccountStreak> = .signedOut
   private(set) var voiceState:
     AccountServerResourceState<[ServerTTSVoice]> = .signedOut
-  private(set) var subscriptionState:
-    AccountServerResourceState<ServerSubscriptionInfo> = .signedOut
   private(set) var selectedTTSID: Int64?
   private(set) var latestSelection: ServerTTSSelection?
   private(set) var isUpdatingVoice = false
@@ -85,16 +83,12 @@ final class AccountServerSettingsViewModel {
     let previousVoices = preservesPreviousValues
       ? voiceState.value
       : nil
-    let previousSubscription = preservesPreviousValues
-      ? subscriptionState.value
-      : nil
     if !preservesPreviousValues {
       selectedTTSID = nil
     }
     profileState = .loading(previous: previousProfile)
     streakState = .loading(previous: previousStreak)
     voiceState = .loading(previous: previousVoices)
-    subscriptionState = .loading(previous: previousSubscription)
 
     async let profileOutcome = accountServerLoadOutcome {
       try await remoteService.fetchProfile(memberID: memberID)
@@ -103,16 +97,13 @@ final class AccountServerSettingsViewModel {
       try await remoteService.fetchStreak(memberID: memberID)
     }
     async let voiceOutcome = accountServerLoadOutcome {
-      try await remoteService.fetchVoices(memberID: memberID)
-    }
-    async let subscriptionOutcome = accountServerLoadOutcome {
-      try await remoteService.fetchSubscription(memberID: memberID)
+      let voices = try await remoteService.fetchVoices(memberID: memberID)
+      return voices.filter { !$0.isProOnly }
     }
     let outcomes = await (
       profileOutcome,
       streakOutcome,
-      voiceOutcome,
-      subscriptionOutcome
+      voiceOutcome
     )
 
     guard !Task.isCancelled,
@@ -134,10 +125,6 @@ final class AccountServerSettingsViewModel {
       previous: previousVoices,
       treatsEmptyCollectionAsEmpty: true
     )
-    subscriptionState = resourceState(
-      from: outcomes.3,
-      previous: previousSubscription
-    )
 
     if case .content(let profile) = profileState {
       selectedTTSID = profile.selectedTTSID
@@ -156,11 +143,6 @@ final class AccountServerSettingsViewModel {
           memberID == currentMemberID,
           let remoteService,
           voiceState.value?.contains(voice) == true else {
-      return
-    }
-    guard !voice.isProOnly || hasActiveProSubscription else {
-      voiceUpdateErrorMessage =
-        "PRO 구독을 확인한 뒤 이 서버 음성을 선택할 수 있어요."
       return
     }
 
@@ -201,14 +183,6 @@ final class AccountServerSettingsViewModel {
     }
   }
 
-  var hasActiveProSubscription: Bool {
-    guard case .content(let subscription) = subscriptionState,
-          subscription.plan == .pro else {
-      return false
-    }
-    return subscription.isActive
-  }
-
   var selectedVoiceDisplayName: String {
     if let latestSelection,
        latestSelection.ttsID == selectedTTSID {
@@ -227,7 +201,6 @@ final class AccountServerSettingsViewModel {
     profileState = .signedOut
     streakState = .signedOut
     voiceState = .signedOut
-    subscriptionState = .signedOut
     selectedTTSID = nil
   }
 
@@ -235,7 +208,6 @@ final class AccountServerSettingsViewModel {
     profileState = .unavailable
     streakState = .unavailable
     voiceState = .unavailable
-    subscriptionState = .unavailable
     selectedTTSID = nil
   }
 

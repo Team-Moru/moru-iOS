@@ -19,27 +19,24 @@ final class AccountServerRemoteContractTests: XCTestCase {
     let update = AccountServerTarget.updateTTS(
       TTSUpdateRequestDTO(ttsId: 2)
     )
-    let subscription = AccountServerTarget.subscription
 
     XCTAssertEqual(profile.path, "/members/me/profile")
     XCTAssertEqual(streak.path, "/members/me/streak")
     XCTAssertEqual(voices.path, "/tts")
     XCTAssertEqual(update.path, "/members/me/tts")
-    XCTAssertEqual(subscription.path, "/subscriptions/me")
     XCTAssertEqual(profile.method, .get)
     XCTAssertEqual(streak.method, .get)
     XCTAssertEqual(voices.method, .get)
     XCTAssertEqual(update.method, .patch)
-    XCTAssertEqual(subscription.method, .get)
 
-    let targets = [profile, streak, voices, update, subscription]
+    let targets = [profile, streak, voices, update]
     XCTAssertTrue(
       targets.allSatisfy {
         $0.authenticationRequirement == .bearer
       }
     )
 
-    for target in [profile, streak, voices, subscription] {
+    for target in [profile, streak, voices] {
       guard case .requestPlain = target.task else {
         return XCTFail("Expected a body-free GET request.")
       }
@@ -65,19 +62,13 @@ final class AccountServerRemoteContractTests: XCTestCase {
       APIResponse<TTSUpdateResponseDTO>.self,
       from: update.sampleData
     )
-    let subscriptionEnvelope = try decoder.decode(
-      APIResponse<SubscriptionInfoResponseDTO>.self,
-      from: subscription.sampleData
-    )
-
     XCTAssertEqual(profileEnvelope.result?.memberId, 98)
     XCTAssertEqual(streakEnvelope.result?.weeklyStatus?.count, 7)
     XCTAssertEqual(voiceEnvelope.result?.voices?.count, 2)
     XCTAssertEqual(updateEnvelope.result?.ttsId, 2)
-    XCTAssertEqual(subscriptionEnvelope.result?.plan, "PRO")
   }
 
-  func testFetchesEveryEndpointWithAccountBindingAndExactPatchBody()
+  func testFetchesSupportedAccountEndpointsWithExactPatchBody()
     async throws {
     let capture = AccountServerRequestCapturePlugin()
     let service = makeStubbedService(additionalPlugins: [capture])
@@ -89,7 +80,6 @@ final class AccountServerRemoteContractTests: XCTestCase {
       ttsID: 2,
       memberID: 98
     )
-    let subscription = try await service.fetchSubscription(memberID: 98)
 
     XCTAssertEqual(
       profile,
@@ -145,18 +135,8 @@ final class AccountServerRemoteContractTests: XCTestCase {
         displayName: "현우"
       )
     )
-    XCTAssertEqual(
-      subscription,
-      ServerSubscriptionInfo(
-        plan: .pro,
-        startedAtRaw: "2026-06-01T00:00:00",
-        expiresAtRaw: "2026-08-01T00:00:00",
-        isActive: true
-      )
-    )
-
     let requests = capture.requests
-    XCTAssertEqual(requests.count, 5)
+    XCTAssertEqual(requests.count, 4)
     XCTAssertEqual(
       Set(requests.compactMap(\.url?.path)),
       Set([
@@ -164,7 +144,6 @@ final class AccountServerRemoteContractTests: XCTestCase {
         "/members/me/streak",
         "/tts",
         "/members/me/tts",
-        "/subscriptions/me",
       ])
     )
     XCTAssertTrue(
@@ -211,21 +190,15 @@ final class AccountServerRemoteContractTests: XCTestCase {
       TTSVoiceListResponseDTO.self,
       from: Data("{}".utf8)
     )
-    let subscription = try decoder.decode(
-      SubscriptionInfoResponseDTO.self,
-      from: Data("{}".utf8)
-    )
 
     XCTAssertNil(profile.memberId)
     XCTAssertNil(streak.currentStreak)
     XCTAssertNil(voices.voices)
-    XCTAssertNil(subscription.plan)
 
     let client = AccountServerPayloadAPIClient(
       profile: profile,
       streak: streak,
-      voices: voices,
-      subscription: subscription
+      voices: voices
     )
     let service = DefaultAccountServerRemoteService(apiClient: client)
 
@@ -237,9 +210,6 @@ final class AccountServerRemoteContractTests: XCTestCase {
     }
     await assertRemoteError(.invalidResponse) {
       _ = try await service.fetchVoices(memberID: 98)
-    }
-    await assertRemoteError(.invalidResponse) {
-      _ = try await service.fetchSubscription(memberID: 98)
     }
   }
 
@@ -261,9 +231,6 @@ final class AccountServerRemoteContractTests: XCTestCase {
     }
     await assertRemoteError(.invalidRequest) {
       _ = try await service.updateTTS(ttsID: 1, memberID: 0)
-    }
-    await assertRemoteError(.invalidRequest) {
-      _ = try await service.fetchSubscription(memberID: -1)
     }
 
     XCTAssertEqual(client.callCount, 0)
@@ -419,61 +386,6 @@ final class AccountServerRemoteContractTests: XCTestCase {
     }
   }
 
-  func testSubscriptionMapsKnownAndUnknownPlansWithoutParsingDates()
-    async throws {
-    let rawStartedAt = "2026-06-01T00:00:00"
-    let rawExpiresAt = " 2026-08-01T00:00:00 "
-    let service = DefaultAccountServerRemoteService(
-      apiClient: AccountServerPayloadAPIClient(
-        subscription: subscriptionDTO(
-          plan: "ENTERPRISE",
-          startedAt: rawStartedAt,
-          expiresAt: rawExpiresAt,
-          isActive: true
-        )
-      )
-    )
-
-    let subscription = try await service.fetchSubscription(memberID: 98)
-
-    XCTAssertEqual(subscription.plan, .unknown("ENTERPRISE"))
-    XCTAssertEqual(subscription.startedAtRaw, rawStartedAt)
-    XCTAssertEqual(subscription.expiresAtRaw, rawExpiresAt)
-    XCTAssertTrue(subscription.isActive)
-
-    let freeService = DefaultAccountServerRemoteService(
-      apiClient: AccountServerPayloadAPIClient(
-        subscription: subscriptionDTO(
-          plan: "FREE",
-          startedAt: nil,
-          expiresAt: nil,
-          isActive: false
-        )
-      )
-    )
-    let free = try await freeService.fetchSubscription(memberID: 98)
-    XCTAssertEqual(free.plan, .free)
-    XCTAssertNil(free.startedAtRaw)
-    XCTAssertNil(free.expiresAtRaw)
-
-    let invalidSubscriptions = [
-      subscriptionDTO(plan: " "),
-      subscriptionDTO(startedAt: ""),
-      subscriptionDTO(expiresAt: "\n"),
-      subscriptionDTO(isActive: nil),
-    ]
-    for invalid in invalidSubscriptions {
-      let invalidService = DefaultAccountServerRemoteService(
-        apiClient: AccountServerPayloadAPIClient(
-          subscription: invalid
-        )
-      )
-      await assertRemoteError(.invalidResponse) {
-        _ = try await invalidService.fetchSubscription(memberID: 98)
-      }
-    }
-  }
-
   func testCancellationAndAccountAuthorizationChangeRemainDistinct()
     async {
     for error in [CancellationError(), APIError.cancelled] as [any Error] {
@@ -624,20 +536,6 @@ nonisolated private func ttsUpdateDTO(
   )
 }
 
-nonisolated private func subscriptionDTO(
-  plan: String? = "PRO",
-  startedAt: String? = "2026-06-01T00:00:00",
-  expiresAt: String? = "2026-08-01T00:00:00",
-  isActive: Bool? = true
-) -> SubscriptionInfoResponseDTO {
-  SubscriptionInfoResponseDTO(
-    plan: plan,
-    startedAt: startedAt,
-    expiresAt: expiresAt,
-    isActive: isActive
-  )
-}
-
 nonisolated private final class AccountServerAccessTokenProvider:
   AccountBoundAccessTokenProviding {
   private let context = AccountAuthorizationContext(
@@ -684,7 +582,6 @@ nonisolated private final class AccountServerPayloadAPIClient:
   private let streak: AccountStreakResponseDTO
   private let voices: TTSVoiceListResponseDTO
   private let update: TTSUpdateResponseDTO
-  private let subscription: SubscriptionInfoResponseDTO
 
   init(
     profile: AccountProfileResponseDTO = accountProfileDTO(),
@@ -692,14 +589,12 @@ nonisolated private final class AccountServerPayloadAPIClient:
     voices: TTSVoiceListResponseDTO = TTSVoiceListResponseDTO(
       voices: [ttsVoiceDTO()]
     ),
-    update: TTSUpdateResponseDTO = ttsUpdateDTO(),
-    subscription: SubscriptionInfoResponseDTO = subscriptionDTO()
+    update: TTSUpdateResponseDTO = ttsUpdateDTO()
   ) {
     self.profile = profile
     self.streak = streak
     self.voices = voices
     self.update = update
-    self.subscription = subscription
   }
 
   func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
@@ -729,8 +624,6 @@ nonisolated private final class AccountServerPayloadAPIClient:
       response = voices
     case .updateTTS:
       response = update
-    case .subscription:
-      response = subscription
     }
 
     guard let payload = response as? Payload else {

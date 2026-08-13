@@ -91,24 +91,6 @@ nonisolated final class DefaultAccountServerRemoteService:
     }
   }
 
-  func fetchSubscription(
-    memberID: Int64
-  ) async throws -> ServerSubscriptionInfo {
-    guard memberID > 0 else {
-      throw AccountServerRemoteError.invalidRequest
-    }
-
-    return try await performAccountRequest {
-      let response = try await apiClient.request(
-        AccountServerTarget.subscription,
-        as: SubscriptionInfoResponseDTO.self,
-        authorizedForMemberID: memberID
-      )
-      try _Concurrency.Task<Never, Never>.checkCancellation()
-      return try response.makeDomainModel()
-    }
-  }
-
   private func performAccountRequest<Output: Sendable>(
     _ operation: () async throws -> Output
   ) async throws -> Output {
@@ -230,22 +212,6 @@ nonisolated private extension TTSUpdateResponseDTO {
   }
 }
 
-nonisolated private extension SubscriptionInfoResponseDTO {
-  func makeDomainModel() throws -> ServerSubscriptionInfo {
-    guard let plan = try normalizedRequiredText(plan),
-          let isActive else {
-      throw AccountServerRemoteError.invalidResponse
-    }
-
-    return ServerSubscriptionInfo(
-      plan: ServerSubscriptionPlan(serverValue: plan),
-      startedAtRaw: try validatedRawTimestamp(startedAt),
-      expiresAtRaw: try validatedRawTimestamp(expiresAt),
-      isActive: isActive
-    )
-  }
-}
-
 nonisolated private extension ServerAccountLoginType {
   init(serverValue: String) {
     switch serverValue {
@@ -257,19 +223,6 @@ nonisolated private extension ServerAccountLoginType {
       self = .kakao
     case "APPLE":
       self = .apple
-    default:
-      self = .unknown(serverValue)
-    }
-  }
-}
-
-nonisolated private extension ServerSubscriptionPlan {
-  init(serverValue: String) {
-    switch serverValue {
-    case "FREE":
-      self = .free
-    case "PRO":
-      self = .pro
     default:
       self = .unknown(serverValue)
     }
@@ -299,20 +252,4 @@ nonisolated private func normalizedOptionalText(
     return nil
   }
   return try normalizedRequiredText(value)
-}
-
-nonisolated private func validatedRawTimestamp(
-  _ value: String?
-) throws -> String? {
-  guard let value else {
-    return nil
-  }
-  guard !value.trimmingCharacters(
-    in: .whitespacesAndNewlines
-  ).isEmpty else {
-    throw AccountServerRemoteError.invalidResponse
-  }
-
-  // Preserve the exact server value. Swagger examples omit a time zone.
-  return value
 }

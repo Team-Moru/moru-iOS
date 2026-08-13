@@ -13,7 +13,6 @@ nonisolated enum AccountServerTarget: MoruTargetType {
   case streak
   case voices
   case updateTTS(TTSUpdateRequestDTO)
-  case subscription
 
   var path: String {
     switch self {
@@ -25,8 +24,6 @@ nonisolated enum AccountServerTarget: MoruTargetType {
       "/tts"
     case .updateTTS:
       "/members/me/tts"
-    case .subscription:
-      "/subscriptions/me"
     }
   }
 
@@ -34,7 +31,7 @@ nonisolated enum AccountServerTarget: MoruTargetType {
     switch self {
     case .updateTTS:
       .patch
-    case .profile, .streak, .voices, .subscription:
+    case .profile, .streak, .voices:
       .get
     }
   }
@@ -43,7 +40,7 @@ nonisolated enum AccountServerTarget: MoruTargetType {
     switch self {
     case .updateTTS(let request):
       .requestJSONEncodable(request)
-    case .profile, .streak, .voices, .subscription:
+    case .profile, .streak, .voices:
       .requestPlain
     }
   }
@@ -126,22 +123,6 @@ nonisolated enum AccountServerTarget: MoruTargetType {
             "ttsId": \(request.ttsId),
             "voiceCode": "HYEONU",
             "displayName": "현우"
-          }
-        }
-        """.utf8
-      )
-    case .subscription:
-      Data(
-        """
-        {
-          "isSuccess": true,
-          "code": "COMMON200",
-          "message": "성공입니다.",
-          "result": {
-            "plan": "PRO",
-            "startedAt": "2026-06-01T00:00:00",
-            "expiresAt": "2026-08-01T00:00:00",
-            "isActive": true
           }
         }
         """.utf8
