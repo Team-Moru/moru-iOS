@@ -444,7 +444,7 @@ final class FoundationSwiftDataTests: XCTestCase {
   }
 
   @MainActor
-  func testLocalTemplateSuggestionCreatesThreeStepTypes() throws {
+  func testLocalTemplateSuggestionCreatesFourStepRoutine() throws {
     let service = LocalTemplateSuggestionService.shared
     let routine = try service.makeRoutine(
       from: RoutineSuggestionInput(
@@ -461,6 +461,7 @@ final class FoundationSwiftDataTests: XCTestCase {
     XCTAssertEqual(routine.alarmSchedule?.hour, 6)
     XCTAssertEqual(routine.alarmSchedule?.minute, 45)
     XCTAssertEqual(routine.alarmSchedule?.weekdays, [.saturday])
+    XCTAssertEqual(routine.steps.count, 4)
     XCTAssertEqual(Set(routine.steps.map(\.type)), Set(RoutineStepType.allCases))
   }
 
