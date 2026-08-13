@@ -90,7 +90,8 @@ enum OnboardingStep: Int, CaseIterable, Identifiable {
     case .organizing:
       return .freeform
     case .review:
-      return .organizing
+      // Organizing is a transient, non-interactive state.
+      return .freeform
     case .alarm:
       return .review
     case .voice:
