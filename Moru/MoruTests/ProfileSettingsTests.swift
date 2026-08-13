@@ -152,14 +152,19 @@ final class ProfileSettingsTests: XCTestCase {
     let recorder = ProfileTestEventRecorder()
     let alarmService = ProfileTestAlarmService(recorder: recorder)
     let resetRepository = ProfileTestResetRepository(recorder: recorder)
+    let audioCacheCleaner = ProfileTestAudioCacheCleaner(recorder: recorder)
     let useCase = ResetLocalDataUseCase(
       localDataResetRepository: resetRepository,
-      alarmService: alarmService
+      alarmService: alarmService,
+      routineTTSAudioCacheCleaner: audioCacheCleaner
     )
 
     try await useCase.execute()
 
-    XCTAssertEqual(recorder.events, ["cancel alarms", "reset data"])
+    XCTAssertEqual(
+      recorder.events,
+      ["cancel alarms", "clear routine TTS audio", "reset data"]
+    )
   }
 
   @MainActor
@@ -181,6 +186,26 @@ final class ProfileSettingsTests: XCTestCase {
     } catch {
       XCTAssertEqual(recorder.events, ["cancel alarms"])
     }
+  }
+
+  @MainActor
+  func testResetContinuesWhenRecoverableAudioCacheCleanupFails() async throws {
+    let recorder = ProfileTestEventRecorder()
+    let useCase = ResetLocalDataUseCase(
+      localDataResetRepository: ProfileTestResetRepository(recorder: recorder),
+      alarmService: ProfileTestAlarmService(recorder: recorder),
+      routineTTSAudioCacheCleaner: ProfileTestAudioCacheCleaner(
+        recorder: recorder,
+        error: ProfileTestError.unavailable
+      )
+    )
+
+    try await useCase.execute()
+
+    XCTAssertEqual(
+      recorder.events,
+      ["cancel alarms", "clear routine TTS audio", "reset data"]
+    )
   }
 
   @MainActor
@@ -327,6 +352,27 @@ private struct ProfileTestVoiceProbe: VoiceAvailabilityProbing {
 @MainActor
 private final class ProfileTestEventRecorder {
   var events: [String] = []
+
+  func record(_ event: String) {
+    events.append(event)
+  }
+}
+
+nonisolated private final class ProfileTestAudioCacheCleaner:
+  RoutineTTSAudioCacheCleaning,
+  @unchecked Sendable {
+  private let recorder: ProfileTestEventRecorder
+  private let error: Error?
+
+  init(recorder: ProfileTestEventRecorder, error: Error? = nil) {
+    self.recorder = recorder
+    self.error = error
+  }
+
+  func removeAllRoutineTTSAudio() async throws {
+    await recorder.record("clear routine TTS audio")
+    if let error { throw error }
+  }
 }
 
 @MainActor

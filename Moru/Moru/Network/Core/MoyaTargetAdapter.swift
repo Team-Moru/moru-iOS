@@ -11,6 +11,7 @@ nonisolated struct MoyaTargetAdapter<Target: MoruTargetType>:
   TargetType,
   AccessTokenAuthorizable,
   RequestAccessTokenProviding,
+  NetworkLogPathProviding,
   Sendable {
   let target: Target
   let baseURL: URL
@@ -18,6 +19,10 @@ nonisolated struct MoyaTargetAdapter<Target: MoruTargetType>:
 
   var path: String {
     target.path
+  }
+
+  var networkLogPath: String {
+    (target as? any NetworkLogPathProviding)?.networkLogPath ?? target.path
   }
 
   var method: Moya.Method {
@@ -55,4 +60,10 @@ nonisolated struct MoyaTargetAdapter<Target: MoruTargetType>:
 
 nonisolated protocol RequestAccessTokenProviding: Sendable {
   var requestAccessToken: String? { get }
+}
+
+/// Lets targets containing server or account identifiers expose a stable,
+/// redacted route template to the network logger.
+nonisolated protocol NetworkLogPathProviding: Sendable {
+  var networkLogPath: String { get }
 }

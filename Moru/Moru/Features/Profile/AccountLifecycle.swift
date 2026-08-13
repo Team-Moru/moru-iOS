@@ -91,23 +91,29 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
   private let accountSessionStore: AccountSessionStore
   private let accountScopedDataCleaner: any AccountScopedDataCleaning
   private let providerSessionSignOut: any SocialProviderSessionSigningOut
+  private let routineTTSAudioCacheCleaner:
+    (any RoutineTTSAudioCacheCleaning)?
 
   init(
     authRemoteDataSource: any AuthRemoteDataSource,
     accountSessionStore: AccountSessionStore,
     accountScopedDataCleaner: any AccountScopedDataCleaning,
     providerSessionSignOut: any SocialProviderSessionSigningOut =
-      NoopSocialProviderSessionSignOut()
+      NoopSocialProviderSessionSignOut(),
+    routineTTSAudioCacheCleaner:
+      (any RoutineTTSAudioCacheCleaning)? = nil
   ) {
     self.authRemoteDataSource = authRemoteDataSource
     self.accountSessionStore = accountSessionStore
     self.accountScopedDataCleaner = accountScopedDataCleaner
     self.providerSessionSignOut = providerSessionSignOut
+    self.routineTTSAudioCacheCleaner = routineTTSAudioCacheCleaner
   }
 
   func logout() async throws {
     let credentials = try? accountSessionStore.credentialsForAccountLifecycle()
     let provider = credentials?.provider ?? accountSessionStore.signedInProvider
+    let memberID = credentials?.memberID ?? accountSessionStore.signedInMemberID
 
     if let refreshToken = credentials?.refreshToken {
       try? await authRemoteDataSource.logout(refreshToken: refreshToken)
@@ -117,6 +123,19 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
         provider: provider,
         reason: .logout
       )
+    }
+
+    if let memberID, let routineTTSAudioCacheCleaner {
+      do {
+        // Purge before credentials are removed. If the process dies here, the
+        // account is still restorable and a later logout can retry; the inverse
+        // order could orphan account audio with no durable cleanup marker.
+        try await routineTTSAudioCacheCleaner.removeRoutineTTSAudio(
+          memberID: memberID
+        )
+      } catch {
+        throw AccountLifecycleError.localCleanupFailed
+      }
     }
 
     do {

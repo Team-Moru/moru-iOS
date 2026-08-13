@@ -21,6 +21,8 @@ final class RoutineGuidanceCoordinator {
   private let player: any RoutineGuidancePlaying
   private let playbackState: RoutineGuidancePlaybackState
   private let voiceCode: String
+  private let routineGroupLocalID: UUID?
+  private weak var warmupCoordinator: (any RoutineTTSWarming)?
   private let delay: any RoutineGuidanceDelaying
 
   private var generation = 0
@@ -31,11 +33,15 @@ final class RoutineGuidanceCoordinator {
     player: any RoutineGuidancePlaying = NoopRoutineGuidancePlayer(),
     playbackState: RoutineGuidancePlaybackState = RoutineGuidancePlaybackState(),
     voiceCode: String = VoiceProfile.aoede.assetVoiceCode,
+    routineGroupLocalID: UUID? = nil,
+    warmupCoordinator: (any RoutineTTSWarming)? = nil,
     delay: any RoutineGuidanceDelaying = ContinuousRoutineGuidanceDelay()
   ) {
     self.player = player
     self.playbackState = playbackState
     self.voiceCode = voiceCode
+    self.routineGroupLocalID = routineGroupLocalID
+    self.warmupCoordinator = warmupCoordinator
     self.delay = delay
   }
 
@@ -46,8 +52,15 @@ final class RoutineGuidanceCoordinator {
   func stepDidStart(_ step: RoutineStep) {
     stopCurrentCue()
 
-    guard let itemID = step.presetItemID else {
+    guard step.presetItemID != nil || routineGroupLocalID != nil else {
       return
+    }
+
+    if let routineGroupLocalID {
+      warmupCoordinator?.prepare(
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalIDs: [step.id]
+      )
     }
 
     let activeGeneration = generation
@@ -56,11 +69,15 @@ final class RoutineGuidanceCoordinator {
         return .cancelled
       }
 
-      return await player.play(
-        itemID: itemID,
+      return await player.play(RoutineGuidanceCueRequest(
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalID: step.id,
+        routineTitle: step.title,
+        routineType: step.type,
+        fallbackItemID: step.presetItemID,
         voiceCode: voiceCode,
         kind: .intro
-      )
+      ))
     }
 
     guard let estimatedSeconds = step.estimatedSeconds, estimatedSeconds > 0 else {
@@ -80,6 +97,10 @@ final class RoutineGuidanceCoordinator {
       }
 
       guard !Task.isCancelled, activeGeneration == generation else {
+        return
+      }
+
+      guard let itemID = step.presetItemID else {
         return
       }
 
@@ -104,11 +125,15 @@ final class RoutineGuidanceCoordinator {
         return .cancelled
       }
 
-      return await player.play(
-        itemID: itemID,
+      return await player.play(RoutineGuidanceCueRequest(
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalID: step.id,
+        routineTitle: step.title,
+        routineType: step.type,
+        fallbackItemID: itemID,
         voiceCode: voiceCode,
         kind: .done
-      )
+      ))
     }
   }
 
