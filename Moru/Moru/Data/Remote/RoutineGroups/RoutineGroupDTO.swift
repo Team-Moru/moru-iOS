@@ -48,3 +48,33 @@ nonisolated struct RoutineGroupStepResponseDTO:
   let content: String?
   let orderIndex: Int?
 }
+
+nonisolated struct ActiveRoutineGroupResponseDTO:
+  Codable,
+  Equatable,
+  Sendable {
+  let routineGroupId: Int64?
+  let title: String?
+  let totalDurationSec: Int?
+  let completionRate: Int?
+  let routines: [ActiveRoutineResponseDTO]?
+}
+
+nonisolated struct ActiveRoutineResponseDTO:
+  Codable,
+  Equatable,
+  Sendable {
+  let routineId: Int64?
+  let title: String?
+  let isCompleted: Bool?
+  let completedTimeSec: Int?
+}
+
+nonisolated struct TodayRoutineGroupSummaryResponseDTO:
+  Codable,
+  Equatable,
+  Sendable {
+  let completedCount: Int?
+  let totalCount: Int?
+  let completionRate: Int?
+}

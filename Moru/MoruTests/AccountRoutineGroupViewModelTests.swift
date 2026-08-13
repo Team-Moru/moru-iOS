@@ -495,6 +495,18 @@ private actor AccountRoutineGroupRemoteStub:
     return try resolved(detailResults.removeFirst())
   }
 
+  func fetchActiveRoutineGroup(
+    identity: AccountSessionIdentity
+  ) async throws -> ServerActiveRoutineGroup? {
+    throw APIError.capabilityDisabled
+  }
+
+  func fetchTodayRoutineGroupSummary(
+    identity: AccountSessionIdentity
+  ) async throws -> ServerTodayRoutineGroupSummary? {
+    throw APIError.capabilityDisabled
+  }
+
   private func resolved<Value>(
     _ result: Result<Value, AccountRoutineGroupTestError>
   ) throws -> Value {
@@ -532,6 +544,18 @@ private actor DeferredAccountRoutineGroupRemoteStub:
     try await withCheckedThrowingContinuation { continuation in
       detailContinuation = continuation
     }
+  }
+
+  func fetchActiveRoutineGroup(
+    identity: AccountSessionIdentity
+  ) async throws -> ServerActiveRoutineGroup? {
+    throw APIError.capabilityDisabled
+  }
+
+  func fetchTodayRoutineGroupSummary(
+    identity: AccountSessionIdentity
+  ) async throws -> ServerTodayRoutineGroupSummary? {
+    throw APIError.capabilityDisabled
   }
 
   func waitUntilListRequested() async {

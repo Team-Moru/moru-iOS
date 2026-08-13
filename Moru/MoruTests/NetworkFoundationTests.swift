@@ -515,6 +515,93 @@ final class NetworkFoundationTests: XCTestCase {
     }
   }
 
+  func testExactSessionResponseRejectsStaleSessionBeforeTransport()
+    async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "first-session-token",
+      memberID: 96
+    )
+    let identity = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 96).map {
+        AccountSessionIdentity(
+          memberID: $0.memberID,
+          sessionID: $0.sessionID
+        )
+      }
+    )
+    tokenProvider.establishAccountSession(
+      with: "second-session-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+
+    do {
+      _ = try await client.requestResponse(
+        StubTarget(authenticationRequirement: .bearer),
+        authorizedFor: identity
+      )
+      XCTFail("Expected the obsolete session to fail before transport.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+
+    XCTAssertNil(requestCapture.request)
+  }
+
+  func testExactSessionResponseRejectsResponseAfterRelogin()
+    async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "first-session-token",
+      memberID: 96
+    )
+    let identity = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 96).map {
+        AccountSessionIdentity(
+          memberID: $0.memberID,
+          sessionID: $0.sessionID
+        )
+      }
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      stubBehavior: .delayed(seconds: 0.1),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+    let request = _Concurrency.Task<AccountBoundHTTPResponse, Error> {
+      try await client.requestResponse(
+        StubTarget(authenticationRequirement: .bearer),
+        authorizedFor: identity
+      )
+    }
+    try await waitUntil { requestCapture.request != nil }
+    tokenProvider.establishAccountSession(
+      with: "second-session-token",
+      memberID: 96
+    )
+
+    do {
+      _ = try await request.value
+      XCTFail("Expected the obsolete response to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+  }
+
   func testAccountBoundOptionalRequestAllowsDocumentedNullResult()
     async throws {
     let tokenProvider = MemoryAccessTokenProvider()

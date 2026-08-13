@@ -114,14 +114,29 @@ struct AppRouter: View {
     if let homeBuilder {
       self.homeBuilder = homeBuilder
     } else {
+      let enrichHomeRoutinesUseCase: (any EnrichHomeRoutinesUseCaseProtocol)?
+      if let remoteService = dependencies.accountRoutineGroupRemoteService,
+         let syncRepository = dependencies.routineSyncRepository {
+        enrichHomeRoutinesUseCase = EnrichHomeRoutinesUseCase(
+          remoteService: remoteService,
+          sessionIdentityProvider: accountSessionStore,
+          syncStateReader: DefaultHomeRoutineSyncStateReader(
+            repository: syncRepository
+          )
+        )
+      } else {
+        enrichHomeRoutinesUseCase = nil
+      }
       self.homeBuilder = DefaultHomeFlowBuilder(
         loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
           routineRepository: dependencies.routineRepository,
           routineRunRepository: dependencies.routineRunRepository,
           localProfileRepository: dependencies.localProfileRepository
         ),
+        enrichHomeRoutinesUseCase: enrichHomeRoutinesUseCase,
         weatherRepository: dependencies.homeWeatherRepository,
         weatherService: dependencies.homeWeatherService,
+        sessionIdentityProvider: accountSessionStore,
         routineSettingContentFactory: {
           AnyView(RoutineSettingView(dependencies: dependencies))
         },

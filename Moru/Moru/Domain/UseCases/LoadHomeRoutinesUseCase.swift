@@ -13,6 +13,23 @@ struct HomeRoutineLoadResult: Equatable {
   let manualRoutines: [Routine]
   let todayRunsByRoutineID: [UUID: RoutineRun]
   let streak: HomeRoutineStreak
+  let loadedAt: Date
+
+  init(
+    profile: LocalProfile?,
+    todayRoutine: Routine?,
+    manualRoutines: [Routine],
+    todayRunsByRoutineID: [UUID: RoutineRun],
+    streak: HomeRoutineStreak,
+    loadedAt: Date = Date()
+  ) {
+    self.profile = profile
+    self.todayRoutine = todayRoutine
+    self.manualRoutines = manualRoutines
+    self.todayRunsByRoutineID = todayRunsByRoutineID
+    self.streak = streak
+    self.loadedAt = loadedAt
+  }
 }
 
 @MainActor
@@ -61,7 +78,8 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
         from: runs,
         currentDate: currentDate
       ),
-      streak: streakCalculator.calculate(from: runs, asOf: currentDate)
+      streak: streakCalculator.calculate(from: runs, asOf: currentDate),
+      loadedAt: currentDate
     )
   }
 
