@@ -1,0 +1,63 @@
+//
+//  EvaluateRoutineExecutionAIStepUseCase.swift
+//  Moru
+//
+
+import Foundation
+
+@MainActor
+protocol RoutineExecutionAIStepEvaluating: AnyObject {
+  func evaluate(
+    _ request: RoutineExecutionAIStepRequest
+  ) async throws -> RoutineExecutionAIStepDecision
+}
+
+@MainActor
+final class EvaluateRoutineExecutionAIStepUseCase:
+  RoutineExecutionAIStepEvaluating {
+  private let remoteService: any RoutineExecutionAIStepRemoteServing
+  private let sessionIdentityProvider:
+    any CurrentAccountSessionIdentityProviding
+
+  init(
+    remoteService: any RoutineExecutionAIStepRemoteServing,
+    sessionIdentityProvider: any CurrentAccountSessionIdentityProviding
+  ) {
+    self.remoteService = remoteService
+    self.sessionIdentityProvider = sessionIdentityProvider
+  }
+
+  func evaluate(
+    _ request: RoutineExecutionAIStepRequest
+  ) async throws -> RoutineExecutionAIStepDecision {
+    try Task.checkCancellation()
+    guard let identity = sessionIdentityProvider
+      .currentAccountSessionIdentity else {
+      throw RoutineExecutionAIStepError.accountSessionUnavailable
+    }
+
+    do {
+      let decision = try await remoteService.evaluate(
+        request,
+        authorizedFor: identity
+      )
+      try Task.checkCancellation()
+
+      guard sessionIdentityProvider.currentAccountSessionIdentity
+              == identity else {
+        throw RoutineExecutionAIStepError.accountAuthorizationChanged
+      }
+
+      return decision
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      try Task.checkCancellation()
+      guard sessionIdentityProvider.currentAccountSessionIdentity
+              == identity else {
+        throw RoutineExecutionAIStepError.accountAuthorizationChanged
+      }
+      throw error
+    }
+  }
+}
