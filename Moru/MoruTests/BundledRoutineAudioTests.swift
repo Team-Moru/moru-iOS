@@ -286,6 +286,333 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(runningStep.id, secondStep.id)
   }
 
+  func testCompletedScreenContinuesWhenDoneCueIsCancelled() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let firstStep = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let secondStep = RoutineStep(
+      presetItemID: "HEALTH-01",
+      type: .timer,
+      title: "스트레칭",
+      order: 1
+    )
+    let routine = Routine(name: "음성 루틴", steps: [firstStep, secondStep])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+
+    let transitionTask = Task { @MainActor in
+      await viewModel.finishStepCompletedScreenAfterGuidance()
+    }
+    await drainTasks()
+
+    player.cancelPlayback()
+    await transitionTask.value
+    await drainTasks()
+
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("A cancelled done cue must not trap the completion screen.")
+      return
+    }
+    XCTAssertEqual(runningStep.id, secondStep.id)
+  }
+
+  func testCancelledDoneCueFinalizesLastTrialStepExactlyOnce() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let step = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let routine = Routine(name: "음성 루틴", steps: [step])
+    let finalizer = GuidanceTrialFinalizer()
+    var completionEventCount = 0
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: finalizer,
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, event in
+        if case .completionDisplayed = event {
+          completionEventCount += 1
+        }
+      }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+
+    async let firstWait: Void = viewModel.finishStepCompletedScreenAfterGuidance()
+    async let secondWait: Void = viewModel.finishStepCompletedScreenAfterGuidance()
+    await drainTasks()
+    player.cancelPlayback()
+    _ = await (firstWait, secondWait)
+    await drainTasks()
+
+    guard case .summary = viewModel.screenState else {
+      XCTFail("A cancelled final done cue must still show the summary.")
+      return
+    }
+    XCTAssertEqual(finalizer.finalizeCallCount, 1)
+    XCTAssertEqual(completionEventCount, 1)
+  }
+
+  func testCancellingCompletionScreenTaskDoesNotAdvance() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let firstStep = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let secondStep = RoutineStep(
+      presetItemID: "HEALTH-01",
+      type: .timer,
+      title: "스트레칭",
+      order: 1
+    )
+    let routine = Routine(name: "음성 루틴", steps: [firstStep, secondStep])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+
+    let transitionTask = Task { @MainActor in
+      await viewModel.finishStepCompletedScreenAfterGuidance()
+    }
+    await drainTasks()
+
+    transitionTask.cancel()
+    player.cancelPlayback()
+    await transitionTask.value
+    await drainTasks()
+
+    guard case .stepCompleted(let completedStep) = viewModel.screenState else {
+      XCTFail("A disappearing completion view must not advance the routine.")
+      return
+    }
+    XCTAssertEqual(completedStep.id, firstStep.id)
+  }
+
+  func testConcurrentCompletionWaitersAdvanceOnlyOnce() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let firstStep = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let secondStep = RoutineStep(
+      presetItemID: "HEALTH-01",
+      type: .timer,
+      title: "스트레칭",
+      order: 1
+    )
+    let thirdStep = RoutineStep(
+      presetItemID: "CALM-01",
+      type: .confirm,
+      title: "호흡하기",
+      order: 2
+    )
+    let routine = Routine(
+      name: "음성 루틴",
+      steps: [firstStep, secondStep, thirdStep]
+    )
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+
+    async let firstWait: Void = viewModel.finishStepCompletedScreenAfterGuidance()
+    async let secondWait: Void = viewModel.finishStepCompletedScreenAfterGuidance()
+    await drainTasks()
+    player.cancelPlayback()
+    _ = await (firstWait, secondWait)
+    await drainTasks()
+
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("Concurrent waiters must advance to one next step only.")
+      return
+    }
+    XCTAssertEqual(runningStep.id, secondStep.id)
+    XCTAssertEqual(viewModel.currentStepIndex, 1)
+  }
+
+  func testStaleCompletionWaiterCannotAdvanceNewerCompletionScreen() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let firstStep = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let secondStep = RoutineStep(
+      presetItemID: "HEALTH-01",
+      type: .timer,
+      title: "스트레칭",
+      order: 1
+    )
+    let thirdStep = RoutineStep(
+      presetItemID: "CALM-01",
+      type: .confirm,
+      title: "호흡하기",
+      order: 2
+    )
+    let routine = Routine(
+      name: "음성 루틴",
+      steps: [firstStep, secondStep, thirdStep]
+    )
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+
+    let staleWaiter = Task { @MainActor in
+      await viewModel.finishStepCompletedScreenAfterGuidance()
+    }
+    await drainTasks()
+
+    viewModel.finishStepCompletedScreen()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+    player.cancelPlayback()
+    await staleWaiter.value
+    await drainTasks()
+
+    guard case .stepCompleted(let completedStep) = viewModel.screenState else {
+      XCTFail("A stale waiter must not advance a newer completion screen.")
+      return
+    }
+    XCTAssertEqual(completedStep.id, secondStep.id)
+    XCTAssertEqual(viewModel.currentStepIndex, 1)
+  }
+
+  func testViewDisappearanceBeforeDoneCueEndsDoesNotAdvance() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: SleepingGuidanceDelay()
+    )
+    let firstStep = RoutineStep(
+      presetItemID: "ENERGY-02",
+      type: .confirm,
+      title: "물 마시기",
+      order: 0
+    )
+    let secondStep = RoutineStep(
+      presetItemID: "HEALTH-01",
+      type: .timer,
+      title: "스트레칭",
+      order: 1
+    )
+    let routine = Routine(name: "음성 루틴", steps: [firstStep, secondStep])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    viewModel.completeCurrentStep()
+    await drainTasks()
+
+    let transitionTask = Task { @MainActor in
+      await viewModel.finishStepCompletedScreenAfterGuidance()
+    }
+    await drainTasks()
+    viewModel.viewDidDisappear()
+    await transitionTask.value
+    await drainTasks()
+
+    guard case .stepCompleted(let completedStep) = viewModel.screenState else {
+      XCTFail("A dismissed player must not advance after stopping its cue.")
+      return
+    }
+    XCTAssertEqual(completedStep.id, firstStep.id)
+    XCTAssertTrue(viewModel.isStepInteractionDisabled)
+  }
+
   func testSpeechStartBarrierWaitsForIntroCompletion() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
@@ -467,6 +794,10 @@ private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
     finishPlayback(with: .completed)
   }
 
+  func cancelPlayback() {
+    finishPlayback(with: .cancelled)
+  }
+
   private func finishPlayback(with result: GuidancePlaybackResult) {
     playbackState.update(isPlaying: false)
     let continuation = playbackContinuation
@@ -511,13 +842,16 @@ private final class GuidanceRoutineResolver: ResolveRoutineExecutionUseCaseProto
 
 @MainActor
 private final class GuidanceTrialFinalizer: TrialRoutineFinalizing {
+  private(set) var finalizeCallCount = 0
+
   func finalize(
     routine: Routine,
     startedAt: Date,
     completedAt: Date,
     results: [RoutineStepResult]
   ) -> Result<RoutineCompletionSummary, RoutineCompletionSummaryValidationError> {
-    makeRoutineCompletionSummary(
+    finalizeCallCount += 1
+    return makeRoutineCompletionSummary(
       routine: routine,
       persistedRunID: nil,
       startedAt: startedAt,

@@ -48,12 +48,44 @@ struct HomeRoutineLaunchBoundary {
   }
 }
 
+struct HomeRoutineServerNoticeBoundary {
+  private let announceAccessibility: HomeAccessibilityAnnouncementHandler
+
+  init(
+    announceAccessibility: @escaping HomeAccessibilityAnnouncementHandler = { message in
+      AccessibilityNotification.Announcement(message).post()
+    }
+  ) {
+    self.announceAccessibility = announceAccessibility
+  }
+
+  @MainActor
+  func noticeDidChange(
+    from oldNotice: HomeRoutineServerNotice?,
+    to newNotice: HomeRoutineServerNotice?
+  ) {
+    guard oldNotice != newNotice,
+          newNotice == .showingSavedRoutines else {
+      return
+    }
+
+    announceAccessibility(HomeRoutineServerNotice.showingSavedRoutinesMessage)
+  }
+}
+
 struct HomeView: View {
   static let rootAccessibilityIdentifier = "home.root"
   static let emptyCreateRoutineAccessibilityIdentifier =
     "home.empty.create-routine"
+  static let routineSyncingAccessibilityIdentifier =
+    "home.routine-sync.syncing"
+  static let routineSavedDataAccessibilityIdentifier =
+    "home.routine-sync.saved-data"
+  static let routineServerRetryAccessibilityIdentifier =
+    "home.routine-sync.retry"
 
   private let routineLaunchBoundary: HomeRoutineLaunchBoundary
+  private let routineServerNoticeBoundary: HomeRoutineServerNoticeBoundary
   private let refreshToken: Int
   private let routineSettingContent: AnyView
   private let routineCreationContent: AnyView
@@ -76,6 +108,7 @@ struct HomeView: View {
     automaticallyLoads: Bool = true
   ) {
     self.routineLaunchBoundary = HomeRoutineLaunchBoundary(onStartRoutine: onStartRoutine)
+    self.routineServerNoticeBoundary = HomeRoutineServerNoticeBoundary()
     self.refreshToken = refreshToken
     self.routineSettingContent = routineSettingContent
     self.routineCreationContent = routineCreationContent ?? routineSettingContent
@@ -91,7 +124,7 @@ struct HomeView: View {
         switch viewModel.state {
         case .loading(let previousContent):
           if let previousContent {
-            homeContent(previousContent)
+            homeContent(previousContent, showsRoutineServerNotice: false)
             HomeRefreshIndicator()
               .padding(.top, MoruPilotSpacing.twenty)
           } else {
@@ -104,6 +137,7 @@ struct HomeView: View {
           homeContent(content)
         case .empty(let content):
           HomeHeaderView(userName: content.userName)
+          routineServerNotice
           weatherCard
             .padding(.top, 24)
           HomeEmptyView(onCreateRoutine: {
@@ -112,7 +146,7 @@ struct HomeView: View {
           .padding(.top, MoruPilotSpacing.twenty)
         case .failed(let failure, let previousContent):
           if let previousContent {
-            homeContent(previousContent)
+            homeContent(previousContent, showsRoutineServerNotice: false)
             HomeFailureBanner(failure: failure, retryAction: viewModel.retry)
               .padding(.top, MoruPilotSpacing.twenty)
           } else {
@@ -148,6 +182,12 @@ struct HomeView: View {
 
       viewModel.resumeWeatherAfterAuthorizationChange()
     }
+    .onChange(of: viewModel.routineServerState.notice) { oldNotice, newNotice in
+      routineServerNoticeBoundary.noticeDidChange(
+        from: oldNotice,
+        to: newNotice
+      )
+    }
     .sheet(item: $presentedRoutineSheet, onDismiss: {
       viewModel.load()
     }) { sheet in
@@ -169,8 +209,27 @@ struct HomeView: View {
   }
 
   @ViewBuilder
-  private func homeContent(_ content: HomeContentState) -> some View {
+  private var routineServerNotice: some View {
+    if let notice = viewModel.routineServerState.notice {
+      HomeRoutineServerNoticeView(
+        notice: notice,
+        retryAction: viewModel.retry
+      )
+      .padding(.top, MoruPilotSpacing.twelve)
+      .padding(.horizontal, MoruPilotSpacing.twenty)
+    }
+  }
+
+  @ViewBuilder
+  private func homeContent(
+    _ content: HomeContentState,
+    showsRoutineServerNotice: Bool = true
+  ) -> some View {
     HomeHeaderView(userName: content.userName)
+
+    if showsRoutineServerNotice {
+      routineServerNotice
+    }
 
     routineProgressCards(content)
       .padding(.top, 24)
@@ -566,6 +625,98 @@ private struct HomeRefreshIndicator: View {
     }
     .padding(.horizontal, AppSpacing.screenHorizontal)
     .accessibilityElement(children: .combine)
+  }
+}
+
+private struct HomeRoutineServerNoticeView: View {
+  let notice: HomeRoutineServerNotice
+  let retryAction: () -> Void
+
+  var body: some View {
+    switch notice {
+    case .syncing:
+      HStack(spacing: MoruPilotSpacing.eight) {
+        ProgressView()
+          .tint(AppColor.orange400)
+          .accessibilityHidden(true)
+        Text(notice.message)
+          .homeFigmaTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .homeRoutineServerNoticeSurface()
+      .accessibilityElement(children: .combine)
+      .accessibilityIdentifier(
+        HomeView.routineSyncingAccessibilityIdentifier
+      )
+
+    case .showingSavedRoutines:
+      VStack(spacing: 0) {
+        Button(action: retryAction) {
+          ViewThatFits(in: .horizontal) {
+            HStack(spacing: MoruPilotSpacing.eight) {
+              savedRoutineNoticeLabel
+              Spacer(minLength: MoruPilotSpacing.eight)
+              retryLabel
+            }
+
+            VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+              savedRoutineNoticeLabel
+              retryLabel
+            }
+          }
+          .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(notice.message) 다시 시도")
+        .accessibilityHint("서버에서 최신 루틴 정보를 다시 확인합니다.")
+        .accessibilityIdentifier(
+          HomeView.routineServerRetryAccessibilityIdentifier
+        )
+      }
+      .homeRoutineServerNoticeSurface(verticalPadding: 0)
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier(
+        HomeView.routineSavedDataAccessibilityIdentifier
+      )
+    }
+  }
+
+  private var savedRoutineNoticeLabel: some View {
+    HStack(spacing: MoruPilotSpacing.eight) {
+      Image(systemName: "exclamationmark.triangle.fill")
+        .foregroundStyle(AppColor.orange500)
+        .accessibilityHidden(true)
+      Text(notice.message)
+        .homeFigmaTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textPrimary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var retryLabel: some View {
+    Text("다시 시도")
+      .homeFigmaTextStyle(.c1.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.accent)
+      .fixedSize(horizontal: true, vertical: false)
+  }
+}
+
+private extension View {
+  func homeRoutineServerNoticeSurface(
+    verticalPadding: CGFloat = MoruPilotSpacing.twelve
+  ) -> some View {
+    padding(.horizontal, MoruPilotSpacing.sixteen)
+      .padding(.vertical, verticalPadding)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(AppColor.grayWhite.opacity(0.45))
+      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+      .overlay {
+        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+          .stroke(MoruPilotColor.border.opacity(0.5), lineWidth: 1)
+      }
   }
 }
 

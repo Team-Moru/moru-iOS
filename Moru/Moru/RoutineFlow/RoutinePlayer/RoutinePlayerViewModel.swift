@@ -67,6 +67,7 @@ final class RoutinePlayerViewModel {
     private var pendingSave: PendingSave?
     private var didEmitRunnableContent = false
     private var didRequestExit = false
+    private var isPresentationActive = true
     
     private(set) var currentStepIndex = 0
     private(set) var stepResults: [RoutineStepResult] = []
@@ -75,7 +76,11 @@ final class RoutinePlayerViewModel {
     private(set) var isSavingRun = false
     private(set) var errorMessage: String?
     var isStepInteractionDisabled: Bool {
-        dialogState != nil || pendingSave != nil || isSavingRun || didRequestExit
+        !isPresentationActive
+            || dialogState != nil
+            || pendingSave != nil
+            || isSavingRun
+            || didRequestExit
     }
     
     init(
@@ -396,16 +401,16 @@ final class RoutinePlayerViewModel {
             return
         }
 
-        guard case .stepCompleted = screenState else {
+        guard case .stepCompleted(let completedStep) = screenState else {
             return
         }
 
-        let result = await guidanceCoordinator.waitUntilCurrentCueFinishes()
-        guard result == .completed else {
-            return
-        }
+        _ = await guidanceCoordinator.waitUntilCurrentCueFinishes()
 
-        guard !Task.isCancelled else {
+        guard !Task.isCancelled,
+              isPresentationActive,
+              case .stepCompleted(let currentStep) = screenState,
+              currentStep.id == completedStep.id else {
             return
         }
 
@@ -455,6 +460,7 @@ final class RoutinePlayerViewModel {
     }
 
     func viewDidDisappear() {
+        isPresentationActive = false
         guidanceCoordinator.stop()
     }
 

@@ -66,6 +66,54 @@ enum HomeRoutineServerState: Equatable {
   case fallback(HomeRoutineServerFallbackReason)
 }
 
+enum HomeRoutineServerNotice: Equatable {
+  case syncing
+  case showingSavedRoutines
+
+  static let syncingMessage = "루틴을 동기화하고 있어요."
+  static let showingSavedRoutinesMessage =
+    "서버 정보를 확인할 수 없어요."
+
+  var message: String {
+    switch self {
+    case .syncing:
+      Self.syncingMessage
+    case .showingSavedRoutines:
+      Self.showingSavedRoutinesMessage
+    }
+  }
+
+  var canRetry: Bool {
+    self == .showingSavedRoutines
+  }
+}
+
+extension HomeRoutineServerState {
+  var notice: HomeRoutineServerNotice? {
+    switch self {
+    case .loading, .fallback(.pendingLocalExecution):
+      .syncing
+    case .fallback(.remoteUnavailable):
+      .showingSavedRoutines
+    case .notConfigured,
+         .applied,
+         .noActive,
+         .fallback(.signedOut),
+         .fallback(.localActiveMissing),
+         .fallback(.localActiveAmbiguous),
+         .fallback(.remoteHasNoActiveLocalHasActive),
+         .fallback(.activeGroupBindingMissing),
+         .fallback(.activeGroupIdentityMismatch),
+         .fallback(.activeRoutineBindingMissing),
+         .fallback(.activeRoutineIdentityMismatch),
+         .fallback(.inconsistentRemoteSnapshot),
+         .fallback(.localSyncStateUnavailable),
+         .fallback(.serverProjectionDayMismatch):
+      nil
+    }
+  }
+}
+
 enum HomeViewState: Equatable {
   case loading(previousContent: HomeContentState?)
   case content(HomeContentState)
