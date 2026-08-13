@@ -25,8 +25,12 @@
 
 ## 음성 계약
 
-- RoutinePlayer 안내는 네 종류의 번들 MP3만 사용한다.
-- 직접 작성 step 또는 매핑이 없는 cue는 무음으로 정상 진행한다.
+- 로그인 계정의 서버 binding과 검증된 로컬 캐시가 준비된 경우
+  RoutinePlayer의 `intro`는 원격 TTS를 우선 재생한다.
+- 네 종류의 번들 MP3는 원격 TTS가 없거나 PENDING/FAILED인 경우,
+  오프라인·다운로드·검증 실패 시 fallback과 `done`·`remind`에 사용한다.
+- 재생 시 원격 URL을 직접 스트리밍하거나 네트워크 완료를 기다리지 않는다.
+- 원격·번들 매핑이 모두 없는 cue는 무음으로 정상 진행한다.
 - 로컬 TTS fallback, 키보드 입력, 별도 확인 버튼은 추가하지 않는다.
 - STT 침묵 자동 종료 기준은 3초다.
   마지막 transcript를 자동 완료 판정에 전달한다.
@@ -57,13 +61,15 @@ Light 고정, README와 이 문서의 핵심 계약을 CI에서 검사한다.
 → 앱 종료/재실행 → 데이터와 예약 유지
 → locked/killed 상태의 실제 AlarmKit → RoutinePlayer 직접 진입
 → fallback 알림 → AlarmRing → 시작 또는 다시 알림
-→ MP3 intro → STT → done MP3 → 다음 step
+→ 캐시된 원격 TTS intro 또는 번들 MP3 fallback
+→ STT → done 번들 MP3 → 다음 step
 → RoutineRun 저장 → Home/History 반영
 → 추천/직접 루틴 추가
 → 모든 루틴 삭제 후 Main empty state 유지
 → 수정/비활성/삭제/reset → 예전 알람 미발생
 ```
 
+온라인 warmup, 오프라인 fallback, 만료된 presigned URL, 계정 전환과 함께
 스피커, Bluetooth, 전화/Siri interruption과 WeatherKit 실제 권한도 확인한다.
 실제 iPhone에서 수행하지 않은 항목은 통과로 기록하지 않으며,
 남은 출시 차단 위험과 후속 QA로 명시한다.

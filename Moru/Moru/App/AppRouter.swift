@@ -191,6 +191,8 @@ struct AppRouter: View {
     .task {
       onboardingStatusRuntimeCoordinator?.start()
       routineSyncRuntimeCoordinator?.setSceneActive(scenePhase == .active)
+      dependencies.routineTTSWarmupCoordinator?
+        .setSceneActive(scenePhase == .active)
       if coordinator.beginInitialSessionLoadIfNeeded(),
          sessionStore.phase == .loading {
         sessionStore.load()
@@ -200,6 +202,8 @@ struct AppRouter: View {
     }
     .onChange(of: scenePhase) { _, newPhase in
       routineSyncRuntimeCoordinator?.setSceneActive(newPhase == .active)
+      dependencies.routineTTSWarmupCoordinator?
+        .setSceneActive(newPhase == .active)
       guard newPhase == .active else {
         return
       }
@@ -211,6 +215,7 @@ struct AppRouter: View {
     }
     .onChange(of: accountSessionStore.state) { _, _ in
       routineSyncRuntimeCoordinator?.accountSessionDidChange()
+      dependencies.routineTTSWarmupCoordinator?.accountSessionDidChange()
     }
     .onChange(of: sessionStore.phase) { _, newPhase in
       guard newPhase == .ready else {
@@ -397,7 +402,11 @@ struct AppRouter: View {
     let resetUseCase = dependencies.localDataResetRepository.map {
       ResetLocalDataUseCase(
         localDataResetRepository: $0,
-        alarmService: profileAlarmService
+        alarmService: profileAlarmService,
+        routineTTSAudioCacheCleaner:
+          dependencies.routineTTSAudioCache.map {
+            RoutineTTSAudioCacheCleaner(cache: $0)
+          }
       )
     }
     let profileBuilder = DefaultProfileFlowBuilder(

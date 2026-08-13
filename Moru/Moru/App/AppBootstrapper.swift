@@ -193,6 +193,7 @@ final class AppBootstrapper: ObservableObject {
         (any AccountServerRemoteServing)?
       let accountRoutineGroupRemoteService:
         (any AccountRoutineGroupRemoteServing)?
+      let routineTTSRemoteService: (any RoutineTTSRemoteServing)?
       if appCapabilities.shouldAllowServerRequests {
         accountHistoryRemoteService = DefaultAccountHistoryRemoteService(
           apiClient: authenticatedAPIClient
@@ -204,10 +205,14 @@ final class AppBootstrapper: ObservableObject {
           DefaultAccountRoutineGroupRemoteService(
             apiClient: authenticatedAPIClient
           )
+        routineTTSRemoteService = DefaultRoutineTTSRemoteService(
+          apiClient: authenticatedAPIClient
+        )
       } else {
         accountHistoryRemoteService = nil
         accountServerRemoteService = nil
         accountRoutineGroupRemoteService = nil
+        routineTTSRemoteService = nil
       }
       let routineSyncWakeupRelay = RoutineSyncWakeupRelay()
       let dependencies = DependencyContainer.local(
@@ -221,6 +226,8 @@ final class AppBootstrapper: ObservableObject {
         accountServerRemoteService: accountServerRemoteService,
         accountRoutineGroupRemoteService:
           accountRoutineGroupRemoteService,
+        routineTTSRemoteService: routineTTSRemoteService,
+        sessionIdentityProvider: accountSessionStore,
         routineSyncWakeupRelay: routineSyncWakeupRelay
       )
       // Recovery changes no request identity. The sender can only replay a
@@ -296,9 +303,19 @@ final class AppBootstrapper: ObservableObject {
       )
       let accountScopedDataCleaner: any AccountScopedDataCleaning
       if let routineSyncRepository = dependencies.routineSyncRepository {
-        accountScopedDataCleaner = SwiftDataRoutineSyncAccountCleaner(
+        let syncCleaner = SwiftDataRoutineSyncAccountCleaner(
           repository: routineSyncRepository
         )
+        if let routineTTSAudioCache = dependencies.routineTTSAudioCache {
+          accountScopedDataCleaner = RoutineTTSAudioAccountScopedDataCleaner(
+            base: syncCleaner,
+            audioCleaner: RoutineTTSAudioCacheCleaner(
+              cache: routineTTSAudioCache
+            )
+          )
+        } else {
+          accountScopedDataCleaner = syncCleaner
+        }
       } else {
         accountScopedDataCleaner = NoAccountScopedDataCleaner()
       }
@@ -306,7 +323,11 @@ final class AppBootstrapper: ObservableObject {
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore,
         accountScopedDataCleaner: accountScopedDataCleaner,
-        providerSessionSignOut: providerSessionSignOut
+        providerSessionSignOut: providerSessionSignOut,
+        routineTTSAudioCacheCleaner:
+          dependencies.routineTTSAudioCache.map {
+            RoutineTTSAudioCacheCleaner(cache: $0)
+          }
       )
       let navigationCoordinator = AppNavigationCoordinator()
       let authCallbackRouter = AuthCallbackRouter(

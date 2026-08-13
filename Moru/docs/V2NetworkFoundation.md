@@ -355,9 +355,11 @@ P0이 Swagger와 실서버에 배포되고 E2E로 검증되기 전에는 어떤 
 기존 번들 MP3 안내 음성과 미리듣기에 연결하지 않습니다.
 
 루틴별 생성 결과 조회(`GET /routine-tts/{routineGroupId}/tts`)는
-별도 계약입니다. 서버 routine ID와 안전한 캐시 정책이 없어 보류합니다.
+`Data/Remote/RoutineTTS`에 연결되어 있습니다. 로컬 routine group/step의
+account-scoped server binding으로 응답 identity를 검증하고,
+`COMPLETED` 상태의 HTTPS 음원만 별도 무인증 downloader가 받습니다.
 
-MP3 또는 음성 URL 계약이 추가되면 아래 흐름으로 구현합니다.
+현재 제품 흐름은 아래처럼 동작합니다.
 
 ```text
 루틴 멘트 확정
@@ -368,8 +370,9 @@ MP3 또는 음성 URL 계약이 추가되면 아래 흐름으로 구현합니다
 -> 캐시가 없거나 실패하면 기존 번들 MP3 fallback
 ```
 
-실제 재생 시점의 네트워크 성공 여부에
-핵심 루틴을 의존시키지 않습니다.
+실제 재생 시점에는 검증된 계정별 디스크 캐시만 사용하므로
+네트워크 성공 여부에 핵심 루틴을 의존시키지 않습니다. 원격 계약에 없는
+`done`과 `remind`는 계속 번들 MP3를 사용합니다.
 
 ## 테스트 기준
 

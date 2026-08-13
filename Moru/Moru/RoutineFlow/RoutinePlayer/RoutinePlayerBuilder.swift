@@ -29,6 +29,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   private let guidancePlayer: any RoutineGuidancePlaying
   private let guidancePlaybackState: RoutineGuidancePlaybackState
   private let audioSessionCoordinator: RoutineAudioSessionCoordinator
+  private weak var routineTTSWarmupCoordinator: (any RoutineTTSWarming)?
 
   init(
     resolver: any ResolveRoutineExecutionUseCaseProtocol,
@@ -37,7 +38,8 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
     localProfileRepository: any LocalProfileRepository,
     guidancePlayer: any RoutineGuidancePlaying,
     guidancePlaybackState: RoutineGuidancePlaybackState,
-    audioSessionCoordinator: RoutineAudioSessionCoordinator
+    audioSessionCoordinator: RoutineAudioSessionCoordinator,
+    routineTTSWarmupCoordinator: (any RoutineTTSWarming)? = nil
   ) {
     self.resolver = resolver
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
@@ -46,6 +48,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
     self.guidancePlayer = guidancePlayer
     self.guidancePlaybackState = guidancePlaybackState
     self.audioSessionCoordinator = audioSessionCoordinator
+    self.routineTTSWarmupCoordinator = routineTTSWarmupCoordinator
   }
 
   func makeTrial(
@@ -57,7 +60,9 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
       request: request,
       resolver: resolver,
       finalizer: DefaultTrialRoutineFinalizer(),
-      guidanceCoordinator: makeGuidanceCoordinator(),
+      guidanceCoordinator: makeGuidanceCoordinator(
+        routineGroupLocalID: nil
+      ),
       presentationToken: presentationToken,
       onEvent: onEvent
     )
@@ -82,7 +87,9 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
         saveRoutineRunUseCase: saveRoutineRunUseCase,
         routineRunRepository: routineRunRepository
       ),
-      guidanceCoordinator: makeGuidanceCoordinator(),
+      guidanceCoordinator: makeGuidanceCoordinator(
+        routineGroupLocalID: request.routineID
+      ),
       presentationToken: presentationToken,
       onEvent: onEvent
     )
@@ -95,14 +102,18 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
     )
   }
 
-  private func makeGuidanceCoordinator() -> RoutineGuidanceCoordinator {
+  private func makeGuidanceCoordinator(
+    routineGroupLocalID: UUID?
+  ) -> RoutineGuidanceCoordinator {
     let selectedVoice = (try? localProfileRepository.fetchProfile())?
       .selectedVoice ?? .aoede
 
     return RoutineGuidanceCoordinator(
       player: guidancePlayer,
       playbackState: guidancePlaybackState,
-      voiceCode: selectedVoice.assetVoiceCode
+      voiceCode: selectedVoice.assetVoiceCode,
+      routineGroupLocalID: routineGroupLocalID,
+      warmupCoordinator: routineTTSWarmupCoordinator
     )
   }
 

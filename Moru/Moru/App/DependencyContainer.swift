@@ -31,6 +31,8 @@ struct DependencyContainer {
   let routineGuidancePlayer: (any RoutineGuidancePlaying)?
   let routineGuidancePlaybackState: RoutineGuidancePlaybackState?
   let routineAudioSessionCoordinator: RoutineAudioSessionCoordinator?
+  let routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator?
+  let routineTTSAudioCache: RoutineTTSAudioCache?
 
   init(
     routineRepository: any RoutineRepository,
@@ -57,7 +59,9 @@ struct DependencyContainer {
     profileAlarmService: (any ProfileAlarmServicing)? = nil,
     routineGuidancePlayer: (any RoutineGuidancePlaying)? = nil,
     routineGuidancePlaybackState: RoutineGuidancePlaybackState? = nil,
-    routineAudioSessionCoordinator: RoutineAudioSessionCoordinator? = nil
+    routineAudioSessionCoordinator: RoutineAudioSessionCoordinator? = nil,
+    routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator? = nil,
+    routineTTSAudioCache: RoutineTTSAudioCache? = nil
   ) {
     self.routineRepository = routineRepository
     self.routineRunRepository = routineRunRepository
@@ -90,6 +94,8 @@ struct DependencyContainer {
     self.routineGuidancePlayer = routineGuidancePlayer
     self.routineGuidancePlaybackState = routineGuidancePlaybackState
     self.routineAudioSessionCoordinator = routineAudioSessionCoordinator
+    self.routineTTSWarmupCoordinator = routineTTSWarmupCoordinator
+    self.routineTTSAudioCache = routineTTSAudioCache
   }
 
   @MainActor
@@ -106,16 +112,16 @@ struct DependencyContainer {
       (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
       (any AccountRoutineGroupRemoteServing)? = nil,
+    routineTTSRemoteService: (any RoutineTTSRemoteServing)? = nil,
+    sessionIdentityProvider:
+      (any CurrentAccountSessionIdentityProviding)? = nil,
     routineSyncWakeupRelay: RoutineSyncWakeupRelay? = nil
   ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
-    let guidancePlayer = BundledRoutineGuidancePlayer(
+    let bundledGuidancePlayer = BundledRoutineGuidancePlayer(
       resourceLoader: audioResourceLoader,
       playbackState: guidancePlaybackState
-    )
-    let audioSessionCoordinator = RoutineAudioSessionCoordinator(
-      guidancePlayback: guidancePlayer
     )
     let voiceAvailabilityProbe = BundledVoiceAvailabilityProbe(
       resourceLoader: audioResourceLoader
@@ -134,6 +140,37 @@ struct DependencyContainer {
       routineSyncRepository: routineSyncRepository,
       signedInMemberProvider: signedInMemberProvider,
       routineSyncWakeupRelay: routineSyncWakeupRelay
+    )
+    let routineTTSAudioCache = try? RoutineTTSAudioCache()
+    let routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator?
+    let guidancePlayer: any RoutineGuidancePlaying
+    if let routineTTSRemoteService,
+       let sessionIdentityProvider,
+       let routineTTSAudioCache {
+      let warmupCoordinator = RoutineTTSWarmupCoordinator(
+        remoteService: routineTTSRemoteService,
+        bindingRepository: routineSyncRepository,
+        routineRepository: routineRepository,
+        audioCache: routineTTSAudioCache,
+        downloader: RoutineTTSAudioDownloader(),
+        sessionIdentityProvider: sessionIdentityProvider
+      )
+      routineTTSWarmupCoordinator = warmupCoordinator
+      let remoteFirstGuidancePlayer = RemoteFirstRoutineGuidancePlayer(
+        bundledPlayer: bundledGuidancePlayer,
+        remotePlayer: LocalFileRoutineAudioPlayer(
+          playbackState: guidancePlaybackState
+        ),
+        localAudioProvider: warmupCoordinator
+      )
+      warmupCoordinator.setPlaybackSessionInvalidator(remoteFirstGuidancePlayer)
+      guidancePlayer = remoteFirstGuidancePlayer
+    } else {
+      routineTTSWarmupCoordinator = nil
+      guidancePlayer = bundledGuidancePlayer
+    }
+    let audioSessionCoordinator = RoutineAudioSessionCoordinator(
+      guidancePlayback: guidancePlayer
     )
     let alarmStateRepository = SwiftDataAlarmPlatformStateRepository(
       modelContext: modelContext
@@ -212,7 +249,9 @@ struct DependencyContainer {
       profileAlarmService: profileAlarmService,
       routineGuidancePlayer: guidancePlayer,
       routineGuidancePlaybackState: guidancePlaybackState,
-      routineAudioSessionCoordinator: audioSessionCoordinator
+      routineAudioSessionCoordinator: audioSessionCoordinator,
+      routineTTSWarmupCoordinator: routineTTSWarmupCoordinator,
+      routineTTSAudioCache: routineTTSAudioCache
     )
   }
 
@@ -261,7 +300,8 @@ struct DependencyContainer {
       localProfileRepository: localProfileRepository,
       guidancePlayer: guidancePlayer,
       guidancePlaybackState: playbackState,
-      audioSessionCoordinator: audioSessionCoordinator
+      audioSessionCoordinator: audioSessionCoordinator,
+      routineTTSWarmupCoordinator: routineTTSWarmupCoordinator
     )
   }
 

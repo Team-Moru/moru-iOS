@@ -10,6 +10,36 @@ enum GuidancePlaybackResult: Equatable {
   case cancelled
 }
 
+/// Carries the local identities needed to select an already-warmed remote
+/// intro while retaining the bundled cue as the fail-safe path.
+struct RoutineGuidanceCueRequest: Equatable {
+  let routineGroupLocalID: UUID?
+  let routineLocalID: UUID?
+  let routineTitle: String?
+  let routineType: RoutineStepType?
+  let fallbackItemID: String?
+  let voiceCode: String
+  let kind: RoutineAudioCueKind
+
+  init(
+    routineGroupLocalID: UUID? = nil,
+    routineLocalID: UUID? = nil,
+    routineTitle: String? = nil,
+    routineType: RoutineStepType? = nil,
+    fallbackItemID: String?,
+    voiceCode: String,
+    kind: RoutineAudioCueKind
+  ) {
+    self.routineGroupLocalID = routineGroupLocalID
+    self.routineLocalID = routineLocalID
+    self.routineTitle = routineTitle
+    self.routineType = routineType
+    self.fallbackItemID = fallbackItemID
+    self.voiceCode = voiceCode
+    self.kind = kind
+  }
+}
+
 @MainActor
 protocol GuidancePlaybackControlling {
   func stopAndWaitUntilIdle() async
@@ -23,7 +53,22 @@ protocol RoutineGuidancePlaying: GuidancePlaybackControlling {
     voiceCode: String,
     kind: RoutineAudioCueKind
   ) async -> GuidancePlaybackResult
+  func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult
   func stop()
+}
+
+extension RoutineGuidancePlaying {
+  func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult {
+    guard let itemID = request.fallbackItemID else {
+      return .completed
+    }
+
+    return await play(
+      itemID: itemID,
+      voiceCode: request.voiceCode,
+      kind: request.kind
+    )
+  }
 }
 
 @MainActor

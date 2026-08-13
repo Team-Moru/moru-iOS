@@ -30,6 +30,48 @@ final class AccountLifecycleTests: XCTestCase {
   }
 
   @MainActor
+  func testLogoutPurgesAccountAudioBeforeRemovingCredentials() async throws {
+    let fixture = makeFixture(includeRoutineTTSAudioCacheCleaner: true)
+
+    try await fixture.service.logout()
+
+    XCTAssertEqual(
+      fixture.events.values,
+      ["remote logout", "audio cleanup 92", "credential remove"]
+    )
+    XCTAssertEqual(fixture.audioCacheCleaner?.memberIDs, [92])
+    XCTAssertNil(fixture.credentialStore.credentials)
+    XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testLogoutKeepsRestorableSessionWhenAccountAudioPurgeFails() async {
+    let fixture = makeFixture(
+      includeRoutineTTSAudioCacheCleaner: true,
+      routineTTSAudioCleanupError: AccountLifecycleTestError.cleanupFailed
+    )
+
+    do {
+      try await fixture.service.logout()
+      XCTFail("Audio cleanup failure must stop credential removal.")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .localCleanupFailed)
+    } catch {
+      XCTFail("Expected AccountLifecycleError, got \(error)")
+    }
+
+    XCTAssertEqual(
+      fixture.events.values,
+      ["remote logout", "audio cleanup 92"]
+    )
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true))
+    )
+  }
+
+  @MainActor
   func testLogoutClearsSessionEvenWhenStoredCredentialsCannotBeLoaded() async throws {
     let fixture = makeFixture()
     fixture.credentialStore.loadError = CredentialStoreError.invalidStoredData
@@ -564,6 +606,8 @@ final class AccountLifecycleTests: XCTestCase {
     provider: AuthProvider = .apple,
     providerSessionSignOut: any SocialProviderSessionSigningOut =
       NoopSocialProviderSessionSignOut(),
+    includeRoutineTTSAudioCacheCleaner: Bool = false,
+    routineTTSAudioCleanupError: Error? = nil,
     restorationGuard: any AccountSessionRestorationGuarding =
       InMemoryAccountSessionRestorationGuard()
   ) -> AccountLifecycleFixture {
@@ -588,11 +632,18 @@ final class AccountLifecycleTests: XCTestCase {
       events: events,
       error: cleanupError
     )
+    let audioCacheCleaner = includeRoutineTTSAudioCacheCleaner
+      ? AccountLifecycleRoutineTTSAudioCacheCleaner(
+          events: events,
+          error: routineTTSAudioCleanupError
+        )
+      : nil
     let service = DefaultAccountLifecycleService(
       authRemoteDataSource: remote,
       accountSessionStore: accountSessionStore,
       accountScopedDataCleaner: cleaner,
-      providerSessionSignOut: providerSessionSignOut
+      providerSessionSignOut: providerSessionSignOut,
+      routineTTSAudioCacheCleaner: audioCacheCleaner
     )
 
     return AccountLifecycleFixture(
@@ -602,6 +653,7 @@ final class AccountLifecycleTests: XCTestCase {
       credentialStore: credentialStore,
       tokenProvider: tokenProvider,
       accountSessionStore: accountSessionStore,
+      audioCacheCleaner: audioCacheCleaner,
       events: events
     )
   }
@@ -745,6 +797,7 @@ private struct AccountLifecycleFixture {
   let credentialStore: AccountLifecycleCredentialStore
   let tokenProvider: MemoryAccessTokenProvider
   let accountSessionStore: AccountSessionStore
+  let audioCacheCleaner: AccountLifecycleRoutineTTSAudioCacheCleaner?
   let events: AccountLifecycleEventRecorder
 }
 
@@ -1037,6 +1090,34 @@ nonisolated private final class AccountLifecycleDataCleaner:
       storedMemberIDs.append(memberID)
     }
 
+    if let error {
+      throw error
+    }
+  }
+}
+
+nonisolated private final class AccountLifecycleRoutineTTSAudioCacheCleaner:
+  RoutineTTSAudioCacheCleaning,
+  @unchecked Sendable {
+  private let lock = NSLock()
+  private let events: AccountLifecycleEventRecorder
+  private let error: Error?
+  private var storedMemberIDs: [Int64] = []
+
+  init(events: AccountLifecycleEventRecorder, error: Error?) {
+    self.events = events
+    self.error = error
+  }
+
+  var memberIDs: [Int64] {
+    lock.withLock { storedMemberIDs }
+  }
+
+  func removeAllRoutineTTSAudio() async throws {}
+
+  func removeRoutineTTSAudio(memberID: Int64) async throws {
+    events.record("audio cleanup \(memberID)")
+    lock.withLock { storedMemberIDs.append(memberID) }
     if let error {
       throw error
     }

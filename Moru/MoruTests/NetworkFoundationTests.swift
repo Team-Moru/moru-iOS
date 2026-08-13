@@ -788,6 +788,21 @@ final class NetworkFoundationTests: XCTestCase {
     XCTAssertFalse(message.contains("private routine text"))
   }
 
+  func testNetworkLogUsesRedactedRouteTemplateWhenProvided() {
+    let adapter = MoyaTargetAdapter(
+      target: IdentifierPathStubTarget(),
+      baseURL: NetworkConfiguration.production.baseURL,
+      requestAccessToken: nil
+    )
+    let target = MultiTarget(adapter)
+
+    XCTAssertEqual(
+      NetworkLogPlugin.requestMessage(for: target),
+      "➡️ GET /routine-tts/{routineGroupId}/tts"
+    )
+    XCTAssertFalse(NetworkLogPlugin.requestMessage(for: target).contains("987654"))
+  }
+
   private func assertAPIError(
     _ expected: APIError,
     operation: () async throws -> Void
@@ -897,6 +912,16 @@ final class NetworkFoundationTests: XCTestCase {
       """.utf8
     )
   }
+}
+
+nonisolated private struct IdentifierPathStubTarget:
+  MoruTargetType,
+  NetworkLogPathProviding {
+  let path = "/routine-tts/987654/tts"
+  let networkLogPath = "/routine-tts/{routineGroupId}/tts"
+  var method: Moya.Method { .get }
+  var task: Moya.Task { .requestPlain }
+  var authenticationRequirement: AuthenticationRequirement { .bearer }
 }
 
 nonisolated private struct StubResult: Decodable, Equatable, Sendable {
