@@ -257,7 +257,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       if persisted.payloadVersion == mutation.payloadVersion, persisted.payload == payload {
         return try makeMutation(persisted)
       }
-      if persisted.stateRawValue == RoutineSyncMutationState.needsReconciliation.rawValue,
+      if (persisted.stateRawValue == RoutineSyncMutationState.needsReconciliation.rawValue
+            || persisted.stateRawValue == RoutineSyncMutationState.blocked.rawValue),
          try makeAttempt(persisted) == nil {
         throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: persisted.id)
       }
@@ -269,7 +270,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       // An older snapshot is still in-flight. Do not overwrite it or make the
       // newer desired value deliverable until that result is settled.
       if persisted.stateRawValue != RoutineSyncMutationState.attempting.rawValue,
-         persisted.stateRawValue != RoutineSyncMutationState.needsReconciliation.rawValue {
+         persisted.stateRawValue != RoutineSyncMutationState.needsReconciliation.rawValue,
+         persisted.stateRawValue != RoutineSyncMutationState.blocked.rawValue {
         persisted.stateRawValue = initialState(for: mutation.operation).rawValue
       }
       persisted.updatedAt = date
@@ -339,11 +341,16 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       localEntityID: localEntityID
     )
     guard let persisted = try persistedMutation(key: key) else { return false }
-    switch try makeMutation(persisted).state {
-    case .waitingForServerContract, .queued:
-      modelContext.delete(persisted)
+    let mutation = try makeMutation(persisted)
+    switch mutation.state {
+    case .waitingForServerContract:
+      try stageDeleteMutation(persisted)
       return true
-    case .attempting, .needsReconciliation:
+    case .queued where mutation.attempt == nil,
+         .blocked where mutation.attempt == nil:
+      try stageDeleteMutation(persisted)
+      return true
+    case .queued, .attempting, .needsReconciliation, .blocked:
       throw RoutineSyncRepositoryError.reconciliationRequired(
         existingMutationID: persisted.id
       )
@@ -368,11 +375,16 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     ), selected == selectedGroupLocalID else {
       return false
     }
-    switch try makeMutation(persisted).state {
-    case .waitingForServerContract, .queued:
-      modelContext.delete(persisted)
+    let mutation = try makeMutation(persisted)
+    switch mutation.state {
+    case .waitingForServerContract:
+      try stageDeleteMutation(persisted)
       return true
-    case .attempting, .needsReconciliation:
+    case .queued where mutation.attempt == nil,
+         .blocked where mutation.attempt == nil:
+      try stageDeleteMutation(persisted)
+      return true
+    case .queued, .attempting, .needsReconciliation, .blocked:
       throw RoutineSyncRepositoryError.reconciliationRequired(
         existingMutationID: persisted.id
       )
@@ -380,15 +392,53 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
   }
 
   func claimForDelivery(id: UUID, at date: Date = Date()) throws -> RoutineSyncAttempt? {
+    try claimInitialDelivery(id: id, wireRequest: nil, at: date)
+  }
+
+  func claimForDelivery(
+    id: UUID,
+    wireRequest: RoutineSyncWireRequest,
+    at date: Date = Date()
+  ) throws -> RoutineSyncAttempt? {
+    try claimInitialDelivery(id: id, wireRequest: wireRequest, at: date)
+  }
+
+  private func claimInitialDelivery(
+    id: UUID,
+    wireRequest: RoutineSyncWireRequest?,
+    at date: Date
+  ) throws -> RoutineSyncAttempt? {
     guard let persisted = try persistedMutation(id: id),
-          persisted.stateRawValue == RoutineSyncMutationState.queued.rawValue else {
+          persisted.stateRawValue == RoutineSyncMutationState.queued.rawValue,
+          try makeAttempt(persisted) == nil else {
       return nil
+    }
+    if let wireRequest {
+      try validate(wireRequest: wireRequest)
+      guard try persistedAttemptArtifact(mutationID: id) == nil else {
+        throw RoutineSyncRepositoryError.corruptedStoredValue(
+          field: "PersistedRoutineSyncAttemptArtifact.duplicate"
+        )
+      }
+      modelContext.insert(
+        PersistedRoutineSyncAttemptArtifact(
+          mutationID: persisted.id,
+          serverNamespaceRawValue: persisted.serverNamespaceRawValue,
+          memberID: persisted.memberID,
+          generationID: persisted.generationID,
+          httpMethodRawValue: wireRequest.method.rawValue,
+          path: wireRequest.path,
+          body: wireRequest.body,
+          firstAttemptedAt: date
+        )
+      )
     }
     let attempt = RoutineSyncAttempt(
       generationID: persisted.generationID,
       generation: persisted.generation,
       payloadVersion: persisted.payloadVersion,
       payload: persisted.payload,
+      wireRequest: wireRequest,
       attemptedAt: date
     )
     persisted.attemptedGenerationID = attempt.generationID
@@ -396,6 +446,28 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     persisted.attemptedPayloadVersion = attempt.payloadVersion
     persisted.attemptedPayload = attempt.payload
     persisted.attemptedAt = attempt.attemptedAt
+    persisted.stateRawValue = RoutineSyncMutationState.attempting.rawValue
+    persisted.updatedAt = date
+    try saveOrRollback()
+    return attempt
+  }
+
+  func claimForExactReplay(
+    id: UUID,
+    expectedGenerationID: UUID,
+    at date: Date = Date()
+  ) throws -> RoutineSyncAttempt? {
+    guard let persisted = try persistedMutation(id: id),
+          persisted.stateRawValue == RoutineSyncMutationState.queued.rawValue,
+          persisted.attemptedGenerationID == expectedGenerationID,
+          let attempt = try makeAttempt(persisted),
+          attempt.wireRequest != nil,
+          attempt.isWithinAutomaticReplayWindow(at: date),
+          let artifact = try persistedAttemptArtifact(mutationID: id),
+          artifact.nextAttemptAt.map({ $0 <= date }) ?? true,
+          artifact.blockReasonRawValue == nil else {
+      return nil
+    }
     persisted.stateRawValue = RoutineSyncMutationState.attempting.rawValue
     persisted.updatedAt = date
     try saveOrRollback()
@@ -417,7 +489,12 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         guard mutation.stateRawValue == RoutineSyncMutationState.waitingForServerContract.rawValue,
               let operation = RoutineSyncOperation(rawValue: mutation.operationRawValue),
               contract.supports(operation),
-              try dependenciesAreSatisfied(for: mutation, among: persisted, memberID: memberID)
+              try dependenciesAreSatisfied(
+                for: mutation,
+                among: persisted,
+                memberID: memberID,
+                contract: contract
+              )
         else { continue }
         mutation.stateRawValue = RoutineSyncMutationState.queued.rawValue
         mutation.updatedAt = date
@@ -454,6 +531,91 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     }
   }
 
+  func prepareExactReplay(
+    id: UUID,
+    expectedGenerationID: UUID,
+    at date: Date = Date()
+  ) throws -> Bool {
+    guard let persisted = try persistedMutation(id: id),
+          persisted.attemptedGenerationID == expectedGenerationID,
+          let attempt = try makeAttempt(persisted),
+          persisted.stateRawValue == RoutineSyncMutationState.needsReconciliation.rawValue
+            || persisted.stateRawValue == RoutineSyncMutationState.attempting.rawValue else {
+      return false
+    }
+    guard let artifact = try persistedAttemptArtifact(mutationID: id),
+          attempt.wireRequest != nil else {
+      persisted.stateRawValue = RoutineSyncMutationState.blocked.rawValue
+      persisted.updatedAt = date
+      try saveOrRollback()
+      return false
+    }
+    guard attempt.isWithinAutomaticReplayWindow(at: date) else {
+      persisted.stateRawValue = RoutineSyncMutationState.blocked.rawValue
+      artifact.blockReasonRawValue = RoutineSyncBlockReason.resultTTLExpired.rawValue
+      persisted.updatedAt = date
+      try saveOrRollback()
+      return false
+    }
+    guard artifact.blockReasonRawValue == nil,
+          artifact.nextAttemptAt.map({ $0 <= date }) ?? true else {
+      return false
+    }
+    persisted.stateRawValue = RoutineSyncMutationState.queued.rawValue
+    persisted.updatedAt = date
+    try saveOrRollback()
+    return true
+  }
+
+  func blockAttempt(
+    id: UUID,
+    expectedGenerationID: UUID,
+    reason: RoutineSyncBlockReason,
+    at date: Date = Date()
+  ) throws {
+    guard let persisted = try persistedMutation(id: id),
+          matchesAttemptOrCurrent(
+            persisted,
+            expectedGenerationID: expectedGenerationID
+          ) else { return }
+    persisted.stateRawValue = RoutineSyncMutationState.blocked.rawValue
+    if let artifact = try persistedAttemptArtifact(mutationID: id) {
+      artifact.blockReasonRawValue = reason.rawValue
+    }
+    persisted.updatedAt = date
+    try saveOrRollback()
+  }
+
+  func scheduleProcessingConflictReplay(
+    id: UUID,
+    expectedGenerationID: UUID,
+    retryAt: Date,
+    maximumConflicts: Int,
+    at date: Date = Date()
+  ) throws -> Bool {
+    guard maximumConflicts > 0,
+          retryAt >= date,
+          let persisted = try persistedMutation(id: id),
+          persisted.attemptedGenerationID == expectedGenerationID,
+          let artifact = try persistedAttemptArtifact(mutationID: id),
+          artifact.generationID == expectedGenerationID,
+          try makeAttempt(persisted) != nil else { return false }
+    let count = artifact.processingConflictCount + 1
+    artifact.processingConflictCount = count
+    persisted.updatedAt = date
+    if count >= maximumConflicts {
+      artifact.blockReasonRawValue =
+        RoutineSyncBlockReason.processingRetryExhausted.rawValue
+      persisted.stateRawValue = RoutineSyncMutationState.blocked.rawValue
+      try saveOrRollback()
+      return false
+    }
+    artifact.nextAttemptAt = retryAt
+    persisted.stateRawValue = RoutineSyncMutationState.needsReconciliation.rawValue
+    try saveOrRollback()
+    return true
+  }
+
   func markNeedsReconciliation(
     id: UUID,
     expectedGenerationID: UUID,
@@ -463,6 +625,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
           matchesAttemptOrCurrent(persisted, expectedGenerationID: expectedGenerationID)
     else { return }
     persisted.stateRawValue = RoutineSyncMutationState.needsReconciliation.rawValue
+    try persistedAttemptArtifact(mutationID: id)?.nextAttemptAt = nil
     persisted.updatedAt = date
     try saveOrRollback()
   }
@@ -518,7 +681,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
            .saveRoutineExecution:
         break
       }
-      clearAttempt(persisted)
+      try clearAttempt(persisted)
       persisted.stateRawValue = initialState(for: operation).rawValue
       persisted.updatedAt = date
       try modelContext.save()
@@ -554,6 +717,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
           matchesAttemptOrCurrent(persisted, expectedGenerationID: expectedGenerationID)
     else { return }
     do {
+      guard childMappingsComplete else {
+        throw RoutineSyncRepositoryError.incompleteChildMapping
+      }
       let bindings = try stageRecordRemoteIDs(assignments, memberID: persisted.memberID, at: date)
       try validateCreateRoutineGroupSettlement(
         mutation: persisted,
@@ -561,19 +727,12 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         bindings: bindings,
         childMappingsComplete: childMappingsComplete
       )
-      if childMappingsComplete {
-        try stageCreateSuccessorIntents(
-          mutation: persisted,
-          expectedGenerationID: expectedGenerationID,
-          at: date
-        )
-        try stageResolveCompleted(persisted, expectedGenerationID: expectedGenerationID)
-      } else {
-        // A group ID alone is useful, but title/order matching child IDs would
-        // be a guess. Keep this row for server-backed reconciliation.
-        persisted.stateRawValue = RoutineSyncMutationState.needsReconciliation.rawValue
-        persisted.updatedAt = date
-      }
+      try stageCreateSuccessorIntents(
+        mutation: persisted,
+        expectedGenerationID: expectedGenerationID,
+        at: date
+      )
+      try stageResolveCompleted(persisted, expectedGenerationID: expectedGenerationID)
       try modelContext.save()
     } catch {
       modelContext.rollback()
@@ -778,19 +937,22 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     expectedGenerationID: UUID
   ) throws {
     if persisted.generationID == expectedGenerationID {
-      modelContext.delete(persisted)
+      try stageDeleteMutation(persisted)
       return
     }
     guard persisted.attemptedGenerationID == expectedGenerationID else { return }
     let operation = try operation(of: persisted)
-    if operation == .createRoutineGroup || operation == .addRoutine {
-      // The old create committed remotely. A newer local title/schedule/step
-      // snapshot has no PATCH contract, so never send a second create. Local
-      // SwiftData remains the projection; the attempted successor is dropped.
-      modelContext.delete(persisted)
+    if operation == .createRoutineGroup
+      || operation == .addRoutine
+      || operation == .saveRoutineExecution {
+      // These operations are immutable creates in the production contract.
+      // Once the attempted generation commits, a locally coalesced successor
+      // must never become a second POST under a fresh idempotency key. Local
+      // SwiftData remains the projection and the durable binding is its receipt.
+      try stageDeleteMutation(persisted)
       return
     }
-    clearAttempt(persisted)
+    try clearAttempt(persisted)
     // The old request settled. The newer coalesced desired value is now the
     // only outstanding intent, even if a prior ambiguity had paused it.
     persisted.stateRawValue = initialState(for: operation).rawValue
@@ -820,19 +982,15 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       throw RoutineSyncRepositoryError.invalidPayload
     }
     guard childMappingsComplete else {
-      // A partial response may record only the group. Anything more would
-      // falsely look like a complete child identity map.
-      guard bindings.count == 1 else {
-        throw RoutineSyncRepositoryError.incompleteChildMapping
-      }
-      return
+      throw RoutineSyncRepositoryError.incompleteChildMapping
     }
     let expectedChildIDs = Set(group.routines.map(\.localID))
     let childBindings = bindings.filter { $0.entityKind == .routine }
     guard group.routines.count == expectedChildIDs.count,
           bindings.count == 1 + expectedChildIDs.count,
           childBindings.count == expectedChildIDs.count,
-          Set(childBindings.map(\.localEntityID)) == expectedChildIDs else {
+          Set(childBindings.map(\.localEntityID)) == expectedChildIDs,
+          Set(bindings.map(\.remoteID)).count == bindings.count else {
       throw RoutineSyncRepositoryError.incompleteChildMapping
     }
     guard childBindings.allSatisfy({
@@ -937,7 +1095,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
   private func dependenciesAreSatisfied(
     for mutation: PersistedRoutineSyncMutation,
     among mutations: [PersistedRoutineSyncMutation],
-    memberID: Int64
+    memberID: Int64,
+    contract: RoutineSyncServerContract
   ) throws -> Bool {
     guard let command = try? typedCommand(from: mutation.payload) else {
       return false
@@ -1029,7 +1188,12 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         case .saveRoutineExecution(let execution) where execution.groupLocalID == groupLocalID:
           return false
         case .selectActiveRoutineGroup:
-          return false
+          // An unsupported account-selection intent must not permanently
+          // deadlock production CRUD. If a future verified contract supports
+          // it, preserve the original ordering and settle selection first.
+          if contract.supports(.setRoutineGroupActive) {
+            return false
+          }
         default:
           continue
         }
@@ -1109,7 +1273,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       guard isCreatePredecessor || state == .waitingForServerContract || state == .queued else {
         throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: mutation.id)
       }
-      modelContext.delete(mutation)
+      try stageDeleteMutation(mutation)
     }
   }
 
@@ -1136,7 +1300,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       guard isAddPredecessor || state == .waitingForServerContract || state == .queued else {
         throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: mutation.id)
       }
-      modelContext.delete(mutation)
+      try stageDeleteMutation(mutation)
     }
   }
 
@@ -1156,7 +1320,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
           existingMutationID: mutation.id
         )
       }
-      modelContext.delete(mutation)
+      try stageDeleteMutation(mutation)
     }
   }
 
@@ -1187,6 +1351,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
   private func stageDeleteAccountScopedData(memberID: Int64) throws {
     try persistedBindings(memberID: memberID).forEach(modelContext.delete)
     try persistedMutations(memberID: memberID).forEach(modelContext.delete)
+    try persistedAttemptArtifacts(memberID: memberID).forEach(modelContext.delete)
   }
 
   private func persistedBindings(memberID: Int64) throws -> [PersistedRoutineServerBinding] {
@@ -1237,6 +1402,29 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     )
     descriptor.fetchLimit = 1
     return try modelContext.fetch(descriptor).first
+  }
+
+  private func persistedAttemptArtifact(
+    mutationID: UUID
+  ) throws -> PersistedRoutineSyncAttemptArtifact? {
+    var descriptor = FetchDescriptor<PersistedRoutineSyncAttemptArtifact>(
+      predicate: #Predicate { $0.mutationID == mutationID }
+    )
+    descriptor.fetchLimit = 1
+    return try modelContext.fetch(descriptor).first
+  }
+
+  private func persistedAttemptArtifacts(
+    memberID: Int64
+  ) throws -> [PersistedRoutineSyncAttemptArtifact] {
+    let namespace = serverNamespace.rawValue
+    return try modelContext.fetch(
+      FetchDescriptor<PersistedRoutineSyncAttemptArtifact>(
+        predicate: #Predicate {
+          $0.serverNamespaceRawValue == namespace && $0.memberID == memberID
+        }
+      )
+    )
   }
 
   private func pendingCleanup(memberID: Int64) throws -> PersistedPendingAccountCleanup? {
@@ -1375,6 +1563,16 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         field: "PersistedRoutineSyncMutation.attempt"
       )
     }
+    let artifact = try persistedAttemptArtifact(mutationID: persisted.id)
+    let storedBlockReason = artifact?.blockReasonRawValue.flatMap(
+      RoutineSyncBlockReason.init(rawValue:)
+    )
+    if artifact?.processingConflictCount ?? 0 < 0
+      || (artifact?.blockReasonRawValue != nil && storedBlockReason == nil) {
+      throw RoutineSyncRepositoryError.corruptedStoredValue(
+        field: "PersistedRoutineSyncAttemptArtifact.retry"
+      )
+    }
     return RoutineSyncMutation(
       id: persisted.id,
       serverNamespace: namespace,
@@ -1388,6 +1586,10 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       payload: persisted.payload,
       state: state,
       attempt: attempt,
+      nextAttemptAt: artifact?.nextAttemptAt,
+      processingConflictCount: artifact?.processingConflictCount ?? 0,
+      blockReason: storedBlockReason
+        ?? (state == .blocked ? .invalidStoredRequest : nil),
       createdAt: persisted.createdAt,
       updatedAt: persisted.updatedAt
     )
@@ -1417,11 +1619,36 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
           payloadVersion > 0,
           !payload.isEmpty,
           try canonicalPayload(payload) == payload else { return nil }
+    let artifact = try persistedAttemptArtifact(mutationID: persisted.id)
+    let wireRequest: RoutineSyncWireRequest?
+    if let artifact {
+      guard artifact.serverNamespaceRawValue == persisted.serverNamespaceRawValue,
+            artifact.memberID == persisted.memberID,
+            artifact.generationID == generationID,
+            artifact.firstAttemptedAt == attemptedAt,
+            let method = RoutineSyncHTTPMethod(
+              rawValue: artifact.httpMethodRawValue
+            ) else {
+        throw RoutineSyncRepositoryError.corruptedStoredValue(
+          field: "PersistedRoutineSyncAttemptArtifact.identity"
+        )
+      }
+      let request = RoutineSyncWireRequest(
+        method: method,
+        path: artifact.path,
+        body: artifact.body
+      )
+      try validate(wireRequest: request)
+      wireRequest = request
+    } else {
+      wireRequest = nil
+    }
     return RoutineSyncAttempt(
       generationID: generationID,
       generation: generation,
       payloadVersion: payloadVersion,
       payload: payload,
+      wireRequest: wireRequest,
       attemptedAt: attemptedAt
     )
   }
@@ -1460,12 +1687,24 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     return command
   }
 
-  private func clearAttempt(_ persisted: PersistedRoutineSyncMutation) {
+  private func clearAttempt(_ persisted: PersistedRoutineSyncMutation) throws {
+    if let artifact = try persistedAttemptArtifact(mutationID: persisted.id) {
+      modelContext.delete(artifact)
+    }
     persisted.attemptedGenerationID = nil
     persisted.attemptedGeneration = nil
     persisted.attemptedPayloadVersion = nil
     persisted.attemptedPayload = nil
     persisted.attemptedAt = nil
+  }
+
+  private func stageDeleteMutation(
+    _ persisted: PersistedRoutineSyncMutation
+  ) throws {
+    if let artifact = try persistedAttemptArtifact(mutationID: persisted.id) {
+      modelContext.delete(artifact)
+    }
+    modelContext.delete(persisted)
   }
 
   private func operation(of persisted: PersistedRoutineSyncMutation) throws -> RoutineSyncOperation {
@@ -1475,6 +1714,25 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       )
     }
     return operation
+  }
+
+  private func validate(wireRequest: RoutineSyncWireRequest) throws {
+    guard wireRequest.path.first == "/",
+          !wireRequest.path.contains(" "),
+          !wireRequest.path.contains("?") else {
+      throw RoutineSyncRepositoryError.invalidPayload
+    }
+    switch wireRequest.method {
+    case .post:
+      guard !wireRequest.body.isEmpty,
+            (try? JSONSerialization.jsonObject(with: wireRequest.body)) != nil else {
+        throw RoutineSyncRepositoryError.invalidPayload
+      }
+    case .delete:
+      guard wireRequest.body.isEmpty else {
+        throw RoutineSyncRepositoryError.invalidPayload
+      }
+    }
   }
 
   private func validate(assignment: RoutineServerBindingAssignment) throws {

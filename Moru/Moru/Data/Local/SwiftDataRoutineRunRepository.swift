@@ -12,15 +12,18 @@ nonisolated final class SwiftDataRoutineRunRepository: RoutineRunRepository {
   private let modelContext: ModelContext
   private let routineSyncRepository: (any RoutineSyncRepository)?
   private weak var signedInMemberProvider: (any SignedInMemberProviding)?
+  private let routineSyncWakeupRelay: RoutineSyncWakeupRelay?
 
   init(
     modelContext: ModelContext,
     routineSyncRepository: (any RoutineSyncRepository)? = nil,
-    signedInMemberProvider: (any SignedInMemberProviding)? = nil
+    signedInMemberProvider: (any SignedInMemberProviding)? = nil,
+    routineSyncWakeupRelay: RoutineSyncWakeupRelay? = nil
   ) {
     self.modelContext = modelContext
     self.routineSyncRepository = routineSyncRepository
     self.signedInMemberProvider = signedInMemberProvider
+    self.routineSyncWakeupRelay = routineSyncWakeupRelay
   }
 
   @MainActor
@@ -147,6 +150,7 @@ nonisolated final class SwiftDataRoutineRunRepository: RoutineRunRepository {
       }
 
       try modelContext.save()
+      routineSyncWakeupRelay?.wake()
     } catch {
       modelContext.rollback()
       throw error
@@ -183,6 +187,22 @@ nonisolated final class SwiftDataRoutineRunRepository: RoutineRunRepository {
     memberID: Int64,
     repository: any RoutineSyncRepository
   ) throws -> Bool {
+    guard run.completedAt != nil,
+          result.completedAt != nil || result.skipped else {
+      return false
+    }
+    // A settled execution binding is the durable receipt for this exact
+    // result UUID. It survives Outbox removal and repository/app recreation,
+    // so later run saves or scanner passes must not enqueue the same server
+    // execution again.
+    if try repository.binding(
+      memberID: memberID,
+      entityKind: .routineExecution,
+      localEntityID: result.id
+    ) != nil {
+      return false
+    }
+
     if let binding = try repository.binding(
       memberID: memberID,
       entityKind: .routine,

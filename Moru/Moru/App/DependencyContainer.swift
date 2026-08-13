@@ -105,7 +105,8 @@ struct DependencyContainer {
     accountServerRemoteService:
       (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
-      (any AccountRoutineGroupRemoteServing)? = nil
+      (any AccountRoutineGroupRemoteServing)? = nil,
+    routineSyncWakeupRelay: RoutineSyncWakeupRelay? = nil
   ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
     let guidancePlaybackState = RoutineGuidancePlaybackState()
@@ -125,12 +126,14 @@ struct DependencyContainer {
     let routineRepository = SwiftDataRoutineRepository(
       modelContext: modelContext,
       routineSyncRepository: routineSyncRepository,
-      signedInMemberProvider: signedInMemberProvider
+      signedInMemberProvider: signedInMemberProvider,
+      routineSyncWakeupRelay: routineSyncWakeupRelay
     )
     let swiftDataRoutineRunRepository = SwiftDataRoutineRunRepository(
       modelContext: modelContext,
       routineSyncRepository: routineSyncRepository,
-      signedInMemberProvider: signedInMemberProvider
+      signedInMemberProvider: signedInMemberProvider,
+      routineSyncWakeupRelay: routineSyncWakeupRelay
     )
     let alarmStateRepository = SwiftDataAlarmPlatformStateRepository(
       modelContext: modelContext
@@ -185,7 +188,8 @@ struct DependencyContainer {
       onboardingRepository: SwiftDataOnboardingRepository(
         modelContext: modelContext,
         routineSyncRepository: routineSyncRepository,
-        signedInMemberProvider: signedInMemberProvider
+        signedInMemberProvider: signedInMemberProvider,
+        routineSyncWakeupRelay: routineSyncWakeupRelay
       ),
       routineSuggestionService: localSuggestionService,
       routineSuggestionCoordinator: routineSuggestionCoordinator,

@@ -802,7 +802,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
-  func testV4SyncFoundationPersistsAcrossContainerReopen() throws {
+  func testV4SyncFoundationMigratesToV5AcrossContainerReopen() throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -814,7 +814,17 @@ final class RoutineSyncFoundationTests: XCTestCase {
     let localID = UUID()
 
     do {
-      let container = try ModelContainer.moruContainer(storeURL: storeURL)
+      let schema = Schema(versionedSchema: MoruSchemaV4.self)
+      let configuration = ModelConfiguration(
+        "Moru",
+        schema: schema,
+        url: storeURL,
+        cloudKitDatabase: .none
+      )
+      let container = try ModelContainer(
+        for: schema,
+        configurations: [configuration]
+      )
       let repository = SwiftDataRoutineSyncRepository(
         modelContext: container.mainContext
       )
@@ -931,7 +941,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
-  func testPartialCreateStoresOnlyVerifiedGroupAndRequiresReconciliation() throws {
+  func testPartialCreateRejectsEveryBindingAndPreservesOutbox() throws {
     let repository = try makeRepository()
     let groupID = UUID()
     let childID = UUID()
@@ -959,27 +969,33 @@ final class RoutineSyncFoundationTests: XCTestCase {
       at: Date(timeIntervalSince1970: 1)
     )
 
-    try repository.completeCreateRoutineGroup(
-      id: mutation.id,
-      expectedGenerationID: mutation.generationID,
-      assignments: [
-        RoutineServerBindingAssignment(
-          entityKind: .routineGroup,
-          localEntityID: groupID,
-          remoteID: 41
-        )
-      ],
-      childMappingsComplete: false,
-      at: Date(timeIntervalSince1970: 2)
-    )
+    XCTAssertThrowsError(
+      try repository.completeCreateRoutineGroup(
+        id: mutation.id,
+        expectedGenerationID: mutation.generationID,
+        assignments: [
+          RoutineServerBindingAssignment(
+            entityKind: .routineGroup,
+            localEntityID: groupID,
+            remoteID: 41
+          )
+        ],
+        childMappingsComplete: false,
+        at: Date(timeIntervalSince1970: 2)
+      )
+    ) { error in
+      XCTAssertEqual(
+        error as? RoutineSyncRepositoryError,
+        .incompleteChildMapping
+      )
+    }
 
-    XCTAssertEqual(
+    XCTAssertNil(
       try repository.binding(
         memberID: 7,
         entityKind: .routineGroup,
         localEntityID: groupID
-      )?.remoteID,
-      41
+      )
     )
     XCTAssertNil(
       try repository.binding(
@@ -988,10 +1004,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
         localEntityID: childID
       )
     )
-    XCTAssertEqual(
-      try repository.mutations(memberID: 7).first?.state,
-      .needsReconciliation
-    )
+    XCTAssertEqual(try repository.mutations(memberID: 7).map(\.id), [mutation.id])
   }
 
   @MainActor
@@ -1284,7 +1297,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
-  func testLateAttemptResultReleasesNewerExecutionGenerationWithoutReplacingIt() throws {
+  func testLateExecutionAttemptSuccessDropsCoalescedSuccessor() throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let repository = SwiftDataRoutineSyncRepository(modelContext: container.mainContext)
     let resultID = UUID()
@@ -1337,11 +1350,10 @@ final class RoutineSyncFoundationTests: XCTestCase {
       expectedGenerationID: first.generationID
     )
 
-    let released = try XCTUnwrap(try repository.mutations(memberID: 7).first)
-    XCTAssertEqual(released.generationID, newer.generationID)
-    XCTAssertEqual(released.payload, newer.payload)
-    XCTAssertEqual(released.state, .waitingForServerContract)
-    XCTAssertNil(released.attempt)
+    // Production execution save is create-only. A local edit while its first
+    // immutable attempt is in flight must not become a second POST with a new
+    // key after that original request succeeds.
+    XCTAssertTrue(try repository.mutations(memberID: 7).isEmpty)
   }
 
   @MainActor
@@ -1720,7 +1732,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
-  func testAdmissionRequiresVerifiedCompleteServerContract() throws {
+  func testAdmissionRequiresVerifiedOperationSpecificServerContract() throws {
     let repository = try makeRepository()
     let groupID = UUID()
     _ = try repository.enqueue(
@@ -1745,7 +1757,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
     XCTAssertTrue(try repository.admitEligibleMutations(
       memberID: 7,
       contract: RoutineSyncServerContract(
-        capabilities: .allRequired.subtracting(.replaySafeDelete),
+        capabilities: .allRequired.subtracting(.clientEntityID),
         isE2EVerified: true
       ),
       at: Date(timeIntervalSince1970: 3)
@@ -1979,6 +1991,42 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
+  func testProductionDeleteIgnoresUnsupportedActiveIntentDependency() throws {
+    let repository = try makeRepository()
+    let groupID = UUID()
+    _ = try repository.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: groupID,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let active = try repository.enqueue(
+      command: .selectActiveRoutineGroup(selectedGroupLocalID: groupID),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+    let delete = try repository.enqueue(
+      command: .deleteRoutineGroup(groupLocalID: groupID),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+
+    let admitted = try repository.admitEligibleMutations(
+      memberID: 7,
+      contract: .productionP0,
+      at: Date(timeIntervalSince1970: 4)
+    )
+
+    XCTAssertEqual(admitted.map(\.id), [delete.id])
+    XCTAssertEqual(
+      try repository.mutations(memberID: 7).first { $0.id == active.id }?.state,
+      .waitingForServerContract
+    )
+  }
+
+  @MainActor
   func testReconciliationKeepsAttemptAndCoalescesLatestDesiredCreateGraph() throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let repository = SwiftDataRoutineSyncRepository(modelContext: container.mainContext)
@@ -1990,18 +2038,20 @@ final class RoutineSyncFoundationTests: XCTestCase {
       context: container.mainContext,
       command: createGroupCommand(groupID: groupID, children: [firstChildID])
     )
-    try repository.completeCreateRoutineGroup(
-      id: first.id,
-      expectedGenerationID: first.generationID,
-      assignments: [
-        RoutineServerBindingAssignment(
-          entityKind: .routineGroup,
-          localEntityID: groupID,
-          remoteID: 41
-        )
-      ],
-      childMappingsComplete: false,
-      at: Date(timeIntervalSince1970: 3)
+    XCTAssertThrowsError(
+      try repository.completeCreateRoutineGroup(
+        id: first.id,
+        expectedGenerationID: first.generationID,
+        assignments: [
+          RoutineServerBindingAssignment(
+            entityKind: .routineGroup,
+            localEntityID: groupID,
+            remoteID: 41
+          )
+        ],
+        childMappingsComplete: false,
+        at: Date(timeIntervalSince1970: 3)
+      )
     )
 
     let desired = try repository.enqueue(
@@ -2012,7 +2062,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
       memberID: 7,
       at: Date(timeIntervalSince1970: 4)
     )
-    XCTAssertEqual(desired.state, .needsReconciliation)
+    XCTAssertEqual(desired.state, .attempting)
     XCTAssertEqual(desired.attempt?.generationID, first.generationID)
     XCTAssertNotEqual(desired.generationID, first.generationID)
 

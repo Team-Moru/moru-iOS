@@ -414,6 +414,84 @@ final class NetworkFoundationTests: XCTestCase {
     )
   }
 
+  func testExactSessionRawRequestRejectsStaleSessionBeforeTransport() async {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "member-token",
+      memberID: 96
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+
+    do {
+      _ = try await client.requestData(
+        StubTarget(authenticationRequirement: .bearer),
+        authorizedFor: AccountSessionIdentity(
+          memberID: 96,
+          sessionID: UUID()
+        )
+      )
+      XCTFail("Expected a stale session generation to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+
+    XCTAssertNil(requestCapture.request)
+  }
+
+  func testExactSessionRawRequestRejectsResponseAfterRelogin() async throws {
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.establishAccountSession(
+      with: "first-session-token",
+      memberID: 96
+    )
+    let identity = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: 96).map {
+        AccountSessionIdentity(
+          memberID: $0.memberID,
+          sessionID: $0.sessionID
+        )
+      }
+    )
+    let requestCapture = RequestCapturePlugin()
+    let client = makeClient(
+      statusCode: 200,
+      data: successData(),
+      stubBehavior: .delayed(seconds: 0.1),
+      tokenProvider: tokenProvider,
+      additionalPlugins: [requestCapture]
+    )
+    let request = _Concurrency.Task<Data, Error> {
+      try await client.requestData(
+        StubTarget(authenticationRequirement: .bearer),
+        authorizedFor: identity
+      )
+    }
+    try await waitUntil {
+      requestCapture.request != nil
+    }
+    tokenProvider.establishAccountSession(
+      with: "second-session-token",
+      memberID: 96
+    )
+
+    do {
+      _ = try await request.value
+      XCTFail("Expected the old-session raw response to be rejected.")
+    } catch let error as AccountAuthorizationContextError {
+      XCTAssertEqual(error, .memberMismatch)
+    } catch {
+      XCTFail("Expected AccountAuthorizationContextError, got \(error)")
+    }
+  }
+
   func testAccountBoundOptionalRequestAllowsDocumentedNullResult()
     async throws {
     let tokenProvider = MemoryAccessTokenProvider()

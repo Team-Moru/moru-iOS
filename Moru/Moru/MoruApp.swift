@@ -53,7 +53,9 @@ struct MoruApp: App {
             appCapabilities: app.appCapabilities,
             coordinator: app.navigationCoordinator,
             onboardingBuilder: app.onboardingBuilder,
-            routinePlayerBuilder: app.routinePlayerBuilder
+            routinePlayerBuilder: app.routinePlayerBuilder,
+            routineSyncRuntimeCoordinator:
+              app.routineSyncRuntimeCoordinator
           )
           .onOpenURL { url in
             app.authCallbackRouter.route(url)

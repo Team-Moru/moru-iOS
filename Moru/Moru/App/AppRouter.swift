@@ -70,6 +70,7 @@ struct AppRouter: View {
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
   private let homeBuilder: any HomeFlowBuilding
+  private let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
 
   @MainActor
   init(
@@ -88,6 +89,7 @@ struct AppRouter: View {
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
     homeBuilder: (any HomeFlowBuilding)? = nil,
+    routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator? = nil,
     state: AppRouterState? = nil
   ) {
     _sessionStore = ObservedObject(wrappedValue: sessionStore)
@@ -101,6 +103,7 @@ struct AppRouter: View {
     self.appCapabilities = appCapabilities
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
+    self.routineSyncRuntimeCoordinator = routineSyncRuntimeCoordinator
     _state = StateObject(wrappedValue: state ?? AppRouterState())
     if let homeBuilder {
       self.homeBuilder = homeBuilder
@@ -180,6 +183,7 @@ struct AppRouter: View {
         .interactiveDismissDisabled()
     }
     .task {
+      routineSyncRuntimeCoordinator?.setSceneActive(scenePhase == .active)
       if coordinator.beginInitialSessionLoadIfNeeded(),
          sessionStore.phase == .loading {
         sessionStore.load()
@@ -188,6 +192,7 @@ struct AppRouter: View {
       await dependencies.alarmScheduleMutator?.reconcile()
     }
     .onChange(of: scenePhase) { _, newPhase in
+      routineSyncRuntimeCoordinator?.setSceneActive(newPhase == .active)
       guard newPhase == .active else {
         return
       }
@@ -196,6 +201,9 @@ struct AppRouter: View {
         await consumePendingAlarmIngress()
         await dependencies.alarmScheduleMutator?.reconcile()
       }
+    }
+    .onChange(of: accountSessionStore.state) { _, _ in
+      routineSyncRuntimeCoordinator?.accountSessionDidChange()
     }
     .onChange(of: sessionStore.phase) { _, newPhase in
       guard newPhase == .ready else {

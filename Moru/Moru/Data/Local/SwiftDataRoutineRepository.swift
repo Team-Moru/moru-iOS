@@ -12,15 +12,18 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
   private let modelContext: ModelContext
   private let routineSyncRepository: (any RoutineSyncRepository)?
   private weak var signedInMemberProvider: (any SignedInMemberProviding)?
+  private let routineSyncWakeupRelay: RoutineSyncWakeupRelay?
 
   init(
     modelContext: ModelContext,
     routineSyncRepository: (any RoutineSyncRepository)? = nil,
-    signedInMemberProvider: (any SignedInMemberProviding)? = nil
+    signedInMemberProvider: (any SignedInMemberProviding)? = nil,
+    routineSyncWakeupRelay: RoutineSyncWakeupRelay? = nil
   ) {
     self.modelContext = modelContext
     self.routineSyncRepository = routineSyncRepository
     self.signedInMemberProvider = signedInMemberProvider
+    self.routineSyncWakeupRelay = routineSyncWakeupRelay
   }
 
   @MainActor
@@ -124,6 +127,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       }
 
       try modelContext.save()
+      routineSyncWakeupRelay?.wake()
     } catch {
       modelContext.rollback()
       throw error
@@ -162,6 +166,9 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
           entityKind: .routineGroup,
           localEntityID: routine.id
         )
+        let pendingCreateMayExistRemotely = mutationMayHaveReachedServer(
+          pendingCreate
+        )
         if binding != nil {
           try routineSyncRepository?.stageEnqueue(
             EnqueuedRoutineSyncMutation(
@@ -170,9 +177,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
             ),
             at: Date()
           )
-        } else if let pendingCreate,
-                  pendingCreate.state == .attempting
-                    || pendingCreate.state == .needsReconciliation {
+        } else if pendingCreateMayExistRemotely {
           // The server may already contain this group. Preserve the ambiguous
           // create and record desired absence as a dependency-blocked delete.
           try routineSyncRepository?.stageEnqueue(
@@ -197,8 +202,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
           )
         }
         if routine.isActive,
-           binding != nil || pendingCreate?.state == .attempting
-             || pendingCreate?.state == .needsReconciliation {
+           binding != nil || pendingCreateMayExistRemotely {
           try stageActiveSelection(
             memberID: memberID,
             allowRemoteClear: true,
@@ -212,6 +216,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
         }
       }
       try modelContext.save()
+      routineSyncWakeupRelay?.wake()
     } catch {
       modelContext.rollback()
       throw error
@@ -350,8 +355,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
           entityKind: .routine,
           localEntityID: step.id
         )
-        if let pendingAdd,
-           pendingAdd.state == .attempting || pendingAdd.state == .needsReconciliation {
+        if mutationMayHaveReachedServer(pendingAdd) {
           // The add may have committed. Keep dependent execution history and
           // record deletion behind the unresolved add instead of rolling back
           // the local edit.
@@ -447,6 +451,18 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       entityKind: .routineGroup,
       localEntityID: groupID
     ) != nil
+  }
+
+  /// A blocked mutation without an attempt is a local validation failure and
+  /// can be cancelled. Any durable attempt means the server may have committed
+  /// it, including a TTL-expired or conflict-blocked attempt.
+  private func mutationMayHaveReachedServer(
+    _ mutation: RoutineSyncMutation?
+  ) -> Bool {
+    guard let mutation else { return false }
+    return mutation.state == .attempting
+      || mutation.state == .needsReconciliation
+      || mutation.state == .blocked && mutation.attempt != nil
   }
 
   @MainActor

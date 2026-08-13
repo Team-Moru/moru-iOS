@@ -9,26 +9,56 @@ import XCTest
 
 final class RoutineSyncSenderTests: XCTestCase {
   @MainActor
-  func testUnavailableContractNeverCallsTransport() async throws {
+  func testInvalidFirstWireRequestBlocksBeforeTransport() async throws {
     let fixture = try makeFixture(actions: [])
-    _ = try fixture.repository.enqueue(
-      command: createCommand(groupID: UUID(), children: []),
+    let mutation = try fixture.repository.enqueue(
+      command: createCommand(groupID: UUID()),
       memberID: 7,
       at: Date(timeIntervalSince1970: 1)
     )
     let sender = RoutineSyncSender(
       repository: fixture.repository,
+      requestPreparer: RejectingRoutineSyncWireRequestPreparer(),
       transport: fixture.transport,
-      contract: .unavailable
+      contract: .productionP0
     )
 
-    let sendResult = try await sender.sendNext(
+    let result = try await sender.sendNext(
       memberID: 7,
       at: Date(timeIntervalSince1970: 2)
     )
-    XCTAssertEqual(sendResult, .idle)
     let requests = await fixture.transport.requests()
+    let stored = try XCTUnwrap(
+      try fixture.repository.mutations(memberID: 7).first
+    )
+
+    XCTAssertEqual(
+      result,
+      .blocked(mutationID: mutation.id, reason: .invalidStoredRequest)
+    )
+    XCTAssertTrue(requests.isEmpty)
+    XCTAssertEqual(stored.state, .blocked)
+    XCTAssertNil(stored.attempt)
+  }
+
+  @MainActor
+  func testUnavailableContractNeverClaimsOrCallsTransport() async throws {
+    let fixture = try makeFixture(actions: [])
+    _ = try fixture.repository.enqueue(
+      command: createCommand(groupID: UUID()),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let sender = makeSender(fixture, contract: .unavailable)
+
+    let result = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+    let requests = await fixture.transport.requests()
+    XCTAssertEqual(result, .idle)
     XCTAssertEqual(requests, [])
+    XCTAssertEqual(fixture.preparer.callCount, 0)
     XCTAssertEqual(
       try fixture.repository.mutations(memberID: 7).first?.state,
       .waitingForServerContract
@@ -36,11 +66,13 @@ final class RoutineSyncSenderTests: XCTestCase {
   }
 
   @MainActor
-  func testCreateUsesGenerationAsIdempotencyKeyAndSettlesBindings() async throws {
+  func testAttemptPersistsExactWireBytesBeforeTransportAndUsesGenerationKey()
+    async throws {
     let groupID = UUID()
-    let childID = UUID()
-    let fixture = try makeFixture(actions: [
-      .outcome(
+    let body = Data(#"{"clientEntityId":"group","title":"그룹"}"#.utf8)
+    let fixture = try makeFixture(
+      body: body,
+      actions: [
         .committed(
           .createRoutineGroup(
             assignments: [
@@ -48,36 +80,35 @@ final class RoutineSyncSenderTests: XCTestCase {
                 entityKind: .routineGroup,
                 localEntityID: groupID,
                 remoteID: 41
-              ),
-              RoutineServerBindingAssignment(
-                entityKind: .routine,
-                localEntityID: childID,
-                remoteID: 51,
-                parentEntityKind: .routineGroup,
-                parentLocalEntityID: groupID
-              ),
-            ],
-            childMappingsComplete: true
+              )
+            ]
           )
         )
-      )
-    ])
+      ]
+    )
     let mutation = try fixture.repository.enqueue(
-      command: createCommand(groupID: groupID, children: [childID]),
+      command: createCommand(groupID: groupID),
       memberID: 7,
       at: Date(timeIntervalSince1970: 1)
     )
-    let sender = makeVerifiedSender(fixture)
+    await fixture.transport.setOnExecute { [repository = fixture.repository] request in
+      let stored = try repository.mutations(memberID: request.memberID).first
+      XCTAssertEqual(stored?.state, .attempting)
+      XCTAssertEqual(stored?.attempt?.wireRequest?.body, body)
+    }
 
-    let sendResult = try await sender.sendNext(
+    let result = try await makeSender(fixture).sendNext(
       memberID: 7,
       at: Date(timeIntervalSince1970: 2)
     )
-    XCTAssertEqual(sendResult, .completed(mutationID: mutation.id))
-    let requests = await fixture.transport.requests()
-    let request = try XCTUnwrap(requests.first)
+
+    XCTAssertEqual(result, .completed(mutationID: mutation.id))
+    let capturedRequests = await fixture.transport.requests()
+    let request = try XCTUnwrap(capturedRequests.first)
     XCTAssertEqual(request.idempotencyKey, mutation.generationID)
-    XCTAssertEqual(request.operation, .createRoutineGroup)
+    XCTAssertEqual(request.wireRequest.body, body)
+    XCTAssertEqual(request.wireRequest.path, "/routine-groups")
+    XCTAssertFalse(request.description.contains("그룹"))
     XCTAssertEqual(
       try fixture.repository.binding(
         memberID: 7,
@@ -86,109 +117,17 @@ final class RoutineSyncSenderTests: XCTestCase {
       )?.remoteID,
       41
     )
-    XCTAssertEqual(
-      try fixture.repository.binding(
-        memberID: 7,
-        entityKind: .routine,
-        localEntityID: childID
-      )?.remoteID,
-      51
-    )
-    XCTAssertTrue(try fixture.repository.mutations(memberID: 7).isEmpty)
   }
 
   @MainActor
-  func testAmbiguousTransportResultNeverRetriesAndRequiresReconciliation() async throws {
-    let fixture = try makeFixture(actions: [.outcome(.ambiguous)])
-    let mutation = try fixture.repository.enqueue(
-      command: createCommand(groupID: UUID(), children: []),
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 1)
-    )
-    let sender = makeVerifiedSender(fixture)
-
-    let firstResult = try await sender.sendNext(
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 2)
-    )
-    XCTAssertEqual(firstResult, .needsReconciliation(mutationID: mutation.id))
-    let stored = try XCTUnwrap(try fixture.repository.mutations(memberID: 7).first)
-    XCTAssertEqual(stored.state, .needsReconciliation)
-    XCTAssertEqual(stored.attempt?.generationID, mutation.generationID)
-    var requests = await fixture.transport.requests()
-    XCTAssertEqual(requests.count, 1)
-    let secondResult = try await sender.sendNext(
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 3)
-    )
-    XCTAssertEqual(secondResult, .idle)
-    requests = await fixture.transport.requests()
-    XCTAssertEqual(requests.count, 1)
-  }
-
-  @MainActor
-  func testReconciliationLookupDoesNotResendAndReleasesProvenUncommittedAttempt() async throws {
-    let fixture = try makeFixture(actions: [
-      .outcome(.ambiguous),
-      .outcome(.notCommitted),
-    ])
-    let mutation = try fixture.repository.enqueue(
-      command: createCommand(groupID: UUID(), children: []),
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 1)
-    )
-    let sender = makeVerifiedSender(fixture)
-
-    let sendResult = try await sender.sendNext(
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 2)
-    )
-    XCTAssertEqual(sendResult, .needsReconciliation(mutationID: mutation.id))
-    let reconcileResult = try await sender.reconcileNext(
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 3)
-    )
-    XCTAssertEqual(reconcileResult, .notCommitted(mutationID: mutation.id))
-
-    let callKinds = await fixture.transport.callKinds()
-    let idempotencyKeys = await fixture.transport.idempotencyKeys()
-    XCTAssertEqual(callKinds, [.execute, .reconcile])
-    XCTAssertEqual(idempotencyKeys, [
-      mutation.generationID,
-      mutation.generationID,
-    ])
-    let stored = try XCTUnwrap(try fixture.repository.mutations(memberID: 7).first)
-    XCTAssertEqual(stored.state, .waitingForServerContract)
-    XCTAssertNil(stored.attempt)
-  }
-
-  @MainActor
-  func testReconciliationNotCommittedReleasesSameGenerationForFutureAdmission() async throws {
-    let fixture = try makeFixture(actions: [.outcome(.notCommitted)])
-    let mutation = try fixture.repository.enqueue(
-      command: createCommand(groupID: UUID(), children: []),
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 1)
-    )
-    let sender = makeVerifiedSender(fixture)
-
-    let sendResult = try await sender.sendNext(
-      memberID: 7,
-      at: Date(timeIntervalSince1970: 2)
-    )
-    XCTAssertEqual(sendResult, .notCommitted(mutationID: mutation.id))
-    let stored = try XCTUnwrap(try fixture.repository.mutations(memberID: 7).first)
-    XCTAssertEqual(stored.state, .waitingForServerContract)
-    XCTAssertEqual(stored.generationID, mutation.generationID)
-    XCTAssertNil(stored.attempt)
-  }
-
-  @MainActor
-  func testSenderExecutesCreateBeforeDependentAdd() async throws {
+  func testRetryUsesPersistedKeyPathAndBodyAfterCurrentPayloadChanges()
+    async throws {
     let groupID = UUID()
-    let childID = UUID()
-    let fixture = try makeFixture(actions: [
-      .outcome(
+    let body = Data(#"{"clientEntityId":"stable","title":"처음"}"#.utf8)
+    let fixture = try makeFixture(
+      body: body,
+      actions: [
+        .ambiguous,
         .committed(
           .createRoutineGroup(
             assignments: [
@@ -197,171 +136,430 @@ final class RoutineSyncSenderTests: XCTestCase {
                 localEntityID: groupID,
                 remoteID: 41
               )
-            ],
-            childMappingsComplete: true
-          )
-        )
-      ),
-      .outcome(
-        .committed(
-          .mutation(
-            assignments: [
-              RoutineServerBindingAssignment(
-                entityKind: .routine,
-                localEntityID: childID,
-                remoteID: 51,
-                parentEntityKind: .routineGroup,
-                parentLocalEntityID: groupID
-              )
             ]
           )
-        )
-      ),
-    ])
-    _ = try fixture.repository.enqueue(
-      command: createCommand(groupID: groupID, children: []),
+        ),
+      ]
+    )
+    let original = try fixture.repository.enqueue(
+      command: createCommand(groupID: groupID, name: "처음"),
       memberID: 7,
       at: Date(timeIntervalSince1970: 1)
     )
-    _ = try fixture.repository.enqueue(
-      command: .addRoutine(
-        groupLocalID: groupID,
-        routine: RoutineSyncRoutineSnapshot(
-          localID: childID,
-          title: "추가",
-          type: "confirm",
-          durationSeconds: nil,
-          order: 0
-        )
-      ),
+    let sender = makeSender(fixture)
+
+    let firstResult = try await sender.sendNext(
       memberID: 7,
       at: Date(timeIntervalSince1970: 2)
     )
-    let sender = makeVerifiedSender(fixture)
+    XCTAssertEqual(
+      firstResult,
+      .retryScheduled(mutationID: original.id, nextAttemptAt: nil)
+    )
+    let changed = try fixture.repository.enqueue(
+      command: createCommand(groupID: groupID, name: "현재 SwiftData 값"),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+    XCTAssertNotEqual(changed.generationID, original.generationID)
 
-    _ = try await sender.sendNext(memberID: 7, at: Date(timeIntervalSince1970: 3))
-    _ = try await sender.sendNext(memberID: 7, at: Date(timeIntervalSince1970: 4))
+    _ = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 4)
+    )
 
-    let operations = await fixture.transport.requests().map(\.operation)
-    XCTAssertEqual(operations, [.createRoutineGroup, .addRoutine])
-    XCTAssertTrue(try fixture.repository.mutations(memberID: 7).isEmpty)
+    let requests = await fixture.transport.requests()
+    XCTAssertEqual(requests.count, 2)
+    XCTAssertEqual(requests.map(\.idempotencyKey), [
+      original.generationID,
+      original.generationID,
+    ])
+    XCTAssertEqual(requests.map(\.wireRequest), [
+      requests[0].wireRequest,
+      requests[0].wireRequest,
+    ])
+    XCTAssertEqual(requests[0].wireRequest.body, body)
+    XCTAssertEqual(fixture.preparer.callCount, 1)
+  }
+
+  @MainActor
+  func testAppReopenReplaysPersistedArtifactWithoutPreparingAgain()
+    async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: directory,
+      withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let storeURL = directory.appendingPathComponent("moru.store")
+    let groupID = UUID()
+    let body = Data(#"{"clientEntityId":"reopen"}"#.utf8)
+    var generationID: UUID!
+
+    do {
+      let container = try ModelContainer.moruContainer(storeURL: storeURL)
+      let repository = SwiftDataRoutineSyncRepository(
+        modelContext: container.mainContext
+      )
+      let preparer = RoutineSyncWireRequestPreparerStub(body: body)
+      let transport = RoutineSyncTransportStub(actions: [.ambiguous])
+      generationID = try repository.enqueue(
+        command: createCommand(groupID: groupID),
+        memberID: 7,
+        at: Date(timeIntervalSince1970: 1)
+      ).generationID
+      let sender = RoutineSyncSender(
+        repository: repository,
+        requestPreparer: preparer,
+        transport: transport,
+        contract: .productionP0
+      )
+      _ = try await sender.sendNext(
+        memberID: 7,
+        at: Date(timeIntervalSince1970: 2)
+      )
+      XCTAssertEqual(preparer.callCount, 1)
+    }
+
+    let reopened = try ModelContainer.moruContainer(storeURL: storeURL)
+    let repository = SwiftDataRoutineSyncRepository(
+      modelContext: reopened.mainContext
+    )
+    let trapPreparer = RoutineSyncWireRequestPreparerStub(
+      body: Data(#"{"wrong":true}"#.utf8)
+    )
+    let transport = RoutineSyncTransportStub(actions: [
+      .committed(
+        .createRoutineGroup(
+          assignments: [
+            RoutineServerBindingAssignment(
+              entityKind: .routineGroup,
+              localEntityID: groupID,
+              remoteID: 41
+            )
+          ]
+        )
+      )
+    ])
+    let sender = RoutineSyncSender(
+      repository: repository,
+      requestPreparer: trapPreparer,
+      transport: transport,
+      contract: .productionP0
+    )
+
+    _ = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+
+    let replayRequests = await transport.requests()
+    let replay = try XCTUnwrap(replayRequests.first)
+    XCTAssertEqual(replay.idempotencyKey, generationID)
+    XCTAssertEqual(replay.wireRequest.body, body)
+    XCTAssertEqual(trapPreparer.callCount, 0)
+  }
+
+  @MainActor
+  func testAttemptAt24HourBoundaryBlocksWithoutReplay() async throws {
+    let fixture = try makeFixture(actions: [.ambiguous])
+    let mutation = try fixture.repository.enqueue(
+      command: createCommand(groupID: UUID()),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 0)
+    )
+    let sender = makeSender(fixture)
+    _ = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+
+    let result = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1 + 24 * 60 * 60)
+    )
+
+    XCTAssertEqual(
+      result,
+      .blocked(mutationID: mutation.id, reason: .resultTTLExpired)
+    )
+    let requestCount = await fixture.transport.requests().count
+    XCTAssertEqual(requestCount, 1)
+    let stored = try XCTUnwrap(try fixture.repository.mutations(memberID: 7).first)
+    XCTAssertEqual(stored.state, .blocked)
+    XCTAssertEqual(stored.blockReason, .resultTTLExpired)
+  }
+
+  @MainActor
+  func testProcessingConflictUsesBoundedPersistedExactReplay() async throws {
+    let fixture = try makeFixture(actions: [
+      .processingConflict,
+      .processingConflict,
+      .processingConflict,
+    ])
+    let mutation = try fixture.repository.enqueue(
+      command: createCommand(groupID: UUID()),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let sender = makeSender(fixture)
+
+    let firstResult = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+    XCTAssertEqual(
+      firstResult,
+      .retryScheduled(
+        mutationID: mutation.id,
+        nextAttemptAt: Date(timeIntervalSince1970: 3)
+      )
+    )
+    let secondResult = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+    XCTAssertEqual(
+      secondResult,
+      .retryScheduled(
+        mutationID: mutation.id,
+        nextAttemptAt: Date(timeIntervalSince1970: 5)
+      )
+    )
+    let thirdResult = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 5)
+    )
+    XCTAssertEqual(
+      thirdResult,
+      .blocked(mutationID: mutation.id, reason: .processingRetryExhausted)
+    )
+
+    let requests = await fixture.transport.requests()
+    XCTAssertEqual(requests.count, 3)
+    XCTAssertEqual(Set(requests.map(\.idempotencyKey)), [mutation.generationID])
+    XCTAssertEqual(Set(requests.map(\.wireRequest.body)), [fixture.preparer.body])
+    XCTAssertEqual(
+      try fixture.repository.mutations(memberID: 7).first?.processingConflictCount,
+      3
+    )
+  }
+
+  @MainActor
+  func testSameMemberNewSessionResponseDoesNotSettleOutboxOrBindings()
+    async throws {
+    let groupID = UUID()
+    let oldIdentity = AccountSessionIdentity(memberID: 7, sessionID: UUID())
+    let provider = MutableSessionIdentityProvider(identity: oldIdentity)
+    let fixture = try makeFixture(actions: [])
+    let mutation = try fixture.repository.enqueue(
+      command: createCommand(groupID: groupID),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let transport = SessionChangingRoutineSyncTransport(
+      provider: provider,
+      outcome: .committed(
+        .createRoutineGroup(
+          assignments: [
+            RoutineServerBindingAssignment(
+              entityKind: .routineGroup,
+              localEntityID: groupID,
+              remoteID: 41
+            )
+          ]
+        )
+      )
+    )
+    let sender = RoutineSyncSender(
+      repository: fixture.repository,
+      requestPreparer: fixture.preparer,
+      transport: transport,
+      contract: .productionP0,
+      sessionIdentityProvider: provider
+    )
+
+    let result = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+
+    XCTAssertEqual(result, .staleSession(mutationID: mutation.id))
+    XCTAssertNil(
+      try fixture.repository.binding(
+        memberID: 7,
+        entityKind: .routineGroup,
+        localEntityID: groupID
+      )
+    )
+    let stored = try XCTUnwrap(try fixture.repository.mutations(memberID: 7).first)
+    XCTAssertEqual(stored.state, .attempting)
+    XCTAssertEqual(stored.attempt?.generationID, mutation.generationID)
+    XCTAssertNotEqual(provider.identity, oldIdentity)
   }
 
   @MainActor
   private func makeFixture(
-    actions: [RoutineSyncTransportStub.Action]
+    body: Data = Data(#"{"clientEntityId":"fixture"}"#.utf8),
+    actions: [RoutineSyncTransportOutcome]
   ) throws -> RoutineSyncSenderFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     return RoutineSyncSenderFixture(
       container: container,
-      repository: SwiftDataRoutineSyncRepository(modelContext: container.mainContext),
+      repository: SwiftDataRoutineSyncRepository(
+        modelContext: container.mainContext
+      ),
+      preparer: RoutineSyncWireRequestPreparerStub(body: body),
       transport: RoutineSyncTransportStub(actions: actions)
     )
   }
 
   @MainActor
-  private func makeVerifiedSender(_ fixture: RoutineSyncSenderFixture) -> RoutineSyncSender {
+  private func makeSender(
+    _ fixture: RoutineSyncSenderFixture,
+    contract: RoutineSyncServerContract = .productionP0
+  ) -> RoutineSyncSender {
     RoutineSyncSender(
       repository: fixture.repository,
+      requestPreparer: fixture.preparer,
       transport: fixture.transport,
-      contract: RoutineSyncServerContract(
-        capabilities: .allRequired,
-        isE2EVerified: true
-      )
+      contract: contract
     )
   }
 
-  private func createCommand(groupID: UUID, children: [UUID]) -> RoutineSyncCommand {
+  private func createCommand(
+    groupID: UUID,
+    name: String = "그룹"
+  ) -> RoutineSyncCommand {
     .createRoutineGroup(
       RoutineSyncGroupSnapshot(
         localID: groupID,
-        name: "그룹",
+        name: name,
         summary: "",
         isActive: false,
         alarm: nil,
-        routines: children.enumerated().map { index, childID in
-          RoutineSyncRoutineSnapshot(
-            localID: childID,
-            title: "단계",
-            type: "confirm",
-            durationSeconds: nil,
-            order: index
-          )
-        }
+        routines: []
       )
     )
   }
 }
 
+@MainActor
 private struct RoutineSyncSenderFixture {
   let container: ModelContainer
   let repository: SwiftDataRoutineSyncRepository
+  let preparer: RoutineSyncWireRequestPreparerStub
   let transport: RoutineSyncTransportStub
 }
 
+@MainActor
+private final class RoutineSyncWireRequestPreparerStub:
+  RoutineSyncWireRequestPreparing {
+  let body: Data
+  private(set) var callCount = 0
+
+  init(body: Data) {
+    self.body = body
+  }
+
+  func makeWireRequest(
+    for _: RoutineSyncCommand,
+    mutation _: RoutineSyncMutation
+  ) throws -> RoutineSyncWireRequest {
+    callCount += 1
+    return RoutineSyncWireRequest(
+      method: .post,
+      path: "/routine-groups",
+      body: body
+    )
+  }
+}
+
+@MainActor
+private final class RejectingRoutineSyncWireRequestPreparer:
+  RoutineSyncWireRequestPreparing {
+  func makeWireRequest(
+    for _: RoutineSyncCommand,
+    mutation _: RoutineSyncMutation
+  ) throws -> RoutineSyncWireRequest {
+    throw RoutineSyncRequestPreparingError.invalidLocalSnapshot
+  }
+}
+
 private actor RoutineSyncTransportStub: RoutineSyncTransport {
-  enum CallKind: Equatable, Sendable {
-    case execute
-    case reconcile
-  }
+  typealias ExecuteHook = @MainActor @Sendable (
+    RoutineSyncTransportRequest
+  ) throws -> Void
 
-  enum Action: Sendable {
-    case outcome(RoutineSyncTransportOutcome)
-    case failure
-  }
+  private var onExecute: ExecuteHook?
 
-  private var actions: [Action]
-  private var capturedExecuteRequests: [RoutineSyncTransportRequest] = []
-  private var capturedReconciliationRequests: [RoutineSyncReconciliationRequest] = []
-  private var capturedCallKinds: [CallKind] = []
-  private var capturedIdempotencyKeys: [UUID] = []
+  private var actions: [RoutineSyncTransportOutcome]
+  private var capturedRequests: [RoutineSyncTransportRequest] = []
 
-  init(actions: [Action]) {
+  init(actions: [RoutineSyncTransportOutcome]) {
     self.actions = actions
+  }
+
+  func setOnExecute(_ hook: @escaping ExecuteHook) {
+    onExecute = hook
   }
 
   func execute(
     _ request: RoutineSyncTransportRequest
-  ) async throws -> RoutineSyncTransportOutcome {
-    capturedExecuteRequests.append(request)
-    capturedCallKinds.append(.execute)
-    capturedIdempotencyKeys.append(request.idempotencyKey)
-    return try nextOutcome()
-  }
-
-  func reconcile(
-    _ request: RoutineSyncReconciliationRequest
-  ) async throws -> RoutineSyncTransportOutcome {
-    capturedReconciliationRequests.append(request)
-    capturedCallKinds.append(.reconcile)
-    capturedIdempotencyKeys.append(request.idempotencyKey)
-    return try nextOutcome()
-  }
-
-  func requests() -> [RoutineSyncTransportRequest] {
-    capturedExecuteRequests
-  }
-
-  func callKinds() -> [CallKind] {
-    capturedCallKinds
-  }
-
-  func idempotencyKeys() -> [UUID] {
-    capturedIdempotencyKeys
-  }
-
-  private func nextOutcome() throws -> RoutineSyncTransportOutcome {
-    guard !actions.isEmpty else { throw StubError.noAction }
-    switch actions.removeFirst() {
-    case .outcome(let outcome):
-      return outcome
-    case .failure:
-      throw StubError.transport
+  ) async -> RoutineSyncTransportOutcome {
+    capturedRequests.append(request)
+    if let onExecute {
+      do {
+        try await onExecute(request)
+      } catch {
+        return .ambiguous
+      }
     }
+    guard !actions.isEmpty else { return .ambiguous }
+    return actions.removeFirst()
   }
 
-  private enum StubError: Error {
-    case noAction
-    case transport
+  func requests() -> [RoutineSyncTransportRequest] { capturedRequests }
+}
+
+@MainActor
+private final class MutableSessionIdentityProvider:
+  CurrentAccountSessionIdentityProviding {
+  var identity: AccountSessionIdentity?
+
+  init(identity: AccountSessionIdentity?) {
+    self.identity = identity
+  }
+
+  var currentAccountSessionIdentity: AccountSessionIdentity? { identity }
+}
+
+private final class SessionChangingRoutineSyncTransport:
+  RoutineSyncTransport,
+  @unchecked Sendable {
+  private weak var provider: MutableSessionIdentityProvider?
+  private let outcome: RoutineSyncTransportOutcome
+
+  @MainActor
+  init(
+    provider: MutableSessionIdentityProvider,
+    outcome: RoutineSyncTransportOutcome
+  ) {
+    self.provider = provider
+    self.outcome = outcome
+  }
+
+  func execute(
+    _: RoutineSyncTransportRequest
+  ) async -> RoutineSyncTransportOutcome {
+    await MainActor.run {
+      guard let provider, let current = provider.identity else { return }
+      provider.identity = AccountSessionIdentity(
+        memberID: current.memberID,
+        sessionID: UUID()
+      )
+    }
+    return outcome
   }
 }

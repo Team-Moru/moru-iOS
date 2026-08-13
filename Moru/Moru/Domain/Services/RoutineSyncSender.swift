@@ -10,129 +10,221 @@ nonisolated struct RoutineSyncTransportRequest: Equatable, Sendable {
   let memberID: Int64
   let operation: RoutineSyncOperation
   let command: RoutineSyncCommand
-  /// Exact Outbox generation ID. A future HTTP adapter sends this value as
-  /// `Idempotency-Key` without generating another request identifier.
+  /// Exact Outbox generation. Production sends this value verbatim as the
+  /// `Idempotency-Key` header.
   let idempotencyKey: UUID
   let generation: Int
   let payloadVersion: Int
+  /// Stored method/path/body. A replay must never rebuild this artifact
+  /// from current SwiftData or from `command`.
+  let wireRequest: RoutineSyncWireRequest
+  /// Non-secret session generation captured before the attempt is claimed.
+  let sessionIdentity: AccountSessionIdentity?
 }
 
-/// Key-only lookup for an ambiguous write. Keeping the original command out of
-/// this type makes it impossible for a reconciliation adapter to resend the
-/// mutation body by accident.
-nonisolated struct RoutineSyncReconciliationRequest: Equatable, Sendable {
-  let serverNamespace: RoutineSyncServerNamespace
-  let memberID: Int64
-  let operation: RoutineSyncOperation
-  let idempotencyKey: UUID
-  let generation: Int
+nonisolated extension RoutineSyncTransportRequest:
+  CustomStringConvertible,
+  CustomDebugStringConvertible {
+  var description: String {
+    "RoutineSyncTransportRequest(\(wireRequest.method.rawValue) \(wireRequest.path), body: <redacted>)"
+  }
+
+  var debugDescription: String { description }
 }
 
 nonisolated enum RoutineSyncTransportCommit: Equatable, Sendable {
-  case createRoutineGroup(
-    assignments: [RoutineServerBindingAssignment],
-    childMappingsComplete: Bool
-  )
+  case createRoutineGroup(assignments: [RoutineServerBindingAssignment])
   case mutation(assignments: [RoutineServerBindingAssignment])
-  case completed
   case deleted
 }
 
 nonisolated enum RoutineSyncTransportOutcome: Equatable, Sendable {
-  /// An authoritative write response or reconciliation lookup proved the exact
-  /// generation committed and returned its server result.
   case committed(RoutineSyncTransportCommit)
-  /// Server reconciliation proved the exact generation did not commit.
-  case notCommitted
-  /// Timeout, cancellation, decode failure, account change, or any other result
-  /// where commit status cannot be proven.
+  /// HTTP 409 + stable machine code COMMON409.
+  case processingConflict
+  /// Timeout, cancellation, transport failure, retryable HTTP status, or a
+  /// successful write whose response cannot prove the committed result.
   case ambiguous
+  /// A classified fail-closed outcome. No automatic key rotation is allowed.
+  case blocked(RoutineSyncBlockReason)
 }
 
 nonisolated protocol RoutineSyncTransport: Sendable {
   func execute(
     _ request: RoutineSyncTransportRequest
-  ) async throws -> RoutineSyncTransportOutcome
+  ) async -> RoutineSyncTransportOutcome
+}
 
-  func reconcile(
-    _ request: RoutineSyncReconciliationRequest
-  ) async throws -> RoutineSyncTransportOutcome
+@MainActor
+protocol RoutineSyncWireRequestPreparing: AnyObject {
+  func makeWireRequest(
+    for command: RoutineSyncCommand,
+    mutation: RoutineSyncMutation
+  ) throws -> RoutineSyncWireRequest
+}
+
+nonisolated struct RoutineSyncProcessingRetryPolicy: Equatable, Sendable {
+  let maximumConflicts: Int
+  let baseDelay: TimeInterval
+
+  init(maximumConflicts: Int = 3, baseDelay: TimeInterval = 1) {
+    precondition(maximumConflicts > 0)
+    precondition(baseDelay > 0)
+    self.maximumConflicts = maximumConflicts
+    self.baseDelay = baseDelay
+  }
+
+  func retryDate(after conflictCount: Int, from date: Date) -> Date {
+    let exponent = max(0, min(conflictCount, 6))
+    return date.addingTimeInterval(baseDelay * pow(2, Double(exponent)))
+  }
 }
 
 nonisolated enum RoutineSyncSenderError: Error, Equatable, Sendable {
   case invalidAttemptPayload
+  case invalidWireRequest
   case unexpectedCommit(operation: RoutineSyncOperation)
 }
 
 nonisolated enum RoutineSyncSendResult: Equatable, Sendable {
   case idle
   case completed(mutationID: UUID)
-  case notCommitted(mutationID: UUID)
-  case needsReconciliation(mutationID: UUID)
+  case retryScheduled(mutationID: UUID, nextAttemptAt: Date?)
+  case blocked(mutationID: UUID, reason: RoutineSyncBlockReason)
+  case staleSession(mutationID: UUID)
 }
 
-/// Contract-gated sender core. It has no production transport wiring while the
-/// live server contract is unavailable, so adding this type cannot issue a
-/// network request by itself.
+/// Serial sender core. The attempt and exact HTTP artifact are durably saved
+/// before transport starts. Ambiguous results can only reuse that artifact and
+/// key during the server's 24-hour completed-result retention window.
 @MainActor
 final class RoutineSyncSender {
   private let repository: any RoutineSyncRepository
+  private let requestPreparer: any RoutineSyncWireRequestPreparing
   private let transport: any RoutineSyncTransport
   private let contract: RoutineSyncServerContract
+  private weak var sessionIdentityProvider:
+    (any CurrentAccountSessionIdentityProviding)?
+  private let retryPolicy: RoutineSyncProcessingRetryPolicy
 
   init(
     repository: any RoutineSyncRepository,
+    requestPreparer: any RoutineSyncWireRequestPreparing,
     transport: any RoutineSyncTransport,
-    contract: RoutineSyncServerContract
+    contract: RoutineSyncServerContract,
+    sessionIdentityProvider:
+      (any CurrentAccountSessionIdentityProviding)? = nil,
+    retryPolicy: RoutineSyncProcessingRetryPolicy = .init()
   ) {
     self.repository = repository
+    self.requestPreparer = requestPreparer
     self.transport = transport
     self.contract = contract
+    self.sessionIdentityProvider = sessionIdentityProvider
+    self.retryPolicy = retryPolicy
   }
 
   func sendNext(
     memberID: Int64,
     at date: Date = Date()
   ) async throws -> RoutineSyncSendResult {
+    // A stale account response deliberately leaves `.attempting` untouched.
+    // Only a later sender turn performs this response-independent recovery.
+    try repository.recoverInterruptedAttempts(at: date)
     _ = try repository.admitEligibleMutations(
       memberID: memberID,
       contract: contract,
       at: date
     )
-    guard let mutation = try repository.mutations(memberID: memberID).first(where: {
-      $0.state == .queued
-        && contract.serverNamespace == $0.serverNamespace
-        && contract.supports($0.operation)
-    }), let attempt = try repository.claimForDelivery(id: mutation.id, at: date) else {
+
+    if let pendingReplay = try repository.mutations(memberID: memberID)
+      .first(where: {
+        $0.state == .needsReconciliation
+          && $0.attempt != nil
+          && contract.serverNamespace == $0.serverNamespace
+          && contract.supports($0.operation)
+      }) {
+      let prepared = try repository.prepareExactReplay(
+        id: pendingReplay.id,
+        expectedGenerationID: pendingReplay.attempt!.generationID,
+        at: date
+      )
+      guard prepared else {
+        let current = try repository.mutations(memberID: memberID).first {
+          $0.id == pendingReplay.id
+        }
+        if let reason = current?.blockReason {
+          return .blocked(mutationID: pendingReplay.id, reason: reason)
+        }
+        return .retryScheduled(
+          mutationID: pendingReplay.id,
+          nextAttemptAt: current?.nextAttemptAt
+        )
+      }
+    }
+
+    guard let mutation = try repository.mutations(memberID: memberID)
+      .first(where: {
+        $0.state == .queued
+          && contract.serverNamespace == $0.serverNamespace
+          && contract.supports($0.operation)
+      }) else {
       return .idle
     }
 
-    let request: RoutineSyncTransportRequest
-    do {
-      request = try makeRequest(
-        mutation: mutation,
-        attempt: attempt,
-        memberID: memberID
-      )
-    } catch {
-      try repository.markNeedsReconciliation(
-        id: mutation.id,
-        expectedGenerationID: attempt.generationID,
-        at: date
-      )
-      throw error
+    let capturedIdentity = sessionIdentityProvider?.currentAccountSessionIdentity
+    if sessionIdentityProvider != nil,
+       capturedIdentity?.memberID != memberID {
+      return .idle
     }
 
-    let outcome: RoutineSyncTransportOutcome
-    do {
-      outcome = try await transport.execute(request)
-    } catch {
-      try repository.markNeedsReconciliation(
+    let attempt: RoutineSyncAttempt?
+    if let storedAttempt = mutation.attempt {
+      attempt = try repository.claimForExactReplay(
         id: mutation.id,
-        expectedGenerationID: attempt.generationID,
+        expectedGenerationID: storedAttempt.generationID,
         at: date
       )
-      return .needsReconciliation(mutationID: mutation.id)
+    } else {
+      let command = try decodedCommand(from: mutation.payload)
+      let wireRequest: RoutineSyncWireRequest
+      do {
+        wireRequest = try requestPreparer.makeWireRequest(
+          for: command,
+          mutation: mutation
+        )
+      } catch {
+        try repository.blockAttempt(
+          id: mutation.id,
+          expectedGenerationID: mutation.generationID,
+          reason: .invalidStoredRequest,
+          at: date
+        )
+        return .blocked(
+          mutationID: mutation.id,
+          reason: .invalidStoredRequest
+        )
+      }
+      attempt = try repository.claimForDelivery(
+        id: mutation.id,
+        wireRequest: wireRequest,
+        at: date
+      )
+    }
+    guard let attempt else { return .idle }
+
+    let request = try makeRequest(
+      mutation: mutation,
+      attempt: attempt,
+      memberID: memberID,
+      sessionIdentity: capturedIdentity
+    )
+    let outcome = await transport.execute(request)
+
+    guard sessionIdentityProvider == nil
+      || sessionIdentityProvider?.currentAccountSessionIdentity
+        == capturedIdentity else {
+      return .staleSession(mutationID: mutation.id)
     }
 
     return try resolve(
@@ -143,57 +235,28 @@ final class RoutineSyncSender {
     )
   }
 
-  /// Looks up one ambiguous attempt by its idempotency key. This method never
-  /// resends the original mutation; only a proven `notCommitted` result can
-  /// release that generation for future admission.
-  func reconcileNext(
-    memberID: Int64,
-    at date: Date = Date()
-  ) async throws -> RoutineSyncSendResult {
-    guard let mutation = try repository.mutations(memberID: memberID).first(where: {
-      $0.state == .needsReconciliation
-        && $0.attempt != nil
-        && contract.serverNamespace == $0.serverNamespace
-        && contract.supports($0.operation)
-    }), let attempt = mutation.attempt else {
-      return .idle
-    }
-    let attemptedRequest = try makeRequest(
-      mutation: mutation,
-      attempt: attempt,
-      memberID: memberID
-    )
-    let request = RoutineSyncReconciliationRequest(
-      serverNamespace: attemptedRequest.serverNamespace,
-      memberID: attemptedRequest.memberID,
-      operation: attemptedRequest.operation,
-      idempotencyKey: attemptedRequest.idempotencyKey,
-      generation: attemptedRequest.generation
-    )
-    let outcome: RoutineSyncTransportOutcome
+  private func decodedCommand(from payload: Data) throws -> RoutineSyncCommand {
     do {
-      outcome = try await transport.reconcile(request)
+      return try JSONDecoder().decode(RoutineSyncCommand.self, from: payload)
     } catch {
-      return .needsReconciliation(mutationID: mutation.id)
+      throw RoutineSyncSenderError.invalidAttemptPayload
     }
-    return try resolve(
-      outcome,
-      mutation: mutation,
-      attempt: attempt,
-      at: date
-    )
   }
 
   private func makeRequest(
     mutation: RoutineSyncMutation,
     attempt: RoutineSyncAttempt,
-    memberID: Int64
+    memberID: Int64,
+    sessionIdentity: AccountSessionIdentity?
   ) throws -> RoutineSyncTransportRequest {
-    let command = try JSONDecoder().decode(RoutineSyncCommand.self, from: attempt.payload)
+    let command = try decodedCommand(from: attempt.payload)
     guard command.operation == mutation.operation,
           command.entityKind == mutation.entityKind,
           command.localEntityID == mutation.localEntityID else {
       throw RoutineSyncSenderError.invalidAttemptPayload
+    }
+    guard let wireRequest = attempt.wireRequest else {
+      throw RoutineSyncSenderError.invalidWireRequest
     }
     return RoutineSyncTransportRequest(
       serverNamespace: mutation.serverNamespace,
@@ -202,7 +265,9 @@ final class RoutineSyncSender {
       command: command,
       idempotencyKey: attempt.generationID,
       generation: attempt.generation,
-      payloadVersion: attempt.payloadVersion
+      payloadVersion: attempt.payloadVersion,
+      wireRequest: wireRequest,
+      sessionIdentity: sessionIdentity
     )
   }
 
@@ -219,39 +284,53 @@ final class RoutineSyncSender {
         expectedGenerationID: attempt.generationID,
         at: date
       )
-      return .needsReconciliation(mutationID: mutation.id)
+      return .retryScheduled(mutationID: mutation.id, nextAttemptAt: nil)
 
-    case .notCommitted:
-      try repository.resolveNotCommitted(
+    case .processingConflict:
+      let retryAt = retryPolicy.retryDate(
+        after: mutation.processingConflictCount,
+        from: date
+      )
+      let scheduled = try repository.scheduleProcessingConflictReplay(
         id: mutation.id,
         expectedGenerationID: attempt.generationID,
+        retryAt: retryAt,
+        maximumConflicts: retryPolicy.maximumConflicts,
         at: date
       )
-      return .notCommitted(mutationID: mutation.id)
+      if scheduled {
+        return .retryScheduled(
+          mutationID: mutation.id,
+          nextAttemptAt: retryAt
+        )
+      }
+      return .blocked(
+        mutationID: mutation.id,
+        reason: .processingRetryExhausted
+      )
+
+    case .blocked(let reason):
+      try repository.blockAttempt(
+        id: mutation.id,
+        expectedGenerationID: attempt.generationID,
+        reason: reason,
+        at: date
+      )
+      return .blocked(mutationID: mutation.id, reason: reason)
 
     case .committed(let commit):
-      do {
-        try settle(
-          commit,
-          mutation: mutation,
-          attempt: attempt,
-          at: date
-        )
-        let remaining = try repository.mutations(memberID: mutation.memberID).first {
-          $0.id == mutation.id
-        }
-        if remaining?.state == .needsReconciliation {
-          return .needsReconciliation(mutationID: mutation.id)
-        }
-        return .completed(mutationID: mutation.id)
-      } catch {
-        try? repository.markNeedsReconciliation(
-          id: mutation.id,
-          expectedGenerationID: attempt.generationID,
-          at: date
-        )
-        throw error
+      try settle(
+        commit,
+        mutation: mutation,
+        attempt: attempt,
+        at: date
+      )
+      let remaining = try repository.mutations(memberID: mutation.memberID)
+        .first { $0.id == mutation.id }
+      if let reason = remaining?.blockReason {
+        return .blocked(mutationID: mutation.id, reason: reason)
       }
+      return .completed(mutationID: mutation.id)
     }
   }
 
@@ -262,12 +341,12 @@ final class RoutineSyncSender {
     at date: Date
   ) throws {
     switch (mutation.operation, commit) {
-    case let (.createRoutineGroup, .createRoutineGroup(assignments, childMappingsComplete)):
+    case let (.createRoutineGroup, .createRoutineGroup(assignments)):
       try repository.completeCreateRoutineGroup(
         id: mutation.id,
         expectedGenerationID: attempt.generationID,
         assignments: assignments,
-        childMappingsComplete: childMappingsComplete,
+        childMappingsComplete: true,
         at: date
       )
 
@@ -278,12 +357,6 @@ final class RoutineSyncSender {
         expectedGenerationID: attempt.generationID,
         assignments: assignments,
         at: date
-      )
-
-    case (.setRoutineGroupActive, .completed):
-      try repository.removeCompleted(
-        id: mutation.id,
-        expectedGenerationID: attempt.generationID
       )
 
     case (.deleteRoutineGroup, .deleted), (.deleteRoutine, .deleted):

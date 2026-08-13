@@ -24,6 +24,7 @@ struct BootstrappedApp {
   let navigationCoordinator: AppNavigationCoordinator
   let onboardingBuilder: any OnboardingFlowBuilding
   let routinePlayerBuilder: any RoutinePlayerBuilding
+  let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
 }
 
 struct AppBootstrapFailure: Equatable {
@@ -206,6 +207,7 @@ final class AppBootstrapper: ObservableObject {
         accountServerRemoteService = nil
         accountRoutineGroupRemoteService = nil
       }
+      let routineSyncWakeupRelay = RoutineSyncWakeupRelay()
       let dependencies = DependencyContainer.local(
         modelContext: modelContainer.mainContext,
         routineSuggestionRemoteDataSource:
@@ -216,11 +218,38 @@ final class AppBootstrapper: ObservableObject {
         accountHistoryRemoteService: accountHistoryRemoteService,
         accountServerRemoteService: accountServerRemoteService,
         accountRoutineGroupRemoteService:
-          accountRoutineGroupRemoteService
+          accountRoutineGroupRemoteService,
+        routineSyncWakeupRelay: routineSyncWakeupRelay
       )
-      // There is no sender today, but a process that died after a future
-      // sender claim must never quietly retry the same unknown request.
+      // Recovery changes no request identity. The sender can only replay a
+      // complete stored wire artifact inside the server's retention window.
       try? dependencies.routineSyncRepository?.recoverInterruptedAttempts(at: Date())
+      let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
+      if appCapabilities.shouldAllowServerRequests,
+         let routineSyncRepository = dependencies.routineSyncRepository {
+        let requestPreparer = ProductionRoutineSyncRequestPreparer(
+          repository: routineSyncRepository
+        )
+        let responseDecoder = ProductionRoutineSyncResponseDecoder()
+        let transport = ProductionRoutineSyncTransport(
+          apiClient: authenticatedAPIClient,
+          responseDecoder: responseDecoder
+        )
+        let sender = RoutineSyncSender(
+          repository: routineSyncRepository,
+          requestPreparer: requestPreparer,
+          transport: transport,
+          contract: .productionP0,
+          sessionIdentityProvider: accountSessionStore
+        )
+        routineSyncRuntimeCoordinator = RoutineSyncRuntimeCoordinator(
+          sender: sender,
+          sessionIdentityProvider: accountSessionStore,
+          wakeupRelay: routineSyncWakeupRelay
+        )
+      } else {
+        routineSyncRuntimeCoordinator = nil
+      }
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
       let socialLoginCoordinator = SocialLoginCoordinator(
@@ -280,7 +309,8 @@ final class AppBootstrapper: ObservableObject {
         authCallbackRouter: authCallbackRouter,
         navigationCoordinator: navigationCoordinator,
         onboardingBuilder: onboardingBuilder,
-        routinePlayerBuilder: routinePlayerBuilder
+        routinePlayerBuilder: routinePlayerBuilder,
+        routineSyncRuntimeCoordinator: routineSyncRuntimeCoordinator
       )
 
       finishBootstrap(
