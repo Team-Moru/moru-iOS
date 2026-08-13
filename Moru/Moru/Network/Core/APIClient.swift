@@ -433,7 +433,16 @@ actor DefaultAPIClient: AccountBoundAPIClient {
         return .cancelled
       }
 
-      let nsError = error as NSError
+      // URLSession failures arrive through Moya wrapped in
+      // AFError.sessionTaskFailed. Preserve the underlying URL error code so
+      // callers can distinguish timeout and offline fallback behavior.
+      let transportError = error.asAFError?.underlyingError ?? error
+
+      if transportError is CancellationError {
+        return .cancelled
+      }
+
+      let nsError = transportError as NSError
 
       if nsError.domain == NSURLErrorDomain,
          nsError.code == URLError.cancelled.rawValue {

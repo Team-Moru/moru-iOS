@@ -24,6 +24,8 @@ struct BootstrappedApp {
   let navigationCoordinator: AppNavigationCoordinator
   let onboardingBuilder: any OnboardingFlowBuilding
   let routinePlayerBuilder: any RoutinePlayerBuilding
+  let onboardingStatusRuntimeCoordinator:
+    OnboardingStatusRuntimeCoordinator?
   let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
 }
 
@@ -252,6 +254,25 @@ final class AppBootstrapper: ObservableObject {
       }
       let sessionStore = dependencies.makeSessionStore()
       sessionStore.load()
+      let onboardingStatusRuntimeCoordinator =
+        appCapabilities.shouldAllowServerRequests
+        ? OnboardingStatusRuntimeCoordinator(
+          remoteService: DefaultOnboardingStatusRemoteService(
+            apiClient: authenticatedAPIClient
+          ),
+          accountSessionStore: accountSessionStore,
+          localCompletionProvider: {
+            switch sessionStore.phase {
+            case .ready:
+              true
+            case .onboardingRequired:
+              false
+            case .loading, .failed:
+              nil
+            }
+          }
+        )
+        : nil
       let socialLoginCoordinator = SocialLoginCoordinator(
         authRemoteDataSource: authRemoteDataSource,
         accountSessionStore: accountSessionStore
@@ -310,6 +331,8 @@ final class AppBootstrapper: ObservableObject {
         navigationCoordinator: navigationCoordinator,
         onboardingBuilder: onboardingBuilder,
         routinePlayerBuilder: routinePlayerBuilder,
+        onboardingStatusRuntimeCoordinator:
+          onboardingStatusRuntimeCoordinator,
         routineSyncRuntimeCoordinator: routineSyncRuntimeCoordinator
       )
 

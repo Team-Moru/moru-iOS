@@ -54,6 +54,8 @@ struct MoruApp: App {
             coordinator: app.navigationCoordinator,
             onboardingBuilder: app.onboardingBuilder,
             routinePlayerBuilder: app.routinePlayerBuilder,
+            onboardingStatusRuntimeCoordinator:
+              app.onboardingStatusRuntimeCoordinator,
             routineSyncRuntimeCoordinator:
               app.routineSyncRuntimeCoordinator
           )
