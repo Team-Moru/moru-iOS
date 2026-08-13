@@ -43,6 +43,20 @@ final class ConfirmTranscriptMatcherTests: XCTestCase {
     )
   }
 
+  func testNegativeTranscriptKeepsNegativeFeedbackAfterManualFinish() {
+    XCTAssertEqual(
+      ConfirmStepFeedback.completionFailure(for: "아직 안 했어"),
+      ConfirmStepFeedback.negativeResponse
+    )
+  }
+
+  func testUnrecognizedTranscriptUsesGenericCompletionFeedback() {
+    XCTAssertEqual(
+      ConfirmStepFeedback.completionFailure(for: "잘 안 들려요"),
+      ConfirmStepFeedback.unrecognizedCompletion
+    )
+  }
+
   func testEmptyAndAmbiguousTranscriptsDoNotConfirmRoutineStep() {
     XCTAssertFalse(ConfirmTranscriptMatcher.isConfirmed(""))
     XCTAssertFalse(ConfirmTranscriptMatcher.isConfirmed("오늘 날씨가 좋아"))

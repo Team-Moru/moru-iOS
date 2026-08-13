@@ -5,6 +5,17 @@
 
 import SwiftUI
 
+enum ConfirmStepFeedback {
+  static let negativeResponse = "아직이군요. 천천히 마무리한 뒤 \"완료했어요\"라고 말해 주세요."
+  static let unrecognizedCompletion = "완료했다고 들리지 않아요. 다시 말해 주세요."
+
+  static func completionFailure(for transcript: String) -> String {
+    ConfirmTranscriptMatcher.hasNegativeIntent(transcript)
+      ? negativeResponse
+      : unrecognizedCompletion
+  }
+}
+
 struct ConfirmStepContentView: View {
   let step: RoutineStep
   let isGuidancePlaying: Bool
@@ -57,7 +68,7 @@ struct ConfirmStepContentView: View {
         waitUntilGuidanceFinishes: waitUntilGuidanceFinishes
       ) { transcript in
         guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
-          feedbackText = "완료했다고 들리지 않아요. 다시 말해 주세요."
+          feedbackText = ConfirmStepFeedback.completionFailure(for: transcript)
           return
         }
 
@@ -77,7 +88,7 @@ struct ConfirmStepContentView: View {
         return
       }
 
-      feedbackText = "아직이군요. 천천히 마무리한 뒤 \"완료했어요\"라고 말해 주세요."
+      feedbackText = ConfirmStepFeedback.negativeResponse
     }
   }
 
