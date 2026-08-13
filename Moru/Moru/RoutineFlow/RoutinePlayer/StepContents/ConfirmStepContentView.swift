@@ -96,10 +96,6 @@ struct ConfirmStepContentView: View {
         .buttonStyle(.plain)
         .accessibilityHint("음성 입력 없이 이 단계를 완료합니다")
 
-        Rectangle()
-          .fill(AppColor.gray250)
-          .frame(width: 1, height: 16)
-
         Button(action: onSkip) {
           Text("건너뛰기")
             .font(
