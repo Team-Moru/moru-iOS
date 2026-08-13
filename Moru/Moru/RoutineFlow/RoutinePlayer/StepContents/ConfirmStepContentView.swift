@@ -75,11 +75,25 @@ struct ConfirmStepContentView: View {
         onComplete(transcript)
       }
 
-      MoruButton("완료했어요", style: .secondary) {
+      Button {
         speechInputController.cancel()
         onComplete(nil)
+      } label: {
+        Text("완료했어요")
+          .font(
+            AppFont.pretendardMedium(
+              size: 14,
+              relativeTo: .caption
+            )
+          )
+          .foregroundStyle(AppColor.gray300)
+          .frame(maxWidth: .infinity)
+          .frame(minHeight: 52)
+          .contentShape(Rectangle())
       }
+      .buttonStyle(.plain)
       .accessibilityHint("음성 입력 없이 이 단계를 완료합니다")
+      .padding(.horizontal, 20)
     }
     .padding(.horizontal, 20)
     .onChange(of: speechInputController.latestTranscriptUpdate) { _, update in
