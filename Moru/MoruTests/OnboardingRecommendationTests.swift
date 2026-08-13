@@ -255,7 +255,8 @@ final class OnboardingRecommendationTests: XCTestCase {
       step: .goals,
       routineSuggestionService: OnboardingRecommendationLocalStub(),
       routineSuggestionCoordinator: aiCoordinator,
-      onboardingRecommendationCoordinator: goalCoordinator
+      onboardingRecommendationCoordinator: goalCoordinator,
+      organizingPresentationSleep: { _ in }
     )
 
     goalsViewModel.primaryButtonDidTap()
@@ -278,7 +279,8 @@ final class OnboardingRecommendationTests: XCTestCase {
       step: .freeform,
       routineSuggestionService: OnboardingRecommendationLocalStub(),
       routineSuggestionCoordinator: aiCoordinator,
-      onboardingRecommendationCoordinator: goalCoordinator
+      onboardingRecommendationCoordinator: goalCoordinator,
+      organizingPresentationSleep: { _ in }
     )
 
     freeformViewModel.primaryButtonDidTap()

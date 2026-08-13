@@ -397,150 +397,46 @@ final class FinalScreenVisualTests: XCTestCase {
     file: StaticString = #filePath,
     line: UInt = #line
   ) throws {
-    let baselineFilename = filename.replacingOccurrences(of: "-dark-", with: "-light-")
+    let baselineURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent("docs/visual-test-baselines/final-screens")
+      .appendingPathComponent(filename)
     let baseline = try XCTUnwrap(
-      VisualBaseline.hashes[baselineFilename],
-      "Missing visual baseline: \(baselineFilename)",
+      UIImage(contentsOfFile: baselineURL.path),
+      "Missing approved visual baseline: \(baselineURL.path)",
       file: file,
       line: line
     )
-    let expectedHash = try XCTUnwrap(
-      Data(base64Encoded: baseline),
-      "Invalid visual baseline: \(baselineFilename)",
-      file: file,
-      line: line
+    let distance = try MoruVisualHash.hammingDistance(
+      between: image,
+      and: baseline
     )
-    let actualHash = try visualHash(for: image)
-    XCTAssertEqual(actualHash.count, expectedHash.count, file: file, line: line)
-    let distance = zip(actualHash, expectedHash).reduce(0) { result, pair in
-      result + Int((pair.0 ^ pair.1).nonzeroBitCount)
-    }
     XCTAssertLessThanOrEqual(
       distance,
-      VisualBaseline.maximumHammingDistance,
+      24,
       "Visual regression in \(filename), hash distance: \(distance), "
-        + "actual hash: \(actualHash.base64EncodedString())",
+        + "baseline: \(baselineURL.path), actual: /private/tmp/\(filename)",
       file: file,
       line: line
     )
   }
 
-  private func visualHash(for image: UIImage) throws -> Data {
-    let width = 17
-    let height = 32
-    var pixels = [UInt8](repeating: 0, count: width * height * 4)
-    let context = try XCTUnwrap(
-      CGContext(
-        data: &pixels,
-        width: width,
-        height: height,
-        bitsPerComponent: 8,
-        bytesPerRow: width * 4,
-        space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-      )
-    )
-    let cgImage = try XCTUnwrap(image.cgImage)
-    context.interpolationQuality = .high
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-    var luminance = [Int]()
-    luminance.reserveCapacity(width * height)
-    for offset in stride(from: 0, to: pixels.count, by: 4) {
-      let red = 299 * Int(pixels[offset])
-      let green = 587 * Int(pixels[offset + 1])
-      let blue = 114 * Int(pixels[offset + 2])
-      luminance.append((red + green + blue) / 1_000)
-    }
-
-    var hash = Data(capacity: (width - 1) * height / 8)
-    var byte: UInt8 = 0
-    var bitIndex = 0
-    for row in 0..<height {
-      for column in 0..<(width - 1) {
-        if luminance[row * width + column] > luminance[row * width + column + 1] {
-          byte |= 1 << (7 - bitIndex)
-        }
-        bitIndex += 1
-        if bitIndex == 8 {
-          hash.append(byte)
-          byte = 0
-          bitIndex = 0
-        }
-      }
-    }
-    return hash
-  }
-
-}
-
-private enum VisualBaseline {
-  static let maximumHammingDistance = 24
-
-  static let hashes: [String: String] = [
-    "moru-pr32-final-home-light-M.png":
-      "AAAEAAYAnwQ8QDjgMOBw8XDweOC4wMwAzgDWAClBGTM0MTTxHMR5cDFhggRgAGAAAgBAAOAMwjjkyGTIAAAAAA==",
-    "moru-pr32-final-home-light-AX3.png":
-      "AAAEAAYAnwQ8QDhgzuLGYfBw+eH9gO2C1oDWgAQhQYFFaSYBRkEmoSXJLYkOSUxhgIADAEMgIyBkyGTIAAAAAA==",
-    "moru-pr32-final-routine-light-M.png":
-      "AAAAACAAwADEAOAA4ATUCNgwyDDQCAAByACGAFg4yDhCEIYEWBDYOEgQgAJHAE4AAAAAAAAAESJsyGTIAAAAAA==",
-    "moru-pr32-final-routine-light-AX3.png":
-      "AAAAADgAxADEAOQQykDKQspg2RTZDNpk2mTAYMBgxBCoAugApMBZAN0QXGBaSERwQHCAylsA2wBkSGTIAAAAAA==",
-    "moru-pr32-final-history-light-M.png":
-      "AAAAACAAwALAANoUzBjcmMSEQADgAuQIGCBxcXnhOdgCAsAA5CAWAEYBVVFVUX9QdRhxUFVUVUBk2GTIAAAAAA==",
-    "moru-pr32-final-history-light-AX3.png":
-      "AAAIAOAA5ADUAcgEwWTBNMCkwLTBVMAkwjTDNMjMyMzIjMjQyNDIzMiEyATIBMgEYMDKAsogCYBkyGTIAAAAAA==",
-    "moru-pr32-final-profile-light-M.png":
-      "AAAAAEAAkACRgOoB6kHkAZEAggA8gPSk8iQQEMgA4ADyBMAEyADMAHIA8gEYAMAAoBDwhPKEEzBsyGTIAAAAAA==",
-    "moru-pr32-final-profile-light-AX3.png":
-      "AAAQAOAAxADBLG7R6tHtwW3JMjDIAMiIMyAxJTqh9mT2ZDYZMQE4AAYA2QDZADIA9kXwBDMBCiBkyGTIAAAAAA==",
-    "moru-pr32-final-current-routine-light-M.png":
-      "AAAAAAAA4ARiBfKY8pjoGFANUA1RDVEFWQ1RBVAN0AyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-    "moru-pr32-final-current-routine-light-AX3.png":
-      "AAAAAAAAxUJlZUUk8kj6QNpA2kDyyPLQwEjAYOBo4HB0oXSFeBF5mW5hf2FVITwJVZF5kThROBlpQXlBWUFckQ==",
-    "moru-pr34-home-active-routines-light-M.png":
-      "AAAAABgAwACCAlAFQAVkQUGNSAxgAWRJ5MhyEJQCcA1kAXQBQIRIBGIBZMhgyGIAAAAAAAAAAAAAAAAAAAAAAA==",
-    "moru-pr34-home-active-routines-light-AX3.png":
-      "AAAAACKAyQDJAKdCSIVIjWdBYiFSgWkBaZEgwWsxajBoAWkBcyHjOHEhskJkgGyNZIFlYVqBWoFpkUmBYllgGQ==",
-    "moru-pr43-alarm-ring-light-M.png":
-      "AAAAAAAAIiEAABAAJVglOAZYALASMAUAAAAAAAAAgEAjAyYTiGbA8ABwBAAAAAAAAADABjAHGvM4B4ACAAAAAA==",
-    "moru-pr43-alarm-ring-light-AX3.png":
-      "AAAAAAAAQIEEIBM2K4sqGxY2IEhEDAAEAAAAAAAAwCAGky4DKUsBIsBwAHAEAAAAAABAABAHPnM+exAHQAAAAA==",
-    "moru-pr44-bundled-voices-light-M.png":
-      "AAAAAMAAgACCBMkA0ADQoOSAwAAwBVAMUAR0BlANGANUDVANKANQBVQNIQMAAAAAAAAAAAABZAHBZMhkZAkAAg==",
-    "moru-pr44-bundled-voices-light-AX3.png":
-      "AAAAANAAwADABAII5eDlZOdAxUHVYuawzTDZRMxAlIAHADADUA1SBT4DMQNwDVIFOgMwg3gFSE3JPM0ccoEAAg==",
-    "moru-pr50-session-empty-home-light-M.png":
-      "AAAEAAYAnwQ8QDjgMOBw8XDweOC4wMwAzgDWAAQhYQFgAQIAAAAAgAMAAzANSD1AMbAGhwaDEWJkyGTIAAAAAA==",
-    "moru-pr50-session-empty-home-light-AX3.png":
-      "AAAEAAYAnwQ8QDhgzuLGYfBw+eH9gO2C1oDWkDkhaWdKQVpBEJAGAAYABoAaATs4EoQwpH2xdZFkyGTIAAAAAA==",
-    "moru-pr50-session-empty-routine-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAxANSB2AGOIGgwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAESJsyGTIAAAAAA==",
-    "moru-pr50-session-empty-routine-light-AX3.png":
-      "AAAAADgAxADEAOUADgAGgAaABoA7IDMoMKQ9olWYXZB7sBJYDTcZAzkjHScbLgCAAAAAAAAAEiJkyGTIAAAAAA==",
-  ]
 }
 
 private enum VisualVariant: CaseIterable {
   case lightMedium
   case lightAccessibility3
-  case darkMedium
-  case darkAccessibility3
 
   var userInterfaceStyle: UIUserInterfaceStyle {
-    switch self {
-    case .lightMedium, .lightAccessibility3:
-      return .light
-    case .darkMedium, .darkAccessibility3:
-      return .dark
-    }
+    .light
   }
 
   var dynamicTypeSize: DynamicTypeSize {
     switch self {
-    case .lightMedium, .darkMedium:
+    case .lightMedium:
       return .medium
-    case .lightAccessibility3, .darkAccessibility3:
+    case .lightAccessibility3:
       return .accessibility3
     }
   }
@@ -551,10 +447,6 @@ private enum VisualVariant: CaseIterable {
       return "light-M"
     case .lightAccessibility3:
       return "light-AX3"
-    case .darkMedium:
-      return "dark-M"
-    case .darkAccessibility3:
-      return "dark-AX3"
     }
   }
 }

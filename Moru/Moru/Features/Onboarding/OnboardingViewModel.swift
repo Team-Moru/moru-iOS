@@ -83,6 +83,8 @@ final class OnboardingViewModel: ObservableObject {
   private let onRecommendedRoutineSaved:
     @MainActor (RecommendedRoutineCreationResult) -> Void
   private let onCancelled: @MainActor () -> Void
+  private let organizingPresentationSleep:
+    @MainActor @Sendable (Duration) async throws -> Void
   private var didComplete = false
   private var suggestionRequestID: UUID?
   private var suggestionTask: Task<RoutineSuggestionResult, Error>?
@@ -106,7 +108,11 @@ final class OnboardingViewModel: ObservableObject {
     onCompleted: @escaping OnboardingCompletionHandler = { _ in },
     onRecommendedRoutineSaved:
       @escaping @MainActor (RecommendedRoutineCreationResult) -> Void = { _ in },
-    onCancelled: @escaping @MainActor () -> Void = {}
+    onCancelled: @escaping @MainActor () -> Void = {},
+    organizingPresentationSleep:
+      @escaping @MainActor @Sendable (Duration) async throws -> Void = {
+        try await _Concurrency.Task<Never, Never>.sleep(for: $0)
+      }
   ) {
     self.flowMode = flowMode
     self.draft = draft
@@ -121,6 +127,7 @@ final class OnboardingViewModel: ObservableObject {
     self.onCompleted = onCompleted
     self.onRecommendedRoutineSaved = onRecommendedRoutineSaved
     self.onCancelled = onCancelled
+    self.organizingPresentationSleep = organizingPresentationSleep
   }
 
   var progressTotal: Int {
@@ -776,6 +783,6 @@ final class OnboardingViewModel: ObservableObject {
       throw CancellationError()
     }
 
-    try await _Concurrency.Task<Never, Never>.sleep(for: duration)
+    try await organizingPresentationSleep(duration)
   }
 }

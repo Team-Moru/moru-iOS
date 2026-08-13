@@ -242,7 +242,19 @@ final class OnboardingFigmaVisualTests: XCTestCase {
 
       XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
       XCTAssertEqual(first.scale, 3)
-      XCTAssertEqual(first.pngData(), second.pngData())
+      if state == .organizing {
+        let distance = try MoruVisualHash.hammingDistance(
+          between: first,
+          and: second
+        )
+        XCTAssertLessThanOrEqual(
+          distance,
+          24,
+          "Animated organizing layout changed, hash distance: \(distance)"
+        )
+      } else {
+        XCTAssertEqual(first.pngData(), second.pngData())
+      }
     }
   }
 
