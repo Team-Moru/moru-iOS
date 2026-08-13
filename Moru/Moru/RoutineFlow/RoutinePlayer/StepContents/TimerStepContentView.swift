@@ -44,6 +44,7 @@ struct TimerStepContentView: View {
     let step: RoutineStep
     let isGuidancePlaying: Bool
     let onComplete: () -> Void
+    let onSkip: () -> Void
 
     @State private var remainingSeconds: Int
     @State private var didComplete = false
@@ -57,13 +58,15 @@ struct TimerStepContentView: View {
     init(
         step: RoutineStep,
         isGuidancePlaying: Bool,
-        onComplete: @escaping () -> Void
+        onComplete: @escaping () -> Void,
+        onSkip: @escaping () -> Void
     ) {
         let seconds = max(step.estimatedSeconds ?? 60, 1)
 
         self.step = step
         self.isGuidancePlaying = isGuidancePlaying
         self.onComplete = onComplete
+        self.onSkip = onSkip
         self.totalSeconds = seconds
 
         _remainingSeconds = State(initialValue: seconds)
@@ -86,6 +89,45 @@ struct TimerStepContentView: View {
             } else {
                 guideSection
             }
+
+            Spacer()
+                .frame(height: timerSegments == nil ? 116 : 16)
+
+            HStack(spacing: 0) {
+                Button {
+                    completeTimer()
+                } label: {
+                    Text("완료했어요")
+                        .font(
+                            AppFont.pretendardMedium(
+                                size: 14,
+                                relativeTo: .caption
+                            )
+                        )
+                        .foregroundStyle(AppColor.gray400)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 52)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("타이머를 끝내고 이 단계를 완료합니다")
+
+                Button(action: onSkip) {
+                    Text("건너뛰기")
+                        .font(
+                            AppFont.pretendardMedium(
+                                size: 14,
+                                relativeTo: .caption
+                            )
+                        )
+                        .foregroundStyle(AppColor.gray300)
+                        .frame(maxWidth: .infinity)
+                        .frame(minHeight: 52)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
         }
         .padding(.horizontal, 24)
         .onReceive(timer) { _ in
@@ -302,6 +344,12 @@ struct TimerStepContentView: View {
         remainingSeconds -= 1
 
         guard remainingSeconds == 0 else { return }
+
+        completeTimer()
+    }
+
+    private func completeTimer() {
+        guard !didComplete else { return }
 
         didComplete = true
         onComplete()
