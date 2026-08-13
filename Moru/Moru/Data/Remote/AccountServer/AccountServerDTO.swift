@@ -59,13 +59,3 @@ nonisolated struct TTSUpdateResponseDTO:
   let voiceCode: String?
   let displayName: String?
 }
-
-nonisolated struct SubscriptionInfoResponseDTO:
-  Decodable,
-  Equatable,
-  Sendable {
-  let plan: String?
-  let startedAt: String?
-  let expiresAt: String?
-  let isActive: Bool?
-}

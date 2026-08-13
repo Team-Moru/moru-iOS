@@ -22,11 +22,6 @@ struct AccountServerSettingsSummaryView: View {
         detail: streakDetail,
         systemImage: "flame"
       )
-      accountRow(
-        title: "구독",
-        detail: subscriptionDetail,
-        systemImage: "checkmark.seal"
-      )
 
       Button(action: onOpenVoiceSelection) {
         accountRow(
@@ -81,17 +76,6 @@ struct AccountServerSettingsSummaryView: View {
     )
   }
 
-  private var subscriptionDetail: String {
-    if let subscription = viewModel.subscriptionState.value {
-      return subscriptionText(subscription)
-        + staleSuffix(for: viewModel.subscriptionState)
-    }
-    return statePlaceholder(
-      viewModel.subscriptionState,
-      failure: "구독 정보 확인 불가"
-    )
-  }
-
   private var voiceDetail: String {
     switch viewModel.voiceState {
     case .content, .loading(previous: .some), .failed(previous: .some):
@@ -121,7 +105,6 @@ struct AccountServerSettingsSummaryView: View {
     isFailed(viewModel.profileState)
       || isFailed(viewModel.streakState)
       || isFailed(viewModel.voiceState)
-      || isFailed(viewModel.subscriptionState)
   }
 
   private func isFailed<Value>(
@@ -178,19 +161,6 @@ struct AccountServerSettingsSummaryView: View {
       "Apple"
     case .unknown:
       "로그인 방식 확인 불가"
-    }
-  }
-
-  private func subscriptionText(
-    _ subscription: ServerSubscriptionInfo
-  ) -> String {
-    switch subscription.plan {
-    case .free:
-      "FREE"
-    case .pro:
-      subscription.isActive ? "PRO · 활성" : "PRO · 비활성"
-    case .unknown:
-      "확인되지 않은 플랜"
     }
   }
 
@@ -289,8 +259,6 @@ struct AccountServerVoiceSelectionView: View {
 
   private func voiceButton(_ voice: ServerTTSVoice) -> some View {
     let isSelected = viewModel.selectedTTSID == voice.ttsID
-    let isLocked = voice.isProOnly
-      && !viewModel.hasActiveProSubscription
 
     return Button {
       Task {
@@ -303,12 +271,6 @@ struct AccountServerVoiceSelectionView: View {
             Text(voice.displayName)
               .moruPilotTextStyle(.b4.weight(.semiBold))
               .foregroundStyle(MoruPilotColor.textStrong)
-
-            if voice.isProOnly {
-              Text("PRO")
-                .moruPilotTextStyle(.c2.weight(.semiBold))
-                .foregroundStyle(MoruPilotColor.accent)
-            }
           }
 
           Text(voice.description)
@@ -323,7 +285,7 @@ struct AccountServerVoiceSelectionView: View {
           ProgressView()
             .accessibilityLabel("서버 음성 변경 중")
         } else {
-          Image(systemName: isLocked ? "lock.fill" : selectionImage(isSelected))
+          Image(systemName: selectionImage(isSelected))
             .foregroundStyle(
               isSelected ? MoruPilotColor.accent : MoruPilotColor.textTertiary
             )
@@ -335,17 +297,12 @@ struct AccountServerVoiceSelectionView: View {
       .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
     }
     .buttonStyle(.plain)
-    .disabled(viewModel.isUpdatingVoice || isLocked)
+    .disabled(viewModel.isUpdatingVoice)
     .accessibilityLabel(
       "\(voice.displayName), \(voice.description)"
-        + (voice.isProOnly ? ", PRO 전용" : "")
         + (isSelected ? ", 선택됨" : "")
     )
-    .accessibilityHint(
-      isLocked
-        ? "활성 PRO 구독 확인이 필요합니다."
-        : "서버 생성 음성으로 선택합니다."
-    )
+    .accessibilityHint("서버 생성 음성으로 선택합니다.")
   }
 
   private var voiceEmptyMessage: String {

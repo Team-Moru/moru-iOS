@@ -13,9 +13,6 @@ nonisolated protocol AccountServerRemoteServing: Sendable {
     ttsID: Int64,
     memberID: Int64
   ) async throws -> ServerTTSSelection
-  func fetchSubscription(
-    memberID: Int64
-  ) async throws -> ServerSubscriptionInfo
 }
 
 nonisolated enum AccountServerRemoteError:

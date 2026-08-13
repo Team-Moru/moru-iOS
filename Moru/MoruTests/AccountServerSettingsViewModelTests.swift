@@ -9,12 +9,12 @@ import XCTest
 
 final class AccountServerSettingsViewModelTests: XCTestCase {
   @MainActor
-  func testLoadPublishesIndependentAccountResources() async {
+  func testLoadPublishesIndependentAccountResourcesWithoutSubscriptionRequest()
+    async {
     let service = AccountServerSettingsRemoteStub(
       profile: .success(accountSettingsProfile()),
       streak: .failure(.unavailable),
-      voices: .success([]),
-      subscription: .failure(.unavailable)
+      voices: .success([])
     )
     let viewModel = AccountServerSettingsViewModel(
       remoteService: service
@@ -28,18 +28,12 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     )
     XCTAssertEqual(viewModel.streakState, .failed(previous: nil))
     XCTAssertEqual(viewModel.voiceState, .empty)
-    XCTAssertEqual(
-      viewModel.subscriptionState,
-      .failed(previous: nil)
-    )
     XCTAssertEqual(viewModel.selectedTTSID, 1)
-    XCTAssertFalse(viewModel.hasActiveProSubscription)
     let calls = await service.calls
-    XCTAssertEqual(calls.count, 4)
+    XCTAssertEqual(calls.count, 3)
     XCTAssertTrue(calls.contains(.profile(98)))
     XCTAssertTrue(calls.contains(.streak(98)))
     XCTAssertTrue(calls.contains(.voices(98)))
-    XCTAssertTrue(calls.contains(.subscription(98)))
   }
 
   @MainActor
@@ -48,8 +42,7 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     let service = AccountServerSequencedRemoteStub(
       firstProfile: accountSettingsProfile(),
       firstStreak: accountSettingsStreak(),
-      firstVoices: [accountSettingsVoice(ttsID: 1)],
-      firstSubscription: accountSettingsSubscription(plan: .pro)
+      firstVoices: [accountSettingsVoice(ttsID: 1)]
     )
     let viewModel = AccountServerSettingsViewModel(
       remoteService: service
@@ -70,38 +63,59 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
       viewModel.voiceState,
       .failed(previous: [accountSettingsVoice(ttsID: 1)])
     )
-    XCTAssertEqual(
-      viewModel.subscriptionState,
-      .failed(
-        previous: accountSettingsSubscription(plan: .pro)
-      )
-    )
     XCTAssertEqual(viewModel.selectedTTSID, 1)
-    XCTAssertFalse(viewModel.hasActiveProSubscription)
   }
 
   @MainActor
-  func testProVoiceRequiresConfirmedActiveProSubscription() async {
+  func testProOnlyVoicesAreExcludedFromSelection() async {
+    let freeVoice = accountSettingsVoice(ttsID: 1)
     let proVoice = accountSettingsVoice(ttsID: 2, isProOnly: true)
     let service = AccountServerSettingsRemoteStub(
       profile: .success(accountSettingsProfile()),
       streak: .success(accountSettingsStreak()),
-      voices: .success([proVoice]),
-      subscription: .success(
-        accountSettingsSubscription(plan: .free)
-      )
+      voices: .success([freeVoice, proVoice])
     )
     let viewModel = AccountServerSettingsViewModel(
       remoteService: service
     )
     await viewModel.load(memberID: 98)
 
+    XCTAssertEqual(viewModel.voiceState, .content([freeVoice]))
+
     await viewModel.selectVoice(proVoice, memberID: 98)
 
     XCTAssertEqual(viewModel.selectedTTSID, 1)
-    XCTAssertNotNil(viewModel.voiceUpdateErrorMessage)
     let updateCallCount = await service.updateCallCount
     XCTAssertEqual(updateCallCount, 0)
+  }
+
+  @MainActor
+  func testFreeVoiceSelectionUsesTTSPatch() async {
+    let voice = accountSettingsVoice(ttsID: 2)
+    let service = AccountServerSettingsRemoteStub(
+      profile: .success(accountSettingsProfile()),
+      streak: .success(accountSettingsStreak()),
+      voices: .success([voice])
+    )
+    let viewModel = AccountServerSettingsViewModel(
+      remoteService: service
+    )
+    await viewModel.load(memberID: 98)
+
+    await viewModel.selectVoice(voice, memberID: 98)
+
+    XCTAssertEqual(viewModel.selectedTTSID, 2)
+    XCTAssertEqual(
+      viewModel.latestSelection,
+      ServerTTSSelection(
+        memberID: 98,
+        ttsID: 2,
+        voiceCode: "VOICE_2",
+        displayName: "서버 음성 2"
+      )
+    )
+    let calls = await service.calls
+    XCTAssertTrue(calls.contains(.update(ttsID: 2, memberID: 98)))
   }
 
   @MainActor
@@ -155,7 +169,6 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     XCTAssertEqual(viewModel.profileState, .loading(previous: nil))
     XCTAssertEqual(viewModel.streakState, .loading(previous: nil))
     XCTAssertEqual(viewModel.voiceState, .loading(previous: nil))
-    XCTAssertEqual(viewModel.subscriptionState, .loading(previous: nil))
     XCTAssertNil(viewModel.selectedTTSID)
 
     await service.resumeSecondProfile(throwing: .unavailable)
@@ -164,7 +177,6 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     XCTAssertEqual(viewModel.profileState, .failed(previous: nil))
     XCTAssertEqual(viewModel.streakState, .failed(previous: nil))
     XCTAssertEqual(viewModel.voiceState, .failed(previous: nil))
-    XCTAssertEqual(viewModel.subscriptionState, .failed(previous: nil))
     XCTAssertNil(viewModel.selectedTTSID)
   }
 }
@@ -173,7 +185,6 @@ private enum AccountServerSettingsCall: Equatable, Sendable {
   case profile(Int64)
   case streak(Int64)
   case voices(Int64)
-  case subscription(Int64)
   case update(ttsID: Int64, memberID: Int64)
 }
 
@@ -189,8 +200,6 @@ private actor AccountServerSettingsRemoteStub:
     Result<ServerAccountStreak, AccountServerSettingsTestError>
   private let voiceResult:
     Result<[ServerTTSVoice], AccountServerSettingsTestError>
-  private let subscriptionResult:
-    Result<ServerSubscriptionInfo, AccountServerSettingsTestError>
   private(set) var calls: [AccountServerSettingsCall] = []
 
   init(
@@ -199,14 +208,11 @@ private actor AccountServerSettingsRemoteStub:
     streak:
       Result<ServerAccountStreak, AccountServerSettingsTestError>,
     voices:
-      Result<[ServerTTSVoice], AccountServerSettingsTestError>,
-    subscription:
-      Result<ServerSubscriptionInfo, AccountServerSettingsTestError>
+      Result<[ServerTTSVoice], AccountServerSettingsTestError>
   ) {
     profileResult = profile
     streakResult = streak
     voiceResult = voices
-    subscriptionResult = subscription
   }
 
   func fetchProfile(
@@ -243,13 +249,6 @@ private actor AccountServerSettingsRemoteStub:
     )
   }
 
-  func fetchSubscription(
-    memberID: Int64
-  ) async throws -> ServerSubscriptionInfo {
-    calls.append(.subscription(memberID))
-    return try subscriptionResult.get()
-  }
-
   var updateCallCount: Int {
     calls.filter {
       if case .update = $0 {
@@ -265,22 +264,18 @@ private actor AccountServerSequencedRemoteStub:
   private let firstProfile: ServerAccountProfile
   private let firstStreak: ServerAccountStreak
   private let firstVoices: [ServerTTSVoice]
-  private let firstSubscription: ServerSubscriptionInfo
   private var profileCallCount = 0
   private var streakCallCount = 0
   private var voiceCallCount = 0
-  private var subscriptionCallCount = 0
 
   init(
     firstProfile: ServerAccountProfile,
     firstStreak: ServerAccountStreak,
-    firstVoices: [ServerTTSVoice],
-    firstSubscription: ServerSubscriptionInfo
+    firstVoices: [ServerTTSVoice]
   ) {
     self.firstProfile = firstProfile
     self.firstStreak = firstStreak
     self.firstVoices = firstVoices
-    self.firstSubscription = firstSubscription
   }
 
   func fetchProfile(
@@ -320,15 +315,6 @@ private actor AccountServerSequencedRemoteStub:
     throw AccountServerSettingsTestError.unavailable
   }
 
-  func fetchSubscription(
-    memberID: Int64
-  ) async throws -> ServerSubscriptionInfo {
-    subscriptionCallCount += 1
-    guard subscriptionCallCount == 1 else {
-      throw AccountServerSettingsTestError.unavailable
-    }
-    return firstSubscription
-  }
 }
 
 private actor AccountServerDeferredUpdateRemoteStub:
@@ -368,12 +354,6 @@ private actor AccountServerDeferredUpdateRemoteStub:
     return try await withCheckedThrowingContinuation {
       updateContinuation = $0
     }
-  }
-
-  func fetchSubscription(
-    memberID: Int64
-  ) async throws -> ServerSubscriptionInfo {
-    accountSettingsSubscription(plan: .free)
   }
 
   func waitUntilUpdateRequested() async {
@@ -439,15 +419,6 @@ private actor AccountServerAccountChangeRemoteStub:
     throw AccountServerSettingsTestError.unavailable
   }
 
-  func fetchSubscription(
-    memberID: Int64
-  ) async throws -> ServerSubscriptionInfo {
-    guard memberID == firstProfile.memberID else {
-      throw AccountServerSettingsTestError.unavailable
-    }
-    return accountSettingsSubscription(plan: .free)
-  }
-
   func waitUntilSecondProfileRequested() async {
     while !didRequestSecondProfile {
       await Task.yield()
@@ -492,16 +463,5 @@ nonisolated private func accountSettingsVoice(
     displayName: "서버 음성 \(ttsID)",
     description: "서버 생성 음성",
     isProOnly: isProOnly
-  )
-}
-
-nonisolated private func accountSettingsSubscription(
-  plan: ServerSubscriptionPlan
-) -> ServerSubscriptionInfo {
-  ServerSubscriptionInfo(
-    plan: plan,
-    startedAtRaw: nil,
-    expiresAtRaw: nil,
-    isActive: plan == .pro
   )
 }
