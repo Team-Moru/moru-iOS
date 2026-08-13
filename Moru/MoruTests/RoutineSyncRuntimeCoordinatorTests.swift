@@ -69,6 +69,30 @@ final class RoutineSyncRuntimeCoordinatorTests: XCTestCase {
   }
 
   @MainActor
+  func testCompletedMutationNotifiesWarmupBridgeAfterSettlement() async {
+    var completedMutationCount = 0
+    let sender = ScriptedRoutineSyncSender(
+      results: [.completed(mutationID: UUID()), .idle]
+    )
+    let provider = RuntimeSessionIdentityProvider(
+      identity: AccountSessionIdentity(memberID: 7, sessionID: UUID())
+    )
+    let coordinator = RoutineSyncRuntimeCoordinator(
+      sender: sender,
+      sessionIdentityProvider: provider,
+      isSceneActive: true,
+      onMutationCompleted: {
+        completedMutationCount += 1
+      }
+    )
+
+    coordinator.wake()
+    await waitUntilStopped(coordinator)
+
+    XCTAssertEqual(completedMutationCount, 1)
+  }
+
+  @MainActor
   func testRetrySleepsUntilPersistedNextAttemptDateThenResumes() async {
     let start = Date(timeIntervalSince1970: 10_000)
     let retryAt = start.addingTimeInterval(8)

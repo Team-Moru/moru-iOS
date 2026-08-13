@@ -62,7 +62,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
         routineBinding: child,
         response: partial
       ),
-      .unavailable
+      .pending
     )
   }
 
@@ -205,10 +205,15 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
   }
 
   func testCustomStepCanRequestRemoteIntroWithoutBundleItem() async {
-    let player = ContextGuidanceRecorder()
+    let order = GuidanceOrderRecorder()
+    let player = ContextGuidanceRecorder(
+      onRequest: { order.events.append("play") }
+    )
+    let warmup = GuidanceWarmupRecorder(order: order)
     let coordinator = RoutineGuidanceCoordinator(
       player: player,
-      routineGroupLocalID: UUID()
+      routineGroupLocalID: UUID(),
+      warmupCoordinator: warmup
     )
     let custom = RoutineStep(type: .confirm, title: "커스텀", order: 0)
 
@@ -218,6 +223,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertEqual(player.requests.count, 1)
     XCTAssertEqual(player.requests.first?.routineLocalID, custom.id)
     XCTAssertNil(player.requests.first?.fallbackItemID)
+    XCTAssertEqual(order.events, ["prepareAndWait", "play"])
   }
 
   func testWarmupJoinsBindingsAndPublishesOnlyCompleteCachedSequence() async throws {
@@ -255,6 +261,216 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     )
 
     XCTAssertNil(urls)
+  }
+
+  func testForegroundWarmupPollsPendingUntilCompleteBeforePublishing() async throws {
+    let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
+    let completed = [remoteRoutine(id: 51, stepIDs: [71])]
+    let fixture = try await makeWarmupFixture(
+      response: pending,
+      responses: [pending, completed],
+      foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy(
+        maximumAttempts: 2,
+        retryDelay: .zero
+      )
+    )
+    try await fixture.seedCachedFiles(stepIDs: [71])
+
+    await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    let urls = await fixture.coordinator.localAudioURLs(
+      for: fixture.localRequest()
+    )
+    let remoteCallCount = await fixture.remote.callCount
+    XCTAssertEqual(urls?.count, 1)
+    XCTAssertEqual(remoteCallCount, 2)
+  }
+
+  func testForegroundWarmupStopsAtRetryCapWithoutPartialPlan() async throws {
+    let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
+    let fixture = try await makeWarmupFixture(
+      response: pending,
+      foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy(
+        maximumAttempts: 2,
+        retryDelay: .zero
+      )
+    )
+    try await fixture.seedCachedFiles(stepIDs: [71])
+
+    await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    let urls = await fixture.coordinator.localAudioURLs(for: fixture.localRequest())
+    let remoteCallCount = await fixture.remote.callCount
+    XCTAssertNil(urls)
+    XCTAssertEqual(remoteCallCount, 2)
+  }
+
+  func testForegroundPendingKeepsPreviouslyPreparedPlanUsable() async throws {
+    let completed = [remoteRoutine(id: 51, stepIDs: [71])]
+    let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
+    let fixture = try await makeWarmupFixture(
+      response: completed,
+      responses: [completed, pending],
+      foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy(
+        maximumAttempts: 2,
+        retryDelay: .zero
+      )
+    )
+    try await fixture.seedCachedFiles(stepIDs: [71])
+
+    fixture.coordinator.prepare(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+    let initiallyPreparedURLs = await waitForLocalURLs(fixture)
+    XCTAssertNotNil(initiallyPreparedURLs)
+
+    await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    let urls = await fixture.coordinator.localAudioURLs(for: fixture.localRequest())
+    let remoteCallCount = await fixture.remote.callCount
+    XCTAssertEqual(urls?.count, 1)
+    XCTAssertEqual(remoteCallCount, 3)
+  }
+
+  func testBackgroundTerminalMismatchInvalidatesPreviouslyPreparedPlan() async throws {
+    let completed = [remoteRoutine(id: 51, stepIDs: [71])]
+    let mismatch = [remoteRoutine(
+      id: 51,
+      stepIDs: [71],
+      title: "서버에서 바뀐 제목"
+    )]
+    let fixture = try await makeWarmupFixture(
+      response: completed,
+      responses: [completed, mismatch]
+    )
+    try await fixture.seedCachedFiles(stepIDs: [71])
+
+    fixture.coordinator.prepare(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+    let initiallyPreparedURLs = await waitForLocalURLs(fixture)
+    XCTAssertNotNil(initiallyPreparedURLs)
+
+    fixture.coordinator.prepare(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+    for _ in 0..<100 {
+      if await fixture.remote.callCount == 2 { break }
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+
+    let urls = await fixture.coordinator.localAudioURLs(for: fixture.localRequest())
+    XCTAssertNil(urls)
+  }
+
+  func testForegroundWarmupWaitsForStagedBindingBeforeRequestingAudio() async throws {
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71])],
+      recordsBindings: false,
+      foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy(
+        maximumAttempts: 2,
+        retryDelay: .milliseconds(50)
+      )
+    )
+    try await fixture.seedCachedFiles(stepIDs: [71])
+    let routine = try XCTUnwrap(
+      fixture.routineRepository.routine(id: fixture.groupID)
+    )
+    _ = try fixture.bindings.enqueue(
+      EnqueuedRoutineSyncMutation(
+        memberID: 7,
+        command: .createRoutineGroup(RoutineSyncGroupSnapshot(routine: routine))
+      ),
+      at: .distantPast
+    )
+
+    let preparation = Task { @MainActor in
+      await fixture.coordinator.prepareAndWait(
+        routineGroupLocalID: fixture.groupID,
+        routineLocalIDs: [fixture.routineID]
+      )
+    }
+    try await Task.sleep(for: .milliseconds(10))
+    _ = try fixture.bindings.recordRemoteIDs(
+      [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: fixture.groupID,
+          remoteID: 41
+        ),
+        RoutineServerBindingAssignment(
+          entityKind: .routine,
+          localEntityID: fixture.routineID,
+          remoteID: 51,
+          parentEntityKind: .routineGroup,
+          parentLocalEntityID: fixture.groupID
+        ),
+      ],
+      memberID: 7,
+      at: .distantPast
+    )
+    await preparation.value
+
+    let urls = await fixture.coordinator.localAudioURLs(for: fixture.localRequest())
+    let remoteCallCount = await fixture.remote.callCount
+    XCTAssertEqual(urls?.count, 1)
+    XCTAssertEqual(remoteCallCount, 1)
+  }
+
+  func testVoiceSelectionPurgesOnlyCurrentAccountNamespaceAndPreparedPlan() async throws {
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71])]
+    )
+    try await fixture.seedCachedFiles(stepIDs: [71])
+    let otherAccountKey = fixture.cacheKey(stepID: 71, accountID: "8")
+    let source = fixture.root.appendingPathComponent("other-account.mp3")
+    try Data([4, 5, 6]).write(to: source)
+    _ = try await fixture.cache.storeDownloadedFile(at: source, for: otherAccountKey)
+
+    fixture.coordinator.prepare(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+    let warmedURLs = await waitForLocalURLs(fixture)
+    XCTAssertNotNil(warmedURLs)
+
+    fixture.coordinator.serverVoiceSelectionDidChange(memberID: 7)
+
+    let clearedURLs = await fixture.coordinator.localAudioURLs(
+      for: fixture.localRequest()
+    )
+    XCTAssertNil(clearedURLs)
+    for _ in 0..<100 {
+      if await fixture.cache.cachedFileURL(
+        for: fixture.cacheKey(stepID: 71),
+        allowStale: true
+      ) == nil {
+        break
+      }
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+    let purgedURL = await fixture.cache.cachedFileURL(
+      for: fixture.cacheKey(stepID: 71),
+      allowStale: true
+    )
+    let otherAccountURL = await fixture.cache.cachedFileURL(
+      for: otherAccountKey,
+      allowStale: true
+    )
+    XCTAssertNil(purgedURL)
+    XCTAssertNotNil(otherAccountURL)
   }
 
   func testWarmupRejectsRemoteTitleMismatch() async throws {
@@ -470,36 +686,42 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     groupID: UUID = UUID(),
     routineID: UUID = UUID(),
     response: [ServerRoutineTTSRoutine],
+    responses: [[ServerRoutineTTSRoutine]]? = nil,
+    recordsBindings: Bool = true,
     routines: [Routine] = [],
-    downloader: any RoutineTTSAudioDownloading = RoutineTTSAudioDownloader()
+    downloader: any RoutineTTSAudioDownloading = RoutineTTSAudioDownloader(),
+    foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy =
+      RoutineTTSForegroundPollingPolicy()
   ) async throws -> WarmupFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let bindings = SwiftDataRoutineSyncRepository(modelContainer: container)
-    _ = try bindings.recordRemoteIDs(
-      [
-        RoutineServerBindingAssignment(
-          entityKind: .routineGroup,
-          localEntityID: groupID,
-          remoteID: 41
-        ),
-        RoutineServerBindingAssignment(
-          entityKind: .routine,
-          localEntityID: routineID,
-          remoteID: 51,
-          parentEntityKind: .routineGroup,
-          parentLocalEntityID: groupID
-        ),
-      ],
-      memberID: 7,
-      at: .distantPast
-    )
+    if recordsBindings {
+      _ = try bindings.recordRemoteIDs(
+        [
+          RoutineServerBindingAssignment(
+            entityKind: .routineGroup,
+            localEntityID: groupID,
+            remoteID: 41
+          ),
+          RoutineServerBindingAssignment(
+            entityKind: .routine,
+            localEntityID: routineID,
+            remoteID: 51,
+            parentEntityKind: .routineGroup,
+            parentLocalEntityID: groupID
+          ),
+        ],
+        memberID: 7,
+        at: .distantPast
+      )
+    }
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let cache = try RoutineTTSAudioCache(rootDirectory: root)
     let identity = MutableIdentityProvider(
       identity: AccountSessionIdentity(memberID: 7, sessionID: UUID())
     )
-    let remote = WarmupRemoteStub(response: response)
+    let remote = WarmupRemoteStub(response: response, responses: responses)
     let resolvedRoutines = routines.isEmpty ? [Routine(
       id: groupID,
       name: "루틴 그룹",
@@ -517,12 +739,14 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       routineRepository: routineRepository,
       audioCache: cache,
       downloader: downloader,
-      sessionIdentityProvider: identity
+      sessionIdentityProvider: identity,
+      foregroundPollingPolicy: foregroundPollingPolicy
     )
     return WarmupFixture(
       groupID: groupID,
       routineID: routineID,
       coordinator: coordinator,
+      bindings: bindings,
       cache: cache,
       remote: remote,
       identityProvider: identity,
@@ -552,6 +776,7 @@ private struct WarmupFixture {
   let groupID: UUID
   let routineID: UUID
   let coordinator: RoutineTTSWarmupCoordinator
+  let bindings: SwiftDataRoutineSyncRepository
   let cache: RoutineTTSAudioCache
   let remote: WarmupRemoteStub
   let identityProvider: MutableIdentityProvider
@@ -569,9 +794,12 @@ private struct WarmupFixture {
     }
   }
 
-  func cacheKey(stepID: Int64) -> RoutineTTSAudioCacheKey {
+  func cacheKey(
+    stepID: Int64,
+    accountID: String = "7"
+  ) -> RoutineTTSAudioCacheKey {
     RoutineTTSAudioCacheKey(
-      accountID: "7",
+      accountID: accountID,
       namespace: RoutineSyncServerNamespace.production.rawValue,
       routineGroupID: 41,
       routineID: 51,
@@ -594,15 +822,24 @@ private struct WarmupFixture {
 }
 
 private actor WarmupRemoteStub: RoutineTTSRemoteServing {
-  let response: [ServerRoutineTTSRoutine]
+  private var responses: [[ServerRoutineTTSRoutine]]
   private(set) var callCount = 0
   private var shouldSuspend = false
   private var continuation: CheckedContinuation<[ServerRoutineTTSRoutine], Never>?
-  init(response: [ServerRoutineTTSRoutine]) { self.response = response }
+  private var suspendedResponse: [ServerRoutineTTSRoutine]?
+
+  init(
+    response: [ServerRoutineTTSRoutine],
+    responses: [[ServerRoutineTTSRoutine]]? = nil
+  ) {
+    self.responses = responses ?? [response]
+  }
+
   func suspendNextResponse() { shouldSuspend = true }
   func resumeResponse() {
-    continuation?.resume(returning: response)
+    continuation?.resume(returning: suspendedResponse ?? [])
     continuation = nil
+    suspendedResponse = nil
     shouldSuspend = false
   }
   func fetchRoutineTTS(
@@ -610,10 +847,20 @@ private actor WarmupRemoteStub: RoutineTTSRemoteServing {
     identity: AccountSessionIdentity
   ) async throws -> [ServerRoutineTTSRoutine] {
     callCount += 1
+    let response = nextResponse()
     if shouldSuspend {
+      suspendedResponse = response
       return await withCheckedContinuation { continuation = $0 }
     }
     return response
+  }
+
+  private func nextResponse() -> [ServerRoutineTTSRoutine] {
+    guard !responses.isEmpty else { return [] }
+    if responses.count == 1 {
+      return responses[0]
+    }
+    return responses.removeFirst()
   }
 }
 
@@ -788,13 +1035,45 @@ private final class OverlapDetectingGuidancePlayer: RoutineGuidancePlaying {
 @MainActor
 private final class ContextGuidanceRecorder: RoutineGuidancePlaying {
   private(set) var requests: [RoutineGuidanceCueRequest] = []
+  private let onRequest: @MainActor () -> Void
+
+  init(onRequest: @escaping @MainActor () -> Void = {}) {
+    self.onRequest = onRequest
+  }
+
   func play(itemID: String, voiceCode: String, kind: RoutineAudioCueKind) async
     -> GuidancePlaybackResult { .completed }
   func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult {
     requests.append(request)
+    onRequest()
     return .completed
   }
   func stop() {}
   func stopAndWaitUntilIdle() async {}
   func resumeAfterSpeechInput() {}
+}
+
+@MainActor
+private final class GuidanceOrderRecorder {
+  var events: [String] = []
+}
+
+@MainActor
+private final class GuidanceWarmupRecorder: RoutineTTSWarming {
+  private let order: GuidanceOrderRecorder
+
+  init(order: GuidanceOrderRecorder) {
+    self.order = order
+  }
+
+  func prepare(routineGroupLocalID: UUID, routineLocalIDs: [UUID]) {
+    order.events.append("prepare")
+  }
+
+  func prepareAndWait(
+    routineGroupLocalID: UUID,
+    routineLocalIDs: [UUID]
+  ) async {
+    order.events.append("prepareAndWait")
+  }
 }

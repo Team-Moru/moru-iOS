@@ -450,6 +450,10 @@ struct AppRouter: View {
       },
       onResetSucceeded: {
         sessionStore.load()
+      },
+      onServerVoiceSelectionDidSucceed: { memberID in
+        dependencies.routineTTSWarmupCoordinator?
+          .serverVoiceSelectionDidChange(memberID: memberID)
       }
     )
     let mainTabState = state.mainTabState

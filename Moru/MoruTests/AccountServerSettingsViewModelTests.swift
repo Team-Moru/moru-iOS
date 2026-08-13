@@ -97,8 +97,12 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
       streak: .success(accountSettingsStreak()),
       voices: .success([voice])
     )
+    var invalidatedMemberIDs: [Int64] = []
     let viewModel = AccountServerSettingsViewModel(
-      remoteService: service
+      remoteService: service,
+      onServerVoiceSelectionDidSucceed: { memberID in
+        invalidatedMemberIDs.append(memberID)
+      }
     )
     await viewModel.load(memberID: 98)
 
@@ -116,6 +120,7 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     )
     let calls = await service.calls
     XCTAssertTrue(calls.contains(.update(ttsID: 2, memberID: 98)))
+    XCTAssertEqual(invalidatedMemberIDs, [98])
   }
 
   @MainActor
@@ -123,8 +128,12 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     async {
     let voice = accountSettingsVoice(ttsID: 2)
     let service = AccountServerDeferredUpdateRemoteStub(voice: voice)
+    var invalidatedMemberIDs: [Int64] = []
     let viewModel = AccountServerSettingsViewModel(
-      remoteService: service
+      remoteService: service,
+      onServerVoiceSelectionDidSucceed: { memberID in
+        invalidatedMemberIDs.append(memberID)
+      }
     )
     await viewModel.load(memberID: 98)
 
@@ -148,6 +157,7 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
       viewModel.voiceUpdateErrorMessage,
       "서버 음성을 변경하지 못했어요. 기존 선택은 유지됩니다."
     )
+    XCTAssertTrue(invalidatedMemberIDs.isEmpty)
   }
 
   @MainActor

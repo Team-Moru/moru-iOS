@@ -60,6 +60,7 @@ final class RoutineSyncRuntimeCoordinator {
     (any CurrentAccountSessionIdentityProviding)?
   private let scheduler: any RoutineSyncRuntimeScheduling
   private let unscheduledRetryDelay: TimeInterval
+  private let onMutationCompleted: @MainActor () -> Void
 
   private var drainTask: Task<Void, Never>?
   private var drainGeneration = 0
@@ -77,7 +78,8 @@ final class RoutineSyncRuntimeCoordinator {
     scheduler: any RoutineSyncRuntimeScheduling =
       SystemRoutineSyncRuntimeScheduler.shared,
     isSceneActive: Bool = false,
-    unscheduledRetryDelay: TimeInterval = 1
+    unscheduledRetryDelay: TimeInterval = 1,
+    onMutationCompleted: @escaping @MainActor () -> Void = {}
   ) {
     precondition(unscheduledRetryDelay > 0)
     self.sender = sender
@@ -85,6 +87,7 @@ final class RoutineSyncRuntimeCoordinator {
     self.scheduler = scheduler
     self.isSceneActive = isSceneActive
     self.unscheduledRetryDelay = unscheduledRetryDelay
+    self.onMutationCompleted = onMutationCompleted
 
     wakeupRelay?.setHandler { [weak self] in
       self?.wake()
@@ -196,6 +199,7 @@ final class RoutineSyncRuntimeCoordinator {
 
       switch result {
       case .completed:
+        onMutationCompleted()
         continue
 
       case .retryScheduled(_, let nextAttemptAt):

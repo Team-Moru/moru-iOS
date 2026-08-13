@@ -31,6 +31,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let resetAvailability: @MainActor () -> Bool
   private let onOpenSettings: @MainActor () -> Void
   private let onResetSucceeded: @MainActor () -> Void
+  private let onServerVoiceSelectionDidSucceed: @MainActor (Int64) -> Void
 
   init(
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
@@ -49,7 +50,9 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
     resetAvailability: @escaping @MainActor () -> Bool,
     onOpenSettings: @escaping @MainActor () -> Void,
-    onResetSucceeded: @escaping @MainActor () -> Void
+    onResetSucceeded: @escaping @MainActor () -> Void,
+    onServerVoiceSelectionDidSucceed:
+      @escaping @MainActor (Int64) -> Void = { _ in }
   ) {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
@@ -67,6 +70,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
     self.onResetSucceeded = onResetSucceeded
+    self.onServerVoiceSelectionDidSucceed = onServerVoiceSelectionDidSucceed
   }
 
   func make() -> AnyView {
@@ -84,7 +88,9 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
           onResetSucceeded: onResetSucceeded
         ),
         accountServerViewModel: AccountServerSettingsViewModel(
-          remoteService: accountServerRemoteService
+          remoteService: accountServerRemoteService,
+          onServerVoiceSelectionDidSucceed:
+            onServerVoiceSelectionDidSucceed
         ),
         accountRoutineGroupRemoteService:
           accountRoutineGroupRemoteService,

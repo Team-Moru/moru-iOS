@@ -56,7 +56,9 @@ final class RoutineGuidanceCoordinator {
       return
     }
 
-    if let routineGroupLocalID {
+    let requiresRemoteReadiness =
+      step.presetItemID == nil && routineGroupLocalID != nil
+    if let routineGroupLocalID, !requiresRemoteReadiness {
       warmupCoordinator?.prepare(
         routineGroupLocalID: routineGroupLocalID,
         routineLocalIDs: [step.id]
@@ -67,6 +69,19 @@ final class RoutineGuidanceCoordinator {
     playTask = Task { [weak self] in
       guard let self, activeGeneration == generation else {
         return .cancelled
+      }
+
+      // A server-generated step has no truthful bundled equivalent. Wait for
+      // its bounded remote preparation window before the player reads the
+      // cache, instead of racing a fire-and-forget warm-up into a silent cue.
+      if requiresRemoteReadiness, let routineGroupLocalID {
+        await warmupCoordinator?.prepareAndWait(
+          routineGroupLocalID: routineGroupLocalID,
+          routineLocalIDs: [step.id]
+        )
+        guard !Task.isCancelled, activeGeneration == generation else {
+          return .cancelled
+        }
       }
 
       return await player.play(RoutineGuidanceCueRequest(
