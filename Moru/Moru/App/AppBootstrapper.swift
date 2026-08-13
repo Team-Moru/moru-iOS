@@ -254,7 +254,10 @@ final class AppBootstrapper: ObservableObject {
         routineSyncRuntimeCoordinator = RoutineSyncRuntimeCoordinator(
           sender: sender,
           sessionIdentityProvider: accountSessionStore,
-          wakeupRelay: routineSyncWakeupRelay
+          wakeupRelay: routineSyncWakeupRelay,
+          onMutationCompleted: {
+            dependencies.routineTTSWarmupCoordinator?.routineSyncDidComplete()
+          }
         )
       } else {
         routineSyncRuntimeCoordinator = nil

@@ -31,6 +31,7 @@ enum AccountServerResourceState<Value: Equatable>: Equatable {
 @Observable
 final class AccountServerSettingsViewModel {
   private let remoteService: (any AccountServerRemoteServing)?
+  private let onServerVoiceSelectionDidSucceed: @MainActor (Int64) -> Void
   private var loadGeneration = 0
   private var currentMemberID: Int64?
 
@@ -46,8 +47,13 @@ final class AccountServerSettingsViewModel {
   private(set) var updatingTTSID: Int64?
   private(set) var voiceUpdateErrorMessage: String?
 
-  init(remoteService: (any AccountServerRemoteServing)? = nil) {
+  init(
+    remoteService: (any AccountServerRemoteServing)? = nil,
+    onServerVoiceSelectionDidSucceed:
+      @escaping @MainActor (Int64) -> Void = { _ in }
+  ) {
     self.remoteService = remoteService
+    self.onServerVoiceSelectionDidSucceed = onServerVoiceSelectionDidSucceed
   }
 
   func load(memberID: Int64?) async {
@@ -147,6 +153,7 @@ final class AccountServerSettingsViewModel {
     }
 
     let generation = loadGeneration
+    let previousTTSID = selectedTTSID
     isUpdatingVoice = true
     updatingTTSID = voice.ttsID
     voiceUpdateErrorMessage = nil
@@ -171,6 +178,9 @@ final class AccountServerSettingsViewModel {
 
       latestSelection = selection
       selectedTTSID = selection.ttsID
+      if previousTTSID != selection.ttsID {
+        onServerVoiceSelectionDidSucceed(memberID)
+      }
     } catch is CancellationError {
       return
     } catch {

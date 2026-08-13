@@ -73,6 +73,7 @@ final class RemoteFirstRoutineGuidancePlayer:
   private let bundledPlayer: any RoutineGuidancePlaying
   private let remotePlayer: any RoutineLocalAudioSequencePlaying
   private let localAudioProvider: any RoutineTTSLocalAudioProviding
+  private let diagnostics = RoutineTTSDiagnostics()
   private var accountSessionGeneration: UInt = 0
   private var playbackGeneration: UInt = 0
 
@@ -192,6 +193,7 @@ final class RemoteFirstRoutineGuidancePlayer:
     guard !Task.isCancelled,
           expectedPlaybackGeneration == playbackGeneration else { return .cancelled }
     guard let itemID = request.fallbackItemID else {
+      diagnostics.record(.customCueUnavailable)
       return .completed
     }
 

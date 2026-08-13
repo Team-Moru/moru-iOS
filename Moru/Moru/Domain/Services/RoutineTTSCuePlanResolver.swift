@@ -13,6 +13,10 @@ nonisolated struct RoutineTTSResolvedAsset: Equatable, Sendable {
 
 nonisolated enum RoutineTTSCuePlanResolution: Equatable, Sendable {
   case unavailable
+  /// The server has accepted the routine identity but has not finished
+  /// generating every audio fragment. Callers may retry this state within a
+  /// bounded foreground window; they must never publish a partial cue plan.
+  case pending
   case playable([RoutineTTSResolvedAsset])
 }
 
@@ -49,25 +53,38 @@ nonisolated struct RoutineTTSCuePlanResolver: Sendable {
 
     var seenStepIDs = Set<Int64>()
     var assets: [RoutineTTSResolvedAsset] = []
+    var hasPendingStep = false
     assets.reserveCapacity(remoteRoutine.steps.count)
 
     for step in remoteRoutine.steps {
       guard step.stepID > 0,
-            seenStepIDs.insert(step.stepID).inserted,
-            step.status == .completed,
-            let audioURL = step.audioURL,
-            audioURL.scheme?.lowercased() == "https",
-            audioURL.host != nil else {
+            seenStepIDs.insert(step.stepID).inserted else {
         return .unavailable
       }
 
-      assets.append(RoutineTTSResolvedAsset(
-        remoteRoutineID: remoteRoutine.routineID,
-        remoteStepID: step.stepID,
-        remoteURL: audioURL
-      ))
+      switch step.status {
+      case .pending:
+        hasPendingStep = true
+
+      case .completed:
+        guard let audioURL = step.audioURL,
+              audioURL.scheme?.lowercased() == "https",
+              audioURL.host != nil else {
+          return .unavailable
+        }
+
+        assets.append(RoutineTTSResolvedAsset(
+          remoteRoutineID: remoteRoutine.routineID,
+          remoteStepID: step.stepID,
+          remoteURL: audioURL
+        ))
+
+      case .failed, .unknown:
+        return .unavailable
+      }
     }
 
+    guard !hasPendingStep else { return .pending }
     return .playable(assets)
   }
 }
