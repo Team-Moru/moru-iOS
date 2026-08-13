@@ -27,7 +27,7 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 ## 현재 연동 범위
 
 2026-08-05 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
-현재 제품 흐름에 연결된 operation은 17개입니다.
+현재 제품 흐름에 연결된 operation은 18개입니다.
 
 | 기능 | API | 앱 연결 상태 |
 | --- | --- | --- |

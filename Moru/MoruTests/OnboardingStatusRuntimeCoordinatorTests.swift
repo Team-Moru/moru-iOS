@@ -129,12 +129,13 @@ final class OnboardingStatusRuntimeCoordinatorTests: XCTestCase {
     XCTAssertEqual(fixture.coordinator.latestResolution?.resolvedCompleted, false)
   }
 
-  func testCancellationTimeoutAndOfflineUseLoginFallbackWithoutChangingLocalState()
+  func testFailuresUseLoginFallbackWithoutChangingLocalState()
     async throws {
     let cases: [(RuntimeStatusServiceStub.Outcome, OnboardingStatusFallbackReason)] = [
       (.cancellation, .cancelled),
       (.timeout, .timeout),
       (.offline, .offline),
+      (.invalidRequest, .unavailable),
     ]
 
     for (outcome, expectedReason) in cases {
@@ -414,6 +415,7 @@ private actor RuntimeStatusServiceStub: OnboardingStatusRemoteServing {
     case cancellation
     case timeout
     case offline
+    case invalidRequest
   }
 
   private var outcomes: [Outcome]
@@ -437,6 +439,11 @@ private actor RuntimeStatusServiceStub: OnboardingStatusRemoteServing {
   ) async throws -> ServerOnboardingStatus {
     let request = storedIdentities.count
     storedIdentities.append(identity)
+    guard !outcomes.isEmpty else {
+      throw APIError.invalidRequest(
+        "Unexpected extra onboarding status request."
+      )
+    }
     let outcome = outcomes.removeFirst()
 
     switch outcome {
@@ -458,6 +465,8 @@ private actor RuntimeStatusServiceStub: OnboardingStatusRemoteServing {
         code: URLError.notConnectedToInternet.rawValue,
         message: "offline"
       )
+    case .invalidRequest:
+      throw OnboardingStatusRemoteError.invalidRequest
     }
   }
 

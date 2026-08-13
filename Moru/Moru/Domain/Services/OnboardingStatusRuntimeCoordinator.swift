@@ -267,7 +267,9 @@ final class OnboardingStatusRuntimeCoordinator {
     }
     if let remoteError = error as? OnboardingStatusRemoteError {
       switch remoteError {
-      case .invalidRequest, .invalidResponse:
+      case .invalidRequest:
+        return .unavailable
+      case .invalidResponse:
         return .invalidResponse
       case .accountAuthorizationChanged:
         return .accountAuthorizationChanged
