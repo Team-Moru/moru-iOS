@@ -138,15 +138,48 @@ private struct OnboardingHeaderView: View {
       }
 
       if let progressIndex = viewModel.progressIndex {
-        MoruProgressBar(
-          current: progressIndex,
-          total: viewModel.progressTotal,
-          componentStyle: .figmaPilot
-        )
+        HStack(spacing: 0) {
+          backButton
+
+          MoruProgressBar(
+            current: progressIndex,
+            total: viewModel.progressTotal,
+            componentStyle: .figmaPilot,
+            showsLabel: false
+          )
+          .frame(maxWidth: .infinity)
+
+          Text("\(progressIndex)/\(viewModel.progressTotal)")
+            .onboardingTextStyle(.c2)
+            .foregroundStyle(MoruPilotColor.textPrimary)
+            .fixedSize()
+            .padding(.leading, MoruPilotSpacing.twelve)
+        }
       }
     }
     .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.top, MoruPilotSpacing.sixteen)
+  }
+
+  @ViewBuilder
+  private var backButton: some View {
+    if viewModel.step.previous != nil {
+      Button(action: viewModel.backButtonDidTap) {
+        Image(systemName: "chevron.left")
+          .font(.system(size: 24, weight: .regular))
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .frame(width: 44, height: 44, alignment: .leading)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .disabled(viewModel.isSaving)
+      .accessibilityLabel("이전 단계로 돌아가기")
+      .accessibilityIdentifier("onboarding.back")
+    } else {
+      Color.clear
+        .frame(width: 44, height: 44)
+        .accessibilityHidden(true)
+    }
   }
 }
 
@@ -1292,6 +1325,7 @@ private struct OnboardingChecklistRow: View {
 
 private struct TimeWheelControl: View {
   @ObservedObject var viewModel: OnboardingViewModel
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var isEditing = false
 
   var body: some View {
@@ -1323,8 +1357,8 @@ private struct TimeWheelControl: View {
       .accessibilityValue(timePresentation.accessibilityValue)
       .accessibilityHint(
         isEditing
-          ? "시간 선택기를 닫습니다. 위아래로 쓸어 5분 단위로 조절할 수 있습니다."
-          : "시간 선택기를 엽니다. 위아래로 쓸어 5분 단위로 조절할 수 있습니다."
+          ? "시간 선택기를 닫습니다. 시와 분을 위아래로 쓸어 조절할 수 있습니다."
+          : "시간 선택기를 엽니다. 시와 분을 위아래로 쓸어 조절할 수 있습니다."
       )
       .accessibilityIdentifier("onboarding.alarm.time")
       .accessibilityAdjustableAction { direction in
@@ -1348,128 +1382,42 @@ private struct TimeWheelControl: View {
   }
 
   private var wheelEditor: some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
-      wheelColumn(
-        label: "시간",
-        previous: hourText(viewModel.draft.alarmHour - 1),
-        current: hourText(viewModel.draft.alarmHour),
-        next: hourText(viewModel.draft.alarmHour + 1),
-        decrement: {
-          viewModel.updateAlarm(
-            hour: wrappedHour(viewModel.draft.alarmHour - 1),
-            minute: viewModel.draft.alarmMinute
-          )
-        },
-        increment: {
-          viewModel.updateAlarm(
-            hour: wrappedHour(viewModel.draft.alarmHour + 1),
-            minute: viewModel.draft.alarmMinute
-          )
-        }
-      )
+    ZStack {
+      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+        .fill(AppColor.gray150.opacity(0.65))
+        .frame(height: dynamicTypeSize.isAccessibilitySize ? 60 : 48)
 
-      Text(":")
-        .font(
-          .custom(
-            MoruTextWeight.semiBold.rawValue,
-            fixedSize: 30
-          )
-        )
-        .foregroundStyle(MoruPilotColor.textStrong)
-        .accessibilityHidden(true)
-
-      wheelColumn(
-        label: "분",
-        previous: minuteText(viewModel.draft.alarmMinute - 1),
-        current: minuteText(viewModel.draft.alarmMinute),
-        next: minuteText(viewModel.draft.alarmMinute + 1),
-        decrement: {
-          viewModel.updateAlarm(
-            hour: viewModel.draft.alarmHour,
-            minute: wrappedMinute(viewModel.draft.alarmMinute - 1)
-          )
-        },
-        increment: {
-          viewModel.updateAlarm(
-            hour: viewModel.draft.alarmHour,
-            minute: wrappedMinute(viewModel.draft.alarmMinute + 1)
-          )
-        }
-      )
+      HStack(spacing: 0) {
+        TimeWheelPicker(value: alarmHourBinding, range: 24)
+        TimeWheelPicker(value: alarmMinuteBinding, range: 60)
+      }
     }
     .frame(maxWidth: .infinity)
-    .padding(.horizontal, MoruPilotSpacing.twenty)
-    .padding(.vertical, MoruPilotSpacing.twelve)
-    .background(OnboardingSurface.card.opacity(0.72))
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+    .frame(height: dynamicTypeSize.isAccessibilitySize ? 180 : 144)
   }
 
-  private func wheelColumn(
-    label: String,
-    previous: String,
-    current: String,
-    next: String,
-    decrement: @escaping () -> Void,
-    increment: @escaping () -> Void
-  ) -> some View {
-    VStack(spacing: AppSpacing.xs) {
-      Button(action: decrement) {
-        Text(previous)
-          .font(
-            .custom(
-              MoruTextWeight.semiBold.rawValue,
-              fixedSize: 18
-            )
-          )
-          .foregroundStyle(MoruPilotColor.textTertiary)
-          .frame(maxWidth: .infinity, minHeight: 44)
-      }
-      .buttonStyle(.plain)
-      .accessibilityLabel("\(label) 줄이기")
-
-      Text(current)
-        .font(
-          .custom(
-            MoruTextWeight.semiBold.rawValue,
-            fixedSize: 30
-          )
+  private var alarmHourBinding: Binding<Int> {
+    Binding(
+      get: { viewModel.draft.alarmHour },
+      set: { hour in
+        viewModel.updateAlarm(
+          hour: hour,
+          minute: viewModel.draft.alarmMinute
         )
-        .foregroundStyle(MoruPilotColor.textStrong)
-        .lineLimit(1)
-        .frame(maxWidth: .infinity, minHeight: 44)
-        .accessibilityHidden(true)
-
-      Button(action: increment) {
-        Text(next)
-          .font(
-            .custom(
-              MoruTextWeight.semiBold.rawValue,
-              fixedSize: 18
-            )
-          )
-          .foregroundStyle(MoruPilotColor.textTertiary)
-          .frame(maxWidth: .infinity, minHeight: 44)
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("\(label) 늘리기")
-    }
-    .frame(maxWidth: .infinity)
+    )
   }
 
-  private func hourText(_ value: Int) -> String {
-    OnboardingAlarmTimePresentation.displayHourText(for: value)
-  }
-
-  private func minuteText(_ value: Int) -> String {
-    String(format: "%02d", wrappedMinute(value))
-  }
-
-  private func wrappedHour(_ value: Int) -> Int {
-    (value % 24 + 24) % 24
-  }
-
-  private func wrappedMinute(_ value: Int) -> Int {
-    (value % 60 + 60) % 60
+  private var alarmMinuteBinding: Binding<Int> {
+    Binding(
+      get: { viewModel.draft.alarmMinute },
+      set: { minute in
+        viewModel.updateAlarm(
+          hour: viewModel.draft.alarmHour,
+          minute: minute
+        )
+      }
+    )
   }
 
   private func adjustTime(byMinutes minuteDelta: Int) {
@@ -1848,6 +1796,23 @@ private extension View {
 
 #Preview("루틴 정리 진행 애니메이션") {
   RoutineOrganizingProgressPreview()
+}
+
+#Preview("온보딩 · 알람 시간 휠") {
+  var draft = OnboardingDraft()
+  draft.alarmHour = 7
+  draft.alarmMinute = 30
+  draft.previewRoutine = try? LocalTemplateSuggestionService.shared.makeRoutine(
+    from: draft.suggestionInput
+  )
+
+  return OnboardingFlowView(
+    viewModel: OnboardingViewModel(
+      draft: draft,
+      step: .alarm,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+  )
 }
 
 @MainActor
