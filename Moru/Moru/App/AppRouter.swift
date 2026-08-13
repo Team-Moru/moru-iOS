@@ -70,6 +70,8 @@ struct AppRouter: View {
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
   private let homeBuilder: any HomeFlowBuilding
+  private let onboardingStatusRuntimeCoordinator:
+    OnboardingStatusRuntimeCoordinator?
   private let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
 
   @MainActor
@@ -89,6 +91,8 @@ struct AppRouter: View {
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
     homeBuilder: (any HomeFlowBuilding)? = nil,
+    onboardingStatusRuntimeCoordinator:
+      OnboardingStatusRuntimeCoordinator? = nil,
     routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator? = nil,
     state: AppRouterState? = nil
   ) {
@@ -103,6 +107,8 @@ struct AppRouter: View {
     self.appCapabilities = appCapabilities
     self.onboardingBuilder = onboardingBuilder
     self.routinePlayerBuilder = routinePlayerBuilder
+    self.onboardingStatusRuntimeCoordinator =
+      onboardingStatusRuntimeCoordinator
     self.routineSyncRuntimeCoordinator = routineSyncRuntimeCoordinator
     _state = StateObject(wrappedValue: state ?? AppRouterState())
     if let homeBuilder {
@@ -183,6 +189,7 @@ struct AppRouter: View {
         .interactiveDismissDisabled()
     }
     .task {
+      onboardingStatusRuntimeCoordinator?.start()
       routineSyncRuntimeCoordinator?.setSceneActive(scenePhase == .active)
       if coordinator.beginInitialSessionLoadIfNeeded(),
          sessionStore.phase == .loading {

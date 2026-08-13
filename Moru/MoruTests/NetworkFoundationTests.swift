@@ -304,6 +304,29 @@ final class NetworkFoundationTests: XCTestCase {
     )
   }
 
+  func testAlamofireSessionTaskFailurePreservesUnderlyingURLError() {
+    let urlErrors: [URLError.Code] = [
+      .timedOut,
+      .notConnectedToInternet,
+    ]
+
+    for code in urlErrors {
+      let underlying = URLError(code)
+      let error = MoyaError.underlying(
+        AFError.sessionTaskFailed(error: underlying),
+        nil
+      )
+
+      XCTAssertEqual(
+        DefaultAPIClient.mapMoyaError(error),
+        .transport(
+          code: code.rawValue,
+          message: underlying.localizedDescription
+        )
+      )
+    }
+  }
+
   func testFactoryAppliesRequestAndResourceTimeouts() {
     let configuration = NetworkConfiguration(
       baseURL: URL(string: "https://staging.example.com")!,

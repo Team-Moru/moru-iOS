@@ -27,7 +27,7 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 ## 현재 연동 범위
 
 2026-08-05 운영 Swagger는 29개 경로, 31개 HTTP operation입니다.
-현재 제품 흐름에 연결된 operation은 17개입니다.
+현재 제품 흐름에 연결된 operation은 18개입니다.
 
 | 기능 | API | 앱 연결 상태 |
 | --- | --- | --- |
@@ -37,6 +37,7 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 | 회원 탈퇴 | `DELETE /auth/withdrawal` | 운영 경로 연결 |
 | AI 루틴 초안 | `POST /routine-groups/ai-generate` | 로그인 계정에 결합해 연결, 실패 시 로컬 추천 |
 | 온보딩 목표 추천 | `GET /onboarding/recommendations` | 최초 목표 선택에 연결, 실패·잘못된 응답 시 로컬 추천 |
+| 온보딩 상태 | `GET /onboarding/status` | 로그인·저장 세션 복원 후 읽기 전용으로 조회, 로컬 라우팅은 유지 |
 | History 주간·월간 | `GET /routine-executions/weekly`, `GET /routine-executions/monthly` | 로컬 History 요약을 서버 집계로 보강 |
 | History 일별 | `GET /routine-executions/daily/{date}` | 서버 heatmap 날짜의 읽기 전용 상세 화면에 연결 |
 | History 기상 패턴 | `GET /routine-executions/wake-pattern` | 로컬 계산값이 없을 때만 서버 값으로 보강 |
@@ -46,9 +47,9 @@ APIClient는 Remote 구현 내부에서만 사용한다.
 | 계정 루틴 보관함 | `GET /routine-groups`, `GET /routine-groups/{routineGroupId}` | Profile에서 목록·상세를 읽기 전용으로 표시. 로컬 루틴과 병합·실행하지 않음 |
 | 서버 상태 | `GET /health` | Target과 계약 테스트만 존재 |
 
-전체 Swagger 기준 operation 커버리지는 `17/31`(`54.8%`)입니다.
+전체 Swagger 기준 operation 커버리지는 `18/31`(`58.1%`)입니다.
 제품 앱에서 연결하면 안 되는 개발 토큰과 화면 없는 health를 제외하면
-`17/29`(`58.6%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
+`18/29`(`62.1%`)입니다. 이 수치는 계약 연결 수이며 실제 기기·QA 완료율은
 아닙니다.
 
 홈, 루틴 관리, 실행 저장, 편집 가능한 로컬 프로필의 기준 데이터는
@@ -249,6 +250,24 @@ lock으로 보호된 메모리 snapshot을 제공하며,
 로그아웃은 토큰과 동기화만 중단하고
 로컬 루틴과 기록을 유지합니다.
 
+`GET /onboarding/status`는 로그인 직후와 저장 세션 복원 직후에
+`AccountSessionIdentity(memberID, sessionID)`로 결합해 조회합니다.
+조회 성공값은 로그인 응답 또는 Keychain에 저장된 `onboardingCompleted`보다
+최신 서버 snapshot으로 우선합니다. 그러나 이 우선순위는 읽기 전용 진단
+snapshot에만 적용합니다. 앱 라우팅과 온보딩 완료 데이터의 기준은 계속
+로컬 `LocalProfile`이며, 서버 상태로 `SessionStore`, SwiftData, 루틴을
+덮어쓰거나 생성·삭제하지 않습니다.
+
+로그인 응답과 status 조회가 다르거나 서버와 로컬 상태가 다르면 mismatch를
+명시적으로 기록합니다. status 응답이 없거나 잘못됐고, offline, timeout,
+취소 또는 서버 오류가 발생하면 로그인/Keychain 값을 fallback snapshot으로
+사용하며 기존 로컬 앱 흐름을 그대로 유지합니다. fallback과 로컬의 차이는
+서버 불일치가 아닌 로그인 힌트 불일치로 구분하고, 로컬 프로필 조회가
+실패하거나 진행 중이면 로컬 비교를 생략합니다. 특히 서버 `false`는
+로컬 온보딩 데이터나 루틴을 초기화하라는 신호가 아닙니다. 요청이 진행되는
+동안 계정이나 같은 member의 `sessionID`가 바뀌면 이전 응답과 fallback을
+모두 폐기합니다.
+
 재발급의 `401`, 잘못된 성공 응답, 회전된 토큰 저장 실패처럼
 기존 자격 증명을 더 사용할 수 없는 경우에만 계정 세션을 해제합니다.
 timeout, 연결 끊김, `408`, `429`, `5xx` 같은 일시 장애에서는
@@ -301,9 +320,10 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
   - 실행 결과용 Outbox 기반은 있지만, 서버 routine ID, 응답 client ID,
     중복 전송 방지 키가 없습니다.
   - 실행 중 계정 전환·재시도·부분 완료 정책도 필요합니다.
-- 온보딩 상태 조회
+- 온보딩 상태 쓰기
+  - 조회는 읽기 전용 snapshot으로 연결했습니다.
   - 현재 Swagger에는 완료 상태를 맞춰 쓰는 mutation이 없습니다.
-  - 서버 상태와 로컬 온보딩·초기 루틴 생성 순서의 기준이 필요합니다.
+  - 따라서 서버 조회값으로 로컬 온보딩·초기 루틴을 변경하지 않습니다.
 - 루틴 TTS 조회
   - 로컬 routine UUID와 서버 routine ID의 연결이 없습니다.
   - `s3Url` 수명, 다운로드 인증, 캐시 만료·fallback 계약이 필요합니다.
