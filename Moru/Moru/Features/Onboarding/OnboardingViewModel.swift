@@ -70,6 +70,14 @@ final class OnboardingViewModel: ObservableObject {
     }
   }
 
+  /// The goal-specific cards shown on onboarding step 3. Their selected
+  /// subset is persisted in `draft.previewRoutine.steps`.
+  private(set) var recommendedRoutineStepCandidates: [RoutineStep] = [] {
+    willSet {
+      objectWillChange.send()
+    }
+  }
+
   private let routineSuggestionService: any RoutineSuggestionService
   private let routineSuggestionCoordinator:
     (any RoutineSuggestionCoordinating)?
@@ -108,8 +116,15 @@ final class OnboardingViewModel: ObservableObject {
       @escaping @MainActor (RecommendedRoutineCreationResult) -> Void = { _ in },
     onCancelled: @escaping @MainActor () -> Void = {}
   ) {
+    var normalizedDraft = draft
+    if flowMode == .onboarding, normalizedDraft.selectedGoalTags.count > 1 {
+      normalizedDraft.selectedGoalTags = Set(
+        normalizedDraft.orderedGoalTags.prefix(1)
+      )
+    }
+
     self.flowMode = flowMode
-    self.draft = draft
+    self.draft = normalizedDraft
     self.step = step
     self.routineSuggestionService = routineSuggestionService
     self.routineSuggestionCoordinator = routineSuggestionCoordinator
@@ -121,6 +136,10 @@ final class OnboardingViewModel: ObservableObject {
     self.onCompleted = onCompleted
     self.onRecommendedRoutineSaved = onRecommendedRoutineSaved
     self.onCancelled = onCancelled
+
+    if flowMode == .onboarding, step == .suggestedRoutine {
+      configureRecommendedRoutineStepCandidates()
+    }
   }
 
   var progressTotal: Int {
@@ -186,12 +205,18 @@ final class OnboardingViewModel: ObservableObject {
     validatedPreviewRoutine != nil
   }
 
+  var hasRecommendedRoutineStepCandidates: Bool {
+    flowMode == .onboarding && !recommendedRoutineStepCandidates.isEmpty
+  }
+
   var canAdvance: Bool {
     guard !isSuggesting else {
       return false
     }
 
     switch step {
+    case .goals:
+      return flowMode != .onboarding || !draft.selectedGoalTags.isEmpty
     case .suggestedRoutine, .duration:
       return hasValidatedPreviewRoutine
     case .review:
@@ -203,7 +228,7 @@ final class OnboardingViewModel: ObservableObject {
         && VoiceProfile.localVoices.contains(draft.selectedVoice)
     case .completion:
       return !isSaving && !didComplete
-    case .experience, .goals, .freeform, .organizing:
+    case .experience, .freeform, .organizing:
       return true
     }
   }
@@ -213,11 +238,72 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   func toggleGoal(tag: String) {
+    if flowMode == .onboarding {
+      guard draft.selectedGoalTags != [tag] else {
+        return
+      }
+
+      draft.selectedGoalTags = [tag]
+      recommendedRoutineStepCandidates = []
+      return
+    }
+
     if draft.selectedGoalTags.contains(tag) {
       draft.selectedGoalTags.remove(tag)
     } else {
       draft.selectedGoalTags.insert(tag)
     }
+  }
+
+  func isRecommendedRoutineStepSelected(_ candidate: RoutineStep) -> Bool {
+    draft.previewRoutine?.steps.contains {
+      representsSameRecommendedRoutineStep($0, as: candidate)
+    } ?? false
+  }
+
+  func canToggleRecommendedRoutineStep(_ candidate: RoutineStep) -> Bool {
+    guard hasRecommendedRoutineStepCandidates,
+          let routine = validatedPreviewRoutine else {
+      return false
+    }
+
+    if isRecommendedRoutineStepSelected(candidate) {
+      return routine.steps.count > 1
+    }
+
+    return true
+  }
+
+  func toggleRecommendedRoutineStep(_ candidate: RoutineStep) {
+    guard flowMode == .onboarding,
+          recommendedRoutineStepCandidates.contains(where: {
+            representsSameRecommendedRoutineStep($0, as: candidate)
+          }),
+          var routine = draft.previewRoutine,
+          !routine.steps.isEmpty else {
+      return
+    }
+
+    if let index = routine.steps.firstIndex(where: {
+      representsSameRecommendedRoutineStep($0, as: candidate)
+    }) {
+      guard routine.steps.count > 1 else {
+        return
+      }
+      routine.steps.remove(at: index)
+    } else {
+      routine.steps.append(candidate)
+    }
+
+    routine.steps = routine.steps
+      .sorted { $0.order < $1.order }
+      .enumerated()
+      .map { index, step in
+        var normalizedStep = step
+        normalizedStep.order = index
+        return normalizedStep
+      }
+    draft.previewRoutine = routine
   }
 
   func toggleKeyword(_ keyword: String) {
@@ -327,6 +413,7 @@ final class OnboardingViewModel: ObservableObject {
         guard refreshPreview() else {
           return
         }
+        configureRecommendedRoutineStepCandidates()
         step = .suggestedRoutine
       }
     case .suggestedRoutine where flowMode == .onboarding:
@@ -408,6 +495,7 @@ final class OnboardingViewModel: ObservableObject {
   @discardableResult
   func refreshPreview() -> Bool {
     cancelSuggestion()
+    recommendedRoutineStepCandidates = []
     draft.previewRoutine = nil
     draft.suggestionSource = nil
 
@@ -458,6 +546,7 @@ final class OnboardingViewModel: ObservableObject {
     if step == .organizing {
       startOrganizingPresentation(requestID: requestID)
     }
+    recommendedRoutineStepCandidates = []
     draft.previewRoutine = nil
     draft.suggestionSource = nil
     errorMessage = nil
@@ -596,6 +685,45 @@ final class OnboardingViewModel: ObservableObject {
     draft.previewRoutine = routine
   }
 
+  private func configureRecommendedRoutineStepCandidates() {
+    guard flowMode == .onboarding,
+          let routine = validatedPreviewRoutine else {
+      recommendedRoutineStepCandidates = []
+      return
+    }
+
+    var candidates = routine.steps.sorted { $0.order < $1.order }
+
+    if let itemProvider = routineSuggestionService as? any RoutineSuggestionItemProviding,
+       let presetItems = try? itemProvider.recommendationItems(
+         from: draft.suggestionInput
+       ) {
+      for item in presetItems {
+        let candidate = item.makeStep(order: candidates.count)
+        guard !candidates.contains(where: {
+          representsSameRecommendedRoutineStep($0, as: candidate)
+        }) else {
+          continue
+        }
+        candidates.append(candidate)
+      }
+    }
+
+    recommendedRoutineStepCandidates = Array(candidates.prefix(6))
+  }
+
+  private func representsSameRecommendedRoutineStep(
+    _ lhs: RoutineStep,
+    as rhs: RoutineStep
+  ) -> Bool {
+    if let lhsPresetItemID = lhs.presetItemID,
+       let rhsPresetItemID = rhs.presetItemID {
+      return lhsPresetItemID == rhsPresetItemID
+    }
+
+    return lhs.id == rhs.id
+  }
+
   private func saveRecommendedRoutine(
     replacingActiveRoutine: Bool
   ) async {
@@ -675,6 +803,9 @@ final class OnboardingViewModel: ObservableObject {
           return
         }
         try Task.checkCancellation()
+        if flowMode == .onboarding, nextStep == .suggestedRoutine {
+          configureRecommendedRoutineStepCandidates()
+        }
         step = nextStep
       } catch is CancellationError {
         return

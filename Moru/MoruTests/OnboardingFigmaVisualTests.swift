@@ -261,7 +261,7 @@ final class OnboardingFigmaVisualTests: XCTestCase {
 
     var draft = OnboardingDraft()
     draft.experience = .wantsRecommendation
-    draft.selectedGoalTags = state == .goals ? [] : ["energy", "health"]
+    draft.selectedGoalTags = state == .goals ? [] : ["mind"]
     draft.selectedKeywords = ["물 마시기", "스트레칭"]
     draft.freeformText = state == .freeform
       ? ""

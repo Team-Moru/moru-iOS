@@ -82,6 +82,37 @@ final class RoutinePresetResourceTests: XCTestCase {
     }
   }
 
+  func testGoalSpecificRecommendationCandidatesAndInitialStepsCoverEveryGoal()
+    throws
+  {
+    let cases = [
+      (tag: "energy", itemIDPrefix: "ENERGY-"),
+      (tag: "health", itemIDPrefix: "HEALTH-"),
+      (tag: "mind", itemIDPrefix: "CALM-"),
+      (tag: "habit", itemIDPrefix: "HABIT-"),
+    ]
+
+    for testCase in cases {
+      let input = RoutineSuggestionInput(goalTags: [testCase.tag])
+      let candidates = try LocalTemplateSuggestionService.shared
+        .recommendationItems(from: input)
+      let initialRoutine = try LocalTemplateSuggestionService.shared
+        .makeRoutine(from: input)
+
+      XCTAssertEqual(candidates.count, 6)
+      XCTAssertTrue(
+        candidates.allSatisfy {
+          $0.id.hasPrefix(testCase.itemIDPrefix)
+        }
+      )
+      XCTAssertEqual(initialRoutine.steps.count, 4)
+      XCTAssertEqual(
+        Set(initialRoutine.steps.map(\.type)),
+        Set(RoutineStepType.allCases)
+      )
+    }
+  }
+
   func testPresetLoaderRejectsUnknownStepType() throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)

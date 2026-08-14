@@ -423,14 +423,26 @@ private struct SuggestedRoutinePreviewView: View {
       titleSpacing: AppSpacing.seventyTwo
     ) {
       if let routine = viewModel.validatedPreviewRoutine {
+        let candidateSteps = viewModel.recommendedRoutineStepCandidates
+        let displayedSteps = candidateSteps.isEmpty
+          ? routine.steps.sorted { $0.order < $1.order }
+          : candidateSteps
+
         VStack(spacing: AppSpacing.lg) {
           RoutineMetaPill(
             goalTitle: viewModel.draft.primaryGoalTitle,
-            stepCount: routine.steps.count,
-            durationMinutes: OnboardingDuration.totalMinutes(for: routine)
+            stepCount: displayedSteps.count,
+            durationMinutes: OnboardingDuration.totalMinutes(for: displayedSteps)
           )
 
-          RoutineStepListCard(routine: routine)
+          if viewModel.hasRecommendedRoutineStepCandidates {
+            RecommendedRoutineStepCandidateList(
+              viewModel: viewModel,
+              candidates: displayedSteps
+            )
+          } else {
+            RoutineStepListCard(routine: routine)
+          }
         }
       } else {
         PreviewUnavailableState(errorMessage: viewModel.errorMessage)
@@ -1039,7 +1051,11 @@ enum OnboardingDuration {
   }
 
   static func totalMinutes(for routine: Routine) -> Int {
-    routine.steps.reduce(0) { total, step in
+    totalMinutes(for: routine.steps)
+  }
+
+  static func totalMinutes(for steps: [RoutineStep]) -> Int {
+    steps.reduce(0) { total, step in
       total + roundedMinutes(for: step.estimatedSeconds)
     }
   }
@@ -1110,44 +1126,148 @@ private struct RoutineStepListCard: View {
   }
 }
 
+private struct RecommendedRoutineStepCandidateList: View {
+  @ObservedObject var viewModel: OnboardingViewModel
+  let candidates: [RoutineStep]
+
+  var body: some View {
+    VStack(spacing: MoruPilotSpacing.eight) {
+      ForEach(Array(candidates.enumerated()), id: \.element.id) { index, step in
+        let isSelected = viewModel.isRecommendedRoutineStepSelected(step)
+
+        RoutineStepPreviewRow(
+          index: index + 1,
+          step: step,
+          isIncluded: isSelected,
+          selectionStyle: isSelected ? .minus : .plus,
+          isSelectionEnabled: viewModel.canToggleRecommendedRoutineStep(step),
+          onSelection: {
+            viewModel.toggleRecommendedRoutineStep(step)
+          }
+        )
+      }
+    }
+  }
+}
+
 private struct RoutineStepPreviewRow: View {
   let index: Int
   let step: RoutineStep
+  let isIncluded: Bool?
+  let selectionStyle: MoruSelectControlStyle?
+  let isSelectionEnabled: Bool
+  let onSelection: (() -> Void)?
+
+  init(
+    index: Int,
+    step: RoutineStep,
+    isIncluded: Bool? = nil,
+    selectionStyle: MoruSelectControlStyle? = nil,
+    isSelectionEnabled: Bool = true,
+    onSelection: (() -> Void)? = nil
+  ) {
+    self.index = index
+    self.step = step
+    self.isIncluded = isIncluded
+    self.selectionStyle = selectionStyle
+    self.isSelectionEnabled = isSelectionEnabled
+    self.onSelection = onSelection
+  }
 
   var body: some View {
     HStack(spacing: MoruPilotSpacing.twelve) {
       ZStack {
         Circle()
-          .fill(MoruPilotColor.accentSurface)
+          .fill(indexCircleColor)
           .frame(width: 20, height: 20)
 
         Text("\(index)")
           .onboardingTextStyle(.c2.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.accent)
+          .foregroundStyle(indexTextColor)
       }
 
       VStack(alignment: .leading, spacing: AppSpacing.xxs) {
         Text(step.title)
-          .onboardingTextStyle(.c1.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textPrimary)
+          .onboardingTextStyle(
+            showsSelectionControl ? .b3.weight(.semiBold) : .c1.weight(.semiBold)
+          )
+          .foregroundStyle(
+            isSelectableAndExcluded
+              ? MoruPilotColor.textTertiary
+              : MoruPilotColor.textPrimary
+          )
           .lineLimit(1)
           .minimumScaleFactor(0.82)
 
         Text("\(step.type.displayTitle) - \(step.durationTitle)")
-          .onboardingTextStyle(.c2)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .onboardingTextStyle(showsSelectionControl ? .b4 : .c2)
+          .foregroundStyle(
+            isSelectableAndExcluded
+              ? MoruPilotColor.textTertiary
+              : MoruPilotColor.textSecondary
+          )
       }
 
       Spacer()
+
+      if let selectionStyle, let onSelection {
+        MoruSelectControl(style: selectionStyle, action: onSelection)
+          .disabled(!isSelectionEnabled)
+          .opacity(isSelectionEnabled ? 1 : 0.42)
+          .accessibilityLabel(selectionAccessibilityLabel)
+      }
     }
     .padding(.horizontal, MoruPilotSpacing.sixteen)
     .frame(minHeight: 62)
-    .background(OnboardingSurface.listRow)
+    .background(
+      isSelectableAndExcluded
+        ? AppColor.moruSurfaceMuted
+        : OnboardingSurface.listRow
+    )
     .overlay(
       RoundedRectangle(cornerRadius: MoruPilotRadius.card)
         .stroke(MoruPilotColor.border, lineWidth: 1)
     )
     .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+  }
+
+  private var showsSelectionControl: Bool {
+    selectionStyle != nil && onSelection != nil
+  }
+
+  private var isSelectableAndExcluded: Bool {
+    showsSelectionControl && isIncluded == false
+  }
+
+  private var indexCircleColor: Color {
+    guard showsSelectionControl else {
+      return MoruPilotColor.accentSurface
+    }
+
+    return isIncluded == true
+      ? MoruPilotColor.accentSoft
+      : MoruPilotColor.accentTint
+  }
+
+  private var indexTextColor: Color {
+    guard showsSelectionControl else {
+      return MoruPilotColor.accent
+    }
+
+    return isIncluded == true
+      ? AppColor.grayWhite
+      : MoruPilotColor.textTertiary
+  }
+
+  private var selectionAccessibilityLabel: String {
+    switch selectionStyle {
+    case .plus:
+      "\(step.title) 추가"
+    case .minus:
+      "\(step.title) 삭제"
+    case nil:
+      step.title
+    }
   }
 }
 

@@ -144,6 +144,77 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
+  func testOnboardingUsesOneGoalAndLetsUsersAdjustRecommendationCandidates()
+    throws
+  {
+    let viewModel = OnboardingViewModel(
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+
+    viewModel.selectExperience(.wantsRecommendation)
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .goals)
+    XCTAssertFalse(viewModel.canAdvance)
+
+    viewModel.toggleGoal(tag: "energy")
+    viewModel.toggleGoal(tag: "mind")
+    XCTAssertEqual(viewModel.draft.selectedGoalTags, ["mind"])
+    XCTAssertTrue(viewModel.canAdvance)
+
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .suggestedRoutine)
+
+    let candidates = viewModel.recommendedRoutineStepCandidates
+    XCTAssertEqual(candidates.count, 6)
+    XCTAssertTrue(
+      candidates.allSatisfy { $0.presetItemID?.hasPrefix("CALM-") == true }
+    )
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 4)
+
+    let selectedCandidate = try XCTUnwrap(candidates.first)
+    let additionalCandidate = try XCTUnwrap(
+      candidates.first { !viewModel.isRecommendedRoutineStepSelected($0) }
+    )
+
+    viewModel.toggleRecommendedRoutineStep(selectedCandidate)
+    XCTAssertFalse(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 3)
+
+    viewModel.toggleRecommendedRoutineStep(additionalCandidate)
+    XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(additionalCandidate))
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 4)
+
+    let selectedAfterEditing = candidates.filter {
+      viewModel.isRecommendedRoutineStepSelected($0)
+    }
+    for candidate in selectedAfterEditing.dropFirst() {
+      viewModel.toggleRecommendedRoutineStep(candidate)
+    }
+
+    let finalSelectedCandidate = try XCTUnwrap(
+      candidates.first { viewModel.isRecommendedRoutineStepSelected($0) }
+    )
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 1)
+    XCTAssertFalse(viewModel.canToggleRecommendedRoutineStep(finalSelectedCandidate))
+
+    viewModel.toggleRecommendedRoutineStep(finalSelectedCandidate)
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 1)
+  }
+
+  @MainActor
+  func testRecommendedAdditionRetainsMultiGoalSelection() {
+    let viewModel = OnboardingViewModel(
+      flowMode: .recommendedAddition,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+
+    viewModel.toggleGoal(tag: "energy")
+    viewModel.toggleGoal(tag: "health")
+
+    XCTAssertEqual(viewModel.draft.selectedGoalTags, ["energy", "health"])
+  }
+
+  @MainActor
   func testOnboardingViewModelMovesThroughStepsAndSavesExactlyOnce() async throws {
     let useCase = SpyCompleteOnboardingUseCase()
     let voicePreviewPlayer = OnboardingVoicePreviewPlayerSpy()
