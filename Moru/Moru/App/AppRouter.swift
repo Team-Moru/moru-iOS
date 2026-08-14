@@ -448,6 +448,7 @@ struct AppRouter: View {
       }
     let historyBuilder = DefaultHistoryFlowBuilder(
       loadHistoryUseCase: LoadHistoryUseCase(
+        routineRepository: dependencies.routineRepository,
         routineRunRepository: dependencies.routineRunRepository
       ),
       summaryEnricher: historySummaryEnricher,

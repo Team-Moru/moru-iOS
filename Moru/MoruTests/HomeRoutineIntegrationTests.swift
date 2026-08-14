@@ -497,6 +497,16 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     )
     let mondayRun = completedRun(on: fixtureDate("2026-07-13T12:00:00Z"))
     let sundayRun = completedRun(on: fixtureDate("2026-07-12T12:00:00Z"))
+    let mondayRoutine = makeRoutine(
+      id: mondayRun.routineID,
+      name: "월요일 루틴",
+      weekdays: [.monday]
+    )
+    let sundayRoutine = makeRoutine(
+      id: sundayRun.routineID,
+      name: "일요일 루틴",
+      weekdays: [.sunday]
+    )
     let endedEarlyRun = RoutineRun(
       routineID: UUID(),
       routineName: "중단된 루틴",
@@ -505,7 +515,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       endedEarly: true
     )
     let viewModel = makeViewModel(
-      routines: [currentRoutine],
+      routines: [currentRoutine, mondayRoutine, sundayRoutine],
       runs: [todayRun, mondayRun, sundayRun, endedEarlyRun],
       now: now
     )
@@ -561,6 +571,30 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     XCTAssertEqual(result.streak.currentDays, 0)
     XCTAssertEqual(result.streak.bestDays, 0)
     XCTAssertTrue(result.streak.completedWeekdays.isEmpty)
+  }
+
+  @MainActor
+  func testHomeStreakCountsConsecutiveScheduledDays() throws {
+    let routine = makeRoutine(
+      name: "월수금 루틴",
+      weekdays: [.monday, .wednesday, .friday]
+    )
+    let runDates = [
+      fixtureDate("2026-07-06T12:00:00Z"),
+      fixtureDate("2026-07-08T12:00:00Z"),
+      fixtureDate("2026-07-10T12:00:00Z"),
+    ]
+    let runs = runDates.map { completedRun(routine: routine, on: $0) }
+
+    let result = try makeUseCase(
+      routines: [routine],
+      runs: runs,
+      now: fixtureDate("2026-07-10T15:00:00Z")
+    ).execute()
+
+    XCTAssertEqual(result.streak.currentDays, 3)
+    XCTAssertEqual(result.streak.bestDays, 3)
+    XCTAssertEqual(result.streak.completedWeekdays, [.monday, .wednesday, .friday])
   }
 
   @MainActor
@@ -664,6 +698,23 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       completedAt: date,
       results: [result],
       plannedSteps: [snapshot]
+    )
+  }
+
+  @MainActor
+  private func completedRun(routine: Routine, on date: Date) -> RoutineRun {
+    RoutineRun(
+      routine: routine,
+      startedAt: date,
+      completedAt: date,
+      results: routine.steps.map { step in
+        RoutineStepResult(
+          stepID: step.id,
+          stepTitle: step.title,
+          stepType: step.type,
+          completedAt: date
+        )
+      }
     )
   }
 

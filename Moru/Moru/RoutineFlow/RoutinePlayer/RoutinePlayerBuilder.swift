@@ -24,6 +24,7 @@ protocol RoutinePlayerBuilding: AnyObject {
 final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   private let resolver: any ResolveRoutineExecutionUseCaseProtocol
   private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
+  private let routineRepository: any RoutineRepository
   private let routineRunRepository: any RoutineRunRepository
   private let localProfileRepository: any LocalProfileRepository
   private let guidancePlayer: any RoutineGuidancePlaying
@@ -34,6 +35,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   init(
     resolver: any ResolveRoutineExecutionUseCaseProtocol,
     saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol,
+    routineRepository: any RoutineRepository,
     routineRunRepository: any RoutineRunRepository,
     localProfileRepository: any LocalProfileRepository,
     guidancePlayer: any RoutineGuidancePlaying,
@@ -43,6 +45,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
   ) {
     self.resolver = resolver
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
+    self.routineRepository = routineRepository
     self.routineRunRepository = routineRunRepository
     self.localProfileRepository = localProfileRepository
     self.guidancePlayer = guidancePlayer
@@ -85,6 +88,7 @@ final class DefaultRoutinePlayerBuilder: RoutinePlayerBuilding {
       resolver: resolver,
       finalizer: DefaultRegularRoutineFinalizer(
         saveRoutineRunUseCase: saveRoutineRunUseCase,
+        routineRepository: routineRepository,
         routineRunRepository: routineRunRepository
       ),
       guidanceCoordinator: makeGuidanceCoordinator(
@@ -148,15 +152,18 @@ private final class DefaultTrialRoutineFinalizer: TrialRoutineFinalizing {
 @MainActor
 final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
   private let saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol
+  private let routineRepository: any RoutineRepository
   private let routineRunRepository: any RoutineRunRepository
   private let streakCalculator: RoutineStreakCalculator
 
   init(
     saveRoutineRunUseCase: any SaveRoutineRunUseCaseProtocol,
+    routineRepository: any RoutineRepository,
     routineRunRepository: any RoutineRunRepository,
     calendar: Calendar = .current
   ) {
     self.saveRoutineRunUseCase = saveRoutineRunUseCase
+    self.routineRepository = routineRepository
     self.routineRunRepository = routineRunRepository
     self.streakCalculator = RoutineStreakCalculator(calendar: calendar)
   }
@@ -170,8 +177,11 @@ final class DefaultRegularRoutineFinalizer: RegularRoutineFinalizing {
     ).get()
 
     let savedRun = try saveRoutineRunUseCase.execute(request)
+    let schedules = try routineRepository.fetchActiveRoutines()
+      .compactMap(RoutineStreakSchedule.init)
     let streak = streakCalculator.calculate(
       from: try routineRunRepository.fetchRuns(),
+      schedules: schedules,
       asOf: request.completedAt
     )
 

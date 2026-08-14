@@ -12,16 +12,19 @@ protocol LoadHistoryUseCaseProtocol: AnyObject {
 
 @MainActor
 final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
+  private let routineRepository: any RoutineRepository
   private let routineRunRepository: any RoutineRunRepository
   private let calendar: Calendar
   private let now: () -> Date
   private let streakCalculator: RoutineStreakCalculator
 
   init(
+    routineRepository: any RoutineRepository,
     routineRunRepository: any RoutineRunRepository,
     calendar: Calendar = .current,
     now: @escaping () -> Date = { Date() }
   ) {
+    self.routineRepository = routineRepository
     self.routineRunRepository = routineRunRepository
     self.calendar = calendar
     self.now = now
@@ -31,6 +34,8 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
   func load() throws -> HistoryOverview {
     let currentDate = now()
     let runs = try routineRunRepository.fetchRuns().filter { $0.completedAt != nil }
+    let schedules = try routineRepository.fetchActiveRoutines()
+      .compactMap(RoutineStreakSchedule.init)
 
     return HistoryOverview(
       calendar: calendar,
@@ -38,7 +43,11 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
       week: makeWeekReport(from: runs, containing: currentDate),
       wakeMetrics: makeWakeMetrics(from: runs, containing: currentDate),
       monthlyHeatmap: makeMonthlyHeatmap(from: runs, containing: currentDate),
-      streak: streakCalculator.calculate(from: runs, asOf: currentDate)
+      streak: streakCalculator.calculate(
+        from: runs,
+        schedules: schedules,
+        asOf: currentDate
+      )
     )
   }
 

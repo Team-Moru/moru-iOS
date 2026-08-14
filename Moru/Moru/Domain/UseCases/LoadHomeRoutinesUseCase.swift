@@ -78,7 +78,11 @@ final class LoadHomeRoutinesUseCase: LoadHomeRoutinesUseCaseProtocol {
         from: runs,
         currentDate: currentDate
       ),
-      streak: streakCalculator.calculate(from: runs, asOf: currentDate),
+      streak: streakCalculator.calculate(
+        from: runs,
+        schedules: manualRoutines.compactMap(RoutineStreakSchedule.init),
+        asOf: currentDate
+      ),
       loadedAt: currentDate
     )
   }
