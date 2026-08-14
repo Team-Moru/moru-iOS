@@ -52,12 +52,27 @@ protocol RoutineSuggestionService: AnyObject {
   @MainActor
   func makeRoutine(from input: RoutineSuggestionInput) throws -> Routine
 }
+
+/// Supplies the goal-specific item candidates shown while a new user adjusts
+/// the initial recommendation. It is intentionally separate from
+/// `RoutineSuggestionService`: remote recommendation services only need to
+/// return the selected routine, while the bundled preset service can also
+/// offer optional local items for the same goal.
+@MainActor
+protocol RoutineSuggestionItemProviding: AnyObject {
+  func recommendationItems(from input: RoutineSuggestionInput) throws -> [RoutinePresetItem]
+}
+
 enum RoutineSuggestionError: Error, Equatable {
   case noPresetItems(goal: String)
 }
 
-final class LocalTemplateSuggestionService: RoutineSuggestionService {
+final class LocalTemplateSuggestionService:
+  RoutineSuggestionService,
+  RoutineSuggestionItemProviding
+{
   private static let maximumSuggestedStepCount = 4
+  private static let maximumRecommendationCandidateCount = 6
 
   private let presetProvider: any RoutinePresetProviding
 
@@ -99,35 +114,26 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
     )
   }
 
+  func recommendationItems(
+    from input: RoutineSuggestionInput
+  ) throws -> [RoutinePresetItem] {
+    let items = try presetProvider.loadItems()
+    let definition = templateDefinition(for: input)
+    let matchingItems = try matchingItems(for: definition, from: items)
+
+    return Array(
+      prioritizedItems(from: matchingItems)
+        .prefix(Self.maximumRecommendationCandidateCount)
+    )
+  }
+
   private func selectTemplate(
     for input: RoutineSuggestionInput,
     items: [RoutinePresetItem]
   ) throws -> LocalRoutineTemplate {
-    let normalizedSignals = makeSignals(from: input)
-    let definition = Self.templateDefinitions.max { lhs, rhs in
-      let lhsScore = lhs.score(for: normalizedSignals)
-      let rhsScore = rhs.score(for: normalizedSignals)
-
-      if lhsScore == rhsScore {
-        return lhs.priority > rhs.priority
-      }
-
-      return lhsScore < rhsScore
-    } ?? Self.templateDefinitions[0]
-    let selectedItems = items.filter { $0.goal == definition.goal }
-
-    guard !selectedItems.isEmpty else {
-      throw RoutineSuggestionError.noPresetItems(goal: definition.goal)
-    }
-
-    let prioritizedItems = selectedItems.filter(\.isCommon)
-      + selectedItems.filter { !$0.isCommon }
-    let suggestedItemIDs = Set(
-      prioritizedItems
-        .prefix(Self.maximumSuggestedStepCount)
-        .map(\.id)
-    )
-    let suggestedItems = selectedItems.filter { suggestedItemIDs.contains($0.id) }
+    let definition = templateDefinition(for: input)
+    let matchingItems = try matchingItems(for: definition, from: items)
+    let suggestedItems = suggestedItems(from: matchingItems)
 
     return LocalRoutineTemplate(
       priority: definition.priority,
@@ -138,6 +144,81 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
         item.makeStep(order: index)
       }
     )
+  }
+
+  private func templateDefinition(
+    for input: RoutineSuggestionInput
+  ) -> RoutineTemplateDefinition {
+    if input.goalTags.count == 1,
+       let goalTag = input.goalTags.first,
+       let definition = Self.templateDefinitions.first(
+         where: { $0.goalTag == goalTag }
+       ) {
+      return definition
+    }
+
+    let normalizedSignals = makeSignals(from: input)
+    return Self.templateDefinitions.max { lhs, rhs in
+      let lhsScore = lhs.score(for: normalizedSignals)
+      let rhsScore = rhs.score(for: normalizedSignals)
+
+      if lhsScore == rhsScore {
+        return lhs.priority > rhs.priority
+      }
+
+      return lhsScore < rhsScore
+    } ?? Self.templateDefinitions[0]
+  }
+
+  private func matchingItems(
+    for definition: RoutineTemplateDefinition,
+    from allItems: [RoutinePresetItem]
+  ) throws -> [RoutinePresetItem] {
+    let matchingItems = allItems.filter { $0.goal == definition.goal }
+
+    guard !matchingItems.isEmpty else {
+      throw RoutineSuggestionError.noPresetItems(goal: definition.goal)
+    }
+
+    return matchingItems
+  }
+
+  private func prioritizedItems(
+    from items: [RoutinePresetItem]
+  ) -> [RoutinePresetItem] {
+    items.filter(\.isCommon) + items.filter { !$0.isCommon }
+  }
+
+  /// Preserve the design's common-item-first ordering while ensuring a
+  /// first-run routine contains every supported step interaction when the
+  /// presets provide one (check, timer, and input).
+  private func suggestedItems(
+    from matchingItems: [RoutinePresetItem]
+  ) -> [RoutinePresetItem] {
+    let prioritized = prioritizedItems(from: matchingItems)
+    var selected = Array(prioritized.prefix(Self.maximumSuggestedStepCount))
+
+    for type in RoutineStepType.allCases
+    where !selected.contains(where: { $0.type == type }) {
+      guard let replacement = prioritized.first(where: { candidate in
+        candidate.type == type
+          && !selected.contains(where: { $0.id == candidate.id })
+      }) else {
+        continue
+      }
+
+      let selectedCounts = Dictionary(grouping: selected, by: \.type)
+        .mapValues(\.count)
+      guard let replacementIndex = selected.lastIndex(where: {
+        (selectedCounts[$0.type] ?? 0) > 1
+      }) else {
+        continue
+      }
+
+      selected[replacementIndex] = replacement
+    }
+
+    return selected
   }
 
   private func makeSignals(from input: RoutineSuggestionInput) -> Set<String> {
@@ -174,6 +255,7 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
   private static let templateDefinitions: [RoutineTemplateDefinition] = [
     RoutineTemplateDefinition(
       priority: 0,
+      goalTag: "energy",
       goal: "활력",
       matchSignals: ["energy", "활력", "스트레칭", "물", "기상", "wantsrecommendation"],
       name: "활력 루틴",
@@ -181,6 +263,7 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
     ),
     RoutineTemplateDefinition(
       priority: 1,
+      goalTag: "health",
       goal: "건강",
       matchSignals: ["health", "건강", "운동", "물마시기", "물 마시기", "물", "스트레칭"],
       name: "건강 루틴",
@@ -188,6 +271,7 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
     ),
     RoutineTemplateDefinition(
       priority: 2,
+      goalTag: "mind",
       goal: "마음 안정",
       matchSignals: ["mind", "마음", "안정", "명상", "일기", "호흡"],
       name: "마음 안정 루틴",
@@ -195,6 +279,7 @@ final class LocalTemplateSuggestionService: RoutineSuggestionService {
     ),
     RoutineTemplateDefinition(
       priority: 3,
+      goalTag: "habit",
       goal: "습관 형성",
       matchSignals: ["habit", "습관", "형성", "독서", "루틴", "hasroutine"],
       name: "습관 형성 루틴",
@@ -231,6 +316,7 @@ private struct LocalRoutineTemplate {
 
 private struct RoutineTemplateDefinition {
   let priority: Int
+  let goalTag: String
   let goal: String
   let matchSignals: Set<String>
   let name: String
