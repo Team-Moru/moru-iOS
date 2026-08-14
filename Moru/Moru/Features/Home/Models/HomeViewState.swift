@@ -296,21 +296,66 @@ struct HomeRoutineState: Equatable, Identifiable {
   )
 }
 
+enum HomeRoutineStepStatus: Equatable {
+  case notStarted
+  case completed
+  case skipped
+}
+
 struct HomeRoutineStepState: Equatable, Identifiable {
   var id: UUID
   var title: String
   var detail: String
-  var isCompleted: Bool
+  var status: HomeRoutineStepStatus
+
+  var isCompleted: Bool {
+    status == .completed
+  }
+
+  var isSkipped: Bool {
+    status == .skipped
+  }
+
+  var displayDetail: String {
+    isSkipped ? HomeCopy.skipped : detail
+  }
+
+  var accessibilityValue: String {
+    if isSkipped {
+      return HomeCopy.skipped
+    }
+
+    return isCompleted ? "완료, \(detail)" : "미실행, \(detail)"
+  }
 
   init(
     id: UUID = UUID(),
     title: String,
     detail: String,
-    isCompleted: Bool
+    isCompleted: Bool,
+    isSkipped: Bool = false
   ) {
     self.id = id
     self.title = title
     self.detail = detail
-    self.isCompleted = isCompleted
+    if isCompleted {
+      status = .completed
+    } else if isSkipped {
+      status = .skipped
+    } else {
+      status = .notStarted
+    }
+  }
+
+  init(
+    id: UUID = UUID(),
+    title: String,
+    detail: String,
+    status: HomeRoutineStepStatus
+  ) {
+    self.id = id
+    self.title = title
+    self.detail = detail
+    self.status = status
   }
 }

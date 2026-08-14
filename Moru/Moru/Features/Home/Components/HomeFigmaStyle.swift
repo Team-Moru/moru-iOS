@@ -9,10 +9,11 @@ import SwiftUI
 
 enum HomeCopy {
   static let morningGreeting = "좋은 아침이에요"
-  static let afternoonGreeting = "좋은 오후예요"
-  static let eveningGreeting = "좋은 저녁이에요"
+  static let afternoonGreeting = "오늘 하루도 힘내봐요"
+  static let eveningGreeting = "편안한 밤 되세요!"
   static let greeting = "\(morningGreeting),"
   static let greetingWithoutName = morningGreeting
+  static let skipped = "건너뜀"
   static let encouragement = "오늘도 작은 루틴이 큰 변화를 만들어요."
   static let todayRoutine = "오늘의 루틴"
   static let currentRoutine = "현재 사용 중인 루틴"

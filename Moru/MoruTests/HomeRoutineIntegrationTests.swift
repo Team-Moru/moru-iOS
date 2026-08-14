@@ -232,6 +232,69 @@ final class HomeRoutineIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testRoutineStepsDistinguishCompletedSkippedAndNotStarted() throws {
+    let now = fixtureDate("2026-07-13T08:00:00Z")
+    let routine = makeRoutine(
+      name: "상태 구분 루틴",
+      steps: [
+        RoutineStep(
+          type: .confirm,
+          title: "완료 단계",
+          order: 0,
+          estimatedSeconds: 60
+        ),
+        RoutineStep(
+          type: .timer,
+          title: "건너뛴 단계",
+          order: 1,
+          estimatedSeconds: 120
+        ),
+        RoutineStep(
+          type: .input,
+          title: "미실행 단계",
+          order: 2,
+          estimatedSeconds: 180
+        ),
+      ]
+    )
+    let run = RoutineRun(
+      routine: routine,
+      startedAt: now,
+      completedAt: now,
+      results: [
+        RoutineStepResult(
+          stepID: routine.steps[0].id,
+          stepTitle: routine.steps[0].title,
+          stepType: routine.steps[0].type,
+          completedAt: now
+        ),
+        RoutineStepResult(
+          stepID: routine.steps[1].id,
+          stepTitle: routine.steps[1].title,
+          stepType: routine.steps[1].type,
+          skipped: true
+        ),
+      ]
+    )
+    let viewModel = makeViewModel(routines: [routine], runs: [run], now: now)
+
+    viewModel.load()
+
+    let state = try XCTUnwrap(viewModel.state.todayRoutine)
+    XCTAssertEqual(
+      state.steps.map(\.status),
+      [.completed, .skipped, .notStarted]
+    )
+    XCTAssertEqual(state.steps.map(\.displayDetail), ["1:00", "건너뜀", "3:00"])
+    XCTAssertEqual(
+      state.steps.map(\.accessibilityValue),
+      ["완료, 1:00", "건너뜀", "미실행, 3:00"]
+    )
+    XCTAssertEqual(state.completionText, "1/3 완료")
+    XCTAssertEqual(state.progress, 1.0 / 3.0)
+  }
+
+  @MainActor
   func testNoManualRoutinesProducesEmptyStateWithoutPlaceholderName() {
     let viewModel = makeViewModel(
       routines: [],
