@@ -31,6 +31,16 @@ final class RecommendedRoutineCreationTests: XCTestCase {
     XCTAssertFalse(
       RoutineCreationFlowMode.recommendedAddition.includesCompletionTrial
     )
+    XCTAssertTrue(
+      RoutineCreationFlowMode.onboarding.supportsRecommendedRoutineStepEditing
+    )
+    XCTAssertTrue(
+      RoutineCreationFlowMode.recommendedAddition
+        .supportsRecommendedRoutineStepEditing
+    )
+    XCTAssertFalse(
+      RoutineCreationFlowMode.directAddition.supportsRecommendedRoutineStepEditing
+    )
   }
 
   @MainActor
@@ -76,16 +86,23 @@ final class RecommendedRoutineCreationTests: XCTestCase {
     viewModel.toggleGoal(tag: "mind")
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .suggestedRoutine)
-    viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .duration)
-    viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .freeform)
+    XCTAssertTrue(viewModel.showsRecommendedRoutineStepEditor)
+    XCTAssertEqual(viewModel.previewSummary, "")
 
-    viewModel.draft.freeformText = "명상과 일기로 차분하게 시작하고 싶어요"
-    viewModel.toggleKeyword("명상")
+    let selectedCandidate = try XCTUnwrap(
+      viewModel.recommendedRoutineStepCandidates.first(
+        where: viewModel.isRecommendedRoutineStepSelected
+      )
+    )
+    let additionalCandidate = try XCTUnwrap(
+      viewModel.recommendedRoutineStepCandidates.first {
+        !viewModel.isRecommendedRoutineStepSelected($0)
+      }
+    )
+    viewModel.toggleRecommendedRoutineStep(selectedCandidate)
+    viewModel.toggleRecommendedRoutineStep(additionalCandidate)
+
     viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .organizing)
-    viewModel.organizingDidFinish()
     XCTAssertEqual(viewModel.step, .review)
 
     let preview = try XCTUnwrap(viewModel.validatedPreviewRoutine)
@@ -117,6 +134,74 @@ final class RecommendedRoutineCreationTests: XCTestCase {
     XCTAssertEqual(viewModel.step, .alarm)
     XCTAssertEqual(voicePreviewPlayer.previewedVoices, [])
     XCTAssertEqual(voicePreviewPlayer.stopCallCount, 0)
+  }
+
+  @MainActor
+  func testRecommendedAdditionOffersStepEditingForEveryExperience() throws {
+    for experience in [
+      RoutineExperience.firstTime,
+      .wantsRecommendation,
+    ] {
+      let viewModel = OnboardingViewModel(
+        flowMode: .recommendedAddition,
+        routineSuggestionService: LocalTemplateSuggestionService.shared
+      )
+
+      viewModel.selectExperience(experience)
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .goals)
+
+      viewModel.toggleGoal(tag: "energy")
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .suggestedRoutine)
+      XCTAssertTrue(viewModel.showsRecommendedRoutineStepEditor)
+      XCTAssertEqual(viewModel.previewSummary, "")
+
+      let selectedCandidate = try XCTUnwrap(
+        viewModel.recommendedRoutineStepCandidates.first(
+          where: viewModel.isRecommendedRoutineStepSelected
+        )
+      )
+      viewModel.toggleRecommendedRoutineStep(selectedCandidate)
+      XCTAssertFalse(
+        viewModel.isRecommendedRoutineStepSelected(selectedCandidate)
+      )
+
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .review)
+      viewModel.backButtonDidTap()
+      XCTAssertEqual(viewModel.step, .suggestedRoutine)
+    }
+
+    let existingRoutineViewModel = OnboardingViewModel(
+      flowMode: .recommendedAddition,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+    existingRoutineViewModel.selectExperience(.hasRoutine)
+    existingRoutineViewModel.primaryButtonDidTap()
+    XCTAssertEqual(existingRoutineViewModel.step, .freeform)
+
+    existingRoutineViewModel.draft.freeformText =
+      "건강 루틴: 물, 스트레칭, 오늘 할 일을 정리하고 싶어요"
+    existingRoutineViewModel.primaryButtonDidTap()
+    XCTAssertEqual(existingRoutineViewModel.step, .organizing)
+    existingRoutineViewModel.organizingDidFinish()
+    XCTAssertEqual(existingRoutineViewModel.step, .review)
+    XCTAssertTrue(existingRoutineViewModel.showsRecommendedRoutineStepEditor)
+    XCTAssertEqual(existingRoutineViewModel.previewSummary, "")
+
+    let selectedCandidate = try XCTUnwrap(
+      existingRoutineViewModel.recommendedRoutineStepCandidates.first(
+        where: existingRoutineViewModel.isRecommendedRoutineStepSelected
+      )
+    )
+    existingRoutineViewModel.toggleRecommendedRoutineStep(selectedCandidate)
+    XCTAssertFalse(
+      existingRoutineViewModel.isRecommendedRoutineStepSelected(selectedCandidate)
+    )
+
+    existingRoutineViewModel.backButtonDidTap()
+    XCTAssertEqual(existingRoutineViewModel.step, .freeform)
   }
 
   @MainActor

@@ -265,7 +265,7 @@ private struct OnboardingBackgroundView: View {
   }
 }
 
-private enum OnboardingSurface {
+enum OnboardingSurface {
   static let card = AppColor.grayWhite
   static let input = AppColor.grayWhite
   static let listRow = AppColor.grayWhite
@@ -796,7 +796,8 @@ private struct RoutineReviewView: View {
     ) {
       if let routine = viewModel.validatedPreviewRoutine {
         VStack(spacing: AppSpacing.md) {
-          if viewModel.allowsReviewEditing {
+          if viewModel.allowsReviewEditing
+            && !viewModel.showsRecommendedRoutineStepEditor {
             EditableRoutineReviewForm(
               viewModel: viewModel,
               routine: routine,
@@ -804,6 +805,7 @@ private struct RoutineReviewView: View {
             )
           } else {
             RoutineReviewForm(
+              viewModel: viewModel,
               routine: routine,
               alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
             )
@@ -1272,12 +1274,13 @@ private struct RoutineStepPreviewRow: View {
 }
 
 private struct RoutineReviewForm: View {
+  @ObservedObject var viewModel: OnboardingViewModel
   let routine: Routine
   let alarmSummary: String
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.twentyEight) {
-      RoutineNameFields(routine: routine)
+      EditableRoutineIdentityFields(viewModel: viewModel)
 
       VStack(alignment: .leading, spacing: AppSpacing.sm) {
         Text("루틴 알림")
@@ -1288,39 +1291,25 @@ private struct RoutineReviewForm: View {
       }
 
       RoutineCountSummary(routine: routine)
-      RoutineStepListCard(routine: routine)
-    }
-  }
-}
-
-private struct RoutineNameFields: View {
-  let routine: Routine
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-      Text("루틴 이름")
-        .onboardingTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textSecondary)
-
-      RoundedInfoField(text: routine.name)
-      RoundedInfoField(
-        text: routine.summary.isEmpty ? "설명이 없어요" : routine.summary,
-        isPlaceholder: routine.summary.isEmpty
-      )
+      if viewModel.showsRecommendedRoutineStepEditor {
+        RecommendedRoutineStepCandidateList(
+          viewModel: viewModel,
+          candidates: viewModel.recommendedRoutineStepCandidates
+        )
+      } else {
+        RoutineStepListCard(routine: routine)
+      }
     }
   }
 }
 
 private struct RoundedInfoField: View {
   let text: String
-  var isPlaceholder: Bool = false
 
   var body: some View {
     Text(text)
       .onboardingTextStyle(.b4.weight(.semiBold))
-      .foregroundStyle(
-        isPlaceholder ? MoruPilotColor.textTertiary : MoruPilotColor.textPrimary
-      )
+      .foregroundStyle(MoruPilotColor.textPrimary)
       .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
       .padding(.horizontal, AppSpacing.md)
       .background(OnboardingSurface.input)
@@ -1847,7 +1836,7 @@ private extension RoutineStep {
   }
 }
 
-private struct OnboardingTextStyleModifier: ViewModifier {
+struct OnboardingTextStyleModifier: ViewModifier {
   let style: MoruTextStyle
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -1867,7 +1856,7 @@ private struct OnboardingTextStyleModifier: ViewModifier {
   }
 }
 
-private extension View {
+extension View {
   func onboardingTextStyle(_ style: MoruTextStyle) -> some View {
     modifier(OnboardingTextStyleModifier(style: style))
   }

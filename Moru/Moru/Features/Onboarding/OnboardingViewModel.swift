@@ -70,8 +70,9 @@ final class OnboardingViewModel: ObservableObject {
     }
   }
 
-  /// The goal-specific cards shown on onboarding step 3. Their selected
-  /// subset is persisted in `draft.previewRoutine.steps`.
+  /// The goal-specific cards shown while a user adjusts either a Moru
+  /// recommendation or an analyzed existing routine. Their selected subset
+  /// is persisted in `draft.previewRoutine.steps` in every guided creation flow.
   private(set) var recommendedRoutineStepCandidates: [RoutineStep] = [] {
     willSet {
       objectWillChange.send()
@@ -137,7 +138,7 @@ final class OnboardingViewModel: ObservableObject {
     self.onRecommendedRoutineSaved = onRecommendedRoutineSaved
     self.onCancelled = onCancelled
 
-    if flowMode == .onboarding, step == .suggestedRoutine {
+    if shouldConfigureRecommendedRoutineStepCandidates(for: step) {
       configureRecommendedRoutineStepCandidates()
     }
   }
@@ -206,7 +207,21 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   var hasRecommendedRoutineStepCandidates: Bool {
-    flowMode == .onboarding && !recommendedRoutineStepCandidates.isEmpty
+    flowMode.supportsRecommendedRoutineStepEditing
+      && !recommendedRoutineStepCandidates.isEmpty
+  }
+
+  var showsRecommendedRoutineStepEditor: Bool {
+    guard hasRecommendedRoutineStepCandidates else {
+      return false
+    }
+
+    switch (step, draft.experience) {
+    case (.suggestedRoutine, _), (.review, .hasRoutine):
+      return true
+    default:
+      return false
+    }
   }
 
   var canAdvance: Bool {
@@ -275,7 +290,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   func toggleRecommendedRoutineStep(_ candidate: RoutineStep) {
-    guard flowMode == .onboarding,
+    guard flowMode.supportsRecommendedRoutineStepEditing,
           recommendedRoutineStepCandidates.contains(where: {
             representsSameRecommendedRoutineStep($0, as: candidate)
           }),
@@ -394,7 +409,7 @@ final class OnboardingViewModel: ObservableObject {
     errorMessage = nil
 
     switch step {
-    case .experience where flowMode == .onboarding:
+    case .experience where flowMode.supportsRecommendedRoutineStepEditing:
       step = draft.experience == .hasRoutine ? .freeform : .goals
     case .goals:
       let coordinator: (any RoutineSuggestionCoordinating)?
@@ -416,7 +431,7 @@ final class OnboardingViewModel: ObservableObject {
         configureRecommendedRoutineStepCandidates()
         step = .suggestedRoutine
       }
-    case .suggestedRoutine where flowMode == .onboarding:
+    case .suggestedRoutine where flowMode.supportsRecommendedRoutineStepEditing:
       step = .review
     case .freeform:
       if let routineSuggestionCoordinator {
@@ -430,6 +445,7 @@ final class OnboardingViewModel: ObservableObject {
         guard refreshPreview() else {
           return
         }
+        configureRecommendedRoutineStepCandidates()
         step = .organizing
       }
     case .completion:
@@ -489,6 +505,9 @@ final class OnboardingViewModel: ObservableObject {
       return
     }
 
+    if shouldConfigureRecommendedRoutineStepCandidates(for: .review) {
+      configureRecommendedRoutineStepCandidates()
+    }
     step = .review
   }
 
@@ -500,8 +519,8 @@ final class OnboardingViewModel: ObservableObject {
     draft.suggestionSource = nil
 
     do {
-      draft.previewRoutine = try routineSuggestionService.makeRoutine(
-        from: draft.suggestionInput
+      draft.previewRoutine = routinePreparedForUserDescription(
+        try routineSuggestionService.makeRoutine(from: draft.suggestionInput)
       )
       draft.suggestionSource = .localFallback(.signedOut)
 
@@ -566,7 +585,7 @@ final class OnboardingViewModel: ObservableObject {
         return false
       }
 
-      draft.previewRoutine = result.routine
+      draft.previewRoutine = routinePreparedForUserDescription(result.routine)
       draft.suggestionSource = result.source
 
       guard hasValidatedPreviewRoutine else {
@@ -643,7 +662,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   private var previousStep: OnboardingStep? {
-    guard flowMode == .onboarding else {
+    guard flowMode.supportsRecommendedRoutineStepEditing else {
       return step.previous
     }
 
@@ -686,7 +705,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   private func configureRecommendedRoutineStepCandidates() {
-    guard flowMode == .onboarding,
+    guard flowMode.supportsRecommendedRoutineStepEditing,
           let routine = validatedPreviewRoutine else {
       recommendedRoutineStepCandidates = []
       return
@@ -710,6 +729,23 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     recommendedRoutineStepCandidates = Array(candidates.prefix(6))
+  }
+
+  private func shouldConfigureRecommendedRoutineStepCandidates(
+    for targetStep: OnboardingStep
+  ) -> Bool {
+    guard flowMode.supportsRecommendedRoutineStepEditing else {
+      return false
+    }
+
+    return targetStep == .suggestedRoutine
+      || (targetStep == .review && draft.experience == .hasRoutine)
+  }
+
+  private func routinePreparedForUserDescription(_ routine: Routine) -> Routine {
+    var editableRoutine = routine
+    editableRoutine.summary = ""
+    return editableRoutine
   }
 
   private func representsSameRecommendedRoutineStep(
@@ -803,7 +839,7 @@ final class OnboardingViewModel: ObservableObject {
           return
         }
         try Task.checkCancellation()
-        if flowMode == .onboarding, nextStep == .suggestedRoutine {
+        if shouldConfigureRecommendedRoutineStepCandidates(for: nextStep) {
           configureRecommendedRoutineStepCandidates()
         }
         step = nextStep

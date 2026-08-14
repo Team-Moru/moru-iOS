@@ -277,7 +277,7 @@ final class OnboardingRecommendationTests: XCTestCase {
         freeformText: "물을 마시고 싶어요"
       ),
       step: .experience,
-      routineSuggestionService: OnboardingRecommendationLocalStub(),
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
       routineSuggestionCoordinator: aiCoordinator,
       onboardingRecommendationCoordinator: goalCoordinator
     )
@@ -295,6 +295,24 @@ final class OnboardingRecommendationTests: XCTestCase {
       freeformViewModel.draft.previewRoutine?.name,
       "AI 재구성"
     )
+    XCTAssertTrue(freeformViewModel.showsRecommendedRoutineStepEditor)
+    XCTAssertEqual(
+      freeformViewModel.recommendedRoutineStepCandidates.count,
+      6
+    )
+    XCTAssertTrue(
+      freeformViewModel.recommendedRoutineStepCandidates.contains {
+        $0.title == "AI 단계"
+      }
+    )
+
+    let additionalCandidate = try XCTUnwrap(
+      freeformViewModel.recommendedRoutineStepCandidates.first {
+        !freeformViewModel.isRecommendedRoutineStepSelected($0)
+      }
+    )
+    freeformViewModel.toggleRecommendedRoutineStep(additionalCandidate)
+    XCTAssertEqual(freeformViewModel.validatedPreviewRoutine?.steps.count, 2)
   }
 
   func testRecommendedAdditionKeepsExistingAICoordinator()
@@ -335,6 +353,8 @@ final class OnboardingRecommendationTests: XCTestCase {
       viewModel.draft.previewRoutine?.name,
       "기존 AI 추천"
     )
+    XCTAssertEqual(viewModel.previewSummary, "")
+    XCTAssertTrue(viewModel.showsRecommendedRoutineStepEditor)
   }
 
   private var suggestionInput: RoutineSuggestionInput {

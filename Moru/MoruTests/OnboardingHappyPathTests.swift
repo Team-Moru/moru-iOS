@@ -244,9 +244,11 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .suggestedRoutine)
     XCTAssertNotNil(viewModel.draft.previewRoutine)
+    XCTAssertEqual(viewModel.previewSummary, "")
 
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .review)
+    viewModel.updatePreviewSummary("사용자가 입력한 아침 루틴 설명")
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .alarm)
 
@@ -271,6 +273,10 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpHour, 6)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpMinute, 40)
     XCTAssertEqual(useCase.requests.first?.selectedVoice, .aoede)
+    XCTAssertEqual(
+      useCase.requests.first?.previewRoutine?.summary,
+      "사용자가 입력한 아침 루틴 설명"
+    )
   }
 
   @MainActor
@@ -304,7 +310,9 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testExistingRoutineOnboardingRoutesThroughFreeformAnalysisAndSharedTail() {
+  func testExistingRoutineOnboardingRoutesThroughEditableAnalysisAndSharedTail()
+    throws
+  {
     let viewModel = OnboardingViewModel(
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
@@ -313,12 +321,39 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .freeform)
 
-    viewModel.draft.freeformText = "물을 마시고 스트레칭한 뒤 오늘 할 일을 정리하고 싶어요"
+    viewModel.draft.freeformText =
+      "건강 루틴: 물, 스트레칭, 오늘 할 일을 정리하고 싶어요"
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .organizing)
 
     viewModel.organizingDidFinish()
     XCTAssertEqual(viewModel.step, .review)
+    XCTAssertTrue(viewModel.showsRecommendedRoutineStepEditor)
+
+    let candidates = viewModel.recommendedRoutineStepCandidates
+    XCTAssertEqual(candidates.count, 6)
+    XCTAssertTrue(
+      candidates.allSatisfy { $0.presetItemID?.hasPrefix("HEALTH-") == true }
+    )
+    XCTAssertEqual(
+      candidates.filter(viewModel.isRecommendedRoutineStepSelected).count,
+      4
+    )
+
+    let selectedCandidate = try XCTUnwrap(
+      candidates.first(where: viewModel.isRecommendedRoutineStepSelected)
+    )
+    let additionalCandidate = try XCTUnwrap(
+      candidates.first { !viewModel.isRecommendedRoutineStepSelected($0) }
+    )
+
+    viewModel.toggleRecommendedRoutineStep(selectedCandidate)
+    XCTAssertFalse(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 3)
+
+    viewModel.toggleRecommendedRoutineStep(additionalCandidate)
+    XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(additionalCandidate))
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 4)
 
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .alarm)
