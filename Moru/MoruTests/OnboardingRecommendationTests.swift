@@ -285,7 +285,7 @@ final class OnboardingRecommendationTests: XCTestCase {
     freeformViewModel.primaryButtonDidTap()
     XCTAssertEqual(freeformViewModel.step, .freeform)
     freeformViewModel.primaryButtonDidTap()
-    try await waitUntil(timeout: .seconds(4)) {
+    try await waitUntil(timeout: .seconds(6)) {
       freeformViewModel.step == .review
     }
 

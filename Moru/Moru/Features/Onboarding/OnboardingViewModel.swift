@@ -18,12 +18,14 @@ enum RoutineOrganizingPresentationPhase: Int, CaseIterable, Equatable {
 
 enum RoutineOrganizingPresentationTiming {
   static let statusAnimationDuration = 0.28
-  static let phaseDwell: Duration = .milliseconds(700)
-  static let completedDwell: Duration = .milliseconds(700)
+  static let phaseDwell: Duration = .seconds(1)
+  static let completedDwell: Duration = .seconds(1)
 }
 
 @MainActor
 final class OnboardingViewModel: ObservableObject {
+  static let freeformTextCharacterLimit = 200
+
   let objectWillChange = ObservableObjectPublisher()
   let flowMode: RoutineCreationFlowMode
 
@@ -123,6 +125,9 @@ final class OnboardingViewModel: ObservableObject {
         normalizedDraft.orderedGoalTags.prefix(1)
       )
     }
+    normalizedDraft.freeformText = String(
+      normalizedDraft.freeformText.prefix(Self.freeformTextCharacterLimit)
+    )
 
     self.flowMode = flowMode
     self.draft = normalizedDraft
@@ -144,11 +149,15 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   var progressTotal: Int {
-    flowMode == .onboarding ? OnboardingStep.progressTotal : 8
+    flowMode == .onboarding ? onboardingProgressSteps.count : 8
   }
 
   var progressIndex: Int? {
-    step.progressIndex
+    guard flowMode == .onboarding else {
+      return step.progressIndex
+    }
+
+    return onboardingProgressSteps.firstIndex(of: step).map { $0 + 1 }
   }
 
   var canCancel: Bool {
@@ -175,6 +184,22 @@ final class OnboardingViewModel: ObservableObject {
     set {
       updatePreviewSummary(newValue)
     }
+  }
+
+  var freeformText: String {
+    draft.freeformText
+  }
+
+  var previewRoutineStepCount: Int {
+    validatedPreviewRoutine?.steps.count ?? 0
+  }
+
+  var previewRoutineDurationMinutes: Int {
+    guard let routine = validatedPreviewRoutine else {
+      return 0
+    }
+
+    return OnboardingDuration.totalMinutes(for: routine)
   }
 
   var primaryButtonTitle: String {
@@ -326,7 +351,12 @@ final class OnboardingViewModel: ObservableObject {
       draft.selectedKeywords.remove(keyword)
     } else {
       draft.selectedKeywords.insert(keyword)
+      appendKeywordToFreeformText(keyword)
     }
+  }
+
+  func updateFreeformText(_ text: String) {
+    draft.freeformText = String(text.prefix(Self.freeformTextCharacterLimit))
   }
 
   func updateAlarm(hour: Int, minute: Int) {
@@ -431,8 +461,13 @@ final class OnboardingViewModel: ObservableObject {
         configureRecommendedRoutineStepCandidates()
         step = .suggestedRoutine
       }
+    case .suggestedRoutine where flowMode == .onboarding:
+      step = .duration
     case .suggestedRoutine where flowMode.supportsRecommendedRoutineStepEditing:
       step = .review
+    case .duration where flowMode == .onboarding
+      && draft.experience != .hasRoutine:
+      step = .alarm
     case .freeform:
       if let routineSuggestionCoordinator {
         step = .organizing
@@ -661,7 +696,54 @@ final class OnboardingViewModel: ObservableObject {
       }
   }
 
+  private var onboardingProgressSteps: [OnboardingStep] {
+    switch draft.experience {
+    case .firstTime, .wantsRecommendation:
+      return [
+        .experience,
+        .goals,
+        .suggestedRoutine,
+        .duration,
+        .alarm,
+        .voice,
+        .completion,
+      ]
+    case .hasRoutine:
+      return [
+        .experience,
+        .freeform,
+        .organizing,
+        .review,
+        .alarm,
+        .voice,
+        .completion,
+      ]
+    }
+  }
+
   private var previousStep: OnboardingStep? {
+    if flowMode == .onboarding {
+      switch (step, draft.experience) {
+      case (.freeform, .hasRoutine):
+        return .experience
+      case (.organizing, .hasRoutine), (.review, .hasRoutine):
+        return .freeform
+      case (.alarm, .firstTime), (.alarm, .wantsRecommendation):
+        return .duration
+      case (.duration, .firstTime), (.duration, .wantsRecommendation):
+        return .suggestedRoutine
+      case (.suggestedRoutine, .firstTime),
+           (.suggestedRoutine, .wantsRecommendation):
+        return .goals
+      default:
+        guard let index = onboardingProgressSteps.firstIndex(of: step),
+              index > onboardingProgressSteps.startIndex else {
+          return nil
+        }
+        return onboardingProgressSteps[index - 1]
+      }
+    }
+
     guard flowMode.supportsRecommendedRoutineStepEditing else {
       return step.previous
     }
@@ -676,6 +758,23 @@ final class OnboardingViewModel: ObservableObject {
     default:
       return step.previous
     }
+  }
+
+  private func appendKeywordToFreeformText(_ keyword: String) {
+    guard !draft.freeformText.contains(keyword) else {
+      return
+    }
+
+    let separator = draft.freeformText.isEmpty
+      || draft.freeformText.last?.isWhitespace == true
+      ? ""
+      : " "
+    let appendedText = draft.freeformText + separator + keyword
+    guard appendedText.count <= Self.freeformTextCharacterLimit else {
+      return
+    }
+
+    updateFreeformText(appendedText)
   }
 
   private func updatePreviewAlarm() {

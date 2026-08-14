@@ -431,8 +431,8 @@ private struct SuggestedRoutinePreviewView: View {
         VStack(spacing: AppSpacing.lg) {
           RoutineMetaPill(
             goalTitle: viewModel.draft.primaryGoalTitle,
-            stepCount: displayedSteps.count,
-            durationMinutes: OnboardingDuration.totalMinutes(for: displayedSteps)
+            stepCount: viewModel.previewRoutineStepCount,
+            durationMinutes: viewModel.previewRoutineDurationMinutes
           )
 
           if viewModel.hasRecommendedRoutineStepCandidates {
@@ -603,14 +603,21 @@ private struct RoutineFreeformInputView: View {
     ) {
       VStack(alignment: .leading, spacing: AppSpacing.md) {
         ZStack(alignment: .topLeading) {
-          if viewModel.draft.freeformText.isEmpty {
+          if viewModel.freeformText.isEmpty {
             Text("예) 일어나면 물 마시고, 스트레칭 하고, 일기 쓰고,\n오늘 할 일 미리 확인하기")
               .onboardingTextStyle(.c1)
               .foregroundStyle(MoruPilotColor.textTertiary)
               .padding(AppSpacing.md)
           }
 
-          TextEditor(text: $viewModel.draft.freeformText)
+          TextEditor(
+            text: Binding(
+              get: { viewModel.freeformText },
+              set: { text in
+                viewModel.updateFreeformText(text)
+              }
+            )
+          )
             .font(
               .custom(
                 MoruTextWeight.medium.rawValue,
@@ -624,7 +631,10 @@ private struct RoutineFreeformInputView: View {
             .scrollContentBackground(.hidden)
             .background(Color.clear)
 
-          Text("\(min(viewModel.draft.freeformText.count, 200))/200")
+          Text(
+            "\(viewModel.freeformText.count)/"
+              + "\(OnboardingViewModel.freeformTextCharacterLimit)"
+          )
             .onboardingTextStyle(.c2)
             .foregroundStyle(MoruPilotColor.textTertiary)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)

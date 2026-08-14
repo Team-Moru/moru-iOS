@@ -136,16 +136,30 @@ final class OnboardingFigmaVisualTests: XCTestCase {
       VoiceProfile.localVoices.map { "‘\($0.displayName)’로 코칭받기" }
     )
 
-    XCTAssertEqual(OnboardingStep.experience.progressIndex, 1)
-    XCTAssertEqual(OnboardingStep.goals.progressIndex, 2)
-    XCTAssertEqual(OnboardingStep.suggestedRoutine.progressIndex, 3)
-    XCTAssertEqual(OnboardingStep.duration.progressIndex, 4)
-    XCTAssertEqual(OnboardingStep.freeform.progressIndex, 5)
-    XCTAssertNil(OnboardingStep.organizing.progressIndex)
-    XCTAssertEqual(OnboardingStep.review.progressIndex, 6)
-    XCTAssertEqual(OnboardingStep.alarm.progressIndex, 7)
-    XCTAssertEqual(OnboardingStep.voice.progressIndex, 8)
-    XCTAssertNil(OnboardingStep.completion.progressIndex)
+    let recommendedRoute: [OnboardingStep] = [
+      .experience,
+      .goals,
+      .suggestedRoutine,
+      .duration,
+      .alarm,
+      .voice,
+      .completion,
+    ]
+    let existingRoutineRoute: [OnboardingStep] = [
+      .experience,
+      .freeform,
+      .organizing,
+      .review,
+      .alarm,
+      .voice,
+      .completion,
+    ]
+
+    assertProgressRoute(
+      recommendedRoute,
+      experience: .wantsRecommendation
+    )
+    assertProgressRoute(existingRoutineRoute, experience: .hasRoutine)
 
     let onboardingAlarm = OnboardingViewModel(
       step: .alarm,
@@ -251,6 +265,24 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     }
   }
 
+  private func assertProgressRoute(
+    _ route: [OnboardingStep],
+    experience: RoutineExperience,
+    file: StaticString = #filePath,
+    line: UInt = #line
+  ) {
+    for (index, step) in route.enumerated() {
+      let viewModel = OnboardingViewModel(
+        draft: OnboardingDraft(experience: experience),
+        step: step,
+        routineSuggestionService: LocalTemplateSuggestionService.shared
+      )
+
+      XCTAssertEqual(viewModel.progressIndex, index + 1, file: file, line: line)
+      XCTAssertEqual(viewModel.progressTotal, route.count, file: file, line: line)
+    }
+  }
+
   private func screen(for state: OnboardingCaptureState) throws -> AnyView {
     if state == .splash {
       return AnyView(SplashScreenView())
@@ -261,11 +293,16 @@ final class OnboardingFigmaVisualTests: XCTestCase {
 
     let isRecommendedAdditionExistingRoutineReview =
       state == .recommendedAdditionExistingRoutineReview
-    let isExistingRoutineReview = state == .existingRoutineReview
+    let isExistingRoutineReview = state == .review
+      || state == .existingRoutineReview
+      || state == .longKorean
       || isRecommendedAdditionExistingRoutineReview
+    let usesExistingRoutineRoute = state == .freeform
+      || state == .organizing
+      || isExistingRoutineReview
     var draft = OnboardingDraft()
-    draft.experience = isExistingRoutineReview ? .hasRoutine : .wantsRecommendation
-    draft.selectedGoalTags = state == .goals || isExistingRoutineReview
+    draft.experience = usesExistingRoutineRoute ? .hasRoutine : .wantsRecommendation
+    draft.selectedGoalTags = state == .goals || usesExistingRoutineRoute
       ? []
       : ["mind"]
     draft.selectedKeywords = ["물 마시기", "스트레칭"]

@@ -170,6 +170,13 @@ final class OnboardingHappyPathTests: XCTestCase {
       candidates.allSatisfy { $0.presetItemID?.hasPrefix("CALM-") == true }
     )
     XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 4)
+    XCTAssertEqual(viewModel.previewRoutineStepCount, 4)
+    XCTAssertEqual(
+      viewModel.previewRoutineDurationMinutes,
+      OnboardingDuration.totalMinutes(
+        for: try XCTUnwrap(viewModel.validatedPreviewRoutine)
+      )
+    )
 
     let selectedCandidate = try XCTUnwrap(candidates.first)
     let additionalCandidate = try XCTUnwrap(
@@ -179,6 +186,13 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.toggleRecommendedRoutineStep(selectedCandidate)
     XCTAssertFalse(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
     XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 3)
+    XCTAssertEqual(viewModel.previewRoutineStepCount, 3)
+    XCTAssertEqual(
+      viewModel.previewRoutineDurationMinutes,
+      OnboardingDuration.totalMinutes(
+        for: try XCTUnwrap(viewModel.validatedPreviewRoutine)
+      )
+    )
 
     viewModel.toggleRecommendedRoutineStep(additionalCandidate)
     XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(additionalCandidate))
@@ -230,10 +244,13 @@ final class OnboardingHappyPathTests: XCTestCase {
     }
 
     XCTAssertEqual(viewModel.step, .experience)
+    XCTAssertEqual(viewModel.progressIndex, 1)
+    XCTAssertEqual(viewModel.progressTotal, 7)
 
     viewModel.selectExperience(.wantsRecommendation)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .goals)
+    XCTAssertEqual(viewModel.progressIndex, 2)
     viewModel.backButtonDidTap()
     XCTAssertEqual(viewModel.step, .experience)
 
@@ -243,23 +260,27 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.toggleGoal(tag: "mind")
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .suggestedRoutine)
+    XCTAssertEqual(viewModel.progressIndex, 3)
     XCTAssertNotNil(viewModel.draft.previewRoutine)
     XCTAssertEqual(viewModel.previewSummary, "")
 
     viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .review)
-    viewModel.updatePreviewSummary("사용자가 입력한 아침 루틴 설명")
+    XCTAssertEqual(viewModel.step, .duration)
+    XCTAssertEqual(viewModel.progressIndex, 4)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .alarm)
+    XCTAssertEqual(viewModel.progressIndex, 5)
 
     viewModel.updateAlarm(hour: 6, minute: 40)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .voice)
+    XCTAssertEqual(viewModel.progressIndex, 6)
 
     viewModel.selectVoice(.aoede)
     XCTAssertEqual(voicePreviewPlayer.previewedVoices, [.aoede])
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .completion)
+    XCTAssertEqual(viewModel.progressIndex, 7)
     XCTAssertEqual(voicePreviewPlayer.stopCallCount, 0)
     viewModel.voiceSelectionViewDidDisappear()
     XCTAssertEqual(voicePreviewPlayer.stopCallCount, 1)
@@ -273,10 +294,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpHour, 6)
     XCTAssertEqual(useCase.requests.first?.suggestionInput.wakeUpMinute, 40)
     XCTAssertEqual(useCase.requests.first?.selectedVoice, .aoede)
-    XCTAssertEqual(
-      useCase.requests.first?.previewRoutine?.summary,
-      "사용자가 입력한 아침 루틴 설명"
-    )
+    XCTAssertEqual(useCase.requests.first?.previewRoutine?.summary, "")
   }
 
   @MainActor
@@ -298,7 +316,8 @@ final class OnboardingHappyPathTests: XCTestCase {
       XCTAssertEqual(viewModel.step, .suggestedRoutine)
 
       viewModel.primaryButtonDidTap()
-      XCTAssertEqual(viewModel.step, .review)
+      XCTAssertEqual(viewModel.step, .duration)
+      XCTAssertEqual(viewModel.progressIndex, 4)
 
       viewModel.backButtonDidTap()
       XCTAssertEqual(viewModel.step, .suggestedRoutine)
@@ -306,28 +325,38 @@ final class OnboardingHappyPathTests: XCTestCase {
       viewModel.primaryButtonDidTap()
       viewModel.primaryButtonDidTap()
       XCTAssertEqual(viewModel.step, .alarm)
+      XCTAssertEqual(viewModel.progressIndex, 5)
+
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .voice)
+      XCTAssertEqual(viewModel.progressIndex, 6)
     }
   }
 
   @MainActor
   func testExistingRoutineOnboardingRoutesThroughEditableAnalysisAndSharedTail()
-    throws
+    async throws
   {
+    let useCase = SpyCompleteOnboardingUseCase()
     let viewModel = OnboardingViewModel(
-      routineSuggestionService: LocalTemplateSuggestionService.shared
+      routineSuggestionService: LocalTemplateSuggestionService.shared,
+      completeOnboardingUseCase: useCase
     )
 
     viewModel.selectExperience(.hasRoutine)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .freeform)
+    XCTAssertEqual(viewModel.progressIndex, 2)
 
     viewModel.draft.freeformText =
       "건강 루틴: 물, 스트레칭, 오늘 할 일을 정리하고 싶어요"
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertEqual(viewModel.progressIndex, 3)
 
     viewModel.organizingDidFinish()
     XCTAssertEqual(viewModel.step, .review)
+    XCTAssertEqual(viewModel.progressIndex, 4)
     XCTAssertTrue(viewModel.showsRecommendedRoutineStepEditor)
 
     let candidates = viewModel.recommendedRoutineStepCandidates
@@ -355,10 +384,29 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(additionalCandidate))
     XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 4)
 
+    viewModel.previewName = "사용자가 고친 건강 루틴"
+    viewModel.previewSummary = "사용자가 고친 루틴 설명"
+
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .alarm)
+    XCTAssertEqual(viewModel.progressIndex, 5)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .voice)
+    XCTAssertEqual(viewModel.progressIndex, 6)
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .completion)
+    XCTAssertEqual(viewModel.progressIndex, 7)
+
+    await viewModel.completeButtonDidTap()
+
+    XCTAssertEqual(
+      useCase.requests.first?.previewRoutine?.name,
+      "사용자가 고친 건강 루틴"
+    )
+    XCTAssertEqual(
+      useCase.requests.first?.previewRoutine?.summary,
+      "사용자가 고친 루틴 설명"
+    )
   }
 
   @MainActor
@@ -404,7 +452,7 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertNil(viewModel.errorMessage)
 
     viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .review)
+    XCTAssertEqual(viewModel.step, .duration)
 
     let freeformViewModel = OnboardingViewModel(
       routineSuggestionService: suggestionService,
@@ -489,6 +537,29 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(OnboardingDuration.roundedMinutes(for: routine.steps[0].estimatedSeconds), 2)
     XCTAssertEqual(OnboardingDuration.roundedMinutes(for: routine.steps[1].estimatedSeconds), 1)
     XCTAssertEqual(OnboardingDuration.totalMinutes(for: routine), 3)
+  }
+
+  @MainActor
+  func testFreeformInputEnforcesCharacterLimitAndAppendsSelectedKeyword() {
+    let viewModel = OnboardingViewModel(
+      draft: OnboardingDraft(
+        freeformText: String(repeating: "😀", count: 201)
+      ),
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+
+    XCTAssertEqual(viewModel.freeformText.count, 200)
+
+    viewModel.updateFreeformText("")
+    viewModel.toggleKeyword("물 마시기")
+    XCTAssertEqual(viewModel.freeformText, "물 마시기")
+
+    viewModel.updateFreeformText("아침에")
+    viewModel.toggleKeyword("스트레칭")
+    XCTAssertEqual(viewModel.freeformText, "아침에 스트레칭")
+
+    viewModel.updateFreeformText(String(repeating: "한", count: 201))
+    XCTAssertEqual(viewModel.freeformText.count, 200)
   }
 
   @MainActor
