@@ -175,19 +175,6 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertNotNil(viewModel.draft.previewRoutine)
 
     viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .duration)
-    viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .freeform)
-
-    viewModel.draft.freeformText = "명상하고 일기를 쓰고 싶어요"
-    viewModel.toggleKeyword("명상")
-    viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .organizing)
-    XCTAssertFalse(
-      viewModel.draft.previewRoutine?.summary.localizedCaseInsensitiveContains("AI") ?? true
-    )
-
-    viewModel.organizingDidFinish()
     XCTAssertEqual(viewModel.step, .review)
     viewModel.primaryButtonDidTap()
     XCTAssertEqual(viewModel.step, .alarm)
@@ -216,8 +203,64 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testBackButtonSkipsNonInteractiveOrganizingStepFromReview() {
+  func testRecommendedOnboardingSkipsFreeformAndAnalysisAfterSuggestion() {
+    for experience in [
+      RoutineExperience.firstTime,
+      .wantsRecommendation,
+    ] {
+      let viewModel = OnboardingViewModel(
+        routineSuggestionService: LocalTemplateSuggestionService.shared
+      )
+
+      viewModel.selectExperience(experience)
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .goals)
+
+      viewModel.toggleGoal(tag: "mind")
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .suggestedRoutine)
+
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .review)
+
+      viewModel.backButtonDidTap()
+      XCTAssertEqual(viewModel.step, .suggestedRoutine)
+
+      viewModel.primaryButtonDidTap()
+      viewModel.primaryButtonDidTap()
+      XCTAssertEqual(viewModel.step, .alarm)
+    }
+  }
+
+  @MainActor
+  func testExistingRoutineOnboardingRoutesThroughFreeformAnalysisAndSharedTail() {
     let viewModel = OnboardingViewModel(
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+
+    viewModel.selectExperience(.hasRoutine)
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .freeform)
+
+    viewModel.draft.freeformText = "물을 마시고 스트레칭한 뒤 오늘 할 일을 정리하고 싶어요"
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .organizing)
+
+    viewModel.organizingDidFinish()
+    XCTAssertEqual(viewModel.step, .review)
+
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .alarm)
+    viewModel.primaryButtonDidTap()
+    XCTAssertEqual(viewModel.step, .voice)
+  }
+
+  @MainActor
+  func testBackButtonSkipsNonInteractiveOrganizingStepFromExistingRoutineReview() {
+    var draft = OnboardingDraft()
+    draft.experience = .hasRoutine
+    let viewModel = OnboardingViewModel(
+      draft: draft,
       step: .review,
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
@@ -225,6 +268,8 @@ final class OnboardingHappyPathTests: XCTestCase {
     viewModel.backButtonDidTap()
 
     XCTAssertEqual(viewModel.step, .freeform)
+    viewModel.backButtonDidTap()
+    XCTAssertEqual(viewModel.step, .experience)
   }
 
   @MainActor
@@ -253,22 +298,33 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertNil(viewModel.errorMessage)
 
     viewModel.primaryButtonDidTap()
-    viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .freeform)
+    XCTAssertEqual(viewModel.step, .review)
+
+    let freeformViewModel = OnboardingViewModel(
+      routineSuggestionService: suggestionService,
+      completeOnboardingUseCase: SpyCompleteOnboardingUseCase(),
+      onCompleted: { _ in }
+    )
+    freeformViewModel.selectExperience(.hasRoutine)
+    freeformViewModel.primaryButtonDidTap()
+    XCTAssertEqual(freeformViewModel.step, .freeform)
 
     suggestionService.shouldFail = true
-    viewModel.primaryButtonDidTap()
+    freeformViewModel.primaryButtonDidTap()
 
-    XCTAssertEqual(viewModel.step, .freeform)
-    XCTAssertNil(viewModel.draft.previewRoutine)
-    XCTAssertEqual(viewModel.errorMessage, RetriableSuggestionError.unavailable.errorDescription)
+    XCTAssertEqual(freeformViewModel.step, .freeform)
+    XCTAssertNil(freeformViewModel.draft.previewRoutine)
+    XCTAssertEqual(
+      freeformViewModel.errorMessage,
+      RetriableSuggestionError.unavailable.errorDescription
+    )
 
     suggestionService.shouldFail = false
-    viewModel.primaryButtonDidTap()
+    freeformViewModel.primaryButtonDidTap()
 
-    XCTAssertEqual(viewModel.step, .organizing)
-    XCTAssertNotNil(viewModel.draft.previewRoutine)
-    XCTAssertNil(viewModel.errorMessage)
+    XCTAssertEqual(freeformViewModel.step, .organizing)
+    XCTAssertNotNil(freeformViewModel.draft.previewRoutine)
+    XCTAssertNil(freeformViewModel.errorMessage)
   }
 
   @MainActor

@@ -7,6 +7,17 @@
 
 import SwiftUI
 
+private struct OnboardingCaptureStaticAnimationsKey: EnvironmentKey {
+  static let defaultValue = false
+}
+
+extension EnvironmentValues {
+  var onboardingCaptureStaticAnimations: Bool {
+    get { self[OnboardingCaptureStaticAnimationsKey.self] }
+    set { self[OnboardingCaptureStaticAnimationsKey.self] = newValue }
+  }
+}
+
 @MainActor
 struct OnboardingFlowView: View {
   static let recommendedRootAccessibilityIdentifier =
@@ -711,6 +722,8 @@ private struct RoutineOrganizingChecklist: View {
 
 private struct OrganizingRoutineOrbView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.onboardingCaptureStaticAnimations)
+  private var captureStaticAnimations
 
   private let waveGradient = AngularGradient(
     colors: [
@@ -723,10 +736,12 @@ private struct OrganizingRoutineOrbView: View {
   )
 
   var body: some View {
+    let isPaused = reduceMotion || captureStaticAnimations
+
     TimelineView(
-      .animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)
+      .animation(minimumInterval: 1.0 / 30.0, paused: isPaused)
     ) { context in
-      let time = reduceMotion
+      let time = isPaused
         ? 0
         : context.date.timeIntervalSinceReferenceDate
       let coreBreath = CGFloat(sin(time * 2.35))
