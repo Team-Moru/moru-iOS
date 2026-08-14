@@ -13,6 +13,17 @@ import Moya
 
 @MainActor
 final class ServerRoutineSuggestionTests: XCTestCase {
+  func testOrganizingPresentationUsesOneSecondIntervals() {
+    XCTAssertEqual(
+      RoutineOrganizingPresentationTiming.phaseDwell,
+      .seconds(1)
+    )
+    XCTAssertEqual(
+      RoutineOrganizingPresentationTiming.completedDwell,
+      .seconds(1)
+    )
+  }
+
   func testTargetMatchesSwaggerUsesBearerAndRedactsSensitiveInput() throws {
     let request = RoutineGroupAiGenerateRequestDTO(
       userInput: "개인적인 아침 계획"
@@ -531,19 +542,19 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertTrue(viewModel.isSuggesting)
     XCTAssertEqual(viewModel.organizingProgress, .preparingRoutine)
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.organizingProgress == .organizingRecommendation
     }
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertTrue(viewModel.isSuggesting)
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.organizingProgress == .preparingReview
     }
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertTrue(viewModel.isSuggesting)
 
     await gate.finish(with: makeRoutine(name: "서버가 정리한 루틴"))
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.step == .review
     }
 
@@ -571,22 +582,22 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     )
 
     viewModel.primaryButtonDidTap()
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.organizingProgress == .organizingRecommendation
     }
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertTrue(viewModel.isSuggesting)
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.organizingProgress == .preparingReview
     }
     XCTAssertEqual(viewModel.step, .organizing)
     XCTAssertTrue(viewModel.isSuggesting)
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.organizingProgress == .completed
     }
     XCTAssertEqual(viewModel.step, .organizing)
 
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.step == .review
     }
 
@@ -609,7 +620,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     )
 
     viewModel.primaryButtonDidTap()
-    try await waitUntil(timeout: .seconds(2)) {
+    try await waitUntil(timeout: .seconds(4)) {
       viewModel.organizingProgress == .organizingRecommendation
     }
 
