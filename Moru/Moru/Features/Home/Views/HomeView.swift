@@ -321,19 +321,26 @@ struct HomeWeatherCard: View {
   @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-      Label("현재 위치 날씨", systemImage: "cloud.sun.fill")
-        .homeFigmaTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textPrimary)
-
-      weatherContent
-    }
+    weatherContent
     .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.vertical, MoruPilotSpacing.twelve)
-    .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+    .frame(
+      maxWidth: .infinity,
+      minHeight: minimumCardHeight,
+      alignment: .leading
+    )
     .homePilotSurface()
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("home.weather.card")
+  }
+
+  private var minimumCardHeight: CGFloat {
+    switch state {
+    case .fresh, .stale:
+      HomeFigmaLayout.weatherCardHeight
+    default:
+      HomeFigmaLayout.actionableWeatherCardHeight
+    }
   }
 
   @ViewBuilder
@@ -344,9 +351,9 @@ struct HomeWeatherCard: View {
     case .requestingPermission, .locating, .loading:
       weatherLoadingContent
     case .fresh(let content):
-      weatherSnapshotContent(content, updateText: "업데이트")
+      weatherSnapshotContent(content)
     case .stale(let content):
-      weatherSnapshotContent(content, updateText: "마지막 업데이트")
+      weatherSnapshotContent(content)
     case .denied:
       VStack(alignment: .leading, spacing: AppSpacing.sm) {
         weatherMessage("위치 권한이 꺼져 있어요")
@@ -408,41 +415,51 @@ struct HomeWeatherCard: View {
 
   @ViewBuilder
   private func weatherSnapshotContent(
-    _ content: HomeWeatherContent,
-    updateText: String
+    _ content: HomeWeatherContent
   ) -> some View {
     if let markImage = attributionMarkImage(for: content.attribution) {
-      ViewThatFits(in: .horizontal) {
-        HStack(alignment: .bottom, spacing: MoruPilotSpacing.sixteen) {
-          weatherReading(content.snapshot, updateText: updateText)
-            .layoutPriority(1)
-          Spacer(minLength: MoruPilotSpacing.eight)
-          VStack(alignment: .trailing, spacing: 0) {
-            refreshButton
-            weatherAttributionLink(
-              content.attribution,
-              markImage: markImage
-            )
+      ZStack(alignment: .topTrailing) {
+        weatherReading(content.snapshot)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .overlay(alignment: .bottomTrailing) {
+            temperatureRange(for: content.snapshot)
           }
-        }
 
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-          weatherReading(content.snapshot, updateText: updateText)
-          HStack(alignment: .bottom, spacing: MoruPilotSpacing.eight) {
-            refreshButton
-            Spacer(minLength: MoruPilotSpacing.eight)
-            weatherAttributionLink(
-              content.attribution,
-              markImage: markImage
-            )
-          }
+        HStack(spacing: -MoruPilotSpacing.sixteen) {
+          weatherAttributionLink(
+            content.attribution,
+            markImage: markImage
+          )
+          .offset(y: MoruPilotSpacing.four)
+          refreshButton
+            .offset(x: 7, y: MoruPilotSpacing.four)
         }
+        .offset(y: -MoruPilotSpacing.eight)
       }
     } else {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
         weatherMessage("날씨 출처 정보를 불러오지 못했어요")
         weatherRequestButton
       }
+    }
+  }
+
+  @ViewBuilder
+  private func temperatureRange(for snapshot: HomeWeatherSnapshot) -> some View {
+    if let dailyHighCelsius = snapshot.dailyHighCelsius,
+       let dailyLowCelsius = snapshot.dailyLowCelsius {
+      Text(
+        "최고 \(temperatureText(for: dailyHighCelsius)) · "
+          + "최저 \(temperatureText(for: dailyLowCelsius))"
+      )
+      .homeFigmaTextStyle(.c2.weight(.regular))
+      .foregroundStyle(MoruPilotColor.textSecondary)
+      .lineLimit(1)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(
+        "최고 섭씨 \(temperatureText(for: dailyHighCelsius)), "
+          + "최저 섭씨 \(temperatureText(for: dailyLowCelsius))"
+      )
     }
   }
 
@@ -459,7 +476,6 @@ struct HomeWeatherCard: View {
         .accessibilityHidden(true)
     }
     .buttonStyle(.plain)
-    .padding(.horizontal, 6)
     .padding(.vertical, 5)
     .background {
       if colorScheme == .dark {
@@ -484,8 +500,7 @@ struct HomeWeatherCard: View {
   }
 
   private func weatherReading(
-    _ snapshot: HomeWeatherSnapshot,
-    updateText: String
+    _ snapshot: HomeWeatherSnapshot
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(temperatureText(for: snapshot))
@@ -493,13 +508,10 @@ struct HomeWeatherCard: View {
         .foregroundStyle(MoruPilotColor.textPrimary)
         .lineLimit(1)
 
-      Text(
-        "\(conditionLabel(for: snapshot.condition)) · "
-          + "\(updateText) \(updateTime(for: snapshot))"
-      )
+      Text("\(conditionLabel(for: snapshot.condition)) · 현재 위치")
       .homeFigmaTextStyle(.c2.weight(.regular))
       .foregroundStyle(MoruPilotColor.textTertiary)
-      .fixedSize(horizontal: false, vertical: true)
+      .lineLimit(1)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(weatherSnapshotAccessibilityLabel(snapshot))
@@ -528,8 +540,17 @@ struct HomeWeatherCard: View {
     _ snapshot: HomeWeatherSnapshot
   ) -> String {
     let rounded = snapshot.temperatureCelsius.rounded(.toNearestOrAwayFromZero)
-    return "\(conditionLabel(for: snapshot.condition)), 섭씨 "
-      + "\(String(format: "%.0f", rounded))도"
+    var components = [
+      "현재 위치",
+      conditionLabel(for: snapshot.condition),
+      "섭씨 \(String(format: "%.0f", rounded))도",
+    ]
+    if let dailyHighCelsius = snapshot.dailyHighCelsius,
+       let dailyLowCelsius = snapshot.dailyLowCelsius {
+      components.append("최고 섭씨 \(temperatureText(for: dailyHighCelsius))")
+      components.append("최저 섭씨 \(temperatureText(for: dailyLowCelsius))")
+    }
+    return components.joined(separator: ", ")
   }
 
   private func conditionLabel(for condition: HomeWeatherCondition) -> String {
@@ -556,7 +577,11 @@ struct HomeWeatherCard: View {
   }
 
   private func temperatureText(for snapshot: HomeWeatherSnapshot) -> String {
-    let rounded = snapshot.temperatureCelsius.rounded(.toNearestOrAwayFromZero)
+    temperatureText(for: snapshot.temperatureCelsius)
+  }
+
+  private func temperatureText(for temperatureCelsius: Double) -> String {
+    let rounded = temperatureCelsius.rounded(.toNearestOrAwayFromZero)
     return "\(String(format: "%.0f", rounded))°"
   }
 

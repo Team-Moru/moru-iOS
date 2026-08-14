@@ -245,10 +245,19 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
       let temperatureCelsius = weather.currentWeather.temperature
         .converted(to: .celsius)
         .value
+      let todayForecast = weather.dailyForecast.forecast.first
+      let dailyHighCelsius = todayForecast?.highTemperature
+        .converted(to: .celsius)
+        .value
+      let dailyLowCelsius = todayForecast?.lowTemperature
+        .converted(to: .celsius)
+        .value
       let fetchedAt = Date()
       let timeZone = TimeZone.current
 
       guard temperatureCelsius.isFinite,
+            dailyHighCelsius?.isFinite != false,
+            dailyLowCelsius?.isFinite != false,
             let latitudeE4 = roundedE4(location.coordinate.latitude),
             let longitudeE4 = roundedE4(location.coordinate.longitude),
             !timeZone.identifier.isEmpty,
@@ -261,6 +270,8 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
         id: UUID(),
         condition: Self.condition(for: weather.currentWeather.condition),
         temperatureCelsius: temperatureCelsius,
+        dailyHighCelsius: dailyHighCelsius,
+        dailyLowCelsius: dailyLowCelsius,
         latitudeE4: latitudeE4,
         longitudeE4: longitudeE4,
         fetchedAt: fetchedAt,
@@ -532,6 +543,8 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
       id: UUID(),
       condition: .clear,
       temperatureCelsius: 22,
+      dailyHighCelsius: 25,
+      dailyLowCelsius: 18,
       latitudeE4: Int((location.coordinate.latitude * 10_000).rounded()),
       longitudeE4: Int((location.coordinate.longitude * 10_000).rounded()),
       fetchedAt: fetchedAt,
