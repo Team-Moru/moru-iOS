@@ -548,13 +548,13 @@ final class RouterRuntimeContractTests: XCTestCase {
 
     coordinator.presentationBindingDidChange(to: nil)
 
-    XCTAssertEqual(coordinator.presentationDidDismiss(), .reloadSession)
+    XCTAssertEqual(coordinator.presentationDidDismiss(), .enterAccountEntry)
     XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
     XCTAssertEqual(coordinator.navigationState, .idle)
   }
 
   @MainActor
-  func testCoordinatorReloadsTrialSessionOnceAfterMatchingDismissal() {
+  func testCoordinatorEntersAccountEntryOnceAfterTrialDismissal() {
     let coordinator = AppNavigationCoordinator()
 
     guard case .presented(let token) = coordinator.presentOnboardingTrial(routineID: UUID()) else {
@@ -571,7 +571,7 @@ final class RouterRuntimeContractTests: XCTestCase {
     )
     coordinator.presentationBindingDidChange(to: nil)
 
-    XCTAssertEqual(coordinator.presentationDidDismiss(), .reloadSession)
+    XCTAssertEqual(coordinator.presentationDidDismiss(), .enterAccountEntry)
     XCTAssertEqual(coordinator.presentationDidDismiss(), .none)
   }
 

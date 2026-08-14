@@ -308,6 +308,8 @@ final class OnboardingViewModel: ObservableObject {
     errorMessage = nil
 
     switch step {
+    case .experience where flowMode == .onboarding:
+      step = draft.experience == .hasRoutine ? .freeform : .goals
     case .goals:
       let coordinator: (any RoutineSuggestionCoordinating)?
       if flowMode == .onboarding {
@@ -327,6 +329,8 @@ final class OnboardingViewModel: ObservableObject {
         }
         step = .suggestedRoutine
       }
+    case .suggestedRoutine where flowMode == .onboarding:
+      step = .review
     case .freeform:
       if let routineSuggestionCoordinator {
         step = .organizing
@@ -357,7 +361,7 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   func backButtonDidTap() {
-    guard !isSaving, let previous = step.previous else {
+    guard !isSaving, let previous = previousStep else {
       return
     }
 
@@ -547,6 +551,23 @@ final class OnboardingViewModel: ObservableObject {
       && routine.steps.allSatisfy {
         !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       }
+  }
+
+  private var previousStep: OnboardingStep? {
+    guard flowMode == .onboarding else {
+      return step.previous
+    }
+
+    switch (step, draft.experience) {
+    case (.freeform, .hasRoutine):
+      return .experience
+    case (.review, .hasRoutine):
+      return .freeform
+    case (.review, .firstTime), (.review, .wantsRecommendation):
+      return .suggestedRoutine
+    default:
+      return step.previous
+    }
   }
 
   private func updatePreviewAlarm() {

@@ -87,7 +87,7 @@ enum PresentationAttempt: Equatable {
 enum AppNavigationEffect: Equatable {
   case none
   case dismiss(token: UUID)
-  case reloadSession
+  case enterAccountEntry
   case showHome
   case showRunDetail(UUID)
 }
@@ -235,7 +235,7 @@ enum AppNavigationReducer {
     case (.onboardingTrial, .summaryRecord):
       return AppNavigationTransition(state: state, effect: .none)
     case (.onboardingTrial, _):
-      afterDismiss = .reloadSession
+      afterDismiss = .enterAccountEntry
     case (.regularRoutine, .summaryCTA):
       afterDismiss = .showHome
     case (.regularRoutine, .summaryRecord(let runID)):

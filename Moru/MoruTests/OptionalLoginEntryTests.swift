@@ -39,22 +39,22 @@ final class OptionalLoginEntryTests: XCTestCase {
     }
   }
 
-  func testNoLocalProfileRoutingPreservesOptionalLoginContract() {
+  func testNewUserWaitsForAccountRestorationThenShowsStartSplash() {
     XCTAssertEqual(
       destination(accountState: .restoring),
-      .splash
+      .splash(showStartCTA: false)
     )
     XCTAssertEqual(
       destination(accountState: .signedOut),
-      .accountEntry(nil)
+      .splash(showStartCTA: true)
     )
     XCTAssertEqual(
       destination(accountState: .failure(.invalidCredentials)),
-      .accountEntry(.invalidCredentials)
+      .splash(showStartCTA: true)
     )
     XCTAssertEqual(
       destination(accountState: .failure(.credentialStoreUnavailable)),
-      .accountEntry(.credentialStoreUnavailable)
+      .splash(showStartCTA: true)
     )
     XCTAssertEqual(
       destination(
@@ -66,21 +66,99 @@ final class OptionalLoginEntryTests: XCTestCase {
           )
         )
       ),
-      .onboarding
-    )
-    XCTAssertEqual(
-      destination(
-        accountState: .signedOut,
-        didCompleteAccountEntry: true
-      ),
-      .onboarding
+      .splash(showStartCTA: true)
     )
     XCTAssertEqual(
       destination(
         accountState: .signedOut,
         accountFeaturesEnabled: false
       ),
+      .splash(showStartCTA: true)
+    )
+    XCTAssertEqual(
+      destination(
+        accountState: .signedOut,
+        didStartOnboarding: true
+      ),
       .onboarding
+    )
+  }
+
+  func testCompletedOnboardingTrialRoutesAccountEntryOnlyWhenNeeded() {
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .restoring,
+        didCompleteOnboardingTrial: true
+      ),
+      .splash(showStartCTA: false)
+    )
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .signedOut,
+        didCompleteOnboardingTrial: true
+      ),
+      .accountEntry(nil)
+    )
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .failure(.invalidCredentials),
+        didCompleteOnboardingTrial: true
+      ),
+      .accountEntry(.invalidCredentials)
+    )
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .signedIn(
+          SignedInAccount(
+            memberID: 2,
+            onboardingCompleted: true,
+            provider: .kakao
+          )
+        ),
+        didCompleteOnboardingTrial: true
+      ),
+      .main
+    )
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .signedOut,
+        accountFeaturesEnabled: false,
+        didCompleteOnboardingTrial: true
+      ),
+      .main
+    )
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .signedOut,
+        didCompleteOnboardingTrial: true,
+        didCompleteAccountEntry: true
+      ),
+      .main
+    )
+  }
+
+  func testClearingTrialSessionFlagsAfterLocalResetReturnsToStartSplash() {
+    XCTAssertEqual(
+      destination(
+        phase: .onboardingRequired,
+        accountState: .signedOut,
+        didStartOnboarding: false,
+        didCompleteOnboardingTrial: false,
+        didCompleteAccountEntry: false
+      ),
+      .splash(showStartCTA: true)
     )
   }
 
@@ -90,7 +168,7 @@ final class OptionalLoginEntryTests: XCTestCase {
         phase: .loading,
         accountState: .signedOut
       ),
-      .splash
+      .splash(showStartCTA: false)
     )
     XCTAssertEqual(
       destination(
@@ -360,6 +438,8 @@ final class OptionalLoginEntryTests: XCTestCase {
     hasLocalProfile: Bool = false,
     accountState: AccountSessionState,
     accountFeaturesEnabled: Bool = true,
+    didStartOnboarding: Bool = false,
+    didCompleteOnboardingTrial: Bool = false,
     didCompleteAccountEntry: Bool = false
   ) -> AppRootDestination {
     AppRouter.rootDestination(
@@ -367,6 +447,8 @@ final class OptionalLoginEntryTests: XCTestCase {
       hasLocalProfile: hasLocalProfile,
       accountState: accountState,
       accountFeaturesEnabled: accountFeaturesEnabled,
+      didStartOnboarding: didStartOnboarding,
+      didCompleteOnboardingTrial: didCompleteOnboardingTrial,
       didCompleteAccountEntry: didCompleteAccountEntry
     )
   }

@@ -10,7 +10,7 @@ import SwiftUI
 import UIKit
 
 nonisolated enum AppRootDestination: Equatable, Sendable {
-  case splash
+  case splash(showStartCTA: Bool)
   case accountEntry(AccountSessionFailure?)
   case onboarding
   case main
@@ -58,6 +58,8 @@ struct AppRouter: View {
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
+  @State private var didStartOnboarding = false
+  @State private var didCompleteOnboardingTrial = false
   @State private var didCompleteAccountEntry = false
   @StateObject private var state: AppRouterState
 
@@ -159,10 +161,14 @@ struct AppRouter: View {
         hasLocalProfile: sessionStore.profile != nil,
         accountState: accountSessionStore.state,
         accountFeaturesEnabled: appCapabilities.shouldShowAccountUI,
+        didStartOnboarding: didStartOnboarding,
+        didCompleteOnboardingTrial: didCompleteOnboardingTrial,
         didCompleteAccountEntry: didCompleteAccountEntry
       ) {
-      case .splash:
-        SplashScreenView()
+      case .splash(let showStartCTA):
+        SplashScreenView(
+          onStart: showStartCTA ? handleOnboardingStarted : nil
+        )
 
       case .accountEntry(let restorationFailure):
         AccountEntryView(
@@ -228,7 +234,11 @@ struct AppRouter: View {
         await dependencies.alarmScheduleMutator?.reconcile()
       }
     }
-    .onChange(of: accountSessionStore.state) { _, _ in
+    .onChange(of: accountSessionStore.state) { _, newState in
+      if didCompleteOnboardingTrial,
+         case .signedIn = newState {
+        didCompleteAccountEntry = true
+      }
       routineSyncRuntimeCoordinator?.accountSessionDidChange()
       dependencies.routineTTSWarmupCoordinator?.accountSessionDidChange()
     }
@@ -257,11 +267,13 @@ struct AppRouter: View {
     hasLocalProfile: Bool,
     accountState: AccountSessionState,
     accountFeaturesEnabled: Bool,
+    didStartOnboarding: Bool,
+    didCompleteOnboardingTrial: Bool,
     didCompleteAccountEntry: Bool
   ) -> AppRootDestination {
     switch sessionPhase {
     case .loading:
-      return .splash
+      return .splash(showStartCTA: false)
     case .failed(let message):
       return .sessionFailure(
         title: "저장소를 열 수 없어요",
@@ -269,6 +281,30 @@ struct AppRouter: View {
       )
     case .ready, .onboardingRequired:
       break
+    }
+
+    if didCompleteOnboardingTrial {
+      guard hasLocalProfile else {
+        return .sessionFailure(
+          title: "프로필 정보를 확인할 수 없어요",
+          message: "앱 상태가 올바르지 않아요. 다시 시도해 주세요."
+        )
+      }
+
+      guard accountFeaturesEnabled, !didCompleteAccountEntry else {
+        return .main
+      }
+
+      switch accountState {
+      case .restoring:
+        return .splash(showStartCTA: false)
+      case .signedIn:
+        return .main
+      case .signedOut:
+        return .accountEntry(nil)
+      case .failure(let failure):
+        return .accountEntry(failure)
+      }
     }
 
     if hasLocalProfile {
@@ -282,20 +318,30 @@ struct AppRouter: View {
       )
     }
 
-    guard accountFeaturesEnabled, !didCompleteAccountEntry else {
+    if didStartOnboarding {
       return .onboarding
     }
 
-    switch accountState {
-    case .restoring:
-      return .splash
-    case .signedIn:
-      return .onboarding
-    case .signedOut:
-      return .accountEntry(nil)
-    case .failure(let failure):
-      return .accountEntry(failure)
+    guard accountFeaturesEnabled,
+          case .restoring = accountState else {
+      return .splash(showStartCTA: true)
     }
+
+    return .splash(showStartCTA: false)
+  }
+
+  @MainActor
+  private func handleOnboardingStarted() {
+    didStartOnboarding = true
+  }
+
+  @MainActor
+  private func resetToNewUserFlow() {
+    deferredOnboardingTrialRoutineID = nil
+    didStartOnboarding = false
+    didCompleteOnboardingTrial = false
+    didCompleteAccountEntry = false
+    sessionStore.load()
   }
 
   private var presentationBinding: Binding<AppPresentation?> {
@@ -449,9 +495,7 @@ struct AppRouter: View {
 
         UIApplication.shared.open(url)
       },
-      onResetSucceeded: {
-        sessionStore.load()
-      },
+      onResetSucceeded: resetToNewUserFlow,
       onServerVoiceSelectionDidSucceed: { memberID in
         dependencies.routineTTSWarmupCoordinator?
           .serverVoiceSelectionDidChange(memberID: memberID)
@@ -505,7 +549,11 @@ struct AppRouter: View {
       break
     case .dismiss(_):
       presentationBinding.wrappedValue = nil
-    case .reloadSession:
+    case .enterAccountEntry:
+      didCompleteOnboardingTrial = true
+      if case .signedIn = accountSessionStore.state {
+        didCompleteAccountEntry = true
+      }
       sessionStore.load()
     case .showHome:
       state.showHome()

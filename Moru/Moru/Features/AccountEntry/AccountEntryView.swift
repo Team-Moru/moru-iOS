@@ -478,7 +478,7 @@ struct AccountEntryView: View {
     .foregroundStyle(AppColor.gray300)
     .frame(maxWidth: .infinity)
     .disabled(viewModel.isRequestInFlight)
-    .accessibilityHint("계정을 연결하지 않고 이 기기의 로컬 온보딩을 시작합니다.")
+    .accessibilityHint("계정을 연결하지 않고 바로 MORU를 시작합니다.")
     .accessibilityIdentifier(AccountEntryAccessibility.guestIdentifier)
   }
 

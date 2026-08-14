@@ -232,7 +232,7 @@ final class OnboardingRecommendationTests: XCTestCase {
     XCTAssertEqual(local.callCount, 1)
   }
 
-  func testOnboardingRoutesGoalsToRecommendationAndFreeformToAI()
+  func testOnboardingRoutesExperienceChoicesToRecommendationAndFreeformAI()
     async throws {
     let goalCoordinator = CountingOnboardingSuggestionCoordinator(
       routine: serverRoutine
@@ -272,15 +272,18 @@ final class OnboardingRecommendationTests: XCTestCase {
 
     let freeformViewModel = OnboardingViewModel(
       draft: OnboardingDraft(
+        experience: .hasRoutine,
         selectedGoalTags: ["health"],
         freeformText: "물을 마시고 싶어요"
       ),
-      step: .freeform,
+      step: .experience,
       routineSuggestionService: OnboardingRecommendationLocalStub(),
       routineSuggestionCoordinator: aiCoordinator,
       onboardingRecommendationCoordinator: goalCoordinator
     )
 
+    freeformViewModel.primaryButtonDidTap()
+    XCTAssertEqual(freeformViewModel.step, .freeform)
     freeformViewModel.primaryButtonDidTap()
     try await waitUntil {
       freeformViewModel.step == .review

@@ -210,9 +210,14 @@ final class OnboardingFigmaVisualTests: XCTestCase {
   }
 
   func testOnboardingStatesRenderDeterministicallyAtReferenceVariants() throws {
-    for state in OnboardingCaptureState.allCases where state != .alarm {
+    for state in OnboardingCaptureState.allCases
+    where state != .alarm && state != .startSplash {
       try assertStateRendersDeterministically(state)
     }
+  }
+
+  func testStartSplashRendersDeterministicallyAtReferenceVariants() throws {
+    try assertStateRendersDeterministically(.startSplash)
   }
 
   private func assertStateRendersDeterministically(
@@ -250,6 +255,9 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     if state == .splash {
       return AnyView(SplashScreenView())
     }
+    if state == .startSplash {
+      return AnyView(SplashScreenView(onStart: {}))
+    }
 
     var draft = OnboardingDraft()
     draft.experience = .wantsRecommendation
@@ -286,7 +294,7 @@ final class OnboardingFigmaVisualTests: XCTestCase {
 
   private func step(for state: OnboardingCaptureState) -> OnboardingStep {
     switch state {
-    case .splash:
+    case .splash, .startSplash:
       return .experience
     case .experience:
       return .experience
@@ -314,6 +322,7 @@ final class OnboardingFigmaVisualTests: XCTestCase {
 
 private enum OnboardingCaptureState: String, CaseIterable {
   case splash
+  case startSplash = "start-splash"
   case experience
   case goals
   case suggestedRoutine = "suggested-routine"

@@ -10,6 +10,7 @@ import QuartzCore
 import SwiftUI
 import UIKit
 import XCTest
+@testable import Moru
 
 enum MoruVisualCaptureVariant: String, CaseIterable {
   case lightMedium = "light-M"
@@ -76,6 +77,7 @@ enum MoruVisualCaptureFixture {
       .environment(\.locale, configuration.locale)
       .environment(\.calendar, configuration.calendar)
       .environment(\.timeZone, configuration.timeZone)
+      .environment(\.onboardingCaptureStaticAnimations, true)
       .preferredColorScheme(configuration.colorScheme)
 
     let windowScene = try XCTUnwrap(
