@@ -5,7 +5,9 @@
 //  Created by Codex on 7/24/26.
 //
 
-enum ProfileCopy {
+import Foundation
+
+nonisolated enum ProfileCopy {
   static let title = "설정"
   static let voiceSettings = "음성 설정"
   static let moruVoice = "모루 말투"
@@ -19,5 +21,29 @@ enum ProfileCopy {
   static let withdraw = "회원탈퇴"
   static let dataManagement = "데이터 관리"
   static let resetLocalData = "로컬 데이터 초기화"
+  static let support = "고객 지원"
+  static let termsOfService = "이용약관"
+  static let contact = "문의하기"
+  static let contactEmail = "mmoru2026@gmail.com"
   static let close = "닫기"
+}
+
+nonisolated struct ProfileSupportLinks: Equatable, Sendable {
+  let termsOfServiceURL: URL?
+  let contactURL: URL
+
+  init(
+    policyConfiguration: AccountEntryPolicyConfiguration,
+    contactEmail: String = ProfileCopy.contactEmail
+  ) {
+    termsOfServiceURL = policyConfiguration.termsOfServiceURL
+
+    var components = URLComponents()
+    components.scheme = "mailto"
+    components.path = contactEmail
+    guard let contactURL = components.url else {
+      preconditionFailure("The MORU support email must form a valid mailto URL.")
+    }
+    self.contactURL = contactURL
+  }
 }

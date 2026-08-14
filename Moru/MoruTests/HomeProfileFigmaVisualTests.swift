@@ -29,6 +29,91 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     XCTAssertEqual(ProfileCopy.socialLogin, "소셜 로그인")
     XCTAssertEqual(ProfileCopy.dataManagement, "데이터 관리")
     XCTAssertEqual(ProfileCopy.resetLocalData, "로컬 데이터 초기화")
+    XCTAssertEqual(ProfileCopy.support, "고객 지원")
+    XCTAssertEqual(ProfileCopy.termsOfService, "이용약관")
+    XCTAssertEqual(ProfileCopy.contact, "문의하기")
+    XCTAssertEqual(ProfileCopy.contactEmail, "mmoru2026@gmail.com")
+  }
+
+  func testGreetingCopyUsesDesignPeriodsAndPreservesEveningPunctuation() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let cases: [(Int, Int, HomeGreetingPeriod, String)] = [
+      (5, 59, .evening, "편안한 밤 되세요!"),
+      (6, 0, .morning, "좋은 아침이에요"),
+      (11, 59, .morning, "좋은 아침이에요"),
+      (12, 0, .afternoon, "오늘 하루도 힘내봐요"),
+      (17, 59, .afternoon, "오늘 하루도 힘내봐요"),
+      (18, 0, .evening, "편안한 밤 되세요!"),
+    ]
+
+    for (hour, minute, expectedPeriod, expectedText) in cases {
+      let date = try XCTUnwrap(
+        calendar.date(
+          from: DateComponents(
+            calendar: calendar,
+            timeZone: calendar.timeZone,
+            year: 2026,
+            month: 7,
+            day: 13,
+            hour: hour,
+            minute: minute
+          )
+        )
+      )
+      let period = HomeGreetingPeriod(date: date, calendar: calendar)
+
+      XCTAssertEqual(period, expectedPeriod)
+      XCTAssertEqual(period.text, expectedText)
+    }
+
+    XCTAssertEqual(
+      HomeGreetingPeriod.evening.greeting(userName: " 모루 "),
+      "편안한 밤 되세요!\n모루님"
+    )
+  }
+
+  func testProfileSupportLinksReuseValidatedTermsAndExactContactEmail() {
+    let links = ProfileSupportLinks(
+      policyConfiguration: AccountEntryPolicyConfiguration(
+        infoDictionary: [
+          "MoruTermsOfServiceURL": "https://team-moru.github.io/terms",
+        ]
+      )
+    )
+
+    XCTAssertEqual(
+      links.termsOfServiceURL?.absoluteString,
+      "https://team-moru.github.io/terms"
+    )
+    XCTAssertEqual(
+      links.contactURL.absoluteString,
+      "mailto:mmoru2026@gmail.com"
+    )
+    XCTAssertEqual(
+      ProfileView.termsOfServiceAccessibilityIdentifier,
+      "profile.support.terms"
+    )
+    XCTAssertEqual(
+      ProfileView.contactAccessibilityIdentifier,
+      "profile.support.contact"
+    )
+  }
+
+  func testProfileSupportLinksKeepContactAvailableWhenTermsAreMisconfigured() {
+    let links = ProfileSupportLinks(
+      policyConfiguration: AccountEntryPolicyConfiguration(
+        infoDictionary: [
+          "MoruTermsOfServiceURL": "http://example.com/terms",
+        ]
+      )
+    )
+
+    XCTAssertNil(links.termsOfServiceURL)
+    XCTAssertEqual(
+      links.contactURL.absoluteString,
+      "mailto:mmoru2026@gmail.com"
+    )
   }
 
   func testWeatherCardHeightContract() {
@@ -362,7 +447,8 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     let completedStepCount = state == .homePartialData ? 1 : routine.steps.count
     let run = makeRun(
       routine: routine,
-      completedStepCount: completedStepCount
+      completedStepCount: completedStepCount,
+      skippedStepIndex: state == .homePartialData ? 1 : nil
     )
     let activeRoutine = makeRoutine(
       id: UUID(uuidString: "30000000-0000-0000-0000-000000000002")!,
@@ -436,15 +522,28 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
 
   private func makeRun(
     routine: Routine,
-    completedStepCount: Int
+    completedStepCount: Int,
+    skippedStepIndex: Int? = nil
   ) -> RoutineRun {
-    let results = routine.steps.prefix(completedStepCount).map { step in
+    var results = routine.steps.prefix(completedStepCount).map { step in
       RoutineStepResult(
         stepID: step.id,
         stepTitle: step.title,
         stepType: step.type,
         completedAt: Date(timeIntervalSince1970: 1_784_841_300),
         durationSeconds: step.estimatedSeconds
+      )
+    }
+    if let skippedStepIndex,
+       routine.steps.indices.contains(skippedStepIndex) {
+      let step = routine.steps[skippedStepIndex]
+      results.append(
+        RoutineStepResult(
+          stepID: step.id,
+          stepTitle: step.title,
+          stepType: step.type,
+          skipped: true
+        )
       )
     }
 

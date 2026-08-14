@@ -194,6 +194,9 @@ struct CurrentRoutineCard: View {
         .fill(AppColor.moruBorder)
         .frame(height: 1)
     }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(step.title)
+    .accessibilityValue(step.accessibilityValue)
   }
 
   private func stepTitle(_ step: HomeRoutineStepState) -> some View {
@@ -204,7 +207,7 @@ struct CurrentRoutineCard: View {
   }
 
   private func stepDetail(_ step: HomeRoutineStepState) -> some View {
-    Text(step.detail)
+    Text(step.displayDetail)
       .homeFigmaTextStyle(.c2)
       .foregroundStyle(MoruPilotColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)

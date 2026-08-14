@@ -51,13 +51,7 @@ struct HomeHeaderView: View {
   }
 
   private func greeting(at date: Date) -> String {
-    let greeting = HomeGreetingPeriod(date: date).text
-    let trimmedName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedName.isEmpty else {
-      return greeting
-    }
-
-    return "\(greeting),\n\(trimmedName)님"
+    HomeGreetingPeriod(date: date).greeting(userName: userName)
   }
 }
 
@@ -86,6 +80,16 @@ enum HomeGreetingPeriod: Equatable {
     case .evening:
       HomeCopy.eveningGreeting
     }
+  }
+
+  func greeting(userName: String) -> String {
+    let trimmedName = userName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedName.isEmpty else {
+      return text
+    }
+
+    let separator = text.hasSuffix("!") ? "\n" : ",\n"
+    return "\(text)\(separator)\(trimmedName)님"
   }
 }
 

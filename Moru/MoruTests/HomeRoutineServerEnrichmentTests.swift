@@ -45,6 +45,42 @@ final class HomeRoutineServerEnrichmentTests: XCTestCase {
   }
 
   @MainActor
+  func testServerOverlayPreservesSkippedWhenRemoteStepIsIncomplete()
+    async throws {
+    let fixture = HomeEnrichmentFixture()
+    let skippedResults = fixture.routine.steps.map { step in
+      RoutineStepResult(
+        stepID: step.id,
+        stepTitle: step.title,
+        stepType: step.type,
+        skipped: true
+      )
+    }
+    let run = RoutineRun(
+      routine: fixture.routine,
+      startedAt: HomeEnrichmentFixture.referenceDate,
+      completedAt: HomeEnrichmentFixture.referenceDate,
+      results: skippedResults
+    )
+    let localResult = fixture.localResult(
+      replacingRuns: [fixture.routine.id: run]
+    )
+    let viewModel = HomeViewModel(
+      loadHomeRoutinesUseCase: StaticHomeRoutineLoadUseCase(
+        result: localResult
+      ),
+      enrichHomeRoutinesUseCase: fixture.makeUseCase()
+    )
+
+    viewModel.load()
+    await waitUntil { viewModel.routineServerState == .applied }
+
+    let today = try XCTUnwrap(viewModel.state.todayRoutine)
+    XCTAssertEqual(today.steps.map(\.status), [.completed, .skipped])
+    XCTAssertEqual(today.steps.map(\.displayDetail), ["1:01", "건너뜀"])
+  }
+
+  @MainActor
   func testBothRemoteReadsReceiveTheExactCapturedSessionIdentity()
     async throws {
     let fixture = HomeEnrichmentFixture()

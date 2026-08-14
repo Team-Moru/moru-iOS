@@ -21,6 +21,8 @@ struct ProfileView: View {
   static let accountWithdrawalAccessibilityIdentifier = "profile.account.withdrawal"
   static let accountRoutineArchiveAccessibilityIdentifier =
     "profile.account.routine-archive"
+  static let termsOfServiceAccessibilityIdentifier = "profile.support.terms"
+  static let contactAccessibilityIdentifier = "profile.support.contact"
 
   @State private var viewModel: ProfileViewModel
   @State private var accountServerViewModel: AccountServerSettingsViewModel
@@ -47,6 +49,7 @@ struct ProfileView: View {
   private let kakaoAuthorizationSession: any KakaoAuthorizationStarting
   private let appCapabilities: AppCapabilities
   private let automaticallyLoads: Bool
+  private let supportLinks: ProfileSupportLinks
 
   init(
     viewModel: ProfileViewModel,
@@ -61,7 +64,8 @@ struct ProfileView: View {
     kakaoAuthorizationSession: any KakaoAuthorizationStarting =
       UnavailableKakaoAuthorizationSession(),
     appCapabilities: AppCapabilities = .production,
-    automaticallyLoads: Bool = true
+    automaticallyLoads: Bool = true,
+    supportLinks: ProfileSupportLinks? = nil
   ) {
     _viewModel = State(initialValue: viewModel)
     _accountServerViewModel = State(initialValue: accountServerViewModel)
@@ -83,6 +87,11 @@ struct ProfileView: View {
     self.kakaoAuthorizationSession = kakaoAuthorizationSession
     self.appCapabilities = appCapabilities
     self.automaticallyLoads = automaticallyLoads
+    self.supportLinks = supportLinks ?? ProfileSupportLinks(
+      policyConfiguration: AccountEntryPolicyConfiguration(
+        infoDictionary: Bundle.main.infoDictionary
+      )
+    )
   }
 
   var body: some View {
@@ -250,6 +259,11 @@ struct ProfileView: View {
 
         settingsSection(title: ProfileCopy.dataManagement) {
           dataManagementCard
+        }
+        .padding(.top, MoruPilotSpacing.twentyEight)
+
+        settingsSection(title: ProfileCopy.support) {
+          supportCard
         }
         .padding(.top, MoruPilotSpacing.twentyEight)
       }
@@ -510,6 +524,34 @@ struct ProfileView: View {
       if let message = viewModel.resetErrorMessage {
         profileMessage(message, color: AppColor.coral300)
       }
+    }
+  }
+
+  private var supportCard: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      if let termsOfServiceURL = supportLinks.termsOfServiceURL {
+        Link(destination: termsOfServiceURL) {
+          figmaNavigationRow(title: ProfileCopy.termsOfService)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("웹 브라우저에서 이용약관을 엽니다.")
+        .accessibilityIdentifier(Self.termsOfServiceAccessibilityIdentifier)
+      } else {
+        Button {} label: {
+          figmaNavigationRow(title: ProfileCopy.termsOfService)
+        }
+        .buttonStyle(.plain)
+        .disabled(true)
+        .accessibilityHint("이용약관 주소가 구성되지 않아 열 수 없습니다.")
+        .accessibilityIdentifier(Self.termsOfServiceAccessibilityIdentifier)
+      }
+
+      Link(destination: supportLinks.contactURL) {
+        figmaNavigationRow(title: ProfileCopy.contact)
+      }
+      .buttonStyle(.plain)
+      .accessibilityHint("메일 앱에서 문의 메일을 작성합니다.")
+      .accessibilityIdentifier(Self.contactAccessibilityIdentifier)
     }
   }
 

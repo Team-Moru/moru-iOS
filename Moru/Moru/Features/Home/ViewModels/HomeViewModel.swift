@@ -226,10 +226,11 @@ final class HomeViewModel {
         return step
       }
       var step = step
-      step.isCompleted = step.isCompleted || remote.isCompleted
-      if remote.isCompleted,
-         let seconds = remote.completedTimeSeconds {
-        step.detail = durationText(seconds)
+      if remote.isCompleted {
+        step.status = .completed
+        if let seconds = remote.completedTimeSeconds {
+          step.detail = durationText(seconds)
+        }
       }
       return step
     }
@@ -728,6 +729,7 @@ final class HomeViewModel {
   ) -> HomeRoutineState {
     let steps = plannedSteps(for: routine, todayRun: todayRun)
     let completedStepIDs = Set(todayRun?.results.filter(\.isCompleted).map(\.stepID) ?? [])
+    let skippedStepIDs = Set(todayRun?.results.filter(\.skipped).map(\.stepID) ?? [])
     let completed = completedStepCount(steps: steps, todayRun: todayRun)
     let progress = progress(completed: completed, total: steps.count)
 
@@ -743,11 +745,20 @@ final class HomeViewModel {
       progress: progress,
       isActive: routine.isActive,
       steps: steps.map { step in
-        HomeRoutineStepState(
+        let status: HomeRoutineStepStatus
+        if completedStepIDs.contains(step.stepID) {
+          status = .completed
+        } else if skippedStepIDs.contains(step.stepID) {
+          status = .skipped
+        } else {
+          status = .notStarted
+        }
+
+        return HomeRoutineStepState(
           id: step.stepID,
           title: step.stepTitle,
           detail: stepDurationText(step),
-          isCompleted: completedStepIDs.contains(step.stepID)
+          status: status
         )
       }
     )
