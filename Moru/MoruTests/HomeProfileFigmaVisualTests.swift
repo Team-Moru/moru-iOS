@@ -461,6 +461,8 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       id: UUID(uuidString: "32000000-0000-0000-0000-000000000001")!,
       condition: .clear,
       temperatureCelsius: 26,
+      dailyHighCelsius: 29,
+      dailyLowCelsius: 20,
       latitudeE4: 375_665,
       longitudeE4: 1_269_780,
       fetchedAt: Date(timeIntervalSince1970: 1_784_841_300),
