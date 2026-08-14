@@ -21,6 +21,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     (any AccountServerRemoteServing)?
   private let accountRoutineGroupRemoteService:
     (any AccountRoutineGroupRemoteServing)?
+  private let serverVoicePreviewPlayer: ServerVoicePreviewPlayer
   private let accountSessionStore: AccountSessionStore
   private let socialLoginCoordinator: any SocialLoginCoordinating
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
@@ -41,6 +42,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
       (any AccountServerRemoteServing)? = nil,
     accountRoutineGroupRemoteService:
       (any AccountRoutineGroupRemoteServing)? = nil,
+    serverVoicePreviewPlayer: ServerVoicePreviewPlayer = ServerVoicePreviewPlayer(),
     accountSessionStore: AccountSessionStore,
     socialLoginCoordinator: any SocialLoginCoordinating,
     googleAuthorizationSession: any GoogleAuthorizationStarting,
@@ -60,6 +62,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.accountServerRemoteService = accountServerRemoteService
     self.accountRoutineGroupRemoteService =
       accountRoutineGroupRemoteService
+    self.serverVoicePreviewPlayer = serverVoicePreviewPlayer
     self.accountSessionStore = accountSessionStore
     self.socialLoginCoordinator = socialLoginCoordinator
     self.googleAuthorizationSession = googleAuthorizationSession
@@ -92,6 +95,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
           onServerVoiceSelectionDidSucceed:
             onServerVoiceSelectionDidSucceed
         ),
+        serverVoicePreviewPlayer: serverVoicePreviewPlayer,
         accountRoutineGroupRemoteService:
           accountRoutineGroupRemoteService,
         accountSessionStore: accountSessionStore,

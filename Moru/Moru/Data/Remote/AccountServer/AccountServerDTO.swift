@@ -41,6 +41,23 @@ nonisolated struct TTSVoiceResponseDTO:
   let displayName: String?
   let description: String?
   let proOnly: Bool?
+  let previewAudioUrl: String?
+
+  init(
+    ttsId: Int64?,
+    voiceCode: String?,
+    displayName: String?,
+    description: String?,
+    proOnly: Bool?,
+    previewAudioUrl: String? = nil
+  ) {
+    self.ttsId = ttsId
+    self.voiceCode = voiceCode
+    self.displayName = displayName
+    self.description = description
+    self.proOnly = proOnly
+    self.previewAudioUrl = previewAudioUrl
+  }
 }
 
 nonisolated struct TTSUpdateRequestDTO:

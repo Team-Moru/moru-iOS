@@ -33,6 +33,7 @@ struct DependencyContainer {
   let routineAudioSessionCoordinator: RoutineAudioSessionCoordinator?
   let routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator?
   let routineTTSAudioCache: RoutineTTSAudioCache?
+  let serverVoicePreviewPlayer: ServerVoicePreviewPlayer
 
   init(
     routineRepository: any RoutineRepository,
@@ -61,7 +62,8 @@ struct DependencyContainer {
     routineGuidancePlaybackState: RoutineGuidancePlaybackState? = nil,
     routineAudioSessionCoordinator: RoutineAudioSessionCoordinator? = nil,
     routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator? = nil,
-    routineTTSAudioCache: RoutineTTSAudioCache? = nil
+    routineTTSAudioCache: RoutineTTSAudioCache? = nil,
+    serverVoicePreviewPlayer: ServerVoicePreviewPlayer? = nil
   ) {
     self.routineRepository = routineRepository
     self.routineRunRepository = routineRunRepository
@@ -96,6 +98,8 @@ struct DependencyContainer {
     self.routineAudioSessionCoordinator = routineAudioSessionCoordinator
     self.routineTTSWarmupCoordinator = routineTTSWarmupCoordinator
     self.routineTTSAudioCache = routineTTSAudioCache
+    self.serverVoicePreviewPlayer = serverVoicePreviewPlayer
+      ?? ServerVoicePreviewPlayer(audioCache: routineTTSAudioCache)
   }
 
   @MainActor
@@ -251,7 +255,10 @@ struct DependencyContainer {
       routineGuidancePlaybackState: guidancePlaybackState,
       routineAudioSessionCoordinator: audioSessionCoordinator,
       routineTTSWarmupCoordinator: routineTTSWarmupCoordinator,
-      routineTTSAudioCache: routineTTSAudioCache
+      routineTTSAudioCache: routineTTSAudioCache,
+      serverVoicePreviewPlayer: ServerVoicePreviewPlayer(
+        audioCache: routineTTSAudioCache
+      )
     )
   }
 

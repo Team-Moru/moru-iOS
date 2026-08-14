@@ -199,6 +199,7 @@ struct AccountServerSettingsSummaryView: View {
 struct AccountServerVoiceSelectionView: View {
   @Environment(\.dismiss) private var dismiss
   @Bindable var viewModel: AccountServerSettingsViewModel
+  @Bindable var previewPlayer: ServerVoicePreviewPlayer
   let memberID: Int64
 
   var body: some View {
@@ -214,6 +215,14 @@ struct AccountServerVoiceSelectionView: View {
           .fixedSize(horizontal: false, vertical: true)
 
           voiceContent
+
+          if let message = previewPlayer.errorMessage {
+            Text(message)
+              .moruPilotTextStyle(.c1)
+              .foregroundStyle(AppColor.coral300)
+              .fixedSize(horizontal: false, vertical: true)
+              .accessibilityIdentifier("profile.account.server-voice.preview-error")
+          }
 
           if let message = viewModel.voiceUpdateErrorMessage {
             Text(message)
@@ -239,6 +248,9 @@ struct AccountServerVoiceSelectionView: View {
     }
     .interactiveDismissDisabled(viewModel.isUpdatingVoice)
     .accessibilityIdentifier("profile.account.server-voice.sheet")
+    .onDisappear {
+      previewPlayer.stopPreview()
+    }
   }
 
   @ViewBuilder
@@ -260,11 +272,7 @@ struct AccountServerVoiceSelectionView: View {
   private func voiceButton(_ voice: ServerTTSVoice) -> some View {
     let isSelected = viewModel.selectedTTSID == voice.ttsID
 
-    return Button {
-      Task {
-        await viewModel.selectVoice(voice, memberID: memberID)
-      }
-    } label: {
+    return VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       HStack(spacing: MoruPilotSpacing.twelve) {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
           HStack(spacing: MoruPilotSpacing.eight) {
@@ -292,17 +300,70 @@ struct AccountServerVoiceSelectionView: View {
             .accessibilityHidden(true)
         }
       }
-      .padding(MoruPilotSpacing.sixteen)
-      .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-      .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: MoruPilotSpacing.eight) {
+          selectionButton(voice, isSelected: isSelected)
+          previewButton(voice)
+        }
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+          selectionButton(voice, isSelected: isSelected)
+          previewButton(voice)
+        }
+      }
     }
-    .buttonStyle(.plain)
-    .disabled(viewModel.isUpdatingVoice)
+    .padding(MoruPilotSpacing.sixteen)
+    .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+    .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("profile.account.server-voice.\(voice.ttsID)")
+  }
+
+  private func selectionButton(
+    _ voice: ServerTTSVoice,
+    isSelected: Bool
+  ) -> some View {
+    Button(isSelected ? "선택됨" : "선택") {
+      previewPlayer.stopPreview()
+      Task {
+        await viewModel.selectVoice(voice, memberID: memberID)
+      }
+    }
+    .buttonStyle(.borderedProminent)
+    .tint(MoruPilotColor.accent)
+    .disabled(viewModel.isUpdatingVoice || isSelected)
     .accessibilityLabel(
-      "\(voice.displayName), \(voice.description)"
-        + (isSelected ? ", 선택됨" : "")
+      "\(voice.displayName) 서버 생성 음성"
+        + (isSelected ? ", 현재 선택됨" : " 선택")
     )
-    .accessibilityHint("서버 생성 음성으로 선택합니다.")
+  }
+
+  private func previewButton(_ voice: ServerTTSVoice) -> some View {
+    Button(previewButtonTitle(for: voice)) {
+      previewPlayer.togglePreview(voice, memberID: memberID)
+    }
+    .buttonStyle(.bordered)
+    .tint(MoruPilotColor.accent)
+    .disabled(
+      viewModel.isUpdatingVoice
+        || !previewPlayer.isPreviewAvailable(for: voice)
+    )
+    .accessibilityLabel("\(voice.displayName) 음성 미리듣기")
+    .accessibilityHint(
+      previewPlayer.isPreviewAvailable(for: voice)
+        ? "공통 샘플 음성을 재생합니다."
+        : "미리듣기 음성을 준비하고 있어요."
+    )
+  }
+
+  private func previewButtonTitle(for voice: ServerTTSVoice) -> String {
+    if previewPlayer.isLoading(voice) {
+      return "불러오는 중"
+    }
+    if previewPlayer.isPlaying(voice) {
+      return "중지"
+    }
+    return voice.previewAudioURL == nil ? "준비 중" : "미리 듣기"
   }
 
   private var voiceEmptyMessage: String {

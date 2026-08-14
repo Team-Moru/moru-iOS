@@ -431,6 +431,7 @@ struct AppRouter: View {
       accountServerRemoteService: dependencies.accountServerRemoteService,
       accountRoutineGroupRemoteService:
         dependencies.accountRoutineGroupRemoteService,
+      serverVoicePreviewPlayer: dependencies.serverVoicePreviewPlayer,
       accountSessionStore: accountSessionStore,
       socialLoginCoordinator: socialLoginCoordinator,
       googleAuthorizationSession: googleAuthorizationSession,

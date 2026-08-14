@@ -35,6 +35,25 @@ nonisolated struct ServerTTSVoice: Equatable, Sendable {
   let displayName: String
   let description: String
   let isProOnly: Bool
+  /// A pre-generated common sample. This stays optional while preview support
+  /// is being rolled out on the backend.
+  let previewAudioURL: URL?
+
+  init(
+    ttsID: Int64,
+    voiceCode: String,
+    displayName: String,
+    description: String,
+    isProOnly: Bool,
+    previewAudioURL: URL? = nil
+  ) {
+    self.ttsID = ttsID
+    self.voiceCode = voiceCode
+    self.displayName = displayName
+    self.description = description
+    self.isProOnly = isProOnly
+    self.previewAudioURL = previewAudioURL
+  }
 }
 
 nonisolated struct ServerTTSSelection: Equatable, Sendable {
