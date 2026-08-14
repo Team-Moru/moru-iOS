@@ -70,8 +70,8 @@ enum HistoryStartTimeRegularity: Sendable, Equatable {
   case variable
   case highlyVariable
 
-  init(averageDeviationMinutes: Int) {
-    switch averageDeviationMinutes {
+  init(standardDeviationMinutes: Int) {
+    switch standardDeviationMinutes {
     case ...10:
       self = .veryConsistent
     case ...20:
@@ -83,17 +83,12 @@ enum HistoryStartTimeRegularity: Sendable, Equatable {
     }
   }
 
-  var score: Int {
-    switch self {
-    case .veryConsistent:
-      return 96
-    case .consistent:
-      return 87
-    case .variable:
-      return 68
-    case .highlyVariable:
-      return 42
-    }
+  static func score(standardDeviationMinutes: Double) -> Int {
+    let rawScore = 100 * (1 - max(0, standardDeviationMinutes) / 120)
+    return min(
+      100,
+      max(0, Int(rawScore.rounded(.toNearestOrAwayFromZero)))
+    )
   }
 
   var shortText: String {
@@ -116,7 +111,8 @@ enum HistoryWakeMetrics: Sendable, Equatable {
   case calculated(
     observationCount: Int,
     averageWakeMinute: Int,
-    averageDeviationMinutes: Int,
+    standardDeviationMinutes: Int,
+    regularityScore: Int,
     regularity: HistoryStartTimeRegularity
   )
   case account(HistoryAccountWakeMetrics)
@@ -126,7 +122,7 @@ enum HistoryWakeMetrics: Sendable, Equatable {
     case .unavailable:
       return 0
     case .insufficient(let observationCount),
-         .calculated(let observationCount, _, _, _):
+         .calculated(let observationCount, _, _, _, _):
       return observationCount
     case .account:
       return 0
@@ -140,6 +136,26 @@ struct HistoryAccountWakeMetrics: Sendable, Equatable {
   let regularityScore: Int?
   let standardDeviationMinutes: Int?
   let regularityLabel: String
+
+  var resolvedRegularityScore: Int? {
+    guard let standardDeviationMinutes else {
+      return regularityScore
+    }
+
+    return HistoryStartTimeRegularity.score(
+      standardDeviationMinutes: Double(standardDeviationMinutes)
+    )
+  }
+
+  var resolvedRegularityLabel: String {
+    guard let standardDeviationMinutes else {
+      return regularityLabel
+    }
+
+    return HistoryStartTimeRegularity(
+      standardDeviationMinutes: standardDeviationMinutes
+    ).shortText
+  }
 }
 
 struct HistoryMonthlyHeatmap: Sendable, Equatable {
@@ -237,6 +253,7 @@ struct HistoryWeekReport: Sendable, Equatable {
   let dailyCompletionRates: [HistoryDailyCompletion]
   let completionRateChangePercentagePoints: Int?
   let totalDurationSeconds: Int?
+  let executionCount: Int?
   let routineStats: [HistoryWeeklyRoutineStat]
   let summarySource: HistorySummarySource
 
@@ -249,6 +266,7 @@ struct HistoryWeekReport: Sendable, Equatable {
     dailyCompletionRates: [HistoryDailyCompletion],
     completionRateChangePercentagePoints: Int? = nil,
     totalDurationSeconds: Int? = nil,
+    executionCount: Int? = nil,
     routineStats: [HistoryWeeklyRoutineStat] = [],
     summarySource: HistorySummarySource = .device
   ) {
@@ -260,6 +278,7 @@ struct HistoryWeekReport: Sendable, Equatable {
     self.dailyCompletionRates = dailyCompletionRates
     self.completionRateChangePercentagePoints = completionRateChangePercentagePoints
     self.totalDurationSeconds = totalDurationSeconds
+    self.executionCount = executionCount
     self.routineStats = routineStats
     self.summarySource = summarySource
   }

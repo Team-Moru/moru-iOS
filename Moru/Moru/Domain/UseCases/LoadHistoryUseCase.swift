@@ -214,7 +214,7 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
     containing date: Date
   ) -> HistoryWakeMetrics {
     let today = calendar.startOfDay(for: date)
-    let intervalStart = calendar.date(byAdding: .day, value: -27, to: today)!
+    let intervalStart = calendar.date(byAdding: .day, value: -6, to: today)!
     let intervalEnd = calendar.date(byAdding: .day, value: 1, to: today)!
     let eligibleRuns = runs.filter { run in
       guard let completedAt = run.completedAt else {
@@ -246,17 +246,27 @@ final class LoadHistoryUseCase: LoadHistoryUseCaseProtocol {
     let minutes = dailyFirstRuns.map { minuteOfDay(for: $0.startedAt) }
     let mean = circularMeanMinute(for: minutes)
     let averageWakeMinute = normalizedRoundedMinute(mean)
-    let averageDeviation = minutes
-      .map { shortestCircularDeviation(from: Double($0), to: mean) }
-      .reduce(0, +) / Double(minutes.count)
-    let averageDeviationMinutes = Int(averageDeviation.rounded(.toNearestOrAwayFromZero))
+    let variance = minutes.reduce(0.0) { partial, minute in
+      let deviation = shortestCircularDeviation(
+        from: Double(minute),
+        to: mean
+      )
+      return partial + deviation * deviation
+    } / Double(minutes.count)
+    let standardDeviation = sqrt(variance)
+    let standardDeviationMinutes = Int(
+      standardDeviation.rounded(.toNearestOrAwayFromZero)
+    )
 
     return .calculated(
       observationCount: observationCount,
       averageWakeMinute: averageWakeMinute,
-      averageDeviationMinutes: averageDeviationMinutes,
+      standardDeviationMinutes: standardDeviationMinutes,
+      regularityScore: HistoryStartTimeRegularity.score(
+        standardDeviationMinutes: standardDeviation
+      ),
       regularity: HistoryStartTimeRegularity(
-        averageDeviationMinutes: averageDeviationMinutes
+        standardDeviationMinutes: standardDeviationMinutes
       )
     )
   }

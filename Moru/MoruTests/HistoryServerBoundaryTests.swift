@@ -15,7 +15,8 @@ final class HistoryServerBoundaryTests: XCTestCase {
     let localWake = HistoryWakeMetrics.calculated(
       observationCount: 4,
       averageWakeMinute: (7 * 60) + 15,
-      averageDeviationMinutes: 9,
+      standardDeviationMinutes: 9,
+      regularityScore: 93,
       regularity: .veryConsistent
     )
     let local = boundaryOverview(wakeMetrics: localWake)
@@ -62,7 +63,26 @@ final class HistoryServerBoundaryTests: XCTestCase {
         )
       )
     )
+    guard case .account(let accountMetrics) = fallbackResult.wakeMetrics else {
+      return XCTFail("Expected account wake metrics.")
+    }
+    XCTAssertEqual(accountMetrics.resolvedRegularityScore, 88)
+    XCTAssertEqual(accountMetrics.resolvedRegularityLabel, "꽤 규칙적이에요")
     XCTAssertEqual(fallbackResult.summarySource, .account)
+  }
+
+  @MainActor
+  func testAccountWakeMetricsFallbackToServerValuesWithoutDeviation() {
+    let metrics = HistoryAccountWakeMetrics(
+      averageWakeMinute: nil,
+      wakeTimeDifferenceMinutes: nil,
+      regularityScore: 77,
+      standardDeviationMinutes: nil,
+      regularityLabel: "서버 규칙성"
+    )
+
+    XCTAssertEqual(metrics.resolvedRegularityScore, 77)
+    XCTAssertEqual(metrics.resolvedRegularityLabel, "서버 규칙성")
   }
 
   @MainActor

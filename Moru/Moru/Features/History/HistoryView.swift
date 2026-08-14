@@ -419,14 +419,14 @@ private func historyElapsedText(
   return String(format: "%02d:%02d", seconds / 60, seconds % 60)
 }
 
-private extension HistoryOverview {
-  func daySummary(for date: Date) -> HistoryDaySummary? {
+extension HistoryOverview {
+  fileprivate func daySummary(for date: Date) -> HistoryDaySummary? {
     recentDays.first { day in
       calendar.isDate(day.date, inSameDayAs: date)
     }
   }
 
-  var weeklyStepAnalysisItems: [HistoryStepAnalysisItem] {
+  fileprivate var weeklyStepAnalysisItems: [HistoryStepAnalysisItem] {
     if week.summarySource == .account {
       return week.routineStats
         .map {
@@ -471,18 +471,22 @@ private extension HistoryOverview {
   }
 
   var weeklyDurationTitle: String {
-    week.summarySource == .account
-      ? HistoryCopy.totalDuration
-      : HistoryCopy.averageDuration
+    HistoryCopy.averageDuration
   }
 
   var weeklyDurationText: String {
-    if week.summarySource == .account,
-       let totalDurationSeconds = week.totalDurationSeconds {
+    if week.summarySource == .account {
+      let executionCount = week.executionCount ?? week.totalRunCount
+      guard let totalDurationSeconds = week.totalDurationSeconds,
+            executionCount > 0 else {
+        return "--:--"
+      }
+
+      let averageSeconds = totalDurationSeconds / executionCount
       return String(
         format: "%02d:%02d",
-        totalDurationSeconds / 60,
-        totalDurationSeconds % 60
+        averageSeconds / 60,
+        averageSeconds % 60
       )
     }
 

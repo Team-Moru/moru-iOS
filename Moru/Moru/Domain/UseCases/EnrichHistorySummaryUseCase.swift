@@ -36,6 +36,12 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
       month: requestedMonth.month,
       memberID: memberID
     )
+    let executionCount = try await fetchAccountExecutionCount(
+      serverSummary.weekly,
+      localWeek: localOverview.week,
+      calendar: requestedMonth.calendar,
+      memberID: memberID
+    )
     try Task.checkCancellation()
 
     guard signedInMemberProvider.signedInMemberID == memberID else {
@@ -45,7 +51,8 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
     return merge(
       serverSummary,
       into: localOverview,
-      serverCalendar: requestedMonth.calendar
+      serverCalendar: requestedMonth.calendar,
+      accountExecutionCount: executionCount
     )
   }
 
@@ -70,9 +77,14 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
   private func merge(
     _ server: ServerHistorySummary,
     into local: HistoryOverview,
-    serverCalendar: Calendar
+    serverCalendar: Calendar,
+    accountExecutionCount: Int?
   ) -> HistoryOverview {
-    let mergedWeek = mergeWeek(server.weekly, into: local.week)
+    let mergedWeek = mergeWeek(
+      server.weekly,
+      into: local.week,
+      executionCount: accountExecutionCount
+    )
     let mergedHeatmap = mergeMonth(
       server.monthlyDays,
       into: local.monthlyHeatmap,
@@ -126,7 +138,8 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
 
   private func mergeWeek(
     _ server: ServerHistoryWeeklySummary,
-    into local: HistoryWeekReport
+    into local: HistoryWeekReport,
+    executionCount: Int?
   ) -> HistoryWeekReport {
     guard local.totalRunCount == 0,
           local.dailyCompletionRates.count
@@ -174,6 +187,7 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
       completionRateChangePercentagePoints:
         server.completionRateChangePercentagePoints,
       totalDurationSeconds: server.totalDurationSeconds,
+      executionCount: executionCount,
       routineStats: server.routineStats.map {
         HistoryWeeklyRoutineStat(
           routineID: $0.routineID,
@@ -183,6 +197,82 @@ final class AccountHistorySummaryEnricher: HistorySummaryEnriching {
       },
       summarySource: .account
     )
+  }
+
+  private func fetchAccountExecutionCount(
+    _ server: ServerHistoryWeeklySummary,
+    localWeek: HistoryWeekReport,
+    calendar: Calendar,
+    memberID: Int64
+  ) async throws -> Int? {
+    guard localWeek.totalRunCount == 0,
+          localWeek.dailyCompletionRates.count
+            == ServerHistoryWeekday.allCases.count else {
+      return nil
+    }
+
+    var completionByWeekday:
+      [ServerHistoryWeekday: ServerHistoryWeekdayCompletion] = [:]
+    for completion in server.dailyCompletions {
+      guard completionByWeekday[completion.weekday] == nil else {
+        return nil
+      }
+      completionByWeekday[completion.weekday] = completion
+    }
+    guard completionByWeekday.count
+            == ServerHistoryWeekday.allCases.count else {
+      return nil
+    }
+
+    let requestedDates = ServerHistoryWeekday.allCases.enumerated().compactMap {
+      offset,
+      weekday -> DateComponents? in
+      guard completionByWeekday[weekday]?.completionRate != nil else {
+        return nil
+      }
+
+      return calendar.dateComponents(
+        [.year, .month, .day],
+        from: localWeek.dailyCompletionRates[offset].date
+      )
+    }
+    guard !requestedDates.isEmpty else {
+      return nil
+    }
+
+    do {
+      return try await withThrowingTaskGroup(of: Int.self) { group in
+        for components in requestedDates {
+          guard let year = components.year,
+                let month = components.month,
+                let day = components.day else {
+            return nil
+          }
+
+          group.addTask { [remoteService] in
+            let report = try await remoteService.fetchDaily(
+              year: year,
+              month: month,
+              day: day,
+              memberID: memberID
+            )
+            return report.routines.count
+          }
+        }
+
+        var count = 0
+        for try await dailyCount in group {
+          count += dailyCount
+        }
+        return count
+      }
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch AccountHistoryRemoteError.accountAuthorizationChanged {
+      throw AccountHistoryRemoteError.accountAuthorizationChanged
+    } catch {
+      return nil
+    }
   }
 
   private func mergeMonth(

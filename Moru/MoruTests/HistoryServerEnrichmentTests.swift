@@ -29,7 +29,13 @@ final class HistoryServerEnrichmentTests: XCTestCase {
       ],
       monthlyDays: []
     )
-    let service = RecordingAccountHistoryRemoteService(result: .success(remote))
+    let service = RecordingAccountHistoryRemoteService(
+      result: .success(remote),
+      dailyReportsByDay: [
+        13: makeServerDailySummary(day: 13, routineCount: 1),
+        14: makeServerDailySummary(day: 14, routineCount: 1),
+      ]
+    )
     let memberProvider = MutableSignedInMemberProvider(memberID: 41)
     let enricher = AccountHistorySummaryEnricher(
       remoteService: service,
@@ -50,6 +56,8 @@ final class HistoryServerEnrichmentTests: XCTestCase {
     XCTAssertEqual(result.week.totalRunCount, 0)
     XCTAssertEqual(result.week.completedRunCount, 0)
     XCTAssertEqual(result.week.totalDurationSeconds, 1_200)
+    XCTAssertEqual(result.weeklyDurationTitle, HistoryCopy.averageDuration)
+    XCTAssertEqual(result.weeklyDurationText, "10:00")
     XCTAssertEqual(
       result.week.routineStats,
       [
@@ -63,6 +71,98 @@ final class HistoryServerEnrichmentTests: XCTestCase {
     XCTAssertTrue(result.recentDays.isEmpty)
     let requestedMemberIDs = await service.requestedMemberIDs
     XCTAssertEqual(requestedMemberIDs, [41])
+  }
+
+  @MainActor
+  func testAccountAverageDurationRequiresAnExecutionCount() async throws {
+    let local = makeOverview(
+      recentDays: [],
+      weekRunCount: 0,
+      weekCompletionRate: 0,
+      monthlyRates: [nil, nil]
+    )
+    let remote = makeServerSummary(
+      weeklyRate: 0,
+      dailyRates: Array(repeating: nil, count: 7),
+      totalDurationSeconds: 1_000
+    )
+    let enricher = AccountHistorySummaryEnricher(
+      remoteService: RecordingAccountHistoryRemoteService(
+        result: .success(remote)
+      ),
+      signedInMemberProvider: MutableSignedInMemberProvider(memberID: 41)
+    )
+
+    let result = try await enricher.enrich(local)
+
+    XCTAssertEqual(result.week.summarySource, .account)
+    XCTAssertEqual(result.weeklyDurationTitle, HistoryCopy.averageDuration)
+    XCTAssertEqual(result.weeklyDurationText, "--:--")
+  }
+
+  @MainActor
+  func testAccountAverageDurationUsesEveryDailyExecution() async throws {
+    let local = makeOverview(
+      recentDays: [],
+      weekRunCount: 0,
+      weekCompletionRate: 0,
+      monthlyRates: [nil, nil]
+    )
+    let remote = makeServerSummary(
+      weeklyRate: 0.75,
+      dailyRates: [1, 0.5, nil, nil, nil, nil, nil],
+      totalDurationSeconds: 900
+    )
+    let service = RecordingAccountHistoryRemoteService(
+      result: .success(remote),
+      dailyReportsByDay: [
+        13: makeServerDailySummary(day: 13, routineCount: 2),
+        14: makeServerDailySummary(day: 14, routineCount: 1),
+      ]
+    )
+    let enricher = AccountHistorySummaryEnricher(
+      remoteService: service,
+      signedInMemberProvider: MutableSignedInMemberProvider(memberID: 41)
+    )
+
+    let result = try await enricher.enrich(local)
+
+    XCTAssertEqual(result.week.executionCount, 3)
+    XCTAssertEqual(result.weeklyDurationTitle, HistoryCopy.averageDuration)
+    XCTAssertEqual(result.weeklyDurationText, "05:00")
+    let requestedDays = await service.requestedDailyDays.sorted()
+    XCTAssertEqual(requestedDays, [13, 14])
+  }
+
+  @MainActor
+  func testAccountAverageDurationDoesNotGuessAfterDailyFailure() async throws {
+    let local = makeOverview(
+      recentDays: [],
+      weekRunCount: 0,
+      weekCompletionRate: 0,
+      monthlyRates: [nil, nil]
+    )
+    let remote = makeServerSummary(
+      weeklyRate: 0.75,
+      dailyRates: [1, 0.5, nil, nil, nil, nil, nil],
+      totalDurationSeconds: 900
+    )
+    let service = RecordingAccountHistoryRemoteService(
+      result: .success(remote),
+      dailyReportsByDay: [
+        13: makeServerDailySummary(day: 13, routineCount: 2),
+      ]
+    )
+    let enricher = AccountHistorySummaryEnricher(
+      remoteService: service,
+      signedInMemberProvider: MutableSignedInMemberProvider(memberID: 41)
+    )
+
+    let result = try await enricher.enrich(local)
+
+    XCTAssertNil(result.week.executionCount)
+    XCTAssertEqual(result.weeklyDurationTitle, HistoryCopy.averageDuration)
+    XCTAssertEqual(result.weeklyDurationText, "--:--")
   }
 
   @MainActor
@@ -154,6 +254,64 @@ final class HistoryServerEnrichmentTests: XCTestCase {
 
     let result = try await task.value
     XCTAssertEqual(result, local)
+  }
+
+  @MainActor
+  func testAccountChangeDuringDailyCountDiscardsServerSummary() async throws {
+    let local = makeOverview()
+    let summary = makeServerSummary(
+      weeklyRate: 1,
+      dailyRates: [1, nil, nil, nil, nil, nil, nil],
+      totalDurationSeconds: 300
+    )
+    let service = DeferredDailyAccountHistoryRemoteService(summary: summary)
+    let memberProvider = MutableSignedInMemberProvider(memberID: 10)
+    let enricher = AccountHistorySummaryEnricher(
+      remoteService: service,
+      signedInMemberProvider: memberProvider
+    )
+    let task = Task {
+      try await enricher.enrich(local)
+    }
+
+    await service.waitUntilDailyRequested()
+    memberProvider.signedInMemberID = 11
+    await service.resumeDaily(
+      returning: makeServerDailySummary(day: 13, routineCount: 1)
+    )
+
+    let result = try await task.value
+    XCTAssertEqual(result, local)
+  }
+
+  @MainActor
+  func testCancellingDailyCountCancelsHistoryEnrichment() async {
+    let local = makeOverview()
+    let summary = makeServerSummary(
+      weeklyRate: 1,
+      dailyRates: [1, nil, nil, nil, nil, nil, nil],
+      totalDurationSeconds: 300
+    )
+    let service = CancellableDailyAccountHistoryRemoteService(summary: summary)
+    let enricher = AccountHistorySummaryEnricher(
+      remoteService: service,
+      signedInMemberProvider: MutableSignedInMemberProvider(memberID: 10)
+    )
+    let task = Task {
+      try await enricher.enrich(local)
+    }
+
+    await service.waitUntilDailyRequested()
+    task.cancel()
+
+    do {
+      _ = try await task.value
+      XCTFail("Expected cancellation to propagate from the daily count.")
+    } catch is CancellationError {
+      // Expected.
+    } catch {
+      XCTFail("Expected CancellationError, received \(error).")
+    }
   }
 
   @MainActor
@@ -306,10 +464,16 @@ private final class MutableSignedInMemberProvider: SignedInMemberProviding {
 private actor RecordingAccountHistoryRemoteService:
   AccountHistoryRemoteServing {
   private(set) var requestedMemberIDs: [Int64] = []
+  private(set) var requestedDailyDays: [Int] = []
   private let result: HistoryRemoteStubResult
+  private let dailyReportsByDay: [Int: ServerHistoryDailySummary]
 
-  init(result: HistoryRemoteStubResult) {
+  init(
+    result: HistoryRemoteStubResult,
+    dailyReportsByDay: [Int: ServerHistoryDailySummary] = [:]
+  ) {
     self.result = result
+    self.dailyReportsByDay = dailyReportsByDay
   }
 
   func fetchSummary(
@@ -332,7 +496,11 @@ private actor RecordingAccountHistoryRemoteService:
     day: Int,
     memberID: Int64
   ) async throws -> ServerHistoryDailySummary {
-    throw HistoryServerEnrichmentTestError.unexpectedRequest
+    requestedDailyDays.append(day)
+    guard let report = dailyReportsByDay[day] else {
+      throw HistoryServerEnrichmentTestError.unexpectedRequest
+    }
+    return report
   }
 }
 
@@ -371,6 +539,84 @@ private actor DeferredAccountHistoryRemoteService:
   func resume(returning summary: ServerHistorySummary) {
     continuation?.resume(returning: summary)
     continuation = nil
+  }
+}
+
+private actor DeferredDailyAccountHistoryRemoteService:
+  AccountHistoryRemoteServing {
+  private let summary: ServerHistorySummary
+  private var dailyContinuation:
+    CheckedContinuation<ServerHistoryDailySummary, Error>?
+  private var didRequestDaily = false
+
+  init(summary: ServerHistorySummary) {
+    self.summary = summary
+  }
+
+  func fetchSummary(
+    year: Int,
+    month: Int,
+    memberID: Int64
+  ) async throws -> ServerHistorySummary {
+    summary
+  }
+
+  func fetchDaily(
+    year: Int,
+    month: Int,
+    day: Int,
+    memberID: Int64
+  ) async throws -> ServerHistoryDailySummary {
+    didRequestDaily = true
+    return try await withCheckedThrowingContinuation {
+      dailyContinuation = $0
+    }
+  }
+
+  func waitUntilDailyRequested() async {
+    while !didRequestDaily {
+      await Task.yield()
+    }
+  }
+
+  func resumeDaily(returning report: ServerHistoryDailySummary) {
+    dailyContinuation?.resume(returning: report)
+    dailyContinuation = nil
+  }
+}
+
+private actor CancellableDailyAccountHistoryRemoteService:
+  AccountHistoryRemoteServing {
+  private let summary: ServerHistorySummary
+  private var didRequestDaily = false
+
+  init(summary: ServerHistorySummary) {
+    self.summary = summary
+  }
+
+  func fetchSummary(
+    year: Int,
+    month: Int,
+    memberID: Int64
+  ) async throws -> ServerHistorySummary {
+    summary
+  }
+
+  func fetchDaily(
+    year: Int,
+    month: Int,
+    day: Int,
+    memberID: Int64
+  ) async throws -> ServerHistoryDailySummary {
+    didRequestDaily = true
+    try await Task.sleep(for: .seconds(30))
+    return makeServerDailySummary(day: day, routineCount: 1)
+  }
+
+  func waitUntilDailyRequested() async {
+    while !didRequestDaily {
+      await Task.yield()
+    }
   }
 }
 
@@ -483,6 +729,31 @@ private func makeServerSummary(
       routineStats: routineStats
     ),
     monthlyDays: monthlyDays
+  )
+}
+
+private func makeServerDailySummary(
+  day: Int,
+  routineCount: Int
+) -> ServerHistoryDailySummary {
+  ServerHistoryDailySummary(
+    year: 2026,
+    month: 7,
+    day: day,
+    completionRate: 1,
+    totalDurationSeconds: routineCount * 300,
+    actualWakeMinute: nil,
+    currentStreak: 0,
+    routines: (0..<routineCount).map { index in
+      ServerHistoryDailyRoutine(
+        routineID: Int64((day * 10) + index),
+        title: "루틴 \(index + 1)",
+        type: .check,
+        durationSeconds: 300,
+        isCompleted: true,
+        memberInput: nil
+      )
+    }
   )
 }
 

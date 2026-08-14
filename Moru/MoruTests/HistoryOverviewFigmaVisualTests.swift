@@ -147,7 +147,8 @@ final class HistoryOverviewFigmaVisualTests: XCTestCase {
       return .calculated(
         observationCount: 12,
         averageWakeMinute: 7 * 60 + 8,
-        averageDeviationMinutes: 18,
+        standardDeviationMinutes: 18,
+        regularityScore: 85,
         regularity: .consistent
       )
     case .loading, .empty, .failure:

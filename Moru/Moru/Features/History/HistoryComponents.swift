@@ -286,7 +286,7 @@ struct HistoryWakeMetricsView: View {
 
     private var averageWakeText: String {
         switch metrics {
-        case .calculated(_, let minute, _, _):
+        case .calculated(_, let minute, _, _, _):
             return String(format: "%02d:%02d", minute / 60, minute % 60)
         case .account(let account):
             guard let minute = account.averageWakeMinute else {
@@ -303,7 +303,7 @@ struct HistoryWakeMetricsView: View {
     private var averageDetailText: String {
         switch metrics {
         case .calculated:
-            return "지난 기록 기준"
+            return "최근 7일 기준"
         case .account(let account):
             guard let difference = account.wakeTimeDifferenceMinutes else {
                 return "계정 기록 기준"
@@ -322,10 +322,10 @@ struct HistoryWakeMetricsView: View {
 
     private var regularityScoreText: String {
         switch metrics {
-        case .calculated(_, _, _, let regularity):
-            return "\(regularity.score)점"
+        case .calculated(_, _, _, let score, _):
+            return "\(score)점"
         case .account(let account):
-            guard let score = account.regularityScore else {
+            guard let score = account.resolvedRegularityScore else {
                 return "--점"
             }
             return "\(score)점"
@@ -336,13 +336,13 @@ struct HistoryWakeMetricsView: View {
 
     private var deviationText: String {
         switch metrics {
-        case .calculated(_, _, let minutes, let regularity):
-            return "편차 ±\(minutes)분 · \(regularity.shortText)"
+        case .calculated(_, _, let minutes, _, let regularity):
+            return "표준편차 \(minutes)분 · \(regularity.shortText)"
         case .account(let account):
             if let minutes = account.standardDeviationMinutes {
-                return "표준편차 \(minutes)분 · \(account.regularityLabel)"
+                return "표준편차 \(minutes)분 · \(account.resolvedRegularityLabel)"
             }
-            return account.regularityLabel
+            return account.resolvedRegularityLabel
         case .insufficient, .unavailable:
             return "편차 기록 없음"
         }
