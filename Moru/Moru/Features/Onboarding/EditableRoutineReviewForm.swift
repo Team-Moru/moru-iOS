@@ -12,24 +12,10 @@ struct EditableRoutineReviewForm: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.twentyEight) {
-      routineNameSection
+      EditableRoutineIdentityFields(viewModel: viewModel)
       alarmSection
       routineCountSummary
       routineStepList
-    }
-  }
-
-  private var routineNameSection: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-      sectionTitle("루틴 이름")
-      EditableRoundedTextField(
-        placeholder: "루틴 이름",
-        text: previewNameBinding
-      )
-      EditableRoundedTextField(
-        placeholder: "루틴 설명",
-        text: previewSummaryBinding
-      )
     }
   }
 
@@ -109,24 +95,6 @@ struct EditableRoutineReviewForm: View {
       .stroke(AppColor.moruBorder, lineWidth: 1)
   }
 
-  private var previewNameBinding: Binding<String> {
-    Binding(
-      get: { viewModel.previewName },
-      set: { name in
-        viewModel.previewName = name
-      }
-    )
-  }
-
-  private var previewSummaryBinding: Binding<String> {
-    Binding(
-      get: { viewModel.previewSummary },
-      set: { summary in
-        viewModel.previewSummary = summary
-      }
-    )
-  }
-
   private func stepTitleBinding(for stepID: UUID) -> Binding<String> {
     Binding(
       get: {
@@ -166,21 +134,52 @@ struct EditableRoutineReviewForm: View {
   }
 }
 
-private struct EditableRoundedTextField: View {
-  let placeholder: String
-  @Binding var text: String
+struct EditableRoutineIdentityFields: View {
+  @ObservedObject var viewModel: OnboardingViewModel
 
   var body: some View {
-    TextField(placeholder, text: $text)
-      .font(AppFont.body1NormalSemiBold)
-      .foregroundStyle(AppColor.moruTextPrimary)
-      .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-      .padding(.horizontal, AppSpacing.md)
-      .background(AppColor.grayWhite.opacity(0.74))
-      .overlay(
-        RoundedRectangle(cornerRadius: AppRadius.sm)
-          .stroke(AppColor.moruBorder, lineWidth: 1)
+    VStack(alignment: .leading, spacing: AppSpacing.sm) {
+      Text("루틴")
+        .onboardingTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textSecondary)
+
+      EditableRoutineTextField(
+        placeholder: "루틴 이름",
+        text: Binding(
+          get: { viewModel.previewName },
+          set: { viewModel.previewName = $0 }
+        )
       )
-      .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
+      EditableRoutineTextField(
+        placeholder: "루틴 설명",
+        text: Binding(
+          get: { viewModel.previewSummary },
+          set: { viewModel.previewSummary = $0 }
+        )
+      )
+    }
+  }
+}
+
+private struct EditableRoutineTextField: View {
+  let placeholder: String
+  @Binding var text: String
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  var body: some View {
+    TextField(placeholder, text: $text, axis: .vertical)
+      .onboardingTextStyle(.b4.weight(.semiBold))
+      .foregroundStyle(MoruPilotColor.textPrimary)
+      .tint(MoruPilotColor.accent)
+      .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
+      .padding(.horizontal, MoruPilotSpacing.sixteen)
+      .padding(.vertical, MoruPilotSpacing.twelve)
+      .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 48)
+      .background(OnboardingSurface.input)
+      .overlay(
+        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+          .stroke(MoruPilotColor.border, lineWidth: 1)
+      )
+      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
   }
 }

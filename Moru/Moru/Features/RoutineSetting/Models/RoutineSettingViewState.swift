@@ -32,6 +32,15 @@ enum RoutineCreationFlowMode: Hashable, Identifiable {
   var includesCompletionTrial: Bool {
     self == .onboarding
   }
+
+  var supportsRecommendedRoutineStepEditing: Bool {
+    switch self {
+    case .onboarding, .recommendedAddition:
+      return true
+    case .directAddition:
+      return false
+    }
+  }
 }
 
 enum RoutineCreationCompletionDestination: Equatable {

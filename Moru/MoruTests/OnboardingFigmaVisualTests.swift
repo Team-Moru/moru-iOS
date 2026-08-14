@@ -259,13 +259,23 @@ final class OnboardingFigmaVisualTests: XCTestCase {
       return AnyView(SplashScreenView(onStart: {}))
     }
 
+    let isRecommendedAdditionExistingRoutineReview =
+      state == .recommendedAdditionExistingRoutineReview
+    let isExistingRoutineReview = state == .existingRoutineReview
+      || isRecommendedAdditionExistingRoutineReview
     var draft = OnboardingDraft()
-    draft.experience = .wantsRecommendation
-    draft.selectedGoalTags = state == .goals ? [] : ["mind"]
+    draft.experience = isExistingRoutineReview ? .hasRoutine : .wantsRecommendation
+    draft.selectedGoalTags = state == .goals || isExistingRoutineReview
+      ? []
+      : ["mind"]
     draft.selectedKeywords = ["물 마시기", "스트레칭"]
-    draft.freeformText = state == .freeform
-      ? ""
-      : "일어나면 물을 마시고 스트레칭한 뒤 오늘 계획을 확인하기"
+    draft.freeformText = if state == .freeform {
+      ""
+    } else if isExistingRoutineReview {
+      "건강 루틴: 물, 스트레칭, 오늘 할 일을 정리하고 싶어요"
+    } else {
+      "일어나면 물을 마시고 스트레칭한 뒤 오늘 계획을 확인하기"
+    }
     draft.alarmHour = 7
     draft.alarmMinute = 0
     draft.selectedWeekdays = [.monday, .wednesday, .saturday, .sunday]
@@ -278,9 +288,15 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     } else {
       suggestionService = LocalTemplateSuggestionService.shared
       draft.previewRoutine = try suggestionService.makeRoutine(from: draft.suggestionInput)
+      if state == .review || isExistingRoutineReview {
+        draft.previewRoutine?.summary = ""
+      }
     }
 
     let viewModel = OnboardingViewModel(
+      flowMode: isRecommendedAdditionExistingRoutineReview
+        ? .recommendedAddition
+        : .onboarding,
       draft: draft,
       step: step(for: state),
       routineSuggestionService: suggestionService,
@@ -308,7 +324,8 @@ final class OnboardingFigmaVisualTests: XCTestCase {
       return .freeform
     case .organizing:
       return .organizing
-    case .review, .longKorean:
+    case .review, .existingRoutineReview,
+         .recommendedAdditionExistingRoutineReview, .longKorean:
       return .review
     case .alarm:
       return .alarm
@@ -330,6 +347,9 @@ private enum OnboardingCaptureState: String, CaseIterable {
   case freeform
   case organizing
   case review
+  case existingRoutineReview = "existing-routine-review"
+  case recommendedAdditionExistingRoutineReview =
+    "recommended-addition-existing-routine-review"
   case alarm
   case voice
   case completion

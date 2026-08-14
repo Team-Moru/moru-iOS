@@ -509,7 +509,7 @@ private enum RoutineManagementVisualBaseline {
     "step-edit-light-M.png":
       "AAAAAEBBggaTBMgAwAPEAxACZSMDAwIAAADAAMIA6ALAhOMY4RjhGIAEgADDBMMk4IDEzMDAggCDAgAAEAFABA==",
     "weekday-conflict-light-AX3.png":
-      "AAAgAMgUyWzZZGk0Ag8ABz03HXcMB42HlSMlIw1HLUMpMzRjNmMGhxtHG0ccpw4HEOMYw2YJ4XDBdOBgYgEAAA==",
+      "AAAAAAYDyXTZbOl0BBYABx03HXcMRw2HlQelIy0HDUcpczRjNmMGBxtHG0Mcpx4nEOMZ40wM4XDBdOBgYgEAAA==",
     "weekday-conflict-light-M.png":
       "AAAAAEBBggaTBMgAwAPEAxADYiMwAsgAgA6MBx9HHSe8ox7HEGcZZ1Af0gRYDlANoQJQDVAN5QDAxMDEYAFABA==",
   ]

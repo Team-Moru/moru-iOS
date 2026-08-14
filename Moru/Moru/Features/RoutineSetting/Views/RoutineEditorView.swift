@@ -237,7 +237,7 @@ struct RoutineEditorView: View {
 
   private var titleSection: some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-      sectionTitle("루틴 이름")
+      sectionTitle("루틴")
 
       VStack(spacing: MoruPilotSpacing.eight) {
         editorInputRow(text: $draft.title, placeholder: "루틴 이름")
