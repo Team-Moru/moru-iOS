@@ -29,7 +29,13 @@ final class HistoryServerEnrichmentTests: XCTestCase {
       ],
       monthlyDays: []
     )
-    let service = RecordingAccountHistoryRemoteService(result: .success(remote))
+    let service = RecordingAccountHistoryRemoteService(
+      result: .success(remote),
+      dailyReportsByDay: [
+        13: makeServerDailySummary(day: 13, routineCount: 1),
+        14: makeServerDailySummary(day: 14, routineCount: 1),
+      ]
+    )
     let memberProvider = MutableSignedInMemberProvider(memberID: 41)
     let enricher = AccountHistorySummaryEnricher(
       remoteService: service,
@@ -126,6 +132,37 @@ final class HistoryServerEnrichmentTests: XCTestCase {
     XCTAssertEqual(result.weeklyDurationText, "05:00")
     let requestedDays = await service.requestedDailyDays.sorted()
     XCTAssertEqual(requestedDays, [13, 14])
+  }
+
+  @MainActor
+  func testAccountAverageDurationDoesNotGuessAfterDailyFailure() async throws {
+    let local = makeOverview(
+      recentDays: [],
+      weekRunCount: 0,
+      weekCompletionRate: 0,
+      monthlyRates: [nil, nil]
+    )
+    let remote = makeServerSummary(
+      weeklyRate: 0.75,
+      dailyRates: [1, 0.5, nil, nil, nil, nil, nil],
+      totalDurationSeconds: 900
+    )
+    let service = RecordingAccountHistoryRemoteService(
+      result: .success(remote),
+      dailyReportsByDay: [
+        13: makeServerDailySummary(day: 13, routineCount: 2),
+      ]
+    )
+    let enricher = AccountHistorySummaryEnricher(
+      remoteService: service,
+      signedInMemberProvider: MutableSignedInMemberProvider(memberID: 41)
+    )
+
+    let result = try await enricher.enrich(local)
+
+    XCTAssertNil(result.week.executionCount)
+    XCTAssertEqual(result.weeklyDurationTitle, HistoryCopy.averageDuration)
+    XCTAssertEqual(result.weeklyDurationText, "--:--")
   }
 
   @MainActor

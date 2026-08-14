@@ -476,10 +476,7 @@ extension HistoryOverview {
 
   var weeklyDurationText: String {
     if week.summarySource == .account {
-      let fallbackCount = week.totalRunCount > 0
-        ? week.totalRunCount
-        : week.dailyCompletionRates.filter(\.hasData).count
-      let executionCount = week.executionCount ?? fallbackCount
+      let executionCount = week.executionCount ?? week.totalRunCount
       guard let totalDurationSeconds = week.totalDurationSeconds,
             executionCount > 0 else {
         return "--:--"
