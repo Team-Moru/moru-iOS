@@ -303,6 +303,7 @@ struct DependencyContainer {
     return DefaultRoutinePlayerBuilder(
       resolver: resolver,
       saveRoutineRunUseCase: saveRoutineRunUseCase,
+      routineRepository: routineRepository,
       routineRunRepository: routineRunRepository,
       localProfileRepository: localProfileRepository,
       guidancePlayer: guidancePlayer,

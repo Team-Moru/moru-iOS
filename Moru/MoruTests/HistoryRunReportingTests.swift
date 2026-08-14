@@ -148,44 +148,52 @@ final class HistoryRunReportingTests: XCTestCase {
   }
 
   @MainActor
-  func testHistoryUsesSharedStreakRuleAndStopsAtMissingCalendarDate() throws {
+  func testHistoryUsesSharedScheduleAwareStreakRule() throws {
     let calendar = makeCalendar()
+    let routineID = UUID()
     let completedDates = [
+      makeDate(2026, 7, 6, 7, 0, calendar: calendar),
+      makeDate(2026, 7, 8, 7, 0, calendar: calendar),
       makeDate(2026, 7, 10, 7, 0, calendar: calendar),
-      makeDate(2026, 7, 13, 7, 0, calendar: calendar),
-      makeDate(2026, 7, 14, 7, 0, calendar: calendar),
     ]
     let completedRuns = completedDates.map { date in
       let step = makeSnapshot()
       return makeRun(
+        routineID: routineID,
         startedAt: date,
         plannedSteps: [step],
         results: [makeCompletedResult(for: step)]
       )
     }
-    let partialSteps = [
-      makeSnapshot(order: 0),
-      makeSnapshot(order: 1),
-    ]
-    let partialRun = makeRun(
-      startedAt: makeDate(2026, 7, 12, 7, 0, calendar: calendar),
-      plannedSteps: partialSteps,
-      results: [makeCompletedResult(for: partialSteps[0])]
+    let routine = Routine(
+      id: routineID,
+      name: "월수금 루틴",
+      steps: [RoutineStep(type: .confirm, title: "스텝", order: 0)],
+      alarmSchedule: AlarmSchedule(
+        hour: 7,
+        minute: 0,
+        weekdays: [.monday, .wednesday, .friday]
+      ),
+      createdAt: .distantPast,
+      updatedAt: .distantPast
     )
-    let now = makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    let now = makeDate(2026, 7, 10, 12, 0, calendar: calendar)
     let overview = try makeUseCase(
-      runs: completedRuns + [partialRun],
+      runs: completedRuns,
       calendar: calendar,
-      now: now
+      now: now,
+      routines: [routine]
     ).load()
+    let schedules = [routine].compactMap(RoutineStreakSchedule.init)
     let expected = RoutineStreakCalculator(calendar: calendar).calculate(
-      from: completedRuns + [partialRun],
+      from: completedRuns,
+      schedules: schedules,
       asOf: now
     )
 
     XCTAssertEqual(overview.streak, expected)
-    XCTAssertEqual(overview.streak.currentDays, 2)
-    XCTAssertEqual(overview.streak.bestDays, 2)
+    XCTAssertEqual(overview.streak.currentDays, 3)
+    XCTAssertEqual(overview.streak.bestDays, 3)
   }
 
   @MainActor
@@ -796,6 +804,7 @@ final class HistoryRunReportingTests: XCTestCase {
     let calendar = makeCalendar()
     let repository = HistoryRunRepositoryStub(error: HistoryRepositoryTestError.unavailable)
     let useCase = LoadHistoryUseCase(
+      routineRepository: MockRoutineRepository(),
       routineRunRepository: repository,
       calendar: calendar,
       now: { self.makeDate(2026, 7, 14, 12, 0, calendar: calendar) }
@@ -819,6 +828,7 @@ final class HistoryRunReportingTests: XCTestCase {
       results: [makeCompletedResult(for: step)]
     )
     let useCase = LoadHistoryUseCase(
+      routineRepository: dependencies.routineRepository,
       routineRunRepository: dependencies.routineRunRepository,
       calendar: calendar,
       now: { now }
@@ -849,13 +859,37 @@ final class HistoryRunReportingTests: XCTestCase {
   private func makeUseCase(
     runs: [RoutineRun],
     calendar: Calendar,
-    now: Date
+    now: Date,
+    routines: [Routine]? = nil
   ) -> LoadHistoryUseCase {
     LoadHistoryUseCase(
+      routineRepository: MockRoutineRepository(
+        routines: routines ?? scheduledRoutines(for: runs)
+      ),
       routineRunRepository: HistoryRunRepositoryStub(runs: runs),
       calendar: calendar,
       now: { now }
     )
+  }
+
+  @MainActor
+  private func scheduledRoutines(for runs: [RoutineRun]) -> [Routine] {
+    let routineIDs = Set(runs.map(\.routineID))
+
+    return routineIDs.map { routineID in
+      Routine(
+        id: routineID,
+        name: "테스트 루틴",
+        steps: [RoutineStep(type: .confirm, title: "테스트", order: 0)],
+        alarmSchedule: AlarmSchedule(
+          hour: 7,
+          minute: 0,
+          weekdays: Weekday.allCases
+        ),
+        createdAt: .distantPast,
+        updatedAt: .distantPast
+      )
+    }
   }
 
   private func makeCalendar(timeZone: TimeZone = .gmt) -> Calendar {

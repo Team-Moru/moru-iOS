@@ -104,6 +104,7 @@ final class HomeHistoryVerticalFlowTests: XCTestCase {
     XCTAssertEqual(try runRepository.fetchRuns().count, 1)
 
     let overview = try LoadHistoryUseCase(
+      routineRepository: routineRepository,
       routineRunRepository: runRepository,
       calendar: calendar,
       now: { now }
