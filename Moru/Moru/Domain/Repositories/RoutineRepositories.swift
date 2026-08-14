@@ -9,14 +9,14 @@ import Foundation
 
 enum RepositoryContractError: Error, Equatable, LocalizedError {
   case routineRunSnapshotRequired
-  case singleActiveRoutineRequired
+  case overlappingActiveRoutineWeekdays
 
   var errorDescription: String? {
     switch self {
     case .routineRunSnapshotRequired:
       return "RoutineRun must include planned step snapshots before it is saved."
-    case .singleActiveRoutineRequired:
-      return "Only one routine can be active at a time."
+    case .overlappingActiveRoutineWeekdays:
+      return "Active routines cannot share scheduled weekdays."
     }
   }
 }

@@ -10,6 +10,13 @@ struct RoutineCreationSheet: View {
   static let recommendedAccessibilityIdentifier =
     "routine.creation.choice.recommended"
   static let directAccessibilityIdentifier = "routine.creation.choice.direct"
+  static let recommendedInitialStep = OnboardingStep.freeform
+
+  static var recommendedInitialDraft: OnboardingDraft {
+    var draft = OnboardingDraft()
+    draft.experience = .hasRoutine
+    return draft
+  }
 
   @Environment(\.dismiss) private var dismiss
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -80,6 +87,8 @@ struct RoutineCreationSheet: View {
     OnboardingFlowView(
       viewModel: OnboardingViewModel(
         flowMode: .recommendedAddition,
+        draft: Self.recommendedInitialDraft,
+        step: Self.recommendedInitialStep,
         routineSuggestionService: dependencies.routineSuggestionService,
         routineSuggestionCoordinator:
           dependencies.routineSuggestionCoordinator,

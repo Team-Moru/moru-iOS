@@ -50,7 +50,7 @@ final class RoutineActivationBootstrapRepairTests: XCTestCase {
     XCTAssertEqual(uuidTie?.winnerID, lexicographicallyFirst.id)
   }
 
-  func testRepairDeactivatesLosersPreservesWeekdaysAndSavesOneBatch() throws {
+  func testRepairDeactivatesOverlappingLosersAndSavesOneBatch() throws {
     let winner = makeRoutine(
       id: uuid("00000000-0000-0000-0000-000000000010"),
       createdAt: Date(timeIntervalSince1970: 10),
@@ -61,7 +61,7 @@ final class RoutineActivationBootstrapRepairTests: XCTestCase {
       id: uuid("00000000-0000-0000-0000-000000000020"),
       createdAt: Date(timeIntervalSince1970: 10),
       updatedAt: Date(timeIntervalSince1970: 10),
-      weekdays: [.monday, .wednesday]
+      weekdays: [.monday, .friday]
     )
     let repository = RoutineActivationRepairRepository(
       routines: [winner, loser]
@@ -86,8 +86,28 @@ final class RoutineActivationBootstrapRepairTests: XCTestCase {
     XCTAssertTrue(savedWinner.alarmSchedule?.isEnabled ?? false)
     XCTAssertFalse(savedLoser.isActive)
     XCTAssertFalse(savedLoser.alarmSchedule?.isEnabled ?? true)
-    XCTAssertEqual(savedLoser.alarmSchedule?.weekdays, [.monday, .wednesday])
+    XCTAssertEqual(savedLoser.alarmSchedule?.weekdays, [.monday, .friday])
     XCTAssertEqual(savedLoser.updatedAt, repairDate)
+  }
+
+  func testRepairLeavesNonOverlappingActiveRoutinesUntouched() throws {
+    let mondayRoutine = makeRoutine(
+      id: uuid("00000000-0000-0000-0000-000000000021"),
+      weekdays: [.monday]
+    )
+    let fridayRoutine = makeRoutine(
+      id: uuid("00000000-0000-0000-0000-000000000022"),
+      weekdays: [.friday]
+    )
+    let repository = RoutineActivationRepairRepository(
+      routines: [mondayRoutine, fridayRoutine]
+    )
+
+    XCTAssertNil(
+      try RoutineActivationBootstrapRepair.repairIfNeeded(in: repository)
+    )
+    XCTAssertTrue(repository.saveBatches.isEmpty)
+    XCTAssertEqual(repository.routines, [mondayRoutine, fridayRoutine])
   }
 
   func testRepairLeavesZeroOrOneActiveRoutineUntouched() throws {

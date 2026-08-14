@@ -164,6 +164,10 @@ final class OnboardingViewModel: ObservableObject {
     flowMode != .onboarding && !isSaving
   }
 
+  var canNavigateBack: Bool {
+    previousStep != nil
+  }
+
   var allowsReviewEditing: Bool {
     flowMode == .recommendedAddition
   }
@@ -749,6 +753,8 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     switch (step, draft.experience) {
+    case (.freeform, .hasRoutine) where flowMode == .recommendedAddition:
+      return nil
     case (.freeform, .hasRoutine):
       return .experience
     case (.review, .hasRoutine):

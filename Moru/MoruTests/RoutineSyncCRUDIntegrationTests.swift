@@ -477,6 +477,59 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testActiveSelectionKeepsNewestServerProjectableRoutine() throws {
+    let fixture = try makeFixture(memberID: nil)
+    var boundRoutine = makeRoutine(
+      name: "서버 연결 루틴",
+      steps: [makeStep()],
+      isActive: false
+    )
+    var localOnlyRoutine = makeRoutine(
+      name: "로컬 전용 루틴",
+      steps: [makeStep()],
+      isActive: false
+    )
+    try fixture.routines.saveRoutines([boundRoutine, localOnlyRoutine])
+
+    fixture.member.signedInMemberID = 7
+    _ = try fixture.sync.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: boundRoutine.id
+    )
+
+    boundRoutine.isActive = true
+    boundRoutine.updatedAt = Date(timeIntervalSince1970: 20)
+    try fixture.routines.saveRoutine(boundRoutine)
+
+    localOnlyRoutine.isActive = true
+    localOnlyRoutine.updatedAt = Date(timeIntervalSince1970: 30)
+    try fixture.routines.saveRoutine(localOnlyRoutine)
+
+    boundRoutine.isActive = false
+    boundRoutine.updatedAt = Date(timeIntervalSince1970: 24)
+    try fixture.routines.saveRoutine(boundRoutine)
+    boundRoutine.isActive = true
+    boundRoutine.updatedAt = Date(timeIntervalSince1970: 25)
+    try fixture.routines.saveRoutine(boundRoutine)
+
+    let selection = try XCTUnwrap(
+      try fixture.sync.mutation(
+        memberID: 7,
+        operation: .setRoutineGroupActive,
+        entityKind: .account,
+        localEntityID: RoutineSyncCommand.accountSelectionID
+      )
+    )
+    XCTAssertEqual(
+      try decodedCommand(selection),
+      .selectActiveRoutineGroup(selectedGroupLocalID: boundRoutine.id)
+    )
+  }
+
+  @MainActor
   func testExecutionStagesPerResultForProjectableGroupAndDoesNotBackfillLegacyRun() throws {
     let fixture = try makeFixture(memberID: nil)
     let step = makeStep(title: "확인", order: 0)

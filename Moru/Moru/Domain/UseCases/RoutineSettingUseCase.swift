@@ -61,7 +61,10 @@ struct RoutineSettingUseCase {
         throw RoutineSettingError.activeRoutineReplacementRequired
       }
 
-      routines = try routinesByReplacingActiveRoutine(for: mutation)
+      routines = try routinesByReplacingActiveRoutine(
+        for: mutation,
+        conflictingIDs: conflictingIDs
+      )
       try routineRepository.saveRoutines(routines)
     } else {
       let routine = try makeRoutine(from: mutation)
@@ -82,7 +85,9 @@ struct RoutineSettingUseCase {
     let routines = try routineRepository.fetchRoutines()
     return routines.reduce(into: Set<UUID>()) { result, routine in
       guard routine.id != mutation.routineID,
-            routine.isActive else {
+            routine.isActive,
+            let schedule = routine.alarmSchedule,
+            !mutation.selectedWeekdays.isDisjoint(with: schedule.weekdays) else {
         return
       }
 
@@ -108,7 +113,10 @@ struct RoutineSettingUseCase {
           throw RoutineSettingError.activeRoutineReplacementRequired
         }
 
-        let routines = try routinesByReplacingActiveRoutine(for: mutation)
+        let routines = try routinesByReplacingActiveRoutine(
+          for: mutation,
+          conflictingIDs: conflictingIDs
+        )
         try routineRepository.saveRoutines(routines)
         return await synchronizeAlarmSchedules(for: routines)
       }
@@ -149,10 +157,11 @@ struct RoutineSettingUseCase {
   }
 
   private func routinesByReplacingActiveRoutine(
-    for mutation: RoutineSettingMutation
+    for mutation: RoutineSettingMutation,
+    conflictingIDs: Set<UUID>
   ) throws -> [Routine] {
-    var routines = try routinesWithOtherActiveRoutinesDisabled(
-      excluding: mutation.routineID
+    var routines = try routinesWithConflictingRoutinesDisabled(
+      conflictingIDs
     )
     let routine = try makeRoutine(from: mutation)
 
@@ -165,14 +174,16 @@ struct RoutineSettingUseCase {
     return routines
   }
 
-  private func routinesWithOtherActiveRoutinesDisabled(
-    excluding routineID: UUID?
+  private func routinesWithConflictingRoutinesDisabled(
+    _ conflictingIDs: Set<UUID>
   ) throws -> [Routine] {
-    var routines = try routineRepository.fetchRoutines()
+    var routines = try routineRepository.fetchRoutines().filter {
+      conflictingIDs.contains($0.id)
+    }
 
     for index in routines.indices {
       var routine = routines[index]
-      guard routine.id != routineID,
+      guard conflictingIDs.contains(routine.id),
             routine.isActive else {
         continue
       }

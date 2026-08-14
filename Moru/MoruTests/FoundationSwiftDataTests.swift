@@ -202,6 +202,116 @@ final class FoundationSwiftDataTests: XCTestCase {
   }
 
   @MainActor
+  func testSwiftDataRoutineRepositoryAllowsOnlyNonOverlappingActiveWeekdays()
+    throws {
+    let container = try makeContainer()
+    let repository = SwiftDataRoutineRepository(modelContext: container.mainContext)
+    let mondayRoutine = makeRoutine(
+      name: "월요일 루틴",
+      createdAt: Date(timeIntervalSince1970: 10),
+      alarmSchedule: AlarmSchedule(
+        hour: 7,
+        minute: 0,
+        weekdays: [.monday]
+      )
+    )
+    let fridayRoutine = makeRoutine(
+      name: "금요일 루틴",
+      createdAt: Date(timeIntervalSince1970: 20),
+      alarmSchedule: AlarmSchedule(
+        hour: 7,
+        minute: 0,
+        weekdays: [.friday]
+      )
+    )
+    let overlappingRoutine = makeRoutine(
+      name: "월수 루틴",
+      createdAt: Date(timeIntervalSince1970: 30),
+      alarmSchedule: AlarmSchedule(
+        hour: 7,
+        minute: 0,
+        weekdays: [.monday, .wednesday]
+      )
+    )
+
+    try repository.saveRoutines([mondayRoutine, fridayRoutine])
+    XCTAssertEqual(
+      Set(try repository.fetchActiveRoutines().map(\.id)),
+      [mondayRoutine.id, fridayRoutine.id]
+    )
+
+    XCTAssertThrowsError(try repository.saveRoutine(overlappingRoutine)) {
+      XCTAssertEqual(
+        $0 as? RepositoryContractError,
+        .overlappingActiveRoutineWeekdays
+      )
+    }
+    XCTAssertNil(try repository.routine(id: overlappingRoutine.id))
+    XCTAssertEqual(
+      Set(try repository.fetchActiveRoutines().map(\.id)),
+      [mondayRoutine.id, fridayRoutine.id]
+    )
+  }
+
+  @MainActor
+  func testBootstrapRepairPersistsNonOverlappingActiveRoutinesFromLegacyData()
+    throws {
+    let container = try makeContainer()
+    let context = container.mainContext
+    var winner = makeRoutine(
+      name: "월요일 유지",
+      createdAt: Date(timeIntervalSince1970: 10),
+      alarmSchedule: AlarmSchedule(
+        hour: 7,
+        minute: 0,
+        weekdays: [.monday]
+      )
+    )
+    var overlapping = makeRoutine(
+      name: "월수 충돌",
+      createdAt: Date(timeIntervalSince1970: 10),
+      alarmSchedule: AlarmSchedule(
+        hour: 7,
+        minute: 0,
+        weekdays: [.monday, .wednesday]
+      )
+    )
+    var nonOverlapping = makeRoutine(
+      name: "금요일 유지",
+      createdAt: Date(timeIntervalSince1970: 10),
+      alarmSchedule: AlarmSchedule(
+        hour: 7,
+        minute: 0,
+        weekdays: [.friday]
+      )
+    )
+    winner.updatedAt = Date(timeIntervalSince1970: 30)
+    overlapping.updatedAt = Date(timeIntervalSince1970: 20)
+    nonOverlapping.updatedAt = Date(timeIntervalSince1970: 10)
+
+    for routine in [winner, overlapping, nonOverlapping] {
+      context.insert(SwiftDataMapper.makePersistedRoutine(from: routine))
+    }
+    try context.save()
+
+    let repository = SwiftDataRoutineRepository(modelContext: context)
+    let result = try RoutineActivationBootstrapRepair.repairIfNeeded(
+      in: repository,
+      now: Date(timeIntervalSince1970: 40)
+    )
+
+    XCTAssertEqual(result?.winnerID, winner.id)
+    XCTAssertEqual(result?.deactivatedRoutineIDs, [overlapping.id])
+    XCTAssertEqual(
+      Set(try repository.fetchActiveRoutines().map(\.id)),
+      [winner.id, nonOverlapping.id]
+    )
+    XCTAssertFalse(
+      try XCTUnwrap(repository.routine(id: overlapping.id)).isActive
+    )
+  }
+
+  @MainActor
   func testSaveRoutineRunUseCaseKeepsOneRunForRepeatedRequest() throws {
     let container = try makeContainer()
     let repository = SwiftDataRoutineRunRepository(modelContext: container.mainContext)

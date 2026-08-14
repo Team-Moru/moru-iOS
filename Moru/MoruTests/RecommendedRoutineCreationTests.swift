@@ -44,6 +44,38 @@ final class RecommendedRoutineCreationTests: XCTestCase {
   }
 
   @MainActor
+  func testRoutineManagementRecommendationStartsAtFreeformInput() {
+    XCTAssertEqual(RoutineCreationSheet.recommendedInitialStep, .freeform)
+    XCTAssertEqual(
+      RoutineCreationSheet.recommendedInitialDraft.experience,
+      .hasRoutine
+    )
+
+    let viewModel = OnboardingViewModel(
+      flowMode: .recommendedAddition,
+      draft: RoutineCreationSheet.recommendedInitialDraft,
+      step: RoutineCreationSheet.recommendedInitialStep,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+
+    XCTAssertEqual(viewModel.step, .freeform)
+    XCTAssertEqual(viewModel.draft.experience, .hasRoutine)
+    XCTAssertFalse(viewModel.canNavigateBack)
+    viewModel.backButtonDidTap()
+    XCTAssertEqual(viewModel.step, .freeform)
+
+    let onboardingViewModel = OnboardingViewModel(
+      flowMode: .onboarding,
+      draft: RoutineCreationSheet.recommendedInitialDraft,
+      step: .freeform,
+      routineSuggestionService: LocalTemplateSuggestionService.shared
+    )
+    XCTAssertTrue(onboardingViewModel.canNavigateBack)
+    onboardingViewModel.backButtonDidTap()
+    XCTAssertEqual(onboardingViewModel.step, .experience)
+  }
+
+  @MainActor
   func testRecommendedCancellationDoesNotWriteData() {
     let useCase = RecommendedRoutineCreationUseCaseSpy()
     var cancellationCount = 0
@@ -205,7 +237,7 @@ final class RecommendedRoutineCreationTests: XCTestCase {
   }
 
   @MainActor
-  func testNonOverlappingActiveRoutineRequiresConfirmationAndPreservesExistingSchedule()
+  func testNonOverlappingActiveRoutineDoesNotRequireConfirmation()
     async throws {
     let existingRoutine = makeRoutine(
       name: "기존 루틴",
@@ -229,12 +261,64 @@ final class RecommendedRoutineCreationTests: XCTestCase {
       selectedWeekdays: [.friday]
     )
 
+    XCTAssertNil(try useCase.activeRoutineConflict(for: request))
+    _ = try await useCase.execute(request)
+
+    let savedExisting = try XCTUnwrap(
+      try repository.routine(id: existingRoutine.id)
+    )
+    let savedRecommended = try XCTUnwrap(
+      try repository.routine(id: suggestedRoutine.id)
+    )
+    XCTAssertTrue(savedExisting.isActive)
+    XCTAssertTrue(savedExisting.alarmSchedule?.isEnabled ?? false)
+    XCTAssertEqual(savedExisting.alarmSchedule?.weekdays, [.monday])
+    XCTAssertTrue(savedRecommended.isActive)
+    XCTAssertEqual(
+      savedRecommended.alarmSchedule?.weekdays,
+      [.friday]
+    )
+  }
+
+  @MainActor
+  func testReplacingRecommendedRoutineDisablesOnlyOverlappingActiveRoutines()
+    async throws {
+    let overlappingRoutine = makeRoutine(
+      name: "월수 루틴",
+      weekdays: [.monday, .wednesday]
+    )
+    let nonOverlappingRoutine = makeRoutine(
+      name: "금요일 루틴",
+      weekdays: [.friday]
+    )
+    let repository = MockRoutineRepository(
+      routines: [overlappingRoutine, nonOverlappingRoutine]
+    )
+    let alarmMutator = RepairRequiredAlarmMutator()
+    let useCase = RecommendedRoutineCreationUseCase(
+      routineRepository: repository,
+      alarmScheduleMutator: alarmMutator
+    )
+    let suggestedRoutine = try LocalTemplateSuggestionService.shared.makeRoutine(
+      from: RoutineSuggestionInput(
+        goalTags: ["health"],
+        selectedKeywords: ["스트레칭"],
+        weekdays: [.wednesday, .sunday]
+      )
+    )
+    let request = RecommendedRoutineCreationRequest(
+      routine: suggestedRoutine,
+      alarmHour: 7,
+      alarmMinute: 20,
+      selectedWeekdays: [.wednesday, .sunday]
+    )
+
     let conflict = try XCTUnwrap(try useCase.activeRoutineConflict(for: request))
-    XCTAssertEqual(conflict.activeRoutineIDs, [existingRoutine.id])
+    XCTAssertEqual(conflict.activeRoutineIDs, [overlappingRoutine.id])
 
     do {
       _ = try await useCase.execute(request)
-      XCTFail("An active routine replacement must be confirmed.")
+      XCTFail("An overlapping active routine must be confirmed.")
     } catch let error as RoutineSettingError {
       XCTAssertEqual(error, .activeRoutineReplacementRequired)
     }
@@ -244,20 +328,58 @@ final class RecommendedRoutineCreationTests: XCTestCase {
       replacingActiveRoutine: true
     )
 
-    let savedExisting = try XCTUnwrap(
-      try repository.routine(id: existingRoutine.id)
+    let savedOverlapping = try XCTUnwrap(
+      try repository.routine(id: overlappingRoutine.id)
+    )
+    let savedNonOverlapping = try XCTUnwrap(
+      try repository.routine(id: nonOverlappingRoutine.id)
     )
     let savedRecommended = try XCTUnwrap(
       try repository.routine(id: suggestedRoutine.id)
     )
-    XCTAssertFalse(savedExisting.isActive)
-    XCTAssertFalse(savedExisting.alarmSchedule?.isEnabled ?? true)
-    XCTAssertEqual(savedExisting.alarmSchedule?.weekdays, [.monday])
+    XCTAssertFalse(savedOverlapping.isActive)
+    XCTAssertFalse(savedOverlapping.alarmSchedule?.isEnabled ?? true)
+    XCTAssertTrue(savedNonOverlapping.isActive)
+    XCTAssertTrue(savedNonOverlapping.alarmSchedule?.isEnabled ?? false)
     XCTAssertTrue(savedRecommended.isActive)
     XCTAssertEqual(
-      savedRecommended.alarmSchedule?.weekdays,
-      [.friday]
+      Set(alarmMutator.synchronizedRoutineIDs),
+      [overlappingRoutine.id, suggestedRoutine.id]
     )
+  }
+
+  @MainActor
+  func testActivationKeepsActiveRoutinesWithDifferentWeekdays() async throws {
+    let mondayRoutine = makeRoutine(
+      name: "월요일 루틴",
+      weekdays: [.monday]
+    )
+    var fridayRoutine = makeRoutine(
+      name: "금요일 루틴",
+      weekdays: [.friday]
+    )
+    fridayRoutine.isActive = false
+    fridayRoutine.alarmSchedule?.isEnabled = false
+    let repository = MockRoutineRepository(
+      routines: [mondayRoutine, fridayRoutine]
+    )
+    let useCase = RoutineSettingUseCase(routineRepository: repository)
+
+    _ = try await useCase.updateActivation(
+      routineID: fridayRoutine.id,
+      isActive: true
+    )
+
+    let savedMonday = try XCTUnwrap(
+      try repository.routine(id: mondayRoutine.id)
+    )
+    let savedFriday = try XCTUnwrap(
+      try repository.routine(id: fridayRoutine.id)
+    )
+    XCTAssertTrue(savedMonday.isActive)
+    XCTAssertTrue(savedMonday.alarmSchedule?.isEnabled ?? false)
+    XCTAssertTrue(savedFriday.isActive)
+    XCTAssertTrue(savedFriday.alarmSchedule?.isEnabled ?? false)
   }
 
   @MainActor
