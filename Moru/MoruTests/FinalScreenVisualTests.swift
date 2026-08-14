@@ -688,7 +688,8 @@ private final class VisualHistoryUseCase: LoadHistoryUseCaseProtocol {
       wakeMetrics: .calculated(
         observationCount: 4,
         averageWakeMinute: 7 * 60,
-        averageDeviationMinutes: 5,
+        standardDeviationMinutes: 5,
+        regularityScore: 96,
         regularity: .veryConsistent
       ),
       monthlyHeatmap: HistoryMonthlyHeatmap(

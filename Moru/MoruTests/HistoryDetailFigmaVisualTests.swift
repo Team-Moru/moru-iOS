@@ -162,7 +162,8 @@ final class HistoryDetailFigmaVisualTests: XCTestCase {
       wakeMetrics: .calculated(
         observationCount: 7,
         averageWakeMinute: 7 * 60 + 23,
-        averageDeviationMinutes: 18,
+        standardDeviationMinutes: 18,
+        regularityScore: 85,
         regularity: .consistent
       ),
       monthlyHeatmap: HistoryMonthlyHeatmap(

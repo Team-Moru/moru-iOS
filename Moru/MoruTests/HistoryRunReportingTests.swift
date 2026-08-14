@@ -237,6 +237,31 @@ final class HistoryRunReportingTests: XCTestCase {
   }
 
   @MainActor
+  func testWeeklyDurationAveragesEveryExecutionIncludingSameDayRuns() throws {
+    let calendar = makeCalendar()
+    let firstRun = makeRun(
+      startedAt: makeDate(2026, 7, 13, 7, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()],
+      durationSeconds: 60
+    )
+    let secondRun = makeRun(
+      startedAt: makeDate(2026, 7, 13, 8, 0, calendar: calendar),
+      plannedSteps: [makeSnapshot()],
+      durationSeconds: 180
+    )
+
+    let overview = try makeUseCase(
+      runs: [firstRun, secondRun],
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load()
+
+    XCTAssertEqual(overview.week.totalRunCount, 2)
+    XCTAssertEqual(overview.weeklyDurationTitle, HistoryCopy.averageDuration)
+    XCTAssertEqual(overview.weeklyDurationText, "02:00")
+  }
+
+  @MainActor
   func testWakeMetricsRequireThreeDifferentDaysOfCompletedRuns() throws {
     let calendar = makeCalendar()
     let firstRun = makeRun(
@@ -252,7 +277,7 @@ final class HistoryRunReportingTests: XCTestCase {
       plannedSteps: [makeSnapshot()]
     )
     let expiredRun = makeRun(
-      startedAt: makeDate(2026, 6, 16, 7, 0, calendar: calendar),
+      startedAt: makeDate(2026, 7, 7, 7, 0, calendar: calendar),
       plannedSteps: [makeSnapshot()]
     )
     let futureRun = makeRun(
@@ -272,6 +297,46 @@ final class HistoryRunReportingTests: XCTestCase {
     ).load()
 
     XCTAssertEqual(overview.wakeMetrics, .insufficient(observationCount: 2))
+  }
+
+  @MainActor
+  func testWakeMetricsIncludeExactlyTheFirstDayOfTheSevenDayWindow() throws {
+    let calendar = makeCalendar()
+    let runs = [
+      makeRun(
+        startedAt: makeDate(2026, 7, 7, 23, 59, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 8, 0, 0, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 13, 0, 0, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      ),
+      makeRun(
+        startedAt: makeDate(2026, 7, 14, 0, 0, calendar: calendar),
+        plannedSteps: [makeSnapshot()]
+      ),
+    ]
+
+    let metrics = try makeUseCase(
+      runs: runs,
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load().wakeMetrics
+
+    XCTAssertEqual(
+      metrics,
+      .calculated(
+        observationCount: 3,
+        averageWakeMinute: 0,
+        standardDeviationMinutes: 0,
+        regularityScore: 100,
+        regularity: .veryConsistent
+      )
+    )
   }
 
   @MainActor
@@ -302,32 +367,76 @@ final class HistoryRunReportingTests: XCTestCase {
       .calculated(
         observationCount: 3,
         averageWakeMinute: 0,
-        averageDeviationMinutes: 7,
+        standardDeviationMinutes: 8,
+        regularityScore: 93,
         regularity: .veryConsistent
       )
     )
   }
 
   @MainActor
-  func testStartTimeRegularityOwnsBoundaryScoresAndCopy() {
+  func testWakeMetricsScoreUsesUnroundedStandardDeviation() throws {
+    let calendar = makeCalendar()
+    let runs = [0, 2, 4].enumerated().map { offset, minute in
+      makeRun(
+        startedAt: makeDate(
+          2026,
+          7,
+          12 + offset,
+          0,
+          minute,
+          calendar: calendar
+        ),
+        plannedSteps: [makeSnapshot()]
+      )
+    }
+
+    let metrics = try makeUseCase(
+      runs: runs,
+      calendar: calendar,
+      now: makeDate(2026, 7, 14, 12, 0, calendar: calendar)
+    ).load().wakeMetrics
+
+    XCTAssertEqual(
+      metrics,
+      .calculated(
+        observationCount: 3,
+        averageWakeMinute: 2,
+        standardDeviationMinutes: 2,
+        regularityScore: 99,
+        regularity: .veryConsistent
+      )
+    )
+  }
+
+  @MainActor
+  func testStartTimeRegularityUsesStandardDeviationScoreAndCopy() {
     let expectations: [
       (deviation: Int, regularity: HistoryStartTimeRegularity, score: Int, copy: String)
     ] = [
-      (10, .veryConsistent, 96, "매우 규칙적이에요"),
-      (11, .consistent, 87, "꽤 규칙적이에요"),
-      (20, .consistent, 87, "꽤 규칙적이에요"),
-      (21, .variable, 68, "조금 불규칙해요"),
-      (40, .variable, 68, "조금 불규칙해요"),
-      (41, .highlyVariable, 42, "많이 불규칙해요"),
+      (0, .veryConsistent, 100, "매우 규칙적이에요"),
+      (10, .veryConsistent, 92, "매우 규칙적이에요"),
+      (11, .consistent, 91, "꽤 규칙적이에요"),
+      (20, .consistent, 83, "꽤 규칙적이에요"),
+      (21, .variable, 83, "조금 불규칙해요"),
+      (40, .variable, 67, "조금 불규칙해요"),
+      (41, .highlyVariable, 66, "많이 불규칙해요"),
+      (120, .highlyVariable, 0, "많이 불규칙해요"),
+      (180, .highlyVariable, 0, "많이 불규칙해요"),
     ]
 
     for expectation in expectations {
       let regularity = HistoryStartTimeRegularity(
-        averageDeviationMinutes: expectation.deviation
+        standardDeviationMinutes: expectation.deviation
       )
 
       XCTAssertEqual(regularity, expectation.regularity)
-      XCTAssertEqual(regularity.score, expectation.score)
+      XCTAssertEqual(
+        HistoryStartTimeRegularity.score(
+          standardDeviationMinutes: Double(expectation.deviation)
+        ),
+        expectation.score
+      )
       XCTAssertEqual(regularity.shortText, expectation.copy)
     }
   }
@@ -352,8 +461,9 @@ final class HistoryRunReportingTests: XCTestCase {
       .calculated(
         observationCount: 3,
         averageWakeMinute: 8 * 60,
-        averageDeviationMinutes: 40,
-        regularity: .variable
+        standardDeviationMinutes: 49,
+        regularityScore: 59,
+        regularity: .highlyVariable
       )
     )
   }
@@ -969,14 +1079,15 @@ final class HistoryRunReportingTests: XCTestCase {
     plannedSteps: [RoutineStepSnapshot],
     results: [RoutineStepResult] = [],
     endedEarly: Bool = false,
-    isFinalized: Bool = true
+    isFinalized: Bool = true,
+    durationSeconds: TimeInterval = 60
   ) -> RoutineRun {
     RoutineRun(
       id: id,
       routineID: routineID,
       routineName: routineName,
       startedAt: startedAt,
-      completedAt: isFinalized ? startedAt.addingTimeInterval(60) : nil,
+      completedAt: isFinalized ? startedAt.addingTimeInterval(durationSeconds) : nil,
       results: results,
       plannedSteps: plannedSteps,
       endedEarly: endedEarly
