@@ -105,6 +105,84 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(player.cues.filter { $0.kind == .done }.count, 1)
   }
 
+  func testGuidanceCoordinatorAnnouncesOnlyTheLastFiveTimerSeconds() {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let announcer = RoutineSystemSpeechAnnouncerSpy()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      systemSpeechAnnouncer: announcer
+    )
+
+    for seconds in [6, 5, 4, 3, 2, 1, 0] {
+      coordinator.timerCountdownDidReach(seconds)
+    }
+
+    XCTAssertEqual(announcer.announcements, [5, 4, 3, 2, 1])
+
+    coordinator.stop()
+
+    XCTAssertEqual(announcer.stopCallCount, 1)
+  }
+
+  func testCustomNoSpeechReminderUsesSystemSpeechBeforeRecognitionRestarts() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let delay = ImmediateGuidanceDelay()
+    let announcer = RoutineSystemSpeechAnnouncerSpy()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: delay,
+      systemSpeechAnnouncer: announcer
+    )
+    let step = RoutineStep(
+      type: .confirm,
+      title: "직접 만든 루틴",
+      order: 0
+    )
+
+    let result = await coordinator.playReminder(for: step)
+
+    XCTAssertEqual(result, .completed)
+    XCTAssertEqual(announcer.noSpeechReminderCallCount, 1)
+    XCTAssertEqual(delay.delays, [.seconds(3)])
+    XCTAssertTrue(player.cues.isEmpty)
+    XCTAssertGreaterThanOrEqual(announcer.stopCallCount, 2)
+  }
+
+  func testStaleCustomReminderCannotStopNewCountdownSpeech() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let delay = SuspendedGuidanceDelay()
+    let announcer = RoutineSystemSpeechAnnouncerSpy()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: delay,
+      systemSpeechAnnouncer: announcer
+    )
+    let step = RoutineStep(
+      type: .confirm,
+      title: "직접 만든 루틴",
+      order: 0
+    )
+    let reminderTask = Task { @MainActor in
+      await coordinator.playReminder(for: step)
+    }
+    await drainTasks()
+
+    XCTAssertTrue(delay.isWaiting)
+    coordinator.timerCountdownDidReach(5)
+    delay.resume()
+    let result = await reminderTask.value
+
+    XCTAssertEqual(result, .cancelled)
+    XCTAssertEqual(announcer.announcements, [5])
+    XCTAssertEqual(announcer.stopCallCount, 1)
+  }
+
   func testFastStepTransitionCancelsReminderAndMissingPresetStaysSilent() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
@@ -738,6 +816,25 @@ private struct GuidanceCueCall: Equatable {
 }
 
 @MainActor
+private final class RoutineSystemSpeechAnnouncerSpy: RoutineSystemSpeechAnnouncing {
+  private(set) var announcements: [Int] = []
+  private(set) var noSpeechReminderCallCount = 0
+  private(set) var stopCallCount = 0
+
+  func announceCountdown(_ seconds: Int) {
+    announcements.append(seconds)
+  }
+
+  func announceNoSpeechReminder() {
+    noSpeechReminderCallCount += 1
+  }
+
+  func stop() {
+    stopCallCount += 1
+  }
+}
+
+@MainActor
 private final class RoutineGuidancePlayerSpy: RoutineGuidancePlaying {
   private let playbackState: RoutineGuidancePlaybackState
   private(set) var cues: [GuidanceCueCall] = []
@@ -824,6 +921,26 @@ private final class ImmediateGuidanceDelay: RoutineGuidanceDelaying {
 private struct SleepingGuidanceDelay: RoutineGuidanceDelaying {
   func wait(for delay: Duration) async throws {
     try await Task.sleep(for: .seconds(60))
+  }
+}
+
+@MainActor
+private final class SuspendedGuidanceDelay: RoutineGuidanceDelaying {
+  private var continuation: CheckedContinuation<Void, Error>?
+  private(set) var isWaiting = false
+
+  func wait(for delay: Duration) async throws {
+    isWaiting = true
+    try await withCheckedThrowingContinuation { continuation in
+      self.continuation = continuation
+    }
+  }
+
+  func resume() {
+    isWaiting = false
+    let pendingContinuation = continuation
+    continuation = nil
+    pendingContinuation?.resume()
   }
 }
 

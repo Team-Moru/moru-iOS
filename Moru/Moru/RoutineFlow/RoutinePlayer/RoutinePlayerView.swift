@@ -230,10 +230,16 @@ struct RoutinePlayerView: View {
                 waitUntilGuidanceFinishes: {
                     await viewModel.waitUntilIntroFinishes(for: step.id)
                 },
+                onNoSpeechReminder: {
+                    await viewModel.playNoSpeechReminder(for: step.id)
+                },
                 onComplete: { transcript in
                     viewModel.completeCurrentStep(
                         transcript: transcript
                     )
+                },
+                onAutomaticSkip: {
+                    viewModel.skipCurrentStep()
                 },
                 onSkip: {
                     viewModel.requestSkipStep()
@@ -247,6 +253,12 @@ struct RoutinePlayerView: View {
                 isGuidancePlaying: viewModel.isGuidancePlaying,
                 onComplete: {
                     viewModel.completeCurrentStep()
+                },
+                onCountdown: { seconds in
+                    viewModel.timerCountdownDidReach(
+                        seconds,
+                        stepID: step.id
+                    )
                 },
                 onSkip: {
                     viewModel.requestSkipStep()
@@ -263,11 +275,17 @@ struct RoutinePlayerView: View {
                 waitUntilGuidanceFinishes: {
                     await viewModel.waitUntilIntroFinishes(for: step.id)
                 },
+                onNoSpeechReminder: {
+                    await viewModel.playNoSpeechReminder(for: step.id)
+                },
                 onComplete: { transcript in
                     viewModel.completeCurrentStep(
                         inputText: transcript,
                         transcript: transcript
                     )
+                },
+                onAutomaticSkip: {
+                    viewModel.skipCurrentStep()
                 },
                 onSkip: {
                     viewModel.requestSkipStep()
@@ -413,7 +431,7 @@ struct RoutinePlayerView: View {
         RoutineFinishedView(
             completionRate: summary.completionRate,
             streak: summary.streak,
-            completedStepTitles: viewModel.completedStepTitles,
+            stepResults: viewModel.stepResults,
             isTrial: summary.persistedRunID == nil,
             onTapTodayRecord: {
                 if summary.persistedRunID == nil {

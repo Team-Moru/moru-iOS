@@ -45,6 +45,7 @@ enum ConfirmTranscriptMatcher {
     "그래",
     "맞아",
     "좋아",
+    "다음",
     "오케이",
     "okay",
     "ok"
@@ -63,6 +64,7 @@ enum ConfirmTranscriptMatcher {
     "끝냈어요",
     "마쳤어",
     "마쳤어요",
+    "다음",
     "됐어",
     "됐어요",
     "완료했습니다"

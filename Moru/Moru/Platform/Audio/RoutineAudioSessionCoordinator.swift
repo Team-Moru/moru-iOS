@@ -5,6 +5,61 @@
 
 import AVFAudio
 
+@MainActor
+protocol RoutineSystemSpeechAnnouncing: AnyObject {
+  func announceCountdown(_ seconds: Int)
+  func announceNoSpeechReminder()
+  func stop()
+}
+
+/// Fixed countdown speech is an explicit timer cue, not a fallback for missing
+/// routine guidance audio.
+@MainActor
+final class SystemRoutineSpeechAnnouncer: RoutineSystemSpeechAnnouncing {
+  private let synthesizer: AVSpeechSynthesizer
+  private let audioSession: AVAudioSession
+
+  init(
+    synthesizer: AVSpeechSynthesizer = AVSpeechSynthesizer(),
+    audioSession: AVAudioSession = .sharedInstance()
+  ) {
+    self.synthesizer = synthesizer
+    self.audioSession = audioSession
+  }
+
+  func announceCountdown(_ seconds: Int) {
+    guard (1...5).contains(seconds) else {
+      return
+    }
+
+    speak("\(seconds)")
+  }
+
+  func announceNoSpeechReminder() {
+    speak("아직 음성이 들리지 않아요. 준비되면 말해 주세요.")
+  }
+
+  func stop() {
+    synthesizer.stopSpeaking(at: .immediate)
+    try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+  }
+
+  private func speak(_ text: String) {
+    synthesizer.stopSpeaking(at: .immediate)
+    try? audioSession.setCategory(
+      .playback,
+      mode: .spokenAudio,
+      options: [.duckOthers]
+    )
+    try? audioSession.setActive(true)
+
+    let utterance = AVSpeechUtterance(string: text)
+    utterance.voice = AVSpeechSynthesisVoice(language: "ko-KR")
+    utterance.rate = 0.48
+    synthesizer.speak(utterance)
+  }
+}
+
 enum GuidancePlaybackResult: Equatable {
   case completed
   case cancelled

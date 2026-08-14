@@ -15,8 +15,8 @@ struct RoutineFinishedView: View {
   /// 체험에는 값이 없다.
   let streak: RoutineStreak?
 
-  /// 실제 완료한 루틴 단계 제목
-  let completedStepTitles: [String]
+  /// 실제로 완료하거나 건너뛴 루틴 단계 결과
+  let stepResults: [RoutineStepResult]
 
   /// 저장하지 않는 온보딩 체험 완료 상태
   let isTrial: Bool
@@ -33,14 +33,14 @@ struct RoutineFinishedView: View {
   init(
     completionRate: Double,
     streak: RoutineStreak?,
-    completedStepTitles: [String],
+    stepResults: [RoutineStepResult],
     isTrial: Bool = false,
     onTapTodayRecord: @escaping () -> Void,
     onTapHome: @escaping () -> Void
   ) {
     self.completionRate = completionRate
     self.streak = streak
-    self.completedStepTitles = completedStepTitles
+    self.stepResults = stepResults
     self.isTrial = isTrial
     self.onTapTodayRecord = onTapTodayRecord
     self.onTapHome = onTapHome
@@ -72,6 +72,10 @@ struct RoutineFinishedView: View {
     ]
   }
 
+  private var displayedStepResults: [RoutineStepResult] {
+    stepResults.filter { $0.isCompleted || $0.skipped }
+  }
+
   var body: some View {
     ZStack {
       backgroundView
@@ -90,7 +94,7 @@ struct RoutineFinishedView: View {
                 .padding(.bottom, 32)
             }
 
-            completedStepsSection
+            stepResultsSection
 
             Spacer(minLength: isTrial ? 32 : 25)
 
@@ -262,9 +266,9 @@ struct RoutineFinishedView: View {
   }
 
   @ViewBuilder
-  private var completedStepsSection: some View {
-    if completedStepTitles.isEmpty {
-      Text("완료한 루틴이 없습니다.")
+  private var stepResultsSection: some View {
+    if displayedStepResults.isEmpty {
+      Text("완료하거나 건너뛴 루틴이 없습니다.")
         .routineFinishedTextStyle(.c1)
         .foregroundStyle(AppColor.gray350)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -272,10 +276,10 @@ struct RoutineFinishedView: View {
     } else if isTrial {
       VStack(alignment: .leading, spacing: 6) {
         ForEach(
-          Array(completedStepTitles.enumerated()),
-          id: \.offset
-        ) { _, stepTitle in
-          completedStepRow(title: stepTitle)
+          displayedStepResults,
+          id: \.id
+        ) { result in
+          stepResultRow(result)
         }
       }
       .frame(maxWidth: .infinity, alignment: .center)
@@ -286,33 +290,35 @@ struct RoutineFinishedView: View {
         spacing: 6
       ) {
         ForEach(
-          Array(completedStepTitles.enumerated()),
-          id: \.offset
-        ) { _, stepTitle in
-          completedStepRow(title: stepTitle)
+          displayedStepResults,
+          id: \.id
+        ) { result in
+          stepResultRow(result)
         }
       }
       .padding(.horizontal, 30)
     }
   }
 
-  private func completedStepRow(
-    title: String
-  ) -> some View {
+  private func stepResultRow(_ result: RoutineStepResult) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 5) {
-      Image(systemName: "checkmark")
+      Image(systemName: result.isCompleted ? "checkmark" : "xmark")
         .font(.system(size: 10, weight: .semibold))
         .foregroundStyle(AppColor.gray350)
         .accessibilityHidden(true)
 
-      Text(title)
+      Text(result.stepTitle)
         .routineFinishedTextStyle(.c1)
         .foregroundStyle(AppColor.gray350)
         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
         .fixedSize(horizontal: false, vertical: true)
     }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel("완료, \(title)")
+    .accessibilityLabel(
+      result.isCompleted
+        ? "완료, \(result.stepTitle)"
+        : "건너뜀, \(result.stepTitle)"
+    )
   }
 
   @ViewBuilder
@@ -438,14 +444,22 @@ private extension View {
       bestDays: 7,
       completedWeekdays: [.monday, .tuesday]
     ),
-    completedStepTitles: [
+    stepResults: [
       "잠자리 정리하기",
       "가볍게 스트레칭하기",
       "심호흡하며 명상하기",
       "짧은 독서 몰입하기",
       "오늘의 다짐 확인하기",
       "감정과 생각을 기록하기",
-    ],
+    ].enumerated().map { index, title in
+      RoutineStepResult(
+        stepID: UUID(),
+        stepTitle: title,
+        stepType: index == 1 ? .timer : .confirm,
+        completedAt: Date(),
+        skipped: false
+      )
+    },
     onTapTodayRecord: {
       print("오늘의 기록 확인")
     },

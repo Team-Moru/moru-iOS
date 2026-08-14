@@ -29,12 +29,6 @@ enum RoutinePlayerCopy {
     "HABIT-15",
   ]
 
-  private static let stretchingPresetIDs: Set<String> = [
-    "ENERGY-10",
-    "HEALTH-08",
-    "HABIT-07",
-  ]
-
   static func guide(for step: RoutineStep) -> String {
     if let presetItemID = step.presetItemID {
       if bedMakingPresetIDs.contains(presetItemID) {
@@ -86,32 +80,36 @@ enum RoutinePlayerCopy {
   }
 
   static func timerSegments(for step: RoutineStep) -> [TimerSegment]? {
-    guard let presetItemID = step.presetItemID,
-          stretchingPresetIDs.contains(presetItemID) else {
+    guard step.type == .timer else {
       return nil
     }
 
+    let instruction = step.instruction.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    let seconds = max(step.estimatedSeconds ?? 60, 1)
+
     return [
       TimerSegment(
-        title: "목 좌우로 천천히 돌리기",
-        duration: nil,
-        durationSeconds: nil
-      ),
-      TimerSegment(
-        title: "앞뒤로 어깨 돌리기",
-        duration: "30초",
-        durationSeconds: 30
-      ),
-      TimerSegment(
-        title: "양팔 위로 쭉 뻗기",
-        duration: "30초",
-        durationSeconds: 30
-      ),
-      TimerSegment(
-        title: "제자리 가볍게 걷기",
-        duration: "1분",
-        durationSeconds: 60
+        title: instruction.isEmpty ? step.title : instruction,
+        duration: durationText(seconds: seconds),
+        durationSeconds: seconds
       ),
     ]
+  }
+
+  private static func durationText(seconds: Int) -> String {
+    let minutes = seconds / 60
+    let remainingSeconds = seconds % 60
+
+    if minutes == 0 {
+      return "\(remainingSeconds)초"
+    }
+
+    if remainingSeconds == 0 {
+      return "\(minutes)분"
+    }
+
+    return "\(minutes)분 \(remainingSeconds)초"
   }
 }

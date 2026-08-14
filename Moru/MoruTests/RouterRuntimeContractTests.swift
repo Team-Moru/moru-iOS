@@ -981,96 +981,164 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
-  func testRegularEndAndCloseSaveBeforeEmittingTheirExit() {
-    for exit in [RoutinePlayerExit.endedEarly, .userDismissed] {
-      let routine = makeExecutableRoutine()
-      var operationOrder: [String] = []
-      let saver = RoutineRunSaverSpy {
-        operationOrder.append("save")
-      }
-      let finalizer = SavingRegularRoutineFinalizer(saver: saver)
-      let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
-      let eventRecorder = RoutinePlayerEventRecorder { event in
-        if case .exitRequested = event {
-          operationOrder.append("exit")
-        }
-      }
-      let viewModel = RoutinePlayerViewModel(
-        request: RegularRoutineExecutionRequest(
-          routineID: routine.id,
-          source: .manual
-        ),
-        resolver: resolver,
-        finalizer: finalizer,
-        presentationToken: UUID()
-      ) { token, event in
-        eventRecorder.record(presentationToken: token, event: event)
-      }
-
-      viewModel.resolveRoutine()
-      requestEarlyExit(exit, from: viewModel)
-      viewModel.confirmActiveDialog()
-
-      XCTAssertEqual(saver.requests.count, 1)
-      XCTAssertEqual(saver.requests.first?.endedEarly, true)
-      XCTAssertEqual(saver.savedRuns.count, 1)
-      XCTAssertEqual(operationOrder, ["save", "exit"])
-      XCTAssertEqual(eventRecorder.events, [.exitRequested(exit)])
+  func testRegularEndSavesCurrentResultsAndDisplaysSummary() {
+    let routine = makeExecutableRoutine(steps: [
+      RoutineStep(type: .confirm, title: "완료", order: 0),
+      RoutineStep(type: .timer, title: "건너뜀", order: 1),
+      RoutineStep(type: .input, title: "미실행", order: 2),
+    ])
+    let saver = RoutineRunSaverSpy()
+    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder()
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: .manual
+      ),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: UUID()
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
     }
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep()
+    viewModel.finishStepCompletedScreen()
+    viewModel.skipCurrentStep()
+    viewModel.requestEndRoutine()
+    viewModel.confirmActiveDialog()
+
+    XCTAssertEqual(saver.requests.count, 1)
+    XCTAssertEqual(saver.requests.first?.endedEarly, true)
+    XCTAssertEqual(saver.requests.first?.results.count, 2)
+    XCTAssertTrue(saver.requests.first?.results[0].isCompleted == true)
+    XCTAssertTrue(saver.requests.first?.results[1].skipped == true)
+
+    guard case .summary(let summary) = viewModel.screenState else {
+      XCTFail("Ending a routine should display its saved summary.")
+      return
+    }
+
+    XCTAssertTrue(summary.endedEarly)
+    XCTAssertEqual(summary.completedStepCount, 1)
+    XCTAssertEqual(summary.skippedStepCount, 1)
+    XCTAssertEqual(summary.completionRate, 1.0 / 3.0, accuracy: 0.001)
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
   }
 
   @MainActor
-  func testRegularEarlyExitRetriesTheSameRequestAndEmitsEachExitOnce() {
-    for exit in [RoutinePlayerExit.endedEarly, .userDismissed] {
-      let routine = makeExecutableRoutine()
-      var operationOrder: [String] = []
-      let saver = RoutineRunSaverSpy(failuresRemaining: 1) {
-        operationOrder.append("save")
-      }
-      let finalizer = SavingRegularRoutineFinalizer(saver: saver)
-      let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
-      let eventRecorder = RoutinePlayerEventRecorder { event in
-        if case .exitRequested = event {
-          operationOrder.append("exit")
-        }
-      }
-      let viewModel = RoutinePlayerViewModel(
-        request: RegularRoutineExecutionRequest(
-          routineID: routine.id,
-          source: .manual
-        ),
-        resolver: resolver,
-        finalizer: finalizer,
-        presentationToken: UUID()
-      ) { token, event in
-        eventRecorder.record(presentationToken: token, event: event)
-      }
-
-      viewModel.resolveRoutine()
-      requestEarlyExit(exit, from: viewModel)
-      viewModel.confirmActiveDialog()
-
-      XCTAssertEqual(saver.requests.count, 1)
-      XCTAssertTrue(saver.savedRuns.isEmpty)
-      XCTAssertNotNil(viewModel.errorMessage)
-      XCTAssertTrue(eventRecorder.events.isEmpty)
-      XCTAssertTrue(viewModel.isStepInteractionDisabled)
-
-      viewModel.retrySavingRun()
-
-      XCTAssertEqual(saver.requests.count, 2)
-      XCTAssertEqual(saver.requests[0], saver.requests[1])
-      XCTAssertEqual(saver.savedRuns.count, 1)
-      XCTAssertNil(viewModel.errorMessage)
-      XCTAssertEqual(operationOrder, ["save", "save", "exit"])
-      XCTAssertEqual(eventRecorder.events, [.exitRequested(exit)])
-
-      viewModel.retrySavingRun()
-      viewModel.confirmActiveDialog()
-
-      XCTAssertEqual(saver.requests.count, 2)
-      XCTAssertEqual(eventRecorder.events, [.exitRequested(exit)])
+  func testRegularCloseSavesBeforeEmittingExit() {
+    let routine = makeExecutableRoutine()
+    var operationOrder: [String] = []
+    let saver = RoutineRunSaverSpy {
+      operationOrder.append("save")
     }
+    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder { event in
+      if case .exitRequested = event {
+        operationOrder.append("exit")
+      }
+    }
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: .manual
+      ),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: UUID()
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    viewModel.resolveRoutine()
+    viewModel.requestCloseRoutine()
+    viewModel.confirmActiveDialog()
+
+    XCTAssertEqual(saver.requests.count, 1)
+    XCTAssertEqual(saver.requests.first?.endedEarly, true)
+    XCTAssertEqual(saver.savedRuns.count, 1)
+    XCTAssertEqual(operationOrder, ["save", "exit"])
+    XCTAssertEqual(eventRecorder.events, [.exitRequested(.userDismissed)])
+  }
+
+  @MainActor
+  func testRegularEndRetryUsesSameRequestAndDisplaysSummaryOnce() {
+    let routine = makeExecutableRoutine()
+    let saver = RoutineRunSaverSpy(failuresRemaining: 1)
+    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder()
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: .manual
+      ),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: UUID()
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    viewModel.resolveRoutine()
+    viewModel.requestEndRoutine()
+    viewModel.confirmActiveDialog()
+
+    XCTAssertEqual(saver.requests.count, 1)
+    XCTAssertNotNil(viewModel.errorMessage)
+    XCTAssertTrue(eventRecorder.events.isEmpty)
+
+    viewModel.retrySavingRun()
+
+    guard case .summary(let summary) = viewModel.screenState else {
+      XCTFail("A successful retry should display the early summary.")
+      return
+    }
+
+    XCTAssertEqual(saver.requests.count, 2)
+    XCTAssertEqual(saver.requests[0], saver.requests[1])
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+
+    viewModel.retrySavingRun()
+    XCTAssertEqual(saver.requests.count, 2)
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+  }
+
+  @MainActor
+  func testRegularCloseRetryUsesSameRequestAndEmitsExitOnce() {
+    let routine = makeExecutableRoutine()
+    let saver = RoutineRunSaverSpy(failuresRemaining: 1)
+    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder()
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: .manual
+      ),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: UUID()
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    viewModel.resolveRoutine()
+    viewModel.requestCloseRoutine()
+    viewModel.confirmActiveDialog()
+    viewModel.retrySavingRun()
+
+    XCTAssertEqual(saver.requests.count, 2)
+    XCTAssertEqual(saver.requests[0], saver.requests[1])
+    XCTAssertEqual(eventRecorder.events, [.exitRequested(.userDismissed)])
+
+    viewModel.retrySavingRun()
+    XCTAssertEqual(saver.requests.count, 2)
+    XCTAssertEqual(eventRecorder.events, [.exitRequested(.userDismissed)])
   }
 
   @MainActor

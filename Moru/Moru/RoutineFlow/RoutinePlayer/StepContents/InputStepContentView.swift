@@ -11,7 +11,9 @@ struct InputStepContentView: View {
   let isAutomaticStartBlocked: Bool
   let speechInputController: SpeechInputController
   let waitUntilGuidanceFinishes: () async -> Bool
+  let onNoSpeechReminder: () async -> Bool
   let onComplete: (String?) -> Void
+  let onAutomaticSkip: () -> Void
   let onSkip: () -> Void
   @State private var feedbackText: String?
 
@@ -59,7 +61,12 @@ struct InputStepContentView: View {
         automaticCompletionIntent: .dictatedInput,
         showsTranscript: false,
         isAutomaticStartBlocked: isAutomaticStartBlocked,
-        waitUntilGuidanceFinishes: waitUntilGuidanceFinishes
+        waitUntilGuidanceFinishes: waitUntilGuidanceFinishes,
+        onNoSpeechReminder: {
+          feedbackText = "아직 음성이 들리지 않아요. 준비되면 말해 주세요."
+          return await onNoSpeechReminder()
+        },
+        onAutomaticSkip: onAutomaticSkip
       ) { transcript in
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
           feedbackText = "음성이 들리지 않았어요. 다시 말해 주세요."

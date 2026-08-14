@@ -24,6 +24,7 @@ final class RoutineGuidanceCoordinator {
   private let routineGroupLocalID: UUID?
   private weak var warmupCoordinator: (any RoutineTTSWarming)?
   private let delay: any RoutineGuidanceDelaying
+  private let systemSpeechAnnouncer: any RoutineSystemSpeechAnnouncing
 
   private var generation = 0
   private var playTask: Task<GuidancePlaybackResult, Never>?
@@ -35,7 +36,9 @@ final class RoutineGuidanceCoordinator {
     voiceCode: String = VoiceProfile.aoede.assetVoiceCode,
     routineGroupLocalID: UUID? = nil,
     warmupCoordinator: (any RoutineTTSWarming)? = nil,
-    delay: any RoutineGuidanceDelaying = ContinuousRoutineGuidanceDelay()
+    delay: any RoutineGuidanceDelaying = ContinuousRoutineGuidanceDelay(),
+    systemSpeechAnnouncer: any RoutineSystemSpeechAnnouncing =
+      SystemRoutineSpeechAnnouncer()
   ) {
     self.player = player
     self.playbackState = playbackState
@@ -43,6 +46,7 @@ final class RoutineGuidanceCoordinator {
     self.routineGroupLocalID = routineGroupLocalID
     self.warmupCoordinator = warmupCoordinator
     self.delay = delay
+    self.systemSpeechAnnouncer = systemSpeechAnnouncer
   }
 
   var isPlaying: Bool {
@@ -95,7 +99,9 @@ final class RoutineGuidanceCoordinator {
       ))
     }
 
-    guard let estimatedSeconds = step.estimatedSeconds, estimatedSeconds > 0 else {
+    guard step.type == .timer,
+          let estimatedSeconds = step.estimatedSeconds,
+          estimatedSeconds > 0 else {
       return
     }
 
@@ -166,6 +172,70 @@ final class RoutineGuidanceCoordinator {
     return result
   }
 
+  func playReminder(for step: RoutineStep) async -> GuidancePlaybackResult {
+    stopCurrentCue()
+    let activeGeneration = generation
+
+    guard step.presetItemID != nil || routineGroupLocalID != nil else {
+      systemSpeechAnnouncer.announceNoSpeechReminder()
+      defer {
+        if activeGeneration == generation {
+          systemSpeechAnnouncer.stop()
+        }
+      }
+
+      do {
+        try await delay.wait(for: .seconds(3))
+      } catch {
+        return .cancelled
+      }
+
+      guard !Task.isCancelled, activeGeneration == generation else {
+        return .cancelled
+      }
+
+      return .completed
+    }
+
+    let task = Task { [weak self] in
+      guard let self, activeGeneration == generation else {
+        return GuidancePlaybackResult.cancelled
+      }
+
+      return await player.play(RoutineGuidanceCueRequest(
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalID: step.id,
+        routineTitle: step.title,
+        routineType: step.type,
+        fallbackItemID: step.presetItemID,
+        voiceCode: voiceCode,
+        kind: .remind
+      ))
+    }
+    playTask = task
+
+    let result = await task.value
+    guard !Task.isCancelled, activeGeneration == generation else {
+      return .cancelled
+    }
+
+    return result
+  }
+
+  func timerCountdownDidReach(_ seconds: Int) {
+    guard (1...5).contains(seconds) else {
+      return
+    }
+
+    generation += 1
+    playTask?.cancel()
+    playTask = nil
+    reminderTask?.cancel()
+    reminderTask = nil
+    player.stop()
+    systemSpeechAnnouncer.announceCountdown(seconds)
+  }
+
   func stop() {
     stopCurrentCue()
   }
@@ -177,5 +247,6 @@ final class RoutineGuidanceCoordinator {
     reminderTask?.cancel()
     reminderTask = nil
     player.stop()
+    systemSpeechAnnouncer.stop()
   }
 }

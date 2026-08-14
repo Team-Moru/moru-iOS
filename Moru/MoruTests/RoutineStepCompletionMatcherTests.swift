@@ -30,6 +30,13 @@ final class RoutineStepCompletionMatcherTests: XCTestCase {
       RoutineStepCompletionMatcher.match("완료했어", for: waterStep),
       .explicit
     )
+    XCTAssertEqual(
+      RoutineStepCompletionMatcher.match("다음", for: waterStep),
+      .explicit
+    )
+    XCTAssertTrue(
+      RoutineStepCompletionMatcher.isCompleted("다음.", for: waterStep)
+    )
   }
 
   func testClassifiesWeakCompletedActionPhrases() {
