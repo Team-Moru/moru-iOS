@@ -291,7 +291,16 @@ final class FinalScreenVisualTests: XCTestCase {
     RoutineFinishedView(
       completionRate: 1,
       streak: streak,
-      completedStepTitles: ["물 마시기", "스트레칭", "오늘 계획 확인"],
+      stepResults: ["물 마시기", "스트레칭", "오늘 계획 확인"]
+        .enumerated()
+        .map { index, title in
+          RoutineStepResult(
+            stepID: UUID(),
+            stepTitle: title,
+            stepType: index == 1 ? .timer : .confirm,
+            completedAt: Date(timeIntervalSince1970: 1)
+          )
+        },
       isTrial: isTrial,
       onTapTodayRecord: {},
       onTapHome: {}

@@ -26,12 +26,7 @@ enum SpeechAutomaticCompletionPolicy {
     match: RoutineStepCompletionMatch
   ) -> SpeechAutomaticCompletionDisposition {
     if intent == .dictatedInput {
-      let transcript = update.text.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !transcript.isEmpty, update.isFinal else {
-        return .none
-      }
-
-      return .immediately
+      return .none
     }
 
     guard match != .none else {

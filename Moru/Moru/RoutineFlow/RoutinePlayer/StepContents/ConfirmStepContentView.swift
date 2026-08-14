@@ -22,7 +22,9 @@ struct ConfirmStepContentView: View {
   let isAutomaticStartBlocked: Bool
   let speechInputController: SpeechInputController
   let waitUntilGuidanceFinishes: () async -> Bool
+  let onNoSpeechReminder: () async -> Bool
   let onComplete: (String?) -> Void
+  let onAutomaticSkip: () -> Void
   let onSkip: () -> Void
   @State private var feedbackText: String?
 
@@ -66,7 +68,12 @@ struct ConfirmStepContentView: View {
           RoutineStepCompletionMatcher.match(transcript, for: step)
         },
         isAutomaticStartBlocked: isAutomaticStartBlocked,
-        waitUntilGuidanceFinishes: waitUntilGuidanceFinishes
+        waitUntilGuidanceFinishes: waitUntilGuidanceFinishes,
+        onNoSpeechReminder: {
+          feedbackText = "아직 음성이 들리지 않아요. 준비되면 말해 주세요."
+          return await onNoSpeechReminder()
+        },
+        onAutomaticSkip: onAutomaticSkip
       ) { transcript in
         guard RoutineStepCompletionMatcher.isCompleted(transcript, for: step) else {
           feedbackText = ConfirmStepFeedback.completionFailure(for: transcript)

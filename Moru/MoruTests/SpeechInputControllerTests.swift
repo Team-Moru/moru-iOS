@@ -238,16 +238,21 @@ final class SpeechInputControllerTests: XCTestCase {
 
   func testThreeSecondSilencePublishesLastTranscriptForAutomaticCompletion() async {
     let session = SpeechInputSessionSpy()
+    let scheduler = ManualSpeechSilenceScheduler()
     let controller = SpeechInputController(
-      silenceTimeout: 0.03,
-      silencePollInterval: .milliseconds(5)
+      silenceScheduler: scheduler
     ) {
       session
     }
 
     await controller.start()
-    session.send(.transcript("정리했어", isFinal: false))
-    try? await Task.sleep(for: .milliseconds(80))
+    XCTAssertEqual(scheduler.scheduledDelay, 30)
+
+    session.send(.transcript("정리했어", isFinal: true))
+    XCTAssertEqual(scheduler.scheduledDelay, 3)
+    XCTAssertEqual(controller.phase, .listening)
+    XCTAssertNil(controller.latestSilenceCompletion)
+    scheduler.fire()
 
     XCTAssertEqual(
       controller.latestSilenceCompletion?.transcript,
@@ -257,20 +262,107 @@ final class SpeechInputControllerTests: XCTestCase {
     XCTAssertEqual(session.cancelCallCount, 1)
   }
 
-  func testThreeSecondSilenceWithoutTranscriptRemainsRetryableFailure() async {
+  func testThirtySecondNoSpeechTimeoutRemainsRetryableFailure() async {
     let session = SpeechInputSessionSpy()
+    let scheduler = ManualSpeechSilenceScheduler()
     let controller = SpeechInputController(
-      silenceTimeout: 0.03,
-      silencePollInterval: .milliseconds(5)
+      silenceScheduler: scheduler
     ) {
       session
     }
 
     await controller.start()
-    try? await Task.sleep(for: .milliseconds(80))
+    XCTAssertEqual(scheduler.scheduledDelay, 30)
+    scheduler.fire()
 
     XCTAssertEqual(controller.phase, .failed(.silence))
     XCTAssertNil(controller.latestSilenceCompletion)
+  }
+
+  func testAmbientNoiseDoesNotDelayInitialNoSpeechTimeout() async {
+    let session = SpeechInputSessionSpy()
+    let scheduler = ManualSpeechSilenceScheduler()
+    let controller = SpeechInputController(silenceScheduler: scheduler) {
+      session
+    }
+
+    await controller.start()
+    session.send(.audioLevels(Array(repeating: 1, count: 20)))
+
+    XCTAssertEqual(scheduler.scheduleCallCount, 1)
+    XCTAssertEqual(scheduler.scheduledDelay, 30)
+    controller.cancel()
+  }
+
+  func testSpeechActivityRestartsPostSpeechSilenceDeadline() async {
+    let session = SpeechInputSessionSpy()
+    let scheduler = ManualSpeechSilenceScheduler()
+    let controller = SpeechInputController(silenceScheduler: scheduler) {
+      session
+    }
+
+    await controller.start()
+    session.send(.transcript("오늘의 다짐", isFinal: false))
+    session.send(.audioLevels(Array(repeating: 1, count: 20)))
+
+    XCTAssertEqual(scheduler.scheduleCallCount, 3)
+    XCTAssertEqual(scheduler.scheduledDelay, 3)
+    controller.cancel()
+  }
+
+  func testCancelInvalidatesScheduledSilenceDeadline() async {
+    let session = SpeechInputSessionSpy()
+    let scheduler = ManualSpeechSilenceScheduler()
+    let controller = SpeechInputController(silenceScheduler: scheduler) {
+      session
+    }
+
+    await controller.start()
+    controller.cancel()
+    scheduler.fire()
+
+    XCTAssertEqual(controller.phase, .idle)
+    XCTAssertEqual(session.cancelCallCount, 1)
+    XCTAssertNil(controller.latestSilenceCompletion)
+  }
+
+  func testNoInputSequenceRemindsThenSkipsAndResetsAfterSpeech() {
+    var sequence = SpeechNoInputSequence()
+
+    XCTAssertEqual(sequence.actionForTimeout(), .playReminder)
+    XCTAssertEqual(sequence.actionForTimeout(), .automaticSkip)
+
+    sequence.speechWasDetected()
+
+    XCTAssertEqual(sequence.actionForTimeout(), .playReminder)
+  }
+
+  func testTwoNoSpeechAttemptsDriveReminderThenAutomaticSkip() async {
+    let firstSession = SpeechInputSessionSpy()
+    let secondSession = SpeechInputSessionSpy()
+    let factory = SpeechInputSessionFactory(
+      sessions: [firstSession, secondSession]
+    )
+    let scheduler = ManualSpeechSilenceScheduler()
+    let controller = SpeechInputController(silenceScheduler: scheduler) {
+      factory.makeSession()
+    }
+    var sequence = SpeechNoInputSequence()
+
+    await controller.start()
+    scheduler.fire()
+
+    XCTAssertEqual(controller.phase, .failed(.silence))
+    XCTAssertEqual(sequence.actionForTimeout(), .playReminder)
+
+    await controller.retry()
+    XCTAssertEqual(scheduler.scheduledDelay, 30)
+    scheduler.fire()
+
+    XCTAssertEqual(controller.phase, .failed(.silence))
+    XCTAssertEqual(sequence.actionForTimeout(), .automaticSkip)
+    XCTAssertEqual(firstSession.cancelCallCount, 1)
+    XCTAssertEqual(secondSession.cancelCallCount, 1)
   }
 
   func testMicrophonePermissionDenialRemainsSettingsFailure() async {
@@ -309,6 +401,34 @@ final class SpeechInputControllerTests: XCTestCase {
     for _ in 0..<10 {
       await Task.yield()
     }
+  }
+}
+
+@MainActor
+private final class ManualSpeechSilenceScheduler: SpeechSilenceScheduling {
+  private var action: (@MainActor () -> Void)?
+  private(set) var scheduledDelay: TimeInterval?
+  private(set) var scheduleCallCount = 0
+
+  func schedule(
+    after delay: TimeInterval,
+    action: @escaping @MainActor () -> Void
+  ) {
+    scheduledDelay = delay
+    scheduleCallCount += 1
+    self.action = action
+  }
+
+  func cancel() {
+    action = nil
+    scheduledDelay = nil
+  }
+
+  func fire() {
+    let pendingAction = action
+    action = nil
+    scheduledDelay = nil
+    pendingAction?()
   }
 }
 

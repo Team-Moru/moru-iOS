@@ -5,6 +5,28 @@
 
 import SwiftUI
 
+enum SpeechNoInputAction: Equatable {
+  case playReminder
+  case automaticSkip
+}
+
+struct SpeechNoInputSequence: Equatable {
+  private(set) var didPlayReminder = false
+
+  mutating func actionForTimeout() -> SpeechNoInputAction {
+    guard didPlayReminder else {
+      didPlayReminder = true
+      return .playReminder
+    }
+
+    return .automaticSkip
+  }
+
+  mutating func speechWasDetected() {
+    didPlayReminder = false
+  }
+}
+
 struct VoiceInputControlView: View {
   private enum AutomaticStartState {
     case waitingForGuidance
@@ -19,11 +41,15 @@ struct VoiceInputControlView: View {
   let showsTranscript: Bool
   let isAutomaticStartBlocked: Bool
   let waitUntilGuidanceFinishes: () async -> Bool
+  let onNoSpeechReminder: () async -> Bool
+  let onAutomaticSkip: () -> Void
   let onFinished: (String) -> Void
   private let appSettingsOpener: AppSettingsOpener
   @State private var isAutomaticallyFinishing = false
   @State private var automaticStartState: AutomaticStartState = .waitingForGuidance
   @State private var pendingAutomaticFinishTask: Task<Void, Never>?
+  @State private var noInputSequence = SpeechNoInputSequence()
+  @State private var noInputHandlingTask: Task<Void, Never>?
 
   init(
     speechInputController: SpeechInputController,
@@ -32,6 +58,8 @@ struct VoiceInputControlView: View {
     showsTranscript: Bool = true,
     isAutomaticStartBlocked: Bool = false,
     waitUntilGuidanceFinishes: @escaping () async -> Bool = { true },
+    onNoSpeechReminder: @escaping () async -> Bool = { true },
+    onAutomaticSkip: @escaping () -> Void = {},
     appSettingsOpener: AppSettingsOpener = AppSettingsOpener(),
     onFinished: @escaping (String) -> Void
   ) {
@@ -41,6 +69,8 @@ struct VoiceInputControlView: View {
     self.showsTranscript = showsTranscript
     self.isAutomaticStartBlocked = isAutomaticStartBlocked
     self.waitUntilGuidanceFinishes = waitUntilGuidanceFinishes
+    self.onNoSpeechReminder = onNoSpeechReminder
+    self.onAutomaticSkip = onAutomaticSkip
     self.appSettingsOpener = appSettingsOpener
     self.onFinished = onFinished
   }
@@ -51,6 +81,8 @@ struct VoiceInputControlView: View {
         preparingView
       } else if speechInputController.shouldShowControls {
         recognitionControlView
+      } else if noInputHandlingTask != nil {
+        noSpeechReminderView
       } else if case .failed = speechInputController.phase {
         failureView
       } else if automaticStartState == .waitingForGuidance {
@@ -65,6 +97,8 @@ struct VoiceInputControlView: View {
     }
     .onDisappear {
       cancelPendingAutomaticFinish()
+      noInputHandlingTask?.cancel()
+      noInputHandlingTask = nil
       speechInputController.cancel()
     }
     .task {
@@ -81,9 +115,17 @@ struct VoiceInputControlView: View {
       await startAutomaticallyIfPossible()
     }
     .onChange(of: speechInputController.latestTranscriptUpdate) { _, update in
+      if let update,
+         !update.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        noInputSequence.speechWasDetected()
+      }
       scheduleAutomaticFinishIfNeeded(for: update)
     }
     .onChange(of: speechInputController.phase) { _, phase in
+      if phase == .failed(.silence) {
+        handleNoSpeechTimeout()
+      }
+
       guard phase != .listening else {
         return
       }
@@ -203,22 +245,59 @@ struct VoiceInputControlView: View {
       return
     }
 
-    let update = SpeechTranscriptUpdate(
-      text: completion.transcript,
-      isFinal: true
-    )
-    let match = autoFinishMatch?(completion.transcript) ?? .none
-    guard SpeechAutomaticCompletionPolicy.disposition(
-      for: update,
-      intent: automaticCompletionIntent,
-      match: match
-    ) != .none else {
-      return
+    switch automaticCompletionIntent {
+    case .dictatedInput:
+      guard !completion.transcript
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .isEmpty else {
+        return
+      }
+
+    case .stepCompletion:
+      let update = SpeechTranscriptUpdate(
+        text: completion.transcript,
+        isFinal: true
+      )
+      let match = autoFinishMatch?(completion.transcript) ?? .none
+      guard SpeechAutomaticCompletionPolicy.disposition(
+        for: update,
+        intent: automaticCompletionIntent,
+        match: match
+      ) != .none else {
+        return
+      }
     }
 
     isAutomaticallyFinishing = true
     cancelPendingAutomaticFinish()
     onFinished(completion.transcript)
+  }
+
+  private func handleNoSpeechTimeout() {
+    guard noInputHandlingTask == nil else {
+      return
+    }
+
+    switch noInputSequence.actionForTimeout() {
+    case .playReminder:
+      noInputHandlingTask = Task { @MainActor in
+        let shouldResume = await onNoSpeechReminder()
+        guard !Task.isCancelled,
+              shouldResume,
+              !isAutomaticStartBlocked else {
+          noInputHandlingTask = nil
+          return
+        }
+
+        await speechInputController.retry()
+        noInputHandlingTask = nil
+      }
+
+    case .automaticSkip:
+      cancelPendingAutomaticFinish()
+      speechInputController.cancel()
+      onAutomaticSkip()
+    }
   }
 
   private func cancelPendingAutomaticFinish() {
@@ -234,6 +313,19 @@ struct VoiceInputControlView: View {
       Text(speechInputController.statusText)
         .font(AppFont.caption1SemiBold)
         .foregroundStyle(AppColor.gray350)
+    }
+    .frame(height: 76)
+  }
+
+  private var noSpeechReminderView: some View {
+    VStack(spacing: 12) {
+      ProgressView()
+        .tint(AppColor.orange250)
+
+      Text("다시 말할 수 있도록 안내하고 있어요.")
+        .font(AppFont.caption1SemiBold)
+        .foregroundStyle(AppColor.gray350)
+        .multilineTextAlignment(.center)
     }
     .frame(height: 76)
   }

@@ -105,6 +105,117 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(player.cues.filter { $0.kind == .done }.count, 1)
   }
 
+  func testGuidanceCoordinatorAnnouncesOnlyTheLastFiveTimerSeconds() {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let announcer = RoutineSystemSpeechAnnouncerSpy()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      systemSpeechAnnouncer: announcer
+    )
+
+    for seconds in [6, 5, 4, 3, 2, 1, 0] {
+      coordinator.timerCountdownDidReach(seconds)
+    }
+
+    XCTAssertEqual(announcer.announcements, [5, 4, 3, 2, 1])
+
+    coordinator.stop()
+
+    XCTAssertEqual(announcer.stopCallCount, 1)
+  }
+
+  func testCustomNoSpeechReminderUsesSystemSpeechBeforeRecognitionRestarts() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let delay = ImmediateGuidanceDelay()
+    let announcer = RoutineSystemSpeechAnnouncerSpy()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      delay: delay,
+      systemSpeechAnnouncer: announcer
+    )
+    let step = RoutineStep(
+      type: .confirm,
+      title: "직접 만든 루틴",
+      order: 0
+    )
+
+    let reminderTask = Task { @MainActor in
+      await coordinator.playReminder(for: step)
+    }
+    await drainTasks()
+
+    XCTAssertEqual(announcer.noSpeechReminderCallCount, 1)
+    XCTAssertTrue(announcer.isReminderPending)
+    XCTAssertTrue(delay.delays.isEmpty)
+    XCTAssertTrue(player.cues.isEmpty)
+
+    announcer.finishReminder(with: .completed)
+    let result = await reminderTask.value
+
+    XCTAssertEqual(result, .completed)
+    XCTAssertEqual(announcer.stopCallCount, 1)
+  }
+
+  func testStaleCustomReminderCannotStopNewCountdownSpeech() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let announcer = RoutineSystemSpeechAnnouncerSpy()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      systemSpeechAnnouncer: announcer
+    )
+    let step = RoutineStep(
+      type: .confirm,
+      title: "직접 만든 루틴",
+      order: 0
+    )
+    let reminderTask = Task { @MainActor in
+      await coordinator.playReminder(for: step)
+    }
+    await drainTasks()
+
+    XCTAssertTrue(announcer.isReminderPending)
+    coordinator.timerCountdownDidReach(5)
+    let result = await reminderTask.value
+
+    XCTAssertEqual(result, .cancelled)
+    XCTAssertEqual(announcer.announcements, [5])
+    XCTAssertEqual(announcer.stopCallCount, 1)
+  }
+
+  func testStoppingCoordinatorCancelsCustomReminder() async {
+    let state = RoutineGuidancePlaybackState()
+    let player = RoutineGuidancePlayerSpy(playbackState: state)
+    let announcer = RoutineSystemSpeechAnnouncerSpy()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      playbackState: state,
+      systemSpeechAnnouncer: announcer
+    )
+    let step = RoutineStep(
+      type: .confirm,
+      title: "직접 만든 루틴",
+      order: 0
+    )
+    let reminderTask = Task { @MainActor in
+      await coordinator.playReminder(for: step)
+    }
+    await drainTasks()
+
+    XCTAssertTrue(announcer.isReminderPending)
+    coordinator.stop()
+    let result = await reminderTask.value
+
+    XCTAssertEqual(result, .cancelled)
+    XCTAssertFalse(announcer.isReminderPending)
+    XCTAssertEqual(announcer.stopCallCount, 2)
+  }
+
   func testFastStepTransitionCancelsReminderAndMissingPresetStaysSilent() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
@@ -735,6 +846,42 @@ private struct GuidanceCueCall: Equatable {
   let itemID: String
   let voiceCode: String
   let kind: RoutineAudioCueKind
+}
+
+@MainActor
+private final class RoutineSystemSpeechAnnouncerSpy: RoutineSystemSpeechAnnouncing {
+  private(set) var announcements: [Int] = []
+  private(set) var noSpeechReminderCallCount = 0
+  private(set) var stopCallCount = 0
+  private var reminderContinuation:
+    CheckedContinuation<GuidancePlaybackResult, Never>?
+
+  var isReminderPending: Bool {
+    reminderContinuation != nil
+  }
+
+  func announceCountdown(_ seconds: Int) {
+    finishReminder(with: .cancelled)
+    announcements.append(seconds)
+  }
+
+  func announceNoSpeechReminder() async -> GuidancePlaybackResult {
+    noSpeechReminderCallCount += 1
+    return await withCheckedContinuation { continuation in
+      reminderContinuation = continuation
+    }
+  }
+
+  func stop() {
+    stopCallCount += 1
+    finishReminder(with: .cancelled)
+  }
+
+  func finishReminder(with result: GuidancePlaybackResult) {
+    let pendingContinuation = reminderContinuation
+    reminderContinuation = nil
+    pendingContinuation?.resume(returning: result)
+  }
 }
 
 @MainActor

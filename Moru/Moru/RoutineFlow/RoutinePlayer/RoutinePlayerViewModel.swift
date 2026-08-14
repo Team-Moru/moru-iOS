@@ -34,7 +34,7 @@ final class RoutinePlayerViewModel {
     }
     
     private enum PendingTerminalIntent {
-        case natural
+        case summary
         case exit(RoutinePlayerExit)
     }
     
@@ -151,12 +151,6 @@ final class RoutinePlayerViewModel {
         }
     }
     
-    var completedStepTitles: [String] {
-        stepResults
-            .filter(\.isCompleted)
-            .map(\.stepTitle)
-    }
-
     var isTrialExecution: Bool {
         if case .trial = finalizationMode {
             return true
@@ -431,6 +425,43 @@ final class RoutinePlayerViewModel {
 
         return true
     }
+
+    func playNoSpeechReminder(for stepID: UUID) async -> Bool {
+        guard isPresentationActive,
+              dialogState == nil,
+              pendingSave == nil,
+              case .running(let step) = screenState,
+              step.id == stepID else {
+            return false
+        }
+
+        let result = await guidanceCoordinator.playReminder(for: step)
+
+        guard result == .completed,
+              !Task.isCancelled,
+              isPresentationActive,
+              dialogState == nil,
+              pendingSave == nil,
+              case .running(let currentStep) = screenState,
+              currentStep.id == stepID else {
+            return false
+        }
+
+        return true
+    }
+
+    func timerCountdownDidReach(_ seconds: Int, stepID: UUID) {
+        guard isPresentationActive,
+              dialogState == nil,
+              pendingSave == nil,
+              case .running(let step) = screenState,
+              step.id == stepID,
+              step.type == .timer else {
+            return
+        }
+
+        guidanceCoordinator.timerCountdownDidReach(seconds)
+    }
     
     func retrySavingRun() {
         guard pendingSave != nil else {
@@ -569,7 +600,7 @@ final class RoutinePlayerViewModel {
                 routine: routine,
                 finalizer: finalizer,
                 endedEarly: false,
-                terminalIntent: .natural
+                terminalIntent: .summary
             )
         }
     }
@@ -583,11 +614,23 @@ final class RoutinePlayerViewModel {
             emitExit(exit)
             
         case .regular(let finalizer):
+            let terminalIntent: PendingTerminalIntent
+
+            switch exit {
+            case .endedEarly:
+                terminalIntent = .summary
+            case .userDismissed:
+                terminalIntent = .exit(.userDismissed)
+            case .summaryCTA, .summaryRecord, .terminalUnavailable:
+                assertionFailure("Unsupported early exit: \(exit)")
+                return
+            }
+
             beginRegularFinalization(
                 routine: routine,
                 finalizer: finalizer,
                 endedEarly: true,
-                terminalIntent: .exit(exit)
+                terminalIntent: terminalIntent
             )
         }
     }
@@ -638,7 +681,7 @@ final class RoutinePlayerViewModel {
             isSavingRun = false
             
             switch pendingSave.terminalIntent {
-            case .natural:
+            case .summary:
                 screenState = .summary(summary)
                 emit(.completionDisplayed(summary))
                 

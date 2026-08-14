@@ -35,6 +35,62 @@ extension EnvironmentValues {
     }
 }
 
+struct RoutineTimerState: Equatable {
+    enum Action: Equatable {
+        case announce(Int)
+        case complete
+    }
+
+    private(set) var remainingSeconds: Int
+    private(set) var didComplete = false
+    private var didStart = false
+
+    init(totalSeconds: Int) {
+        remainingSeconds = max(totalSeconds, 1)
+    }
+
+    mutating func start() -> [Action] {
+        guard !didStart, !didComplete else {
+            return []
+        }
+
+        didStart = true
+        guard (1...5).contains(remainingSeconds) else {
+            return []
+        }
+
+        return [.announce(remainingSeconds)]
+    }
+
+    mutating func tick() -> [Action] {
+        guard didStart, !didComplete, remainingSeconds > 0 else {
+            return []
+        }
+
+        remainingSeconds -= 1
+        if remainingSeconds == 0 {
+            didComplete = true
+            return [.complete]
+        }
+
+        guard (1...5).contains(remainingSeconds) else {
+            return []
+        }
+
+        return [.announce(remainingSeconds)]
+    }
+
+    mutating func complete() -> Bool {
+        guard !didComplete else {
+            return false
+        }
+
+        didComplete = true
+        remainingSeconds = 0
+        return true
+    }
+}
+
 struct TimerStepContentView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.routinePlayerCaptureTimerRemainingSeconds)
@@ -44,10 +100,10 @@ struct TimerStepContentView: View {
     let step: RoutineStep
     let isGuidancePlaying: Bool
     let onComplete: () -> Void
+    let onCountdown: (Int) -> Void
     let onSkip: () -> Void
 
-    @State private var remainingSeconds: Int
-    @State private var didComplete = false
+    @State private var timerState: RoutineTimerState
 
     private let totalSeconds: Int
 
@@ -59,6 +115,7 @@ struct TimerStepContentView: View {
         step: RoutineStep,
         isGuidancePlaying: Bool,
         onComplete: @escaping () -> Void,
+        onCountdown: @escaping (Int) -> Void = { _ in },
         onSkip: @escaping () -> Void
     ) {
         let seconds = max(step.estimatedSeconds ?? 60, 1)
@@ -66,10 +123,13 @@ struct TimerStepContentView: View {
         self.step = step
         self.isGuidancePlaying = isGuidancePlaying
         self.onComplete = onComplete
+        self.onCountdown = onCountdown
         self.onSkip = onSkip
         self.totalSeconds = seconds
 
-        _remainingSeconds = State(initialValue: seconds)
+        _timerState = State(
+            initialValue: RoutineTimerState(totalSeconds: seconds)
+        )
     }
 
     var body: some View {
@@ -132,6 +192,9 @@ struct TimerStepContentView: View {
         .padding(.horizontal, 24)
         .onReceive(timer) { _ in
             updateTimer()
+        }
+        .onAppear {
+            handleTimerActions(timerState.start())
         }
     }
 
@@ -198,7 +261,7 @@ struct TimerStepContentView: View {
             // 1초 단위 값 변경을 부드럽게 연결
             .animation(
                 .linear(duration: 1),
-                value: remainingSeconds
+                value: timerState.remainingSeconds
             )
     }
 
@@ -306,7 +369,7 @@ struct TimerStepContentView: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("스트레칭 순서")
+        .accessibilityLabel("타이머 세부 항목")
     }
 
     private var activeTimerSegmentIndex: Int {
@@ -338,21 +401,24 @@ struct TimerStepContentView: View {
     // MARK: - Timer logic
 
     private func updateTimer() {
-        guard !didComplete else { return }
-        guard remainingSeconds > 0 else { return }
-
-        remainingSeconds -= 1
-
-        guard remainingSeconds == 0 else { return }
-
-        completeTimer()
+        handleTimerActions(timerState.tick())
     }
 
     private func completeTimer() {
-        guard !didComplete else { return }
+        guard timerState.complete() else { return }
 
-        didComplete = true
         onComplete()
+    }
+
+    private func handleTimerActions(_ actions: [RoutineTimerState.Action]) {
+        for action in actions {
+            switch action {
+            case .announce(let seconds):
+                onCountdown(seconds)
+            case .complete:
+                onComplete()
+            }
+        }
     }
 
     /// 전체 설정 시간 중 현재 남아 있는 시간의 비율
@@ -415,7 +481,7 @@ struct TimerStepContentView: View {
             return min(max(captureRemainingSeconds, 0), totalSeconds)
         }
 #endif
-        return remainingSeconds
+        return timerState.remainingSeconds
     }
 
     private func segmentDisplayText(

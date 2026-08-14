@@ -17,6 +17,7 @@ final class ConfirmTranscriptMatcherTests: XCTestCase {
       "끝냈어요",
       "마쳤어",
       "됐어",
+      "다음",
       "네",
       "넵",
       "예",
@@ -66,6 +67,7 @@ final class ConfirmTranscriptMatcherTests: XCTestCase {
   func testExplicitCompletionCommandDoesNotTreatFreeformInputAsFinished() {
     XCTAssertTrue(ConfirmTranscriptMatcher.isExplicitCompletionCommand("완료했어"))
     XCTAssertTrue(ConfirmTranscriptMatcher.isExplicitCompletionCommand("다 했어"))
+    XCTAssertTrue(ConfirmTranscriptMatcher.isExplicitCompletionCommand("다음."))
     XCTAssertFalse(ConfirmTranscriptMatcher.isExplicitCompletionCommand("물을 마시고 완료할 거야"))
     XCTAssertFalse(ConfirmTranscriptMatcher.isExplicitCompletionCommand("아직 완료 안 했어"))
   }

@@ -48,7 +48,7 @@ final class SpeechAutomaticCompletionPolicyTests: XCTestCase {
     XCTAssertEqual(disposition, .none)
   }
 
-  func testFinalDictatedInputFinishesWithoutCompletionKeyword() {
+  func testFinalDictatedInputWaitsForThreeSecondSilence() {
     let disposition = SpeechAutomaticCompletionPolicy.disposition(
       for: SpeechTranscriptUpdate(
         text: "차분하게 하루를 시작할게요",
@@ -58,7 +58,7 @@ final class SpeechAutomaticCompletionPolicyTests: XCTestCase {
       match: .none
     )
 
-    XCTAssertEqual(disposition, .immediately)
+    XCTAssertEqual(disposition, .none)
   }
 
   func testVolatileDictatedInputWaitsForFinalResult() {

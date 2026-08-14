@@ -51,18 +51,36 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
     )
     XCTAssertEqual(
       RoutinePlayerCopy.timerSegments(for: stretchingStep)?.map(\.title),
-      [
-        "목 좌우로 천천히 돌리기",
-        "앞뒤로 어깨 돌리기",
-        "양팔 위로 쭉 뻗기",
-        "제자리 가볍게 걷기",
-      ]
+      ["가볍게 스트레칭하기"]
     )
     XCTAssertEqual(
       RoutinePlayerCopy.timerSegments(for: stretchingStep)?.map {
-        $0.durationSeconds ?? 60
+        $0.durationSeconds ?? 0
       },
-      [60, 30, 30, 60]
+      [180]
+    )
+
+    let editedTimerStep = step(
+      index: 4,
+      presetItemID: "ENERGY-10",
+      type: .timer,
+      title: "내가 만든 집중 타이머",
+      instruction: "책상 위 한 구역만 정리해요.",
+      seconds: 90
+    )
+    XCTAssertEqual(
+      RoutinePlayerCopy.timerSegments(for: editedTimerStep),
+      [
+        RoutinePlayerCopy.TimerSegment(
+          title: "책상 위 한 구역만 정리해요.",
+          duration: "1분 30초",
+          durationSeconds: 90
+        ),
+      ]
+    )
+    XCTAssertEqual(
+      RoutinePlayerCopy.guide(for: editedTimerStep),
+      "책상 위 한 구역만 정리해요."
     )
   }
 

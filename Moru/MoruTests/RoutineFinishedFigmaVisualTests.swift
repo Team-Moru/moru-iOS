@@ -49,7 +49,7 @@ final class RoutineFinishedFigmaVisualTests: XCTestCase {
     RoutineFinishedView(
       completionRate: state.completionRate,
       streak: state.streak,
-      completedStepTitles: state.completedStepTitles,
+      stepResults: state.stepResults,
       isTrial: state == .trial,
       onTapTodayRecord: {},
       onTapHome: {}
@@ -100,39 +100,56 @@ private enum RoutineFinishedCaptureState: String, CaseIterable {
     }
   }
 
-  var completedStepTitles: [String] {
-    switch self {
+  @MainActor
+  var stepResults: [RoutineStepResult] {
+    let entries: [(title: String, skipped: Bool)] = switch self {
     case .regular:
       [
-        "잠자리 정리하기",
-        "가볍게 스트레칭하기",
-        "심호흡하며 명상하기",
-        "짧은 독서 몰입하기",
-        "오늘의 다짐 확인하기",
-        "감정과 생각을 기록하기",
+        ("잠자리 정리하기", false),
+        ("가볍게 스트레칭하기", false),
+        ("심호흡하며 명상하기", true),
+        ("짧은 독서 몰입하기", false),
+        ("오늘의 다짐 확인하기", false),
+        ("감정과 생각을 기록하기", false),
       ]
     case .trial:
       [
-        "잠자리 정리하기",
-        "오늘의 다짐 확인하기",
+        ("잠자리 정리하기", false),
+        ("오늘의 다짐 확인하기", false),
       ]
     case .noStreak:
       [
-        "물 한 잔 마시기",
-        "창문 열고 환기하기",
-        "오늘 계획 확인하기",
+        ("물 한 잔 마시기", false),
+        ("창문 열고 환기하기", true),
+        ("오늘 계획 확인하기", false),
       ]
     case .noCompletedSteps:
       []
     case .longKorean:
       [
-        "잠에서 깬 몸을 천천히 깨우는 전신 스트레칭하기",
-        "창문을 활짝 열고 아침 공기를 깊게 마시며 환기하기",
-        "오늘 꼭 마무리할 가장 중요한 한 가지 목표 확인하기",
-        "따뜻한 물 한 잔을 천천히 마시며 몸의 감각 살피기",
-        "마음이 차분해지는 호흡에 집중하며 짧게 명상하기",
-        "감사한 일을 떠올리고 오늘의 다짐을 또렷하게 기록하기",
+        ("잠에서 깬 몸을 천천히 깨우는 전신 스트레칭하기", false),
+        ("창문을 활짝 열고 아침 공기를 깊게 마시며 환기하기", true),
+        ("오늘 꼭 마무리할 가장 중요한 한 가지 목표 확인하기", false),
+        ("따뜻한 물 한 잔을 천천히 마시며 몸의 감각 살피기", false),
+        ("마음이 차분해지는 호흡에 집중하며 짧게 명상하기", false),
+        ("감사한 일을 떠올리고 오늘의 다짐을 또렷하게 기록하기", false),
       ]
+    }
+
+    return entries.enumerated().map { index, entry in
+      RoutineStepResult(
+        id: UUID(
+          uuidString: String(
+            format: "83000000-0000-0000-0000-%012d",
+            index + 1
+          )
+        )!,
+        stepID: UUID(),
+        stepTitle: entry.title,
+        stepType: .confirm,
+        completedAt: entry.skipped ? nil : Date(timeIntervalSince1970: 1),
+        skipped: entry.skipped
+      )
     }
   }
 }
