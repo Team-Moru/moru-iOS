@@ -177,24 +177,13 @@ final class RoutineGuidanceCoordinator {
     let activeGeneration = generation
 
     guard step.presetItemID != nil || routineGroupLocalID != nil else {
-      systemSpeechAnnouncer.announceNoSpeechReminder()
-      defer {
-        if activeGeneration == generation {
-          systemSpeechAnnouncer.stop()
-        }
-      }
-
-      do {
-        try await delay.wait(for: .seconds(3))
-      } catch {
-        return .cancelled
-      }
+      let result = await systemSpeechAnnouncer.announceNoSpeechReminder()
 
       guard !Task.isCancelled, activeGeneration == generation else {
         return .cancelled
       }
 
-      return .completed
+      return result
     }
 
     let task = Task { [weak self] in
