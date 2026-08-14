@@ -430,7 +430,7 @@ struct HomeWeatherCard: View {
             content.attribution,
             markImage: markImage
           )
-          .offset(y: MoruPilotSpacing.four)
+          .offset(x: -1, y: MoruPilotSpacing.four)
           refreshButton
             .offset(x: 7, y: MoruPilotSpacing.four)
         }
