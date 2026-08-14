@@ -24,6 +24,7 @@ struct ProfileView: View {
 
   @State private var viewModel: ProfileViewModel
   @State private var accountServerViewModel: AccountServerSettingsViewModel
+  @State private var serverVoicePreviewPlayer: ServerVoicePreviewPlayer
   @State private var accountRoutineGroupListViewModel:
     AccountRoutineGroupListViewModel
   @State private var accountRoutineGroupDetailViewModel:
@@ -33,6 +34,7 @@ struct ProfileView: View {
   @Environment(\.scenePhase) private var scenePhase
   @State private var displayNameDraft = ""
   @State private var isDisplayNameEditorPresented = false
+  @State private var isMoruVoiceSettingsPresented = false
   @State private var isVoiceSelectionPresented = false
   @State private var isServerVoiceSelectionPresented = false
   @State private var isResetConfirmationPresented = false
@@ -50,6 +52,7 @@ struct ProfileView: View {
     viewModel: ProfileViewModel,
     accountServerViewModel: AccountServerSettingsViewModel =
       AccountServerSettingsViewModel(),
+    serverVoicePreviewPlayer: ServerVoicePreviewPlayer = ServerVoicePreviewPlayer(),
     accountRoutineGroupRemoteService:
       (any AccountRoutineGroupRemoteServing)? = nil,
     accountSessionStore: AccountSessionStore,
@@ -62,6 +65,9 @@ struct ProfileView: View {
   ) {
     _viewModel = State(initialValue: viewModel)
     _accountServerViewModel = State(initialValue: accountServerViewModel)
+    _serverVoicePreviewPlayer = State(
+      initialValue: serverVoicePreviewPlayer
+    )
     _accountRoutineGroupListViewModel = State(
       initialValue: AccountRoutineGroupListViewModel(
         remoteService: accountRoutineGroupRemoteService
@@ -118,6 +124,18 @@ struct ProfileView: View {
           )
         }
       }
+      .navigationDestination(isPresented: $isMoruVoiceSettingsPresented) {
+        MoruVoiceSettingsView(
+          profileViewModel: viewModel,
+          accountServerViewModel: accountServerViewModel,
+          onOpenDeviceVoiceSelection: {
+            isVoiceSelectionPresented = true
+          },
+          onOpenServerVoiceSelection: {
+            isServerVoiceSelectionPresented = true
+          }
+        )
+      }
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
@@ -169,6 +187,7 @@ struct ProfileView: View {
       if let memberID = accountSessionStore.signedInMemberID {
         AccountServerVoiceSelectionView(
           viewModel: accountServerViewModel,
+          previewPlayer: serverVoicePreviewPlayer,
           memberID: memberID
         )
       }
@@ -443,13 +462,15 @@ struct ProfileView: View {
   private func voiceCard(_ content: ProfileSettingsLoadResult) -> some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
       Button {
-        isVoiceSelectionPresented = true
+        isMoruVoiceSettingsPresented = true
       } label: {
         figmaNavigationRow(title: ProfileCopy.moruVoice)
       }
       .buttonStyle(.plain)
-      .accessibilityLabel(ProfileCopy.moruVoice)
-      .accessibilityHint("앱 내장 목소리를 선택하고 미리 듣습니다.")
+      .accessibilityLabel(
+        "모루 말투, 기기 내장 음성 \(content.profile.selectedVoice.displayName)"
+      )
+      .accessibilityHint("기기 내장 음성과 서버 생성 음성을 선택합니다.")
       .accessibilityIdentifier("profile.voice.chooser")
 
       if let fallbackNotice = content.fallbackNotice {
@@ -820,6 +841,146 @@ struct ProfileView: View {
     .padding(.vertical, MoruPilotSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     .profilePilotSurface(cornerRadius: MoruPilotSpacing.twelve)
+  }
+}
+
+struct MoruVoiceSettingsView: View {
+  @Bindable var profileViewModel: ProfileViewModel
+  @Bindable var accountServerViewModel: AccountServerSettingsViewModel
+  let onOpenDeviceVoiceSelection: () -> Void
+  let onOpenServerVoiceSelection: () -> Void
+
+  var body: some View {
+    ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+          Button(action: onOpenDeviceVoiceSelection) {
+            voiceSettingsRow(
+              title: "기기 내장 음성",
+              detail: "\(selectedDeviceVoiceDisplayName) · 미리듣기 가능"
+            )
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel(
+            "기기 내장 음성, \(selectedDeviceVoiceDisplayName)"
+          )
+          .accessibilityHint("앱 내장 목소리를 선택하고 미리 듣습니다.")
+          .accessibilityIdentifier("profile.voice.device")
+
+          Divider()
+            .overlay(MoruPilotColor.border)
+
+          Button(action: onOpenServerVoiceSelection) {
+            voiceSettingsRow(
+              title: "서버 생성 음성",
+              detail: serverVoiceDetail
+            )
+          }
+          .buttonStyle(.plain)
+          .disabled(!canOpenServerVoiceSelection)
+          .accessibilityLabel("서버 생성 음성, \(serverVoiceDetail)")
+          .accessibilityHint(serverVoiceAccessibilityHint)
+          .accessibilityIdentifier("profile.voice.server")
+        }
+        .padding(MoruPilotSpacing.sixteen)
+        .profilePilotSurface(cornerRadius: MoruPilotSpacing.twelve)
+
+        if let message = profileViewModel.voiceErrorMessage {
+          Text(message)
+            .profileFigmaTextStyle(.c1)
+            .foregroundStyle(AppColor.coral300)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.top, MoruPilotSpacing.twenty)
+      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+    }
+    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .navigationTitle("")
+    .navigationBarTitleDisplayMode(.inline)
+    .toolbar(.visible, for: .navigationBar)
+    .toolbar {
+      ToolbarItem(placement: .principal) {
+        Text(ProfileCopy.moruVoice)
+          .profileFigmaTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruPilotColor.textStrong)
+      }
+    }
+    .tint(MoruPilotColor.textPrimary)
+    .accessibilityIdentifier("profile.voice.settings")
+  }
+
+  private var selectedDeviceVoiceDisplayName: String {
+    guard case .content(let content) = profileViewModel.state else {
+      return "선택 정보 확인 중"
+    }
+    return content.profile.selectedVoice.displayName
+  }
+
+  private var canOpenServerVoiceSelection: Bool {
+    !accountServerViewModel.isUpdatingVoice
+      && accountServerViewModel.voiceState.value?.isEmpty == false
+  }
+
+  private var serverVoiceDetail: String {
+    switch accountServerViewModel.voiceState {
+    case .content, .loading(previous: .some), .failed(previous: .some):
+      let previewStatus = accountServerViewModel.selectedVoiceHasPreview
+        ? "미리듣기 가능"
+        : "미리듣기 준비 중"
+      return "\(accountServerViewModel.selectedVoiceDisplayName) · \(previewStatus)"
+    case .empty:
+      return "선택 가능한 서버 음성이 없어요"
+    case .loading:
+      return "서버 음성을 불러오는 중"
+    case .failed:
+      return "서버 음성을 확인하지 못했어요"
+    case .unavailable:
+      return "이 빌드에서 사용할 수 없어요"
+    case .signedOut:
+      return "로그인 후 사용할 수 있어요"
+    }
+  }
+
+  private var serverVoiceAccessibilityHint: String {
+    switch accountServerViewModel.voiceState {
+    case .content, .loading(previous: .some), .failed(previous: .some):
+      return "서버에서 루틴 intro를 만들 때 쓰는 음성을 선택합니다."
+    case .signedOut:
+      return "로그인한 뒤 서버 음성을 선택할 수 있어요."
+    case .unavailable:
+      return "이 빌드에서는 서버 음성을 사용할 수 없어요."
+    case .loading:
+      return "서버 음성 목록을 불러오는 중이에요."
+    case .empty:
+      return "선택 가능한 서버 음성이 없어요."
+    case .failed:
+      return "서버 음성 목록을 확인하지 못했어요."
+    }
+  }
+
+  private func voiceSettingsRow(
+    title: String,
+    detail: String
+  ) -> some View {
+    HStack(spacing: MoruPilotSpacing.twelve) {
+      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+        Text(title)
+          .profileFigmaTextStyle(.b4)
+          .foregroundStyle(MoruPilotColor.textPrimary)
+        Text(detail)
+          .profileFigmaTextStyle(.c1)
+          .foregroundStyle(MoruPilotColor.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      Spacer(minLength: MoruPilotSpacing.eight)
+      MoruChevron(color: MoruPilotColor.textPrimary)
+        .accessibilityHidden(true)
+    }
+    .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+    .contentShape(Rectangle())
   }
 }
 

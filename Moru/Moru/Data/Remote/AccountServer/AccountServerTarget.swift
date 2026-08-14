@@ -97,14 +97,16 @@ nonisolated enum AccountServerTarget: MoruTargetType {
                 "voiceCode": "MINSEO",
                 "displayName": "민서",
                 "description": "따뜻한 친구",
-                "proOnly": false
+                "proOnly": false,
+                "previewAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/minseo.mp3"
               },
               {
                 "ttsId": 2,
                 "voiceCode": "HYEONU",
                 "displayName": "현우",
                 "description": "차분한 친구",
-                "proOnly": true
+                "proOnly": true,
+                "previewAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/hyeonu.mp3"
               }
             ]
           }

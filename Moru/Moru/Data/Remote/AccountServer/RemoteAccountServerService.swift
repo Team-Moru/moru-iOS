@@ -175,13 +175,15 @@ nonisolated private extension TTSVoiceListResponseDTO {
             let proOnly = voice.proOnly else {
         throw AccountServerRemoteError.invalidResponse
       }
+      let previewAudioURL = try previewAudioURL(from: voice.previewAudioUrl)
 
       return ServerTTSVoice(
         ttsID: ttsId,
         voiceCode: voiceCode,
         displayName: displayName,
         description: description,
-        isProOnly: proOnly
+        isProOnly: proOnly,
+        previewAudioURL: previewAudioURL
       )
     }
   }
@@ -252,4 +254,23 @@ nonisolated private func normalizedOptionalText(
     return nil
   }
   return try normalizedRequiredText(value)
+}
+
+nonisolated private func previewAudioURL(
+  from value: String?
+) throws -> URL? {
+  guard let normalized = try normalizedOptionalText(value) else {
+    return nil
+  }
+  guard let url = URL(string: normalized),
+        url.scheme?.lowercased() == "https",
+        let host = url.host,
+        !host.isEmpty,
+        url.port == nil || url.port == 443,
+        url.user == nil,
+        url.password == nil,
+        url.fragment == nil else {
+    throw AccountServerRemoteError.invalidResponse
+  }
+  return url
 }

@@ -94,6 +94,42 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     XCTAssertEqual(image.size, CGSize(width: 393, height: 852))
   }
 
+  func testMoruVoiceSettingsPageRendersAtReferenceViewport() throws {
+    let viewModel = ProfileViewModel(
+      profileSettingsUseCase: HomeProfileCaptureProfileUseCase(
+        result: ProfileSettingsLoadResult(
+          profile: LocalProfile(displayName: "김모루", selectedVoice: .aoede),
+          fallbackNotice: nil
+        )
+      ),
+      voicePreviewPlayer: HomeProfileCaptureVoicePlayer(),
+      alarmService: HomeProfileCaptureAlarmService(status: .configured),
+      resetUseCase: HomeProfileCaptureResetUseCase(),
+      resetAvailability: { true },
+      onOpenSettings: {},
+      onResetSucceeded: {}
+    )
+    viewModel.loadProfileSettings()
+
+    let image = try MoruVisualCaptureFixture.render(
+      NavigationStack {
+        MoruVoiceSettingsView(
+          profileViewModel: viewModel,
+          accountServerViewModel: AccountServerSettingsViewModel(),
+          onOpenDeviceVoiceSelection: {},
+          onOpenServerVoiceSelection: {}
+        )
+      },
+      filename: "moru-voice-settings-light-M.png",
+      variant: .lightMedium,
+      outputDirectory: URL(
+        fileURLWithPath: "/private/tmp/moru-voice-settings"
+      )
+    )
+
+    XCTAssertEqual(image.size, CGSize(width: 393, height: 852))
+  }
+
   func testHomeAndProfileStatesRenderDeterministicallyAtReferenceVariants() async throws {
     let environment = ProcessInfo.processInfo.environment
     let phase = environment["MORU_HOME_PROFILE_CAPTURE_PHASE"] ?? "after"

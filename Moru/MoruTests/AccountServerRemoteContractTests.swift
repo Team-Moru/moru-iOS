@@ -115,14 +115,20 @@ final class AccountServerRemoteContractTests: XCTestCase {
           voiceCode: "MINSEO",
           displayName: "민서",
           description: "따뜻한 친구",
-          isProOnly: false
+          isProOnly: false,
+          previewAudioURL: URL(
+            string: "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/minseo.mp3"
+          )
         ),
         ServerTTSVoice(
           ttsID: 2,
           voiceCode: "HYEONU",
           displayName: "현우",
           description: "차분한 친구",
-          isProOnly: true
+          isProOnly: true,
+          previewAudioURL: URL(
+            string: "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/hyeonu.mp3"
+          )
         ),
       ]
     )
@@ -316,6 +322,7 @@ final class AccountServerRemoteContractTests: XCTestCase {
     XCTAssertEqual(voices.map(\.ttsID), [2, 1])
     XCTAssertEqual(voices.map(\.voiceCode), ["B", "A"])
     XCTAssertEqual(voices.map(\.displayName), ["둘째", "첫째"])
+    XCTAssertTrue(voices.allSatisfy { $0.previewAudioURL == nil })
 
     let invalidVoiceLists = [
       TTSVoiceListResponseDTO(
@@ -323,6 +330,9 @@ final class AccountServerRemoteContractTests: XCTestCase {
           ttsVoiceDTO(ttsId: 1),
           ttsVoiceDTO(ttsId: 1),
         ]
+      ),
+      TTSVoiceListResponseDTO(
+        voices: [ttsVoiceDTO(previewAudioUrl: "http://audio.example.com/preview.mp3")]
       ),
       TTSVoiceListResponseDTO(voices: [ttsVoiceDTO(ttsId: 0)]),
       TTSVoiceListResponseDTO(
@@ -511,14 +521,16 @@ nonisolated private func ttsVoiceDTO(
   voiceCode: String? = "MINSEO",
   displayName: String? = "민서",
   description: String? = "따뜻한 친구",
-  proOnly: Bool? = false
+  proOnly: Bool? = false,
+  previewAudioUrl: String? = nil
 ) -> TTSVoiceResponseDTO {
   TTSVoiceResponseDTO(
     ttsId: ttsId,
     voiceCode: voiceCode,
     displayName: displayName,
     description: description,
-    proOnly: proOnly
+    proOnly: proOnly,
+    previewAudioUrl: previewAudioUrl
   )
 }
 

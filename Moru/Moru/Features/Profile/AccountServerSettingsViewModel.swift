@@ -207,6 +207,17 @@ final class AccountServerSettingsViewModel {
     return "선택 정보 확인 중"
   }
 
+  var selectedVoice: ServerTTSVoice? {
+    guard let selectedTTSID else {
+      return nil
+    }
+    return voiceState.value?.first(where: { $0.ttsID == selectedTTSID })
+  }
+
+  var selectedVoiceHasPreview: Bool {
+    selectedVoice?.previewAudioURL != nil
+  }
+
   private func applySignedOutState() {
     profileState = .signedOut
     streakState = .signedOut
