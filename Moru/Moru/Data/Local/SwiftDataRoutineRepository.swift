@@ -116,7 +116,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
         }
       }
 
-      try ensureAtMostOneActiveRoutine()
+      try ensureActiveRoutineWeekdaysDoNotOverlap()
 
       if let memberID, activeProjectionChanged {
         try stageActiveSelection(
@@ -397,7 +397,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
     guard let routineSyncRepository else { return }
     let routines = try modelContext.fetch(FetchDescriptor<PersistedRoutine>())
       .map(SwiftDataMapper.makeDomainRoutine)
-    let localSelection = routines.filter(\.isActive).sorted {
+    let activeRoutines = routines.filter(\.isActive).sorted {
       if $0.updatedAt == $1.updatedAt {
         if $0.createdAt == $1.createdAt {
           return $0.id.uuidString < $1.id.uuidString
@@ -405,10 +405,12 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
         return $0.createdAt > $1.createdAt
       }
       return $0.updatedAt > $1.updatedAt
-    }.first
+    }
+    let localSelection = try activeRoutines.first { routine in
+      try isServerProjectableGroup(routine.id, memberID: memberID)
+    }
 
-    if let localSelection,
-       try isServerProjectableGroup(localSelection.id, memberID: memberID) {
+    if let localSelection {
       try routineSyncRepository.stageEnqueue(
         EnqueuedRoutineSyncMutation(
           memberID: memberID,
@@ -566,12 +568,19 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
   }
 
   @MainActor
-  private func ensureAtMostOneActiveRoutine() throws {
+  private func ensureActiveRoutineWeekdaysDoNotOverlap() throws {
     let activeRoutines = try modelContext.fetch(
       FetchDescriptor<PersistedRoutine>(predicate: #Predicate { $0.isActive })
     )
-    guard activeRoutines.count <= 1 else {
-      throw RepositoryContractError.singleActiveRoutineRequired
+
+    var scheduledWeekdays: Set<Weekday> = []
+    for persisted in activeRoutines {
+      let routine = try SwiftDataMapper.makeDomainRoutine(from: persisted)
+      let weekdays = Set(routine.alarmSchedule?.weekdays ?? [])
+      guard scheduledWeekdays.isDisjoint(with: weekdays) else {
+        throw RepositoryContractError.overlappingActiveRoutineWeekdays
+      }
+      scheduledWeekdays.formUnion(weekdays)
     }
   }
 }

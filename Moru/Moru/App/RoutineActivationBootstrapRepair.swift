@@ -14,7 +14,7 @@ struct RoutineActivationBootstrapRepairResult: Equatable {
   let routines: [Routine]
 }
 
-/// Repairs only legacy local data that predates the single-active invariant.
+/// Repairs only legacy local data whose active routine weekdays overlap.
 /// It intentionally uses the normal local repository before session restoration,
 /// so no account-scoped sync intent can be produced during app launch.
 @MainActor
@@ -36,9 +36,24 @@ enum RoutineActivationBootstrapRepair {
     routines: [Routine],
     now: Date = Date()
   ) -> RoutineActivationBootstrapRepairResult? {
-    let activeRoutines = routines.filter(\.isActive)
+    let activeRoutines = routines.filter(\.isActive).sorted(by: Self.winsOver)
     guard activeRoutines.count > 1,
-          let winner = activeRoutines.sorted(by: Self.winsOver).first else {
+          let winner = activeRoutines.first else {
+      return nil
+    }
+
+    var scheduledWeekdays: Set<Weekday> = []
+    var conflictingRoutineIDs: Set<UUID> = []
+    for routine in activeRoutines {
+      let weekdays = Set(routine.alarmSchedule?.weekdays ?? [])
+      if scheduledWeekdays.isDisjoint(with: weekdays) {
+        scheduledWeekdays.formUnion(weekdays)
+      } else {
+        conflictingRoutineIDs.insert(routine.id)
+      }
+    }
+
+    guard !conflictingRoutineIDs.isEmpty else {
       return nil
     }
 
@@ -46,7 +61,7 @@ enum RoutineActivationBootstrapRepair {
     var deactivatedRoutineIDs: [UUID] = []
 
     for index in repairedRoutines.indices where repairedRoutines[index].isActive {
-      guard repairedRoutines[index].id != winner.id else {
+      guard conflictingRoutineIDs.contains(repairedRoutines[index].id) else {
         continue
       }
 

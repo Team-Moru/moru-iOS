@@ -174,7 +174,7 @@ private struct OnboardingHeaderView: View {
 
   @ViewBuilder
   private var backButton: some View {
-    if viewModel.step.previous != nil {
+    if viewModel.canNavigateBack {
       Button(action: viewModel.backButtonDidTap) {
         Image(systemName: "chevron.left")
           .font(.system(size: 24, weight: .regular))
