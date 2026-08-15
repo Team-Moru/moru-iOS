@@ -10,6 +10,12 @@ nonisolated struct SocialLoginRequestDTO: Encodable, Equatable, Sendable {
   let authorizationCode: String?
 }
 
+nonisolated struct AppleLoginRequestDTO: Encodable, Equatable, Sendable {
+  let provider = "APPLE"
+  let identityToken: String
+  let authorizationCode: String?
+}
+
 nonisolated struct LoginResponseDTO: Decodable, Equatable, Sendable {
   let memberId: Int64
   let accessToken: String

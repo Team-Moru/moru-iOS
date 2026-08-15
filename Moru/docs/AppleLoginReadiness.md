@@ -1,7 +1,8 @@
 # Apple 로그인 출시 계약 점검
 
-- 확인 일자: 2026-07-27
-- 기준 문서: `https://moru-api.duckdns.org/v3/api-docs`
+- 최초 확인 일자: 2026-07-27
+- Apple request body 갱신: 2026-08-15 서버팀 전달 계약
+- 최초 기준 문서: `https://moru-api.duckdns.org/v3/api-docs`
 - 대상: `POST /auth/login/{provider}`, `DELETE /auth/withdrawal`
 
 ## 공개 앱 metadata
@@ -23,6 +24,8 @@ private key는 제공받지 않았으며 앱·Git·문서에 저장하지 않습
 - Apple callback은 identity token, authorization code, raw nonce, Apple
   user identifier가 모두 현재 요청에 묶인 경우에만 공통 로그인 coordinator로
   전달한다.
+- Apple 로그인 request body는 `provider: "APPLE"`, `identityToken`,
+  `authorizationCode`를 전송한다. 기존 endpoint `/auth/login/apple`은 유지한다.
 - 이름과 이메일 scope는 요청하지 않는다.
 - Apple user identifier는 계정 credential과 session에 보존하며 token 재발급 뒤에도
   유지한다.
@@ -34,9 +37,10 @@ private key는 제공받지 않았으며 앱·Git·문서에 저장하지 않습
 
 ## 서버 계약 blocker
 
-현재 OpenAPI의 `SocialLoginRequest`는 `token`과 `authorizationCode`만 선언한다.
-`rawNonce`와 Apple user identifier 필드는 선언되어 있지 않다. 앱은 서버가
-무시하거나 다르게 해석할 수 있는 필드를 추정해 전송하지 않는다.
+2026-08-15 서버팀이 전달한 Apple request body에는 `provider`, `identityToken`,
+`authorizationCode`만 선언되어 있다. `rawNonce`와 Apple user identifier 필드는
+선언되어 있지 않다. 앱은 서버가 무시하거나 다르게 해석할 수 있는 필드를 추정해
+전송하지 않는다.
 
 현재 `DELETE /auth/withdrawal` 성공 응답은 회원 탈퇴 완료 message만 제공한다.
 Apple refresh token revoke 수행 여부나 완료 상태를 확인할 필드 또는 별도

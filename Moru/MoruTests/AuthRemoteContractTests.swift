@@ -110,17 +110,46 @@ final class AuthRemoteContractTests: XCTestCase {
     )
 
     let body = try jsonBody(from: request)
-    XCTAssertEqual(body["token"] as? String, "apple-identity-token")
+    XCTAssertEqual(body["provider"] as? String, "APPLE")
+    XCTAssertEqual(
+      body["identityToken"] as? String,
+      "apple-identity-token"
+    )
     XCTAssertEqual(
       body["authorizationCode"] as? String,
       "apple-authorization-code"
     )
     XCTAssertEqual(
       Set(body.keys),
-      Set(["token", "authorizationCode"])
+      Set(["provider", "identityToken", "authorizationCode"])
     )
+    XCTAssertNil(body["token"])
     XCTAssertNil(body["rawNonce"])
     XCTAssertNil(body["providerUserIdentifier"])
+  }
+
+  func testLoginKeepsNonAppleTokenContract() async throws {
+    let requestCapture = AuthRequestCapturePlugin()
+    let client = makeClient(
+      data: loginResponseData(),
+      additionalPlugins: [requestCapture]
+    )
+    let dataSource = DefaultAuthRemoteDataSource(apiClient: client)
+
+    _ = try await dataSource.login(
+      provider: .google,
+      request: SocialLoginRequestDTO(
+        token: "google-id-token",
+        authorizationCode: nil
+      )
+    )
+
+    let request = try XCTUnwrap(requestCapture.request)
+    let body = try jsonBody(from: request)
+    XCTAssertEqual(body["token"] as? String, "google-id-token")
+    XCTAssertEqual(Set(body.keys), Set(["token"]))
+    XCTAssertNil(body["provider"])
+    XCTAssertNil(body["identityToken"])
   }
 
   func testLoginResponseAllowsMissingIsNewMember() async throws {

@@ -235,10 +235,10 @@ final class SocialLoginCoordinator: SocialLoginCoordinating {
       }
     }
 
-    // The 2026-07-27 OpenAPI contract accepts only token and
-    // authorizationCode. Keep the locally bound raw nonce and Apple user
-    // identifier out of the request until the server explicitly declares
-    // those fields.
+    // AuthTarget maps Apple's internal token value to the server's
+    // identityToken field and adds provider = APPLE. Keep the locally bound
+    // raw nonce and Apple user identifier out of the request until the server
+    // explicitly declares those fields.
     let response: LoginResponseDTO
     do {
       response = try await authRemoteDataSource.login(
