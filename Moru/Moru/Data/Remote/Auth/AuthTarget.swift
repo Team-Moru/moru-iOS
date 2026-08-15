@@ -40,8 +40,17 @@ nonisolated enum AuthTarget: MoruTargetType {
 
   var task: Moya.Task {
     switch self {
-    case .login(_, let request):
-      .requestJSONEncodable(request)
+    case .login(let provider, let request):
+      if provider == .apple {
+        .requestJSONEncodable(
+          AppleLoginRequestDTO(
+            identityToken: request.token,
+            authorizationCode: request.authorizationCode
+          )
+        )
+      } else {
+        .requestJSONEncodable(request)
+      }
     case .reissue,
          .withdrawal:
       .requestPlain
