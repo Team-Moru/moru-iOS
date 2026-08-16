@@ -542,6 +542,82 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertEqual(downloadCallCount, 0)
   }
 
+  func testPersistedVoiceSelectionVersionBlocksMismatchAfterRelaunch() async throws {
+    let versionStore = InMemoryVoiceSelectionVersionStore()
+    let firstLaunch = try await makeWarmupFixture(
+      response: [],
+      voiceSelectionVersionStore: versionStore
+    )
+    firstLaunch.coordinator.serverVoiceSelectionDidChange(
+      memberID: 7,
+      selectionVersion: 2
+    )
+
+    let downloader = RecordingWarmupDownloader()
+    let relaunched = try await makeWarmupFixture(
+      response: [
+        remoteRoutine(id: 51, stepIDs: [71], selectionVersion: 1),
+      ],
+      downloader: downloader,
+      voiceSelectionVersionStore: versionStore
+    )
+    relaunched.coordinator.prepare(
+      routineGroupLocalID: relaunched.groupID,
+      routineLocalIDs: [relaunched.routineID]
+    )
+    for _ in 0..<100 {
+      if await relaunched.remote.callCount > 0 { break }
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+
+    let urls = await relaunched.coordinator.localAudioURLs(
+      for: relaunched.localRequest()
+    )
+    let downloadCallCount = await downloader.callCount
+    XCTAssertEqual(versionStore.selectionVersion(forMemberID: 7), 2)
+    XCTAssertNil(urls)
+    XCTAssertEqual(downloadCallCount, 0)
+  }
+
+  func testMissingPatchVersionClearsPersistedSelectionVersion() async throws {
+    let versionStore = InMemoryVoiceSelectionVersionStore()
+    versionStore.setSelectionVersion(2, forMemberID: 7)
+    versionStore.setSelectionVersion(8, forMemberID: 8)
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      voiceSelectionVersionStore: versionStore
+    )
+
+    fixture.coordinator.serverVoiceSelectionDidChange(
+      memberID: 7,
+      selectionVersion: nil
+    )
+
+    XCTAssertNil(versionStore.selectionVersion(forMemberID: 7))
+    XCTAssertEqual(versionStore.selectionVersion(forMemberID: 8), 8)
+  }
+
+  func testUserDefaultsVoiceSelectionVersionPersistsZeroPerAccount() throws {
+    let suiteName = "RoutineTTSVoiceSelectionVersionTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let firstStore = UserDefaultsRoutineTTSVoiceSelectionVersionStore(
+      userDefaults: defaults
+    )
+    firstStore.setSelectionVersion(0, forMemberID: 7)
+    firstStore.setSelectionVersion(4, forMemberID: 8)
+
+    let restoredStore = UserDefaultsRoutineTTSVoiceSelectionVersionStore(
+      userDefaults: defaults
+    )
+
+    XCTAssertEqual(restoredStore.selectionVersion(forMemberID: 7), 0)
+    XCTAssertEqual(restoredStore.selectionVersion(forMemberID: 8), 4)
+    restoredStore.removeSelectionVersion(forMemberID: 7)
+    XCTAssertNil(restoredStore.selectionVersion(forMemberID: 7))
+    XCTAssertEqual(restoredStore.selectionVersion(forMemberID: 8), 4)
+  }
+
   func testWarmupRejectsRemoteTitleMismatch() async throws {
     let fixture = try await makeWarmupFixture(
       response: [remoteRoutine(id: 51, stepIDs: [71], title: "이전 제목")]
@@ -762,7 +838,9 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     routines: [Routine] = [],
     downloader: any RoutineTTSAudioDownloading = RoutineTTSAudioDownloader(),
     foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy =
-      RoutineTTSForegroundPollingPolicy()
+      RoutineTTSForegroundPollingPolicy(),
+    voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring =
+      InMemoryVoiceSelectionVersionStore()
   ) async throws -> WarmupFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let bindings = SwiftDataRoutineSyncRepository(modelContainer: container)
@@ -811,7 +889,8 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       audioCache: cache,
       downloader: downloader,
       sessionIdentityProvider: identity,
-      foregroundPollingPolicy: foregroundPollingPolicy
+      foregroundPollingPolicy: foregroundPollingPolicy,
+      voiceSelectionVersionStore: voiceSelectionVersionStore
     )
     return WarmupFixture(
       groupID: groupID,
@@ -839,6 +918,28 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       try? await Task.sleep(for: .milliseconds(10))
     }
     return nil
+  }
+}
+
+@MainActor
+private final class InMemoryVoiceSelectionVersionStore:
+  RoutineTTSVoiceSelectionVersionStoring {
+  private var versions: [Int64: Int64] = [:]
+
+  func selectionVersion(forMemberID memberID: Int64) -> Int64? {
+    versions[memberID]
+  }
+
+  func setSelectionVersion(_ version: Int64, forMemberID memberID: Int64) {
+    guard version >= 0 else {
+      removeSelectionVersion(forMemberID: memberID)
+      return
+    }
+    versions[memberID] = version
+  }
+
+  func removeSelectionVersion(forMemberID memberID: Int64) {
+    versions[memberID] = nil
   }
 }
 

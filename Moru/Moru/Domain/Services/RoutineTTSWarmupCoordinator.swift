@@ -63,6 +63,13 @@ protocol RoutineTTSWarming: AnyObject {
   ) async
 }
 
+@MainActor
+protocol RoutineTTSVoiceSelectionVersionStoring: AnyObject {
+  func selectionVersion(forMemberID memberID: Int64) -> Int64?
+  func setSelectionVersion(_ version: Int64, forMemberID memberID: Int64)
+  func removeSelectionVersion(forMemberID memberID: Int64)
+}
+
 extension RoutineTTSWarming {
   /// Keeps lightweight test and preview doubles source-compatible while the
   /// production coordinator supplies the foreground readiness wait.
@@ -141,6 +148,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private let resolver: RoutineTTSCuePlanResolver
   private let foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy
   private let diagnostics: RoutineTTSDiagnostics
+  private let voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring
   private weak var playbackSessionInvalidator:
     (any RoutineTTSPlaybackSessionInvalidating)?
 
@@ -149,8 +157,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private var sessionTransitionTask: Task<Void, Never>?
   private var isSceneActive = false
   private var observedIdentity: AccountSessionIdentity?
-  /// Trusted only for the exact account session that received the PATCH
-  /// response. The current backend has no read contract for restoring it.
+  /// Restored only from a version previously received from this member's
+  /// successful PATCH response on this device.
   private var currentVoiceSelection: CurrentVoiceSelection?
   /// If a purge fails, normalized cache keys can still resolve old bytes.
   /// Keep the affected account muted until a later purge succeeds instead of
@@ -168,7 +176,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     resolver: RoutineTTSCuePlanResolver = RoutineTTSCuePlanResolver(),
     foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy =
       RoutineTTSForegroundPollingPolicy(),
-    diagnostics: RoutineTTSDiagnostics = RoutineTTSDiagnostics()
+    diagnostics: RoutineTTSDiagnostics = RoutineTTSDiagnostics(),
+    voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring
   ) {
     self.remoteService = remoteService
     self.bindingRepository = bindingRepository
@@ -180,7 +189,10 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     self.resolver = resolver
     self.foregroundPollingPolicy = foregroundPollingPolicy
     self.diagnostics = diagnostics
-    observedIdentity = sessionIdentityProvider.currentAccountSessionIdentity
+    self.voiceSelectionVersionStore = voiceSelectionVersionStore
+    let identity = sessionIdentityProvider.currentAccountSessionIdentity
+    observedIdentity = identity
+    currentVoiceSelection = restoredVoiceSelection(for: identity)
   }
 
   func setSceneActive(_ isActive: Bool) {
@@ -204,7 +216,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let previousIdentity = observedIdentity
     let currentIdentity = sessionIdentityProvider?.currentAccountSessionIdentity
     observedIdentity = currentIdentity
-    currentVoiceSelection = nil
+    currentVoiceSelection = restoredVoiceSelection(for: currentIdentity)
     preparedPlans.removeAll()
     var memberIDsToPurge = Set<Int64>()
     if let previousIdentity {
@@ -262,11 +274,16 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     }
 
     if let selectionVersion, selectionVersion >= 0 {
+      voiceSelectionVersionStore.setSelectionVersion(
+        selectionVersion,
+        forMemberID: memberID
+      )
       currentVoiceSelection = CurrentVoiceSelection(
         identity: identity,
         version: selectionVersion
       )
     } else {
+      voiceSelectionVersionStore.removeSelectionVersion(forMemberID: memberID)
       currentVoiceSelection = nil
     }
     preparedPlans.removeAll()
@@ -1104,6 +1121,18 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   ) -> Int64? {
     guard currentVoiceSelection?.identity == identity else { return nil }
     return currentVoiceSelection?.version
+  }
+
+  private func restoredVoiceSelection(
+    for identity: AccountSessionIdentity?
+  ) -> CurrentVoiceSelection? {
+    guard let identity,
+          let version = voiceSelectionVersionStore.selectionVersion(
+            forMemberID: identity.memberID
+          ) else {
+      return nil
+    }
+    return CurrentVoiceSelection(identity: identity, version: version)
   }
 
   private func validateCurrentBinding(
