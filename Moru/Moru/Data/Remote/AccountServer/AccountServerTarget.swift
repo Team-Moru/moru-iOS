@@ -124,7 +124,8 @@ nonisolated enum AccountServerTarget: MoruTargetType {
             "memberId": 98,
             "ttsId": \(request.ttsId),
             "voiceCode": "HYEONU",
-            "displayName": "현우"
+            "displayName": "현우",
+            "selectionVersion": 0
           }
         }
         """.utf8

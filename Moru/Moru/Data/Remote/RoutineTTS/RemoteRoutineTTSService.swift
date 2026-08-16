@@ -105,6 +105,9 @@ where Element == RoutineTTSStepResponseDTO {
         content: try requiredRoutineTTSText(step.content),
         introText: introText,
         status: status,
+        selectionVersion: try validRoutineTTSSelectionVersion(
+          step.selectionVersion
+        ),
         audioURL: playableAudioURL(
           status: status,
           introText: introText,
@@ -165,6 +168,16 @@ nonisolated private func normalizedOptionalRoutineTTSText(
     in: .whitespacesAndNewlines
   )
   return normalized.isEmpty ? nil : normalized
+}
+
+nonisolated private func validRoutineTTSSelectionVersion(
+  _ value: Int64?
+) throws -> Int64? {
+  guard let value else { return nil }
+  guard value >= 0 else {
+    throw RoutineTTSRemoteError.invalidResponse
+  }
+  return value
 }
 
 nonisolated private func playableAudioURL(

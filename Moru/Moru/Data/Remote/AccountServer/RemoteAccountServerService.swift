@@ -209,7 +209,8 @@ nonisolated private extension TTSUpdateResponseDTO {
       memberID: memberId,
       ttsID: ttsId,
       voiceCode: voiceCode,
-      displayName: displayName
+      displayName: displayName,
+      selectionVersion: try validSelectionVersion(selectionVersion)
     )
   }
 }
@@ -254,6 +255,16 @@ nonisolated private func normalizedOptionalText(
     return nil
   }
   return try normalizedRequiredText(value)
+}
+
+nonisolated private func validSelectionVersion(
+  _ value: Int64?
+) throws -> Int64? {
+  guard let value else { return nil }
+  guard value >= 0 else {
+    throw AccountServerRemoteError.invalidResponse
+  }
+  return value
 }
 
 nonisolated private func previewAudioURL(

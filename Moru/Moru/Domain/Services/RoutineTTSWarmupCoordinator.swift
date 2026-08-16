@@ -87,6 +87,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let keys: [RoutineTTSAudioCacheKey]
   }
 
+  private struct CurrentVoiceSelection {
+    let identity: AccountSessionIdentity
+    let version: Int64
+  }
+
   private struct RoutineTTSLocalFingerprint: Equatable {
     let normalizedTitle: String
     let type: RoutineStepType
@@ -144,6 +149,9 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private var sessionTransitionTask: Task<Void, Never>?
   private var isSceneActive = false
   private var observedIdentity: AccountSessionIdentity?
+  /// Trusted only for the exact account session that received the PATCH
+  /// response. The current backend has no read contract for restoring it.
+  private var currentVoiceSelection: CurrentVoiceSelection?
   /// If a purge fails, normalized cache keys can still resolve old bytes.
   /// Keep the affected account muted until a later purge succeeds instead of
   /// risking the newly selected voice playing stale audio.
@@ -196,6 +204,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let previousIdentity = observedIdentity
     let currentIdentity = sessionIdentityProvider?.currentAccountSessionIdentity
     observedIdentity = currentIdentity
+    currentVoiceSelection = nil
     preparedPlans.removeAll()
     var memberIDsToPurge = Set<Int64>()
     if let previousIdentity {
@@ -243,12 +252,23 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   /// a new signed URL. The cache key intentionally normalizes URL queries, so
   /// invalidate this account's namespace before any next cue can use old
   /// bytes. Rewarming is deferred until the purge completes.
-  func serverVoiceSelectionDidChange(memberID: Int64) {
+  func serverVoiceSelectionDidChange(
+    memberID: Int64,
+    selectionVersion: Int64? = nil
+  ) {
     guard let identity = sessionIdentityProvider?.currentAccountSessionIdentity,
           identity.memberID == memberID else {
       return
     }
 
+    if let selectionVersion, selectionVersion >= 0 {
+      currentVoiceSelection = CurrentVoiceSelection(
+        identity: identity,
+        version: selectionVersion
+      )
+    } else {
+      currentVoiceSelection = nil
+    }
     preparedPlans.removeAll()
     cacheUnavailableMemberIDs.insert(memberID)
     let previousTransition = sessionTransitionTask
@@ -610,7 +630,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         routineLocalID: routineLocalID,
         groupBinding: groupBinding,
         routineBinding: routineBinding,
-        response: response
+        response: response,
+        currentSelectionVersion: currentSelectionVersion(for: identity)
       )
       let assets: [RoutineTTSResolvedAsset]
       switch resolution {
@@ -837,7 +858,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         routineLocalID: routineLocalID,
         groupBinding: groupBinding,
         routineBinding: routineBinding,
-        response: response
+        response: response,
+        currentSelectionVersion: currentSelectionVersion(for: identity)
       ) {
       case .pending:
         return .pendingGeneration
@@ -1075,6 +1097,13 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
 
   private func isAudioCacheUsable(for identity: AccountSessionIdentity) -> Bool {
     !cacheUnavailableMemberIDs.contains(identity.memberID)
+  }
+
+  private func currentSelectionVersion(
+    for identity: AccountSessionIdentity
+  ) -> Int64? {
+    guard currentVoiceSelection?.identity == identity else { return nil }
+    return currentVoiceSelection?.version
   }
 
   private func validateCurrentBinding(

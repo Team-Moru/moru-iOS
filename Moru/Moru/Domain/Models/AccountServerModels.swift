@@ -61,4 +61,19 @@ nonisolated struct ServerTTSSelection: Equatable, Sendable {
   let ttsID: Int64
   let voiceCode: String
   let displayName: String
+  let selectionVersion: Int64?
+
+  init(
+    memberID: Int64,
+    ttsID: Int64,
+    voiceCode: String,
+    displayName: String,
+    selectionVersion: Int64? = nil
+  ) {
+    self.memberID = memberID
+    self.ttsID = ttsID
+    self.voiceCode = voiceCode
+    self.displayName = displayName
+    self.selectionVersion = selectionVersion
+  }
 }

@@ -497,9 +497,12 @@ struct AppRouter: View {
         UIApplication.shared.open(url)
       },
       onResetSucceeded: resetToNewUserFlow,
-      onServerVoiceSelectionDidSucceed: { memberID in
+      onServerVoiceSelectionDidSucceed: { selection in
         dependencies.routineTTSWarmupCoordinator?
-          .serverVoiceSelectionDidChange(memberID: memberID)
+          .serverVoiceSelectionDidChange(
+            memberID: selection.memberID,
+            selectionVersion: selection.selectionVersion
+          )
       }
     )
     let mainTabState = state.mainTabState

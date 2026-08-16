@@ -97,11 +97,11 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
       streak: .success(accountSettingsStreak()),
       voices: .success([voice])
     )
-    var invalidatedMemberIDs: [Int64] = []
+    var invalidatedSelections: [ServerTTSSelection] = []
     let viewModel = AccountServerSettingsViewModel(
       remoteService: service,
-      onServerVoiceSelectionDidSucceed: { memberID in
-        invalidatedMemberIDs.append(memberID)
+      onServerVoiceSelectionDidSucceed: { selection in
+        invalidatedSelections.append(selection)
       }
     )
     await viewModel.load(memberID: 98)
@@ -115,12 +115,14 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
         memberID: 98,
         ttsID: 2,
         voiceCode: "VOICE_2",
-        displayName: "서버 음성 2"
+        displayName: "서버 음성 2",
+        selectionVersion: 4
       )
     )
     let calls = await service.calls
     XCTAssertTrue(calls.contains(.update(ttsID: 2, memberID: 98)))
-    XCTAssertEqual(invalidatedMemberIDs, [98])
+    XCTAssertEqual(invalidatedSelections.count, 1)
+    XCTAssertEqual(invalidatedSelections.first, viewModel.latestSelection)
   }
 
   @MainActor
@@ -131,8 +133,8 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     var invalidatedMemberIDs: [Int64] = []
     let viewModel = AccountServerSettingsViewModel(
       remoteService: service,
-      onServerVoiceSelectionDidSucceed: { memberID in
-        invalidatedMemberIDs.append(memberID)
+      onServerVoiceSelectionDidSucceed: { selection in
+        invalidatedMemberIDs.append(selection.memberID)
       }
     )
     await viewModel.load(memberID: 98)
@@ -255,7 +257,8 @@ private actor AccountServerSettingsRemoteStub:
       memberID: memberID,
       ttsID: ttsID,
       voiceCode: "VOICE_\(ttsID)",
-      displayName: "서버 음성 \(ttsID)"
+      displayName: "서버 음성 \(ttsID)",
+      selectionVersion: 4
     )
   }
 
