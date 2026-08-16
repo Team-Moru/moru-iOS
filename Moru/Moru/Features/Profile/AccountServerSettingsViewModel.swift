@@ -31,7 +31,8 @@ enum AccountServerResourceState<Value: Equatable>: Equatable {
 @Observable
 final class AccountServerSettingsViewModel {
   private let remoteService: (any AccountServerRemoteServing)?
-  private let onServerVoiceSelectionDidSucceed: @MainActor (Int64) -> Void
+  private let onServerVoiceSelectionDidSucceed:
+    @MainActor (ServerTTSSelection) -> Void
   private var loadGeneration = 0
   private var currentMemberID: Int64?
 
@@ -50,7 +51,7 @@ final class AccountServerSettingsViewModel {
   init(
     remoteService: (any AccountServerRemoteServing)? = nil,
     onServerVoiceSelectionDidSucceed:
-      @escaping @MainActor (Int64) -> Void = { _ in }
+      @escaping @MainActor (ServerTTSSelection) -> Void = { _ in }
   ) {
     self.remoteService = remoteService
     self.onServerVoiceSelectionDidSucceed = onServerVoiceSelectionDidSucceed
@@ -179,7 +180,7 @@ final class AccountServerSettingsViewModel {
       latestSelection = selection
       selectedTTSID = selection.ttsID
       if previousTTSID != selection.ttsID {
-        onServerVoiceSelectionDidSucceed(memberID)
+        onServerVoiceSelectionDidSucceed(selection)
       }
     } catch is CancellationError {
       return

@@ -157,7 +157,8 @@ struct DependencyContainer {
         routineRepository: routineRepository,
         audioCache: routineTTSAudioCache,
         downloader: RoutineTTSAudioDownloader(),
-        sessionIdentityProvider: sessionIdentityProvider
+        sessionIdentityProvider: sessionIdentityProvider,
+        voiceSelectionVersionStore: UserDefaultsRoutineTTSVoiceSelectionVersionStore()
       )
       routineTTSWarmupCoordinator = warmupCoordinator
       let remoteFirstGuidancePlayer = RemoteFirstRoutineGuidancePlayer(

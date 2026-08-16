@@ -66,6 +66,7 @@ final class AccountServerRemoteContractTests: XCTestCase {
     XCTAssertEqual(streakEnvelope.result?.weeklyStatus?.count, 7)
     XCTAssertEqual(voiceEnvelope.result?.voices?.count, 2)
     XCTAssertEqual(updateEnvelope.result?.ttsId, 2)
+    XCTAssertEqual(updateEnvelope.result?.selectionVersion, 0)
   }
 
   func testFetchesSupportedAccountEndpointsWithExactPatchBody()
@@ -138,7 +139,8 @@ final class AccountServerRemoteContractTests: XCTestCase {
         memberID: 98,
         ttsID: 2,
         voiceCode: "HYEONU",
-        displayName: "현우"
+        displayName: "현우",
+        selectionVersion: 0
       )
     )
     let requests = capture.requests
@@ -196,10 +198,24 @@ final class AccountServerRemoteContractTests: XCTestCase {
       TTSVoiceListResponseDTO.self,
       from: Data("{}".utf8)
     )
+    let legacyUpdate = try decoder.decode(
+      TTSUpdateResponseDTO.self,
+      from: Data(
+        """
+        {
+          "memberId": 98,
+          "ttsId": 2,
+          "voiceCode": "HYEONU",
+          "displayName": "현우"
+        }
+        """.utf8
+      )
+    )
 
     XCTAssertNil(profile.memberId)
     XCTAssertNil(streak.currentStreak)
     XCTAssertNil(voices.voices)
+    XCTAssertNil(legacyUpdate.selectionVersion)
 
     let client = AccountServerPayloadAPIClient(
       profile: profile,
@@ -217,6 +233,15 @@ final class AccountServerRemoteContractTests: XCTestCase {
     await assertRemoteError(.invalidResponse) {
       _ = try await service.fetchVoices(memberID: 98)
     }
+
+    let legacyService = DefaultAccountServerRemoteService(
+      apiClient: AccountServerPayloadAPIClient(update: legacyUpdate)
+    )
+    let legacySelection = try await legacyService.updateTTS(
+      ttsID: 2,
+      memberID: 98
+    )
+    XCTAssertNil(legacySelection.selectionVersion)
   }
 
   func testRejectsInvalidMemberAndTTSIDsBeforeTransport() async {
@@ -384,6 +409,7 @@ final class AccountServerRemoteContractTests: XCTestCase {
       ttsUpdateDTO(ttsId: 0),
       ttsUpdateDTO(voiceCode: " "),
       ttsUpdateDTO(displayName: "\n"),
+      ttsUpdateDTO(selectionVersion: -1),
     ]
 
     for update in invalidUpdates {
@@ -538,13 +564,15 @@ nonisolated private func ttsUpdateDTO(
   memberId: Int64? = 98,
   ttsId: Int64? = 2,
   voiceCode: String? = "HYEONU",
-  displayName: String? = "현우"
+  displayName: String? = "현우",
+  selectionVersion: Int64? = nil
 ) -> TTSUpdateResponseDTO {
   TTSUpdateResponseDTO(
     memberId: memberId,
     ttsId: ttsId,
     voiceCode: voiceCode,
-    displayName: displayName
+    displayName: displayName,
+    selectionVersion: selectionVersion
   )
 }
 

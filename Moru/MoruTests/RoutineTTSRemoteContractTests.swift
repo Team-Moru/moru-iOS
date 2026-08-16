@@ -38,6 +38,10 @@ final class RoutineTTSRemoteContractTests: XCTestCase {
     XCTAssertTrue(envelope.isSuccess)
     XCTAssertEqual(envelope.result?.first?.routineId, 14)
     XCTAssertEqual(envelope.result?.first?.steps?.first?.stepId, 101)
+    XCTAssertEqual(
+      envelope.result?.first?.steps?.first?.selectionVersion,
+      0
+    )
   }
 
   func testFetchUsesExactIdentityAndMapsAllContractValues()
@@ -56,7 +60,8 @@ final class RoutineTTSRemoteContractTests: XCTestCase {
                 "content": "  첫 안내  ",
                 "ttsIntro": "  시작해 볼까요?  ",
                 "ttsStatus": "COMPLETED",
-                "s3Url": "  https://audio.example.com/a.mp3?signature=secret  "
+                "s3Url": "  https://audio.example.com/a.mp3?signature=secret  ",
+                "selectionVersion": 0
               },
               {
                 "stepId": 102,
@@ -117,12 +122,14 @@ final class RoutineTTSRemoteContractTests: XCTestCase {
     XCTAssertEqual(routines[0].steps[0].content, "첫 안내")
     XCTAssertEqual(routines[0].steps[0].introText, "시작해 볼까요?")
     XCTAssertEqual(routines[0].steps[0].status, .completed)
+    XCTAssertEqual(routines[0].steps[0].selectionVersion, 0)
     XCTAssertEqual(
       routines[0].steps[0].audioURL?.absoluteString,
       "https://audio.example.com/a.mp3?signature=secret"
     )
     XCTAssertTrue(routines[0].steps[0].isPlayable)
     XCTAssertEqual(routines[0].steps[1].status, .unknown("QUEUED_V2"))
+    XCTAssertNil(routines[0].steps[1].selectionVersion)
     XCTAssertNil(routines[0].steps[1].audioURL)
     XCTAssertEqual(routines[1].steps[0].status, .pending)
     XCTAssertNil(routines[1].steps[0].audioURL)
@@ -146,6 +153,7 @@ final class RoutineTTSRemoteContractTests: XCTestCase {
     XCTAssertNil(routine.steps)
     XCTAssertNil(step.stepId)
     XCTAssertNil(step.ttsStatus)
+    XCTAssertNil(step.selectionVersion)
 
     let service = makeService(resultJSON: "[{}]")
     await assertRemoteError(.invalidResponse) {
@@ -240,6 +248,19 @@ final class RoutineTTSRemoteContractTests: XCTestCase {
         stepsJSON:
           """
           [{"stepId":1,"content":"A","ttsStatus":"  "}]
+          """
+      ),
+      routineResult(
+        stepsJSON:
+          """
+          [
+            {
+              "stepId":1,
+              "content":"A",
+              "ttsStatus":"COMPLETED",
+              "selectionVersion":-1
+            }
+          ]
           """
       ),
       """

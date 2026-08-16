@@ -32,7 +32,8 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let resetAvailability: @MainActor () -> Bool
   private let onOpenSettings: @MainActor () -> Void
   private let onResetSucceeded: @MainActor () -> Void
-  private let onServerVoiceSelectionDidSucceed: @MainActor (Int64) -> Void
+  private let onServerVoiceSelectionDidSucceed:
+    @MainActor (ServerTTSSelection) -> Void
 
   init(
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
@@ -54,7 +55,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     onOpenSettings: @escaping @MainActor () -> Void,
     onResetSucceeded: @escaping @MainActor () -> Void,
     onServerVoiceSelectionDidSucceed:
-      @escaping @MainActor (Int64) -> Void = { _ in }
+      @escaping @MainActor (ServerTTSSelection) -> Void = { _ in }
   ) {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voicePreviewPlayer = voicePreviewPlayer

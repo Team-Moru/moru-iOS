@@ -28,7 +28,8 @@ nonisolated struct RoutineTTSCuePlanResolver: Sendable {
     routineLocalID: UUID,
     groupBinding: RoutineServerBinding?,
     routineBinding: RoutineServerBinding?,
-    response: [ServerRoutineTTSRoutine]
+    response: [ServerRoutineTTSRoutine],
+    currentSelectionVersion: Int64? = nil
   ) -> RoutineTTSCuePlanResolution {
     guard let groupBinding,
           groupBinding.entityKind == .routineGroup,
@@ -67,6 +68,10 @@ nonisolated struct RoutineTTSCuePlanResolver: Sendable {
         hasPendingStep = true
 
       case .completed:
+        guard step.matchesCurrentSelectionVersion(currentSelectionVersion) else {
+          hasPendingStep = true
+          continue
+        }
         guard let audioURL = step.audioURL,
               audioURL.scheme?.lowercased() == "https",
               audioURL.host != nil else {

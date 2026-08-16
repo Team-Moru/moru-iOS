@@ -54,7 +54,8 @@ nonisolated enum RoutineTTSTarget:
                 "content": "목 스트레칭",
                 "ttsIntro": "이제 목을 부드럽게 풀어볼까요?",
                 "ttsStatus": "COMPLETED",
-                "s3Url": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/101.mp3"
+                "s3Url": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/101.mp3",
+                "selectionVersion": 0
               }
             ]
           }

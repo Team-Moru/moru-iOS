@@ -24,4 +24,5 @@ nonisolated struct RoutineTTSStepResponseDTO:
   let ttsIntro: String?
   let ttsStatus: String?
   let s3Url: String?
+  let selectionVersion: Int64?
 }

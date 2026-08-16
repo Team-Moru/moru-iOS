@@ -66,6 +66,42 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     )
   }
 
+  func testResolverAppliesVersionGateOnlyWhenBothVersionsExist() {
+    let groupID = UUID()
+    let routineID = UUID()
+    let group = binding(kind: .routineGroup, localID: groupID, remoteID: 41)
+    let child = binding(
+      kind: .routine,
+      localID: routineID,
+      remoteID: 51,
+      parentID: groupID
+    )
+    let expected = RoutineTTSCuePlanResolution.playable([
+      asset(routineID: 51, stepID: 71),
+    ])
+    let versionedResponse = [
+      remoteRoutine(id: 51, stepIDs: [71], selectionVersion: 0),
+    ]
+    let legacyResponse = [remoteRoutine(id: 51, stepIDs: [71])]
+    let resolve: ([ServerRoutineTTSRoutine], Int64?) -> RoutineTTSCuePlanResolution = {
+      response,
+      currentSelectionVersion in
+      RoutineTTSCuePlanResolver().resolve(
+        routineGroupLocalID: groupID,
+        routineLocalID: routineID,
+        groupBinding: group,
+        routineBinding: child,
+        response: response,
+        currentSelectionVersion: currentSelectionVersion
+      )
+    }
+
+    XCTAssertEqual(resolve(versionedResponse, 0), expected)
+    XCTAssertEqual(resolve(versionedResponse, 1), .pending)
+    XCTAssertEqual(resolve(versionedResponse, nil), expected)
+    XCTAssertEqual(resolve(legacyResponse, 1), expected)
+  }
+
   func testIntroUsesEveryPreparedLocalAssetInOrder() async {
     let groupID = UUID()
     let routineID = UUID()
@@ -446,7 +482,10 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     let warmedURLs = await waitForLocalURLs(fixture)
     XCTAssertNotNil(warmedURLs)
 
-    fixture.coordinator.serverVoiceSelectionDidChange(memberID: 7)
+    fixture.coordinator.serverVoiceSelectionDidChange(
+      memberID: 7,
+      selectionVersion: 2
+    )
 
     let clearedURLs = await fixture.coordinator.localAudioURLs(
       for: fixture.localRequest()
@@ -471,6 +510,112 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     )
     XCTAssertNil(purgedURL)
     XCTAssertNotNil(otherAccountURL)
+  }
+
+  func testVoiceSelectionVersionBlocksMismatchedCompletedStep() async throws {
+    let downloader = RecordingWarmupDownloader()
+    let fixture = try await makeWarmupFixture(
+      response: [
+        remoteRoutine(id: 51, stepIDs: [71], selectionVersion: 1),
+      ],
+      downloader: downloader
+    )
+
+    fixture.coordinator.serverVoiceSelectionDidChange(
+      memberID: 7,
+      selectionVersion: 2
+    )
+    fixture.coordinator.prepare(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+    for _ in 0..<100 {
+      if await fixture.remote.callCount > 0 { break }
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+
+    let urls = await fixture.coordinator.localAudioURLs(
+      for: fixture.localRequest()
+    )
+    let downloadCallCount = await downloader.callCount
+    XCTAssertNil(urls)
+    XCTAssertEqual(downloadCallCount, 0)
+  }
+
+  func testPersistedVoiceSelectionVersionBlocksMismatchAfterRelaunch() async throws {
+    let versionStore = InMemoryVoiceSelectionVersionStore()
+    let firstLaunch = try await makeWarmupFixture(
+      response: [],
+      voiceSelectionVersionStore: versionStore
+    )
+    firstLaunch.coordinator.serverVoiceSelectionDidChange(
+      memberID: 7,
+      selectionVersion: 2
+    )
+
+    let downloader = RecordingWarmupDownloader()
+    let relaunched = try await makeWarmupFixture(
+      response: [
+        remoteRoutine(id: 51, stepIDs: [71], selectionVersion: 1),
+      ],
+      downloader: downloader,
+      voiceSelectionVersionStore: versionStore
+    )
+    relaunched.coordinator.prepare(
+      routineGroupLocalID: relaunched.groupID,
+      routineLocalIDs: [relaunched.routineID]
+    )
+    for _ in 0..<100 {
+      if await relaunched.remote.callCount > 0 { break }
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+
+    let urls = await relaunched.coordinator.localAudioURLs(
+      for: relaunched.localRequest()
+    )
+    let downloadCallCount = await downloader.callCount
+    XCTAssertEqual(versionStore.selectionVersion(forMemberID: 7), 2)
+    XCTAssertNil(urls)
+    XCTAssertEqual(downloadCallCount, 0)
+  }
+
+  func testMissingPatchVersionClearsPersistedSelectionVersion() async throws {
+    let versionStore = InMemoryVoiceSelectionVersionStore()
+    versionStore.setSelectionVersion(2, forMemberID: 7)
+    versionStore.setSelectionVersion(8, forMemberID: 8)
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      voiceSelectionVersionStore: versionStore
+    )
+
+    fixture.coordinator.serverVoiceSelectionDidChange(
+      memberID: 7,
+      selectionVersion: nil
+    )
+
+    XCTAssertNil(versionStore.selectionVersion(forMemberID: 7))
+    XCTAssertEqual(versionStore.selectionVersion(forMemberID: 8), 8)
+  }
+
+  func testUserDefaultsVoiceSelectionVersionPersistsZeroPerAccount() throws {
+    let suiteName = "RoutineTTSVoiceSelectionVersionTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let firstStore = UserDefaultsRoutineTTSVoiceSelectionVersionStore(
+      userDefaults: defaults
+    )
+    firstStore.setSelectionVersion(0, forMemberID: 7)
+    firstStore.setSelectionVersion(4, forMemberID: 8)
+
+    let restoredStore = UserDefaultsRoutineTTSVoiceSelectionVersionStore(
+      userDefaults: defaults
+    )
+
+    XCTAssertEqual(restoredStore.selectionVersion(forMemberID: 7), 0)
+    XCTAssertEqual(restoredStore.selectionVersion(forMemberID: 8), 4)
+    restoredStore.removeSelectionVersion(forMemberID: 7)
+    XCTAssertNil(restoredStore.selectionVersion(forMemberID: 7))
+    XCTAssertEqual(restoredStore.selectionVersion(forMemberID: 8), 4)
   }
 
   func testWarmupRejectsRemoteTitleMismatch() async throws {
@@ -646,7 +791,8 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     id: Int64,
     stepIDs: [Int64],
     includePending: Bool = false,
-    title: String = "루틴"
+    title: String = "루틴",
+    selectionVersion: Int64? = nil
   ) -> ServerRoutineTTSRoutine {
     var steps = stepIDs.map { stepID in
       ServerRoutineTTSStep(
@@ -654,6 +800,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
         content: "안내",
         introText: "안내",
         status: .completed,
+        selectionVersion: selectionVersion,
         audioURL: URL(string: "https://audio.example.com/\(stepID).mp3")!
       )
     }
@@ -691,7 +838,9 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     routines: [Routine] = [],
     downloader: any RoutineTTSAudioDownloading = RoutineTTSAudioDownloader(),
     foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy =
-      RoutineTTSForegroundPollingPolicy()
+      RoutineTTSForegroundPollingPolicy(),
+    voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring =
+      InMemoryVoiceSelectionVersionStore()
   ) async throws -> WarmupFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let bindings = SwiftDataRoutineSyncRepository(modelContainer: container)
@@ -740,7 +889,8 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       audioCache: cache,
       downloader: downloader,
       sessionIdentityProvider: identity,
-      foregroundPollingPolicy: foregroundPollingPolicy
+      foregroundPollingPolicy: foregroundPollingPolicy,
+      voiceSelectionVersionStore: voiceSelectionVersionStore
     )
     return WarmupFixture(
       groupID: groupID,
@@ -768,6 +918,28 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       try? await Task.sleep(for: .milliseconds(10))
     }
     return nil
+  }
+}
+
+@MainActor
+private final class InMemoryVoiceSelectionVersionStore:
+  RoutineTTSVoiceSelectionVersionStoring {
+  private var versions: [Int64: Int64] = [:]
+
+  func selectionVersion(forMemberID memberID: Int64) -> Int64? {
+    versions[memberID]
+  }
+
+  func setSelectionVersion(_ version: Int64, forMemberID memberID: Int64) {
+    guard version >= 0 else {
+      removeSelectionVersion(forMemberID: memberID)
+      return
+    }
+    versions[memberID] = version
+  }
+
+  func removeSelectionVersion(forMemberID memberID: Int64) {
+    versions[memberID] = nil
   }
 }
 
@@ -861,6 +1033,23 @@ private actor WarmupRemoteStub: RoutineTTSRemoteServing {
       return responses[0]
     }
     return responses.removeFirst()
+  }
+}
+
+private actor RecordingWarmupDownloader: RoutineTTSAudioDownloading {
+  private(set) var callCount = 0
+
+  func download(
+    _ request: RoutineTTSAudioDownloadRequest,
+    stagingDirectory: URL
+  ) async throws -> RoutineTTSAudioDownloadedFile {
+    callCount += 1
+    let file = stagingDirectory.appendingPathComponent("recorded.partial")
+    try Data("audio".utf8).write(
+      to: file,
+      options: .completeFileProtectionUnlessOpen
+    )
+    return RoutineTTSAudioDownloadedFile(fileURL: file, byteCount: 5)
   }
 }
 

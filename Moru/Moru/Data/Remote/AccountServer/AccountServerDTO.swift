@@ -75,4 +75,5 @@ nonisolated struct TTSUpdateResponseDTO:
   let ttsId: Int64?
   let voiceCode: String?
   let displayName: String?
+  let selectionVersion: Int64?
 }
