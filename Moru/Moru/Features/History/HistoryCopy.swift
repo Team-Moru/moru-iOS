@@ -25,8 +25,6 @@ enum HistoryCopy {
   static let noHistoryTitle = "아직 기록이 없어요."
   static let noHistoryMessage =
     "루틴을 완료하면 이곳에서 매일의 기록과 주간 리포트를 확인할 수 있어요."
-  static let accountSummaryNotice =
-    "로그인한 계정의 주간·월간·기상 요약을 표시하고 있어요. 계정에서 채운 날짜는 선택해 서버 상세 기록을 볼 수 있어요."
   static let accountSummaryDetailNotice =
     "이 기기에서 저장한 상세 실행 기록은 아직 없어요."
   static let accountRecordNotice = "로그인한 계정의 서버 기록"

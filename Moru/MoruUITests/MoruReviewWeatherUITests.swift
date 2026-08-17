@@ -4,6 +4,34 @@ import XCTest
 final class MoruReviewWeatherUITests: XCTestCase {
   private let app = XCUIApplication()
 
+  func testAccountConnectionShowsRoundSocialLoginButtons() {
+    launchApp()
+
+    let profileTab = app.buttons["app.tab.my"]
+    XCTAssertTrue(profileTab.waitForExistence(timeout: 5))
+    profileTab.tap()
+
+    let accountCard = app.buttons["profile.account.card"]
+    XCTAssertTrue(accountCard.waitForExistence(timeout: 5))
+    accountCard.tap()
+
+    let roundSocialLoginButtons = [
+      app.buttons["profile.account.google-sign-in"],
+      app.buttons["profile.account.kakao-sign-in"],
+    ]
+    for button in roundSocialLoginButtons {
+      XCTAssertTrue(button.waitForExistence(timeout: 5))
+      XCTAssertEqual(button.frame.width, button.frame.height, accuracy: 0.5)
+      XCTAssertGreaterThan(button.frame.width, 50)
+    }
+
+    let appleButton = app.buttons["profile.account.apple-sign-in"]
+    XCTAssertTrue(appleButton.waitForExistence(timeout: 5))
+    XCTAssertGreaterThan(appleButton.frame.height, 50)
+
+    attachCurrentUI(named: "profile-account-connection-social-icons")
+  }
+
   private func launchApp() {
     continueAfterFailure = false
     app.launchArguments = ["-ui-testing-weather-fixture"]
