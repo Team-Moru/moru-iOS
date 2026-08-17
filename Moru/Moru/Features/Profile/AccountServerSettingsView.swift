@@ -207,8 +207,8 @@ struct AccountServerVoiceSelectionView: View {
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
           Text(
-            "서버에서 루틴 음성을 만들 때 쓰는 선택입니다. "
-              + "기기 내 안내 음성과 별도이며, 준비된 음성은 공통 샘플로 미리 들을 수 있습니다."
+            "서버에 동기화된 루틴의 첫 안내 음성을 만들 때 쓰는 선택입니다. "
+              + "기기 내 안내 음성은 완료·알림 등에 계속 별도로 사용되며, 준비된 음성은 공통 샘플로 미리 들을 수 있습니다."
           )
           .moruPilotTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textSecondary)

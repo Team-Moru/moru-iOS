@@ -181,10 +181,14 @@ final class SystemRoutineSpeechAnnouncer:
 enum GuidancePlaybackResult: Equatable {
   case completed
   case cancelled
+  /// A server-required cue has no truthful bundled replacement and could not
+  /// be prepared or played. The UI must offer an explicit retry or opt-out.
+  case unavailable
 }
 
 /// Carries the local identities needed to select an already-warmed remote
-/// intro while retaining the bundled cue as the fail-safe path.
+/// intro. A synced server intro may prohibit a bundled fallback so a selected
+/// server voice can never silently become the device voice.
 struct RoutineGuidanceCueRequest: Equatable {
   let routineGroupLocalID: UUID?
   let routineLocalID: UUID?
@@ -193,6 +197,7 @@ struct RoutineGuidanceCueRequest: Equatable {
   let fallbackItemID: String?
   let voiceCode: String
   let kind: RoutineAudioCueKind
+  let requiresServerGeneratedIntro: Bool
 
   init(
     routineGroupLocalID: UUID? = nil,
@@ -201,7 +206,8 @@ struct RoutineGuidanceCueRequest: Equatable {
     routineType: RoutineStepType? = nil,
     fallbackItemID: String?,
     voiceCode: String,
-    kind: RoutineAudioCueKind
+    kind: RoutineAudioCueKind,
+    requiresServerGeneratedIntro: Bool = false
   ) {
     self.routineGroupLocalID = routineGroupLocalID
     self.routineLocalID = routineLocalID
@@ -210,6 +216,7 @@ struct RoutineGuidanceCueRequest: Equatable {
     self.fallbackItemID = fallbackItemID
     self.voiceCode = voiceCode
     self.kind = kind
+    self.requiresServerGeneratedIntro = requiresServerGeneratedIntro
   }
 }
 
@@ -233,7 +240,7 @@ protocol RoutineGuidancePlaying: GuidancePlaybackControlling {
 extension RoutineGuidancePlaying {
   func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult {
     guard let itemID = request.fallbackItemID else {
-      return .completed
+      return .unavailable
     }
 
     return await play(

@@ -192,9 +192,13 @@ final class RemoteFirstRoutineGuidancePlayer:
   ) async -> GuidancePlaybackResult {
     guard !Task.isCancelled,
           expectedPlaybackGeneration == playbackGeneration else { return .cancelled }
+    guard !request.requiresServerGeneratedIntro else {
+      diagnostics.record(.serverCueUnavailable)
+      return .unavailable
+    }
     guard let itemID = request.fallbackItemID else {
       diagnostics.record(.customCueUnavailable)
-      return .completed
+      return .unavailable
     }
 
     await stopRemoteBeforeBundledPlayback()

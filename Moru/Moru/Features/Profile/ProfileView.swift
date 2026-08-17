@@ -1320,7 +1320,7 @@ struct MoruVoiceSettingsView: View {
   private var serverVoiceAccessibilityHint: String {
     switch accountServerViewModel.voiceState {
     case .content, .loading(previous: .some), .failed(previous: .some):
-      return "서버에서 루틴 intro를 만들 때 쓰는 음성을 선택합니다."
+      return "서버에 동기화된 루틴의 첫 안내 음성을 선택합니다. 완료·알림에는 기기 내장 음성이 사용됩니다."
     case .signedOut:
       return "로그인한 뒤 서버 음성을 선택할 수 있어요."
     case .unavailable:

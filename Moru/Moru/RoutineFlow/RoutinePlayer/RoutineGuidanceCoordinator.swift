@@ -53,15 +53,61 @@ final class RoutineGuidanceCoordinator {
     playbackState.isPlaying
   }
 
-  func stepDidStart(_ step: RoutineStep) {
+  func requiresServerVoiceReadiness(for step: RoutineStep) -> Bool {
+    guard let routineGroupLocalID else {
+      return false
+    }
+
+    // Both custom and preset steps wait only when their current-account
+    // binding (or staged creation) proves that a server intro is expected.
+    // A local custom step has no bundled audio, but must still start normally
+    // rather than being mistaken for a broken server cue.
+    return warmupCoordinator?.expectsServerGeneratedIntro(
+      routineGroupLocalID: routineGroupLocalID,
+      routineLocalID: step.id
+    ) ?? false
+  }
+
+  /// Prepares a server-generated intro before the player presents a step.
+  /// A custom step has no bundled equivalent, so callers must surface a
+  /// non-ready result instead of silently proceeding.
+  func prepareServerVoiceIntro(
+    for step: RoutineStep,
+    serverVoiceRequired: Bool? = nil
+  ) async -> RoutineTTSForegroundPreparationStatus {
+    let requiresRemoteReadiness = serverVoiceRequired
+      ?? requiresServerVoiceReadiness(for: step)
+    guard requiresRemoteReadiness,
+          let routineGroupLocalID else {
+      return .prepared
+    }
+
+    guard let warmupCoordinator else {
+      return .unavailable
+    }
+
+    return await warmupCoordinator.prepareAndWait(
+      routineGroupLocalID: routineGroupLocalID,
+      routineLocalIDs: [step.id]
+    )
+  }
+
+  func stepDidStart(
+    _ step: RoutineStep,
+    serverVoiceIsPrepared: Bool = false
+  ) {
     stopCurrentCue()
 
     guard step.presetItemID != nil || routineGroupLocalID != nil else {
       return
     }
 
-    let requiresRemoteReadiness =
-      step.presetItemID == nil && routineGroupLocalID != nil
+    // A successful foreground preparation already proved the server intent.
+    // Do not repeat that storage lookup here: a transient read failure between
+    // preparation and playback must become a visible retry, never a bundled
+    // voice fallback.
+    let requiresRemoteReadiness = serverVoiceIsPrepared
+      || requiresServerVoiceReadiness(for: step)
     if let routineGroupLocalID, !requiresRemoteReadiness {
       warmupCoordinator?.prepare(
         routineGroupLocalID: routineGroupLocalID,
@@ -78,11 +124,14 @@ final class RoutineGuidanceCoordinator {
       // A server-generated step has no truthful bundled equivalent. Wait for
       // its bounded remote preparation window before the player reads the
       // cache, instead of racing a fire-and-forget warm-up into a silent cue.
-      if requiresRemoteReadiness, let routineGroupLocalID {
-        await warmupCoordinator?.prepareAndWait(
-          routineGroupLocalID: routineGroupLocalID,
-          routineLocalIDs: [step.id]
+      if requiresRemoteReadiness, !serverVoiceIsPrepared {
+        let preparation = await self.prepareServerVoiceIntro(
+          for: step,
+          serverVoiceRequired: true
         )
+        guard preparation == .prepared else {
+          return .unavailable
+        }
         guard !Task.isCancelled, activeGeneration == generation else {
           return .cancelled
         }
@@ -95,7 +144,8 @@ final class RoutineGuidanceCoordinator {
         routineType: step.type,
         fallbackItemID: step.presetItemID,
         voiceCode: voiceCode,
-        kind: .intro
+        kind: .intro,
+        requiresServerGeneratedIntro: requiresRemoteReadiness
       ))
     }
 

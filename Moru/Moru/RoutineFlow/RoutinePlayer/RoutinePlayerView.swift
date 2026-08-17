@@ -71,6 +71,12 @@ struct RoutinePlayerView: View {
         case .terminalFailure(let reason):
             terminalFailureView(reason: reason)
 
+        case .serverVoicePreparing(let step):
+            serverVoicePreparingView(step: step)
+
+        case .serverVoiceRetry(let step):
+            serverVoiceRetryView(step: step)
+
         case .running(let step):
             runningView(step: step)
 
@@ -149,6 +155,93 @@ struct RoutinePlayerView: View {
             .buttonStyle(.plain)
         }
         .padding(32)
+    }
+
+    private func serverVoicePreparingView(step: RoutineStep) -> some View {
+        VStack(spacing: 20) {
+            if !viewModel.isTrialExecution {
+                topBar
+            }
+
+            Spacer(minLength: 0)
+
+            ProgressView()
+                .tint(AppColor.orange250)
+
+            Text("선택한 서버 음성을 준비하고 있어요.")
+                .font(AppFont.title2Bold)
+                .foregroundStyle(AppColor.gray600)
+
+            Text("음성 준비가 끝나면 이 단계를 시작할게요.")
+                .font(AppFont.body1NormalMedium)
+                .foregroundStyle(AppColor.gray500)
+                .multilineTextAlignment(.center)
+
+            Text(step.title)
+                .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
+                .foregroundStyle(AppColor.gray400)
+                .multilineTextAlignment(.center)
+
+            Spacer(minLength: 0)
+        }
+        .padding(32)
+        .accessibilityIdentifier("routine-server-voice-preparing")
+    }
+
+    private func serverVoiceRetryView(step: RoutineStep) -> some View {
+        VStack(spacing: 20) {
+            if !viewModel.isTrialExecution {
+                topBar
+            }
+
+            Spacer(minLength: 0)
+
+            Text("서버 음성을 아직 준비하지 못했어요.")
+                .font(AppFont.title2Bold)
+                .foregroundStyle(AppColor.gray600)
+
+            Text("잠시 후 다시 시도하거나, 음성 없이 이 단계를 시작할 수 있어요.")
+                .font(AppFont.body1NormalMedium)
+                .foregroundStyle(AppColor.gray500)
+                .multilineTextAlignment(.center)
+
+            Text(step.title)
+                .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
+                .foregroundStyle(AppColor.gray400)
+                .multilineTextAlignment(.center)
+
+            Button {
+                viewModel.retryServerVoiceGuidance()
+            } label: {
+                Text("다시 시도")
+                    .font(AppFont.body1NormalSemiBold)
+                    .foregroundStyle(AppColor.grayWhite)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(AppColor.orange350)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("routine-server-voice-retry")
+
+            Button {
+                viewModel.continueWithoutServerVoice()
+            } label: {
+                Text("음성 없이 계속")
+                    .font(AppFont.body1NormalSemiBold)
+                    .foregroundStyle(AppColor.gray500)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(AppColor.gray100)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("routine-server-voice-continue-without-audio")
+
+            Spacer(minLength: 0)
+        }
+        .padding(32)
+        .accessibilityIdentifier("routine-server-voice-retry-state")
     }
 
     // MARK: - Running

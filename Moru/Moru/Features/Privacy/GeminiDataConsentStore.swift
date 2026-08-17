@@ -27,7 +27,7 @@ protocol GeminiDataConsentAuthorizing: AnyObject {
   func requestGeminiDataConsentIfNeeded()
 }
 
-/// Persisted, versioned consent for AI features whose server processing may
+/// Versioned consent for AI features whose server processing may
 /// send user routine content to Google Gemini.
 @MainActor
 final class GeminiDataConsentStore: ObservableObject,
