@@ -499,7 +499,10 @@ final class AccountSessionFoundationTests: XCTestCase {
       accountSessionStoreFactory: {
         accountSessionStore
       },
-      appCapabilities: .production
+      appCapabilities: .production,
+      installationMarkerUserDefaults: makeInstallationUserDefaults(
+        markerPresent: true
+      )
     )
 
     bootstrapper.start()
@@ -530,6 +533,112 @@ final class AccountSessionFoundationTests: XCTestCase {
           memberID: credentials.memberID,
           onboardingCompleted: credentials.onboardingCompleted
         )
+      )
+    )
+  }
+
+  func testFreshReinstallDiscardsCredentialAndSkipsServerRestoration()
+    async throws {
+    let credentials = makeCredentials()
+    let credentialStore = StubCredentialStore(
+      loadResult: .success(credentials)
+    )
+    let tokenProvider = MemoryAccessTokenProvider()
+    tokenProvider.replace(with: "stale-memory-token")
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    let installationDefaults = makeInstallationUserDefaults(
+      markerPresent: false
+    )
+    let bootstrapper = AppBootstrapper(
+      modelContainerFactory: {
+        try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+      },
+      accountSessionStoreFactory: {
+        accountSessionStore
+      },
+      appCapabilities: .production,
+      installationMarkerUserDefaults: installationDefaults
+    )
+
+    bootstrapper.start()
+    try await waitUntil {
+      if case .ready = bootstrapper.state {
+        return true
+      }
+      return false
+    }
+    guard case .ready(let app) = bootstrapper.state else {
+      return XCTFail("Fresh installation should finish bootstrapping.")
+    }
+
+    XCTAssertEqual(credentialStore.removeCount, 1)
+    XCTAssertEqual(credentialStore.loadCount, 0)
+    XCTAssertEqual(accountSessionStore.state, .signedOut)
+    XCTAssertNil(accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertTrue(
+      installationDefaults.bool(
+        forKey: AppBootstrapper.installationMarkerKey
+      )
+    )
+
+    app.onboardingStatusRuntimeCoordinator?.start()
+    app.onboardingStatusRuntimeCoordinator?.accountSessionDidChange()
+    await Task.yield()
+    XCTAssertEqual(
+      app.onboardingStatusRuntimeCoordinator?.restorationState,
+      .idle
+    )
+    XCTAssertNil(app.onboardingStatusRuntimeCoordinator?.latestResolution)
+  }
+
+  func testMissingInstallationMarkerWithLocalDataPreservesAccountRestore()
+    async throws {
+    let credentials = makeCredentials()
+    let credentialStore = StubCredentialStore(
+      loadResult: .success(credentials)
+    )
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    let container = try ModelContainer.moruContainer(
+      isStoredInMemoryOnly: true
+    )
+    try SwiftDataLocalProfileRepository(
+      modelContext: container.mainContext
+    ).saveProfile(LocalProfile(displayName: "기존 사용자"))
+    let installationDefaults = makeInstallationUserDefaults(
+      markerPresent: false
+    )
+    let bootstrapper = AppBootstrapper(
+      modelContainerFactory: { container },
+      accountSessionStoreFactory: { accountSessionStore },
+      appCapabilities: .production,
+      installationMarkerUserDefaults: installationDefaults
+    )
+
+    bootstrapper.start()
+    try await waitUntil {
+      accountSessionStore.state == .signedIn(
+        SignedInAccount(
+          memberID: credentials.memberID,
+          onboardingCompleted: credentials.onboardingCompleted
+        )
+      )
+    }
+
+    XCTAssertEqual(credentialStore.removeCount, 0)
+    XCTAssertEqual(credentialStore.loadCount, 1)
+    XCTAssertEqual(
+      accountSessionStore.accessTokenProvider.accessToken,
+      credentials.accessToken
+    )
+    XCTAssertTrue(
+      installationDefaults.bool(
+        forKey: AppBootstrapper.installationMarkerKey
       )
     )
   }
@@ -614,7 +723,10 @@ final class AccountSessionFoundationTests: XCTestCase {
     let bootstrapper = AppBootstrapper(
       modelContainerFactory: { container },
       accountSessionStoreFactory: { accountSessionStore },
-      appCapabilities: .production
+      appCapabilities: .production,
+      installationMarkerUserDefaults: makeInstallationUserDefaults(
+        markerPresent: true
+      )
     )
 
     bootstrapper.start()
@@ -668,7 +780,10 @@ final class AccountSessionFoundationTests: XCTestCase {
     let bootstrapper = AppBootstrapper(
       modelContainerFactory: { container },
       accountSessionStoreFactory: { accountSessionStore },
-      appCapabilities: .production
+      appCapabilities: .production,
+      installationMarkerUserDefaults: makeInstallationUserDefaults(
+        markerPresent: true
+      )
     )
 
     bootstrapper.start()
@@ -737,6 +852,21 @@ final class AccountSessionFoundationTests: XCTestCase {
       refreshToken: "refresh-token",
       onboardingCompleted: true
     )
+  }
+
+  private func makeInstallationUserDefaults(
+    markerPresent: Bool
+  ) -> UserDefaults {
+    let suiteName = "com.teammoru.MoruTests.installation.\(UUID().uuidString)"
+    let userDefaults = UserDefaults(suiteName: suiteName)!
+    userDefaults.removePersistentDomain(forName: suiteName)
+    if markerPresent {
+      userDefaults.set(
+        true,
+        forKey: AppBootstrapper.installationMarkerKey
+      )
+    }
+    return userDefaults
   }
 
   private func assertInvalidStoredData(_ data: Data) throws {
