@@ -65,6 +65,19 @@ nonisolated final class SessionStore: ObservableObject {
     }
   }
 
+  @MainActor
+  func beginServerRoutineRestoration() {
+    guard profile == nil else {
+      return
+    }
+    phase = .loading
+  }
+
+  @MainActor
+  func finishServerRoutineRestoration() {
+    load()
+  }
+
   static func isSessionReady(profile: LocalProfile?) -> Bool {
     profile != nil
   }

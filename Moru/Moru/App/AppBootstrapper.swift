@@ -293,6 +293,20 @@ final class AppBootstrapper: ObservableObject {
       }
       #endif
       sessionStore.load()
+      let serverRoutineRestorer: (any ServerRoutineRestoring)?
+      if let accountRoutineGroupRemoteService,
+         let routineSyncRepository = dependencies.routineSyncRepository {
+        serverRoutineRestorer = DefaultServerRoutineRestorationService(
+          remoteService: accountRoutineGroupRemoteService,
+          persistence: SwiftDataServerRoutineRestorationRepository(
+            modelContext: modelContainer.mainContext,
+            syncRepository: routineSyncRepository
+          ),
+          sessionIdentityProvider: accountSessionStore
+        )
+      } else {
+        serverRoutineRestorer = nil
+      }
       let onboardingStatusRuntimeCoordinator =
         appCapabilities.shouldAllowServerRequests
         ? OnboardingStatusRuntimeCoordinator(
@@ -309,6 +323,13 @@ final class AppBootstrapper: ObservableObject {
             case .loading, .failed:
               nil
             }
+          },
+          routineRestorer: serverRoutineRestorer,
+          onRestorationBegan: {
+            sessionStore.beginServerRoutineRestoration()
+          },
+          onRestorationFinished: {
+            sessionStore.finishServerRoutineRestoration()
           }
         )
         : nil
