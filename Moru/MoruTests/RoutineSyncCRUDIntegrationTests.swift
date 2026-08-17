@@ -189,7 +189,8 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
         responseDecoder: ProductionRoutineSyncResponseDecoder()
       ),
       contract: .productionP0,
-      sessionIdentityProvider: identityProvider
+      sessionIdentityProvider: identityProvider,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let coordinator = RoutineSyncRuntimeCoordinator(
       sender: sender,
@@ -238,7 +239,7 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
       51
     )
     XCTAssertTrue(try fixture.sync.mutations(memberID: 7).isEmpty)
-    XCTAssertEqual(coordinator.lastStopReason, .idle)
+    XCTAssertEqual(coordinator.lastStopReason, .some(.idle))
   }
 
   @MainActor
@@ -289,7 +290,7 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
     XCTAssertTrue(try sync.mutations(memberID: 7).isEmpty)
     let requestCount = await transport.requestCount()
     XCTAssertEqual(requestCount, 0)
-    XCTAssertEqual(coordinator.lastStopReason, .signedOut)
+    XCTAssertEqual(coordinator.lastStopReason, .some(.signedOut))
   }
 
   @MainActor
@@ -346,7 +347,7 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
     XCTAssertTrue(try reopenedSync.mutations(memberID: 7).isEmpty)
     let requestCount = await transport.requestCount()
     XCTAssertEqual(requestCount, 0)
-    XCTAssertEqual(coordinator.lastStopReason, .signedOut)
+    XCTAssertEqual(coordinator.lastStopReason, .some(.signedOut))
   }
 
   @MainActor
@@ -1303,6 +1304,31 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
         signedInMemberProvider: member
       )
     )
+  }
+
+  @MainActor
+  private func persistGuestRoutine(to storeURL: URL) throws -> UUID {
+    let container = try ModelContainer.moruContainer(storeURL: storeURL)
+    let session = RoutineSyncCRUDSessionProvider(identity: nil)
+    let sync = SwiftDataRoutineSyncRepository(modelContext: container.mainContext)
+    let routines = SwiftDataRoutineRepository(
+      modelContext: container.mainContext,
+      routineSyncRepository: sync,
+      signedInMemberProvider: session
+    )
+    let routine = makeRoutine(
+      name: "재실행 뒤에도 로컬",
+      steps: [makeStep()],
+      isActive: false
+    )
+
+    try routines.saveRoutine(routine)
+    XCTAssertTrue(
+      try container.mainContext.fetch(
+        FetchDescriptor<PersistedRoutineSyncMutation>()
+      ).isEmpty
+    )
+    return routine.id
   }
 
   @MainActor
