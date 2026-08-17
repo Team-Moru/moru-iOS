@@ -32,7 +32,7 @@ protocol GeminiDataConsentAuthorizing: AnyObject {
 @MainActor
 final class GeminiDataConsentStore: ObservableObject,
   GeminiDataConsentAuthorizing {
-  static let disclosureVersion = "2026-08-17-tts"
+  static let disclosureVersion = "2026-08-17-google-free-tier"
   /// Bumping the disclosure version deliberately starts from `.undecided`, so
   /// an old approval is never silently reused for a materially new notice.
   static let defaultStorageKey =

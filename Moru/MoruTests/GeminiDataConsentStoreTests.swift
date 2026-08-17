@@ -59,4 +59,20 @@ final class GeminiDataConsentStoreTests: XCTestCase {
       )
     )
   }
+
+  func testMaterialDisclosureChangeDoesNotReusePreviousApproval() {
+    let suiteName = "GeminiDataConsentStoreTests.\(UUID().uuidString)"
+    let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    defaults.set(
+      GeminiDataConsentStatus.granted.rawValue,
+      forKey: "moru.gemini-data-consent.2026-08-17-tts"
+    )
+
+    let store = GeminiDataConsentStore(defaults: defaults)
+
+    XCTAssertEqual(store.status, .undecided)
+    XCTAssertFalse(store.hasExplicitGeminiDataConsent)
+  }
 }
