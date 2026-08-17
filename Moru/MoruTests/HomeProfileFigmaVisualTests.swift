@@ -246,7 +246,8 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
 
       XCTAssertTrue(
         renderedText.contains(ProfileCopy.privacyPolicy),
-        "\(shouldFail ? "failed" : "loading") 렌더에 개인정보처리방침 행이 있어야 합니다. "
+        "\(shouldFail ? "failed" : "loading") 렌더에 "
+          + "개인정보처리방침 행이 있어야 합니다. "
           + "인식된 문구: \(renderedText)"
       )
     }
@@ -293,7 +294,8 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       ]
       XCTAssertTrue(
         supportTitles.allSatisfy(renderedText.contains),
-        "\(isSignedIn ? "signed-in" : "guest") content 렌더에 고객 지원 3개 행이 있어야 합니다. "
+        "\(isSignedIn ? "signed-in" : "guest") content 렌더에 "
+          + "고객 지원 3개 행이 있어야 합니다. "
           + "인식된 문구: \(renderedText)"
       )
     }

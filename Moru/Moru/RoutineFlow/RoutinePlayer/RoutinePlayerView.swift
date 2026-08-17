@@ -200,7 +200,10 @@ struct RoutinePlayerView: View {
                 .font(AppFont.title2Bold)
                 .foregroundStyle(AppColor.gray600)
 
-            Text("잠시 후 다시 시도하거나, 음성 없이 이 단계를 시작할 수 있어요.")
+            Text(
+                "잠시 후 다시 시도하거나, "
+                    + "음성 없이 이 단계를 시작할 수 있어요."
+            )
                 .font(AppFont.body1NormalMedium)
                 .foregroundStyle(AppColor.gray500)
                 .multilineTextAlignment(.center)

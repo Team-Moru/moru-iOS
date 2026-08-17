@@ -682,7 +682,8 @@ final class AccountLifecycleTests: XCTestCase {
       XCTAssertEqual(
         events.values,
         ["prepare", "attempting", "remote withdrawal"],
-        "HTTP \(statusCode) must retain the attempting marker until the backend contract is confirmed."
+        "HTTP \(statusCode) must retain the attempting marker "
+          + "until the backend contract is confirmed."
       )
       XCTAssertEqual(cleaner.completedPhases, [.prepare, .attempting])
       XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
@@ -1154,7 +1155,8 @@ final class AccountLifecycleTests: XCTestCase {
     XCTAssertTrue(viewModel.canBeginAppleWithdrawalReauthentication)
     XCTAssertEqual(
       viewModel.accountErrorMessage,
-      "Apple 재인증을 취소했어요. 회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+      "Apple 재인증을 취소했어요. "
+        + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
     )
 
     XCTAssertTrue(viewModel.appleWithdrawalReauthenticationWillBegin())

@@ -359,7 +359,8 @@ final class ProfileViewModel {
     }
     isAppleWithdrawalReauthenticationInProgress = false
     reportAccountError(
-      "Apple 재인증을 시작하지 못했어요. 회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+      "Apple 재인증을 시작하지 못했어요. "
+        + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
     )
   }
 
@@ -374,12 +375,14 @@ final class ProfileViewModel {
     switch outcome {
     case .cancelled:
       reportAccountError(
-        "Apple 재인증을 취소했어요. 회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+        "Apple 재인증을 취소했어요. "
+          + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
       )
 
     case .failed:
       reportAccountError(
-        "Apple 인증 정보를 확인하지 못했어요. 회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+        "Apple 인증 정보를 확인하지 못했어요. "
+          + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
       )
 
     case .authorized(let authorization):
@@ -396,11 +399,13 @@ final class ProfileViewModel {
       } catch AccountLifecycleError.appleReauthenticationRequired {
         requiresAppleWithdrawalReauthentication = true
         reportAccountError(
-          "Apple 재인증이 다시 필요해요. 회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+          "Apple 재인증이 다시 필요해요. "
+            + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
         )
       } catch AccountLifecycleError.localCleanupFailed {
         reportAccountError(
-          "회원 탈퇴는 완료됐지만 기기의 계정 정보를 모두 정리하지 못했어요."
+          "회원 탈퇴는 완료됐지만 "
+            + "기기의 계정 정보를 모두 정리하지 못했어요."
         )
       } catch {
         reportAccountError(

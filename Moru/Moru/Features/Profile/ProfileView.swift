@@ -511,7 +511,9 @@ struct ProfileView: View {
           figmaNavigationRow(title: ProfileCopy.aiDataConsentWithdraw)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("앞으로 AI 처리로 이어질 수 있는 새 데이터 전송을 중단합니다.")
+        .accessibilityHint(
+          "앞으로 AI 처리로 이어질 수 있는 새 데이터 전송을 중단합니다."
+        )
         .accessibilityIdentifier("profile.gemini-consent.revoke")
       }
     }
@@ -520,9 +522,11 @@ struct ProfileView: View {
 
   private var geminiDataConsentDescription: String {
     if geminiDataConsentStore.hasExplicitGeminiDataConsent {
-      return "AI 루틴 기능에 필요한 데이터 전송에 동의했어요. 언제든 철회할 수 있어요."
+      return "AI 루틴 기능에 필요한 데이터 전송에 동의했어요. "
+        + "언제든 철회할 수 있어요."
     }
-    return "동의하지 않아도 로컬 루틴은 계속 사용할 수 있어요. AI 처리로 이어질 수 있는 데이터는 전송하지 않아요."
+    return "동의하지 않아도 로컬 루틴은 계속 사용할 수 있어요. "
+      + "AI 처리로 이어질 수 있는 데이터는 전송하지 않아요."
   }
 
   private var pendingWithdrawalActions: some View {
@@ -1320,7 +1324,8 @@ struct MoruVoiceSettingsView: View {
   private var serverVoiceAccessibilityHint: String {
     switch accountServerViewModel.voiceState {
     case .content, .loading(previous: .some), .failed(previous: .some):
-      return "서버에 동기화된 루틴의 첫 안내 음성을 선택합니다. 완료·알림에는 기기 내장 음성이 사용됩니다."
+      return "서버에 동기화된 루틴의 첫 안내 음성을 선택합니다. "
+        + "완료·알림에는 기기 내장 음성이 사용됩니다."
     case .signedOut:
       return "로그인한 뒤 서버 음성을 선택할 수 있어요."
     case .unavailable:
