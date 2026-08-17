@@ -52,6 +52,17 @@ nonisolated enum OnboardingStatusDiagnostic: Equatable, Sendable {
   )
 }
 
+nonisolated enum ServerRoutineRestorationRuntimeState:
+  Equatable,
+  Sendable {
+  case idle
+  case loading(AccountSessionIdentity)
+  case restored(AccountSessionIdentity, routineCount: Int)
+  case localDataPresent(AccountSessionIdentity)
+  case onboardingRequired(AccountSessionIdentity)
+  case failed(AccountSessionIdentity)
+}
+
 nonisolated protocol OnboardingStatusReporting: Sendable {
   func report(_ diagnostic: OnboardingStatusDiagnostic)
 }
@@ -87,30 +98,55 @@ nonisolated struct OnboardingStatusLogger: OnboardingStatusReporting {
 
 /// Observes every account-session publication so a same-member re-login, which
 /// creates a new `sessionID`, cannot be collapsed by Equatable state filtering.
-/// The coordinator has no repository write dependency by design: reconciliation
-/// can report differences but cannot delete or initialize local onboarding data.
+/// Status reconciliation remains read-only for established local users. Empty
+/// stores and an exact, durable provisional onboarding projection may be
+/// initialized from the server before login backfill is released.
 @MainActor
 final class OnboardingStatusRuntimeCoordinator {
   private let remoteService: any OnboardingStatusRemoteServing
   private let accountSessionStore: AccountSessionStore
   private let localCompletionProvider: @MainActor () -> Bool?
+  private let routineRestorer: (any ServerRoutineRestoring)?
+  private let restorationBackfillBarrier:
+    RoutineRestorationBackfillBarrier?
+  private let onRestorationBegan: @MainActor () -> Void
+  private let onRestorationFinished: @MainActor () -> Void
+  private let onRestorationFailed: @MainActor () -> Void
   private let reporter: any OnboardingStatusReporting
 
   private var stateObservation: AnyCancellable?
   private var requestTask: Task<Void, Never>?
   private var activeIdentity: AccountSessionIdentity?
+  private var restorationLoadingIdentity: AccountSessionIdentity?
+  private var restorationUIFailed = false
+  private var restorationUIHeldForAccountRestore: Bool
 
   private(set) var latestResolution: OnboardingStatusResolution?
+  private(set) var restorationState: ServerRoutineRestorationRuntimeState = .idle
 
   init(
     remoteService: any OnboardingStatusRemoteServing,
     accountSessionStore: AccountSessionStore,
     localCompletionProvider: @escaping @MainActor () -> Bool?,
+    routineRestorer: (any ServerRoutineRestoring)? = nil,
+    restorationBackfillBarrier:
+      RoutineRestorationBackfillBarrier? = nil,
+    onRestorationBegan: @escaping @MainActor () -> Void = {},
+    onRestorationFinished: @escaping @MainActor () -> Void = {},
+    onRestorationFailed: @escaping @MainActor () -> Void = {},
+    restorationUIHeldForAccountRestore: Bool = false,
     reporter: any OnboardingStatusReporting = OnboardingStatusLogger()
   ) {
     self.remoteService = remoteService
     self.accountSessionStore = accountSessionStore
     self.localCompletionProvider = localCompletionProvider
+    self.routineRestorer = routineRestorer
+    self.restorationBackfillBarrier = restorationBackfillBarrier
+    self.onRestorationBegan = onRestorationBegan
+    self.onRestorationFinished = onRestorationFinished
+    self.onRestorationFailed = onRestorationFailed
+    self.restorationUIHeldForAccountRestore =
+      restorationUIHeldForAccountRestore
     self.reporter = reporter
   }
 
@@ -124,27 +160,80 @@ final class OnboardingStatusRuntimeCoordinator {
     stateObservation = accountSessionStore.$state
       .sink { [weak self] _ in
         Task { @MainActor [weak self] in
-          self?.refreshForCurrentSession()
+          self?.accountSessionDidChange()
         }
       }
   }
 
+  /// AppRouter calls this synchronously from its account-state callback so a
+  /// provisional profile cannot render Home for a frame before loading begins.
+  func accountSessionDidChange() {
+    refreshForCurrentSession()
+  }
+
+  @discardableResult
+  func retryRestorationForCurrentSession() -> Bool {
+    guard restorationUIFailed,
+          case .signedIn = accountSessionStore.state,
+          let identity = accountSessionStore.currentAccountSessionIdentity,
+          activeIdentity == identity,
+          let routineRestorer,
+          let localDataState = try? routineRestorer.localDataState(),
+          localDataState.restorationSource != nil else {
+      return false
+    }
+
+    activeIdentity = nil
+    refreshForCurrentSession()
+    return true
+  }
+
   func stop() {
+    let shouldResetRestorationUI = restorationLoadingIdentity != nil
+      || restorationUIFailed
+      || restorationUIHeldForAccountRestore
+    if let activeIdentity {
+      restorationBackfillBarrier?.cancel(for: activeIdentity)
+    }
     stateObservation?.cancel()
     stateObservation = nil
     requestTask?.cancel()
     requestTask = nil
     activeIdentity = nil
+    restorationLoadingIdentity = nil
+    restorationUIFailed = false
+    restorationUIHeldForAccountRestore = false
     latestResolution = nil
+    restorationState = .idle
+    if shouldResetRestorationUI {
+      onRestorationFinished()
+    }
   }
 
   private func refreshForCurrentSession() {
+    if case .restoring = accountSessionStore.state {
+      return
+    }
+
     guard case .signedIn(let account) = accountSessionStore.state,
           let identity = accountSessionStore.currentAccountSessionIdentity else {
+      let shouldResetRestorationUI = restorationLoadingIdentity != nil
+        || restorationUIFailed
+        || restorationUIHeldForAccountRestore
+      if let activeIdentity {
+        restorationBackfillBarrier?.cancel(for: activeIdentity)
+      }
       requestTask?.cancel()
       requestTask = nil
       activeIdentity = nil
+      restorationLoadingIdentity = nil
+      restorationUIFailed = false
+      restorationUIHeldForAccountRestore = false
       latestResolution = nil
+      restorationState = .idle
+      if shouldResetRestorationUI {
+        onRestorationFinished()
+      }
       return
     }
 
@@ -153,20 +242,63 @@ final class OnboardingStatusRuntimeCoordinator {
     }
 
     requestTask?.cancel()
+    if let activeIdentity {
+      restorationBackfillBarrier?.cancel(for: activeIdentity)
+    }
     activeIdentity = identity
     latestResolution = nil
+    restorationBackfillBarrier?.begin(for: identity)
+    let restorationUIWasPreheld = restorationUIHeldForAccountRestore
+    restorationUIHeldForAccountRestore = false
+
+    let localDataState: ServerRoutineRestorationLocalDataState
+    do {
+      localDataState = try routineRestorer?.localDataState()
+        ?? .established
+    } catch {
+      restorationState = .failed(identity)
+      restorationLoadingIdentity = nil
+      restorationUIFailed = true
+      onRestorationFailed()
+      return
+    }
+    let restorationSource = localDataState.restorationSource
+
+    if restorationSource != nil {
+      let shouldBeginRestorationUI = !restorationUIWasPreheld
+        && (restorationLoadingIdentity == nil || restorationUIFailed)
+      restorationLoadingIdentity = identity
+      restorationUIFailed = false
+      restorationState = .loading(identity)
+      if shouldBeginRestorationUI {
+        onRestorationBegan()
+      }
+    } else {
+      if routineRestorer != nil {
+        restorationState = .localDataPresent(identity)
+      }
+      if restorationLoadingIdentity != nil
+          || restorationUIFailed
+          || restorationUIWasPreheld {
+        restorationLoadingIdentity = nil
+        restorationUIFailed = false
+        onRestorationFinished()
+      }
+    }
 
     requestTask = Task { @MainActor [weak self] in
       await self?.resolve(
         identity: identity,
-        loginCompleted: account.onboardingCompleted
+        loginCompleted: account.onboardingCompleted,
+        restorationSource: restorationSource
       )
     }
   }
 
   private func resolve(
     identity: AccountSessionIdentity,
-    loginCompleted: Bool
+    loginCompleted: Bool,
+    restorationSource: ServerRoutineRestorationSource?
   ) async {
     do {
       let status = try await remoteService.fetchStatus(for: identity)
@@ -180,6 +312,67 @@ final class OnboardingStatusRuntimeCoordinator {
         source: .statusEndpoint,
         loginCompleted: loginCompleted
       )
+
+      guard let restorationSource else {
+        restorationBackfillBarrier?.resolve(for: identity)
+        return
+      }
+      guard status.isCompleted else {
+        guard let routineRestorer else {
+          failRestoration(for: identity)
+          return
+        }
+        do {
+          try routineRestorer.finalizeLocalDataForBackfill(
+            for: identity,
+            source: restorationSource
+          )
+        } catch {
+          guard !Task.isCancelled, isCurrent(identity) else { return }
+          failRestoration(for: identity)
+          return
+        }
+        guard !Task.isCancelled, isCurrent(identity) else { return }
+        switch restorationSource {
+        case .empty:
+          restorationState = .onboardingRequired(identity)
+        case .provisional:
+          restorationState = .localDataPresent(identity)
+        }
+        restorationBackfillBarrier?.resolve(for: identity)
+        finishRestorationLoading(for: identity)
+        return
+      }
+      guard let routineRestorer else {
+        failRestoration(for: identity)
+        return
+      }
+
+      do {
+        let result = try await routineRestorer.restore(
+          for: identity,
+          replacing: restorationSource
+        )
+        guard !Task.isCancelled, isCurrent(identity) else {
+          return
+        }
+        switch result {
+        case .restored(let routineCount):
+          restorationState = .restored(
+            identity,
+            routineCount: routineCount
+          )
+        case .localDataPresent:
+          restorationState = .localDataPresent(identity)
+        }
+        restorationBackfillBarrier?.resolve(for: identity)
+        finishRestorationLoading(for: identity)
+      } catch {
+        guard !Task.isCancelled, isCurrent(identity) else {
+          return
+        }
+        failRestoration(for: identity)
+      }
     } catch {
       guard !Task.isCancelled, isCurrent(identity) else {
         return
@@ -193,7 +386,31 @@ final class OnboardingStatusRuntimeCoordinator {
         source: .loginFallback(reason),
         loginCompleted: loginCompleted
       )
+      if restorationSource != nil {
+        failRestoration(for: identity)
+      } else {
+        restorationBackfillBarrier?.resolve(for: identity)
+      }
     }
+  }
+
+  private func finishRestorationLoading(
+    for identity: AccountSessionIdentity
+  ) {
+    guard restorationLoadingIdentity == identity else {
+      return
+    }
+    restorationLoadingIdentity = nil
+    restorationUIFailed = false
+    onRestorationFinished()
+  }
+
+  private func failRestoration(for identity: AccountSessionIdentity) {
+    guard restorationLoadingIdentity == identity else { return }
+    restorationLoadingIdentity = nil
+    restorationUIFailed = true
+    restorationState = .failed(identity)
+    onRestorationFailed()
   }
 
   private func isCurrent(_ identity: AccountSessionIdentity) -> Bool {

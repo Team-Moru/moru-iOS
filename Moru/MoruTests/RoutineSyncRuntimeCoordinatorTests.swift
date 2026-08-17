@@ -142,6 +142,38 @@ final class RoutineSyncRuntimeCoordinatorTests: XCTestCase {
   }
 
   @MainActor
+  func testRestorationBarrierHoldsBackfillAndSendUntilExplicitResolution()
+    async {
+    let identity = AccountSessionIdentity(memberID: 8, sessionID: UUID())
+    let provider = RuntimeSessionIdentityProvider(identity: identity)
+    let barrier = RoutineRestorationBackfillBarrier()
+    barrier.begin(for: identity)
+    let sender = ScriptedRoutineSyncSender(results: [.idle])
+    let backfiller = RecordingRoutineSyncLoginBackfiller { _ in }
+    let coordinator = RoutineSyncRuntimeCoordinator(
+      sender: sender,
+      sessionIdentityProvider: provider,
+      loginBackfiller: backfiller,
+      isSceneActive: true,
+      restorationBackfillBarrier: barrier
+    )
+
+    coordinator.accountSessionDidChange()
+    await waitUntilStopped(coordinator)
+
+    XCTAssertEqual(coordinator.lastStopReason, .restorationPending)
+    XCTAssertEqual(backfiller.memberIDs, [])
+    XCTAssertEqual(sender.callCount, 0)
+
+    barrier.resolve(for: identity)
+    await waitUntilStopped(coordinator)
+
+    XCTAssertEqual(backfiller.memberIDs, [identity.memberID])
+    XCTAssertEqual(sender.callCount, 1)
+    XCTAssertEqual(coordinator.lastStopReason, .idle)
+  }
+
+  @MainActor
   func testRetrySleepsUntilPersistedNextAttemptDateThenResumes() async {
     let start = Date(timeIntervalSince1970: 10_000)
     let retryAt = start.addingTimeInterval(8)

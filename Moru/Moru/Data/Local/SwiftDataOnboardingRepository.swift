@@ -38,6 +38,15 @@ nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
   @MainActor
   func saveCompletion(profile: LocalProfile, routine: Routine) throws {
     do {
+      let provisionalStore = SwiftDataProvisionalOnboardingDataStore(
+        modelContext: modelContext
+      )
+      // Only a genuinely empty installation can acquire provisional
+      // provenance. Existing data from older versions has no marker and must
+      // never become replaceable merely because onboarding is shown again.
+      let shouldRecordProvisionalMarker =
+        try provisionalStore.localDataState() == .empty
+
       if let persistedProfile = try persistedProfile(id: profile.id) {
         SwiftDataMapper.update(persistedProfile, with: profile)
       } else {
@@ -81,6 +90,18 @@ nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
             )
           }
         }
+      }
+
+      if shouldRecordProvisionalMarker {
+        try provisionalStore.stageRecord(
+          profile: profile,
+          routines: [routine],
+          at: Date()
+        )
+      } else {
+        // A repeated or non-fresh onboarding completion is established local
+        // data. Clearing provenance never clears its content.
+        try provisionalStore.stageInvalidate()
       }
 
       try modelContext.save()

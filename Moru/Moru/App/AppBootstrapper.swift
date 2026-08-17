@@ -248,6 +248,8 @@ final class AppBootstrapper: ObservableObject {
       // Recovery changes no request identity. The sender can only replay a
       // complete stored wire artifact inside the server's retention window.
       try? dependencies.routineSyncRepository?.recoverInterruptedAttempts(at: Date())
+      let routineRestorationBackfillBarrier =
+        RoutineRestorationBackfillBarrier()
       let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
       if appCapabilities.shouldAllowServerRequests,
          let routineSyncRepository = dependencies.routineSyncRepository {
@@ -276,6 +278,8 @@ final class AppBootstrapper: ObservableObject {
           sessionIdentityProvider: accountSessionStore,
           loginBackfiller: loginBackfiller,
           wakeupRelay: routineSyncWakeupRelay,
+          restorationBackfillBarrier:
+            routineRestorationBackfillBarrier,
           onMutationCompleted: {
             dependencies.routineTTSWarmupCoordinator?.routineSyncDidComplete()
           }
@@ -293,6 +297,28 @@ final class AppBootstrapper: ObservableObject {
       }
       #endif
       sessionStore.load()
+      let serverRoutineRestorer: (any ServerRoutineRestoring)?
+      if let accountRoutineGroupRemoteService,
+         let routineSyncRepository = dependencies.routineSyncRepository {
+        serverRoutineRestorer = DefaultServerRoutineRestorationService(
+          remoteService: accountRoutineGroupRemoteService,
+          persistence: SwiftDataServerRoutineRestorationRepository(
+            modelContext: modelContainer.mainContext,
+            syncRepository: routineSyncRepository
+          ),
+          sessionIdentityProvider: accountSessionStore
+        )
+      } else {
+        serverRoutineRestorer = nil
+      }
+      let shouldHoldProvisionalRestorationUI: Bool
+      if case .restoring = accountSessionStore.state,
+         case .provisional = try? serverRoutineRestorer?.localDataState() {
+        shouldHoldProvisionalRestorationUI = true
+        sessionStore.beginServerRoutineRestoration()
+      } else {
+        shouldHoldProvisionalRestorationUI = false
+      }
       let onboardingStatusRuntimeCoordinator =
         appCapabilities.shouldAllowServerRequests
         ? OnboardingStatusRuntimeCoordinator(
@@ -309,7 +335,21 @@ final class AppBootstrapper: ObservableObject {
             case .loading, .failed:
               nil
             }
-          }
+          },
+          routineRestorer: serverRoutineRestorer,
+          restorationBackfillBarrier:
+            routineRestorationBackfillBarrier,
+          onRestorationBegan: {
+            sessionStore.beginServerRoutineRestoration()
+          },
+          onRestorationFinished: {
+            sessionStore.finishServerRoutineRestoration()
+          },
+          onRestorationFailed: {
+            sessionStore.failServerRoutineRestoration()
+          },
+          restorationUIHeldForAccountRestore:
+            shouldHoldProvisionalRestorationUI
         )
         : nil
       let socialLoginCoordinator = SocialLoginCoordinator(
