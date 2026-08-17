@@ -268,7 +268,8 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       return
     }
     if groupBinding == nil {
-      // Existing local-only groups are deliberately not backfilled at login.
+      // Login backfill owns creation for existing local-only groups. Avoid
+      // creating that account-scoped intent implicitly from an unrelated edit.
       return
     }
 

@@ -44,21 +44,201 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
-  func testSignedOutAndLegacyLocalGroupsNeverBackfillOrCreateUnresolvableSelection() throws {
+  func testLoginBackfillStagesSignedOutLocalGroupAndReusesGeneration() throws {
     let fixture = try makeFixture(memberID: nil)
-    var routine = makeRoutine(name: "로컬", steps: [makeStep()], isActive: false)
+    let routine = makeRoutine(name: "로컬", steps: [makeStep()], isActive: false)
     try fixture.routines.saveRoutine(routine)
     XCTAssertTrue(try fixture.sync.mutations(memberID: 7).isEmpty)
 
     fixture.member.signedInMemberID = 7
-    routine.name = "로그인 뒤 수정"
-    routine.updatedAt = Date(timeIntervalSince1970: 20)
+    let backfiller = RoutineSyncLoginBackfiller(
+      routineRepository: fixture.routines,
+      syncRepository: fixture.sync
+    )
+    try backfiller.backfillLocalRoutineGroups(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 20)
+    )
+
+    let first = try XCTUnwrap(try fixture.sync.mutations(memberID: 7).first)
+    XCTAssertEqual(first.operation, .createRoutineGroup)
+    XCTAssertEqual(first.localEntityID, routine.id)
+    XCTAssertEqual(
+      try decodedCommand(first),
+      .createRoutineGroup(RoutineSyncGroupSnapshot(routine: routine))
+    )
+
+    try backfiller.backfillLocalRoutineGroups(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 30)
+    )
+
+    let repeated = try fixture.sync.mutations(memberID: 7)
+    XCTAssertEqual(repeated.count, 1)
+    XCTAssertEqual(repeated[0].id, first.id)
+    XCTAssertEqual(repeated[0].generationID, first.generationID)
+    XCTAssertEqual(repeated[0].generation, first.generation)
+  }
+
+  @MainActor
+  func testLoginBackfillSkipsGroupAlreadyBoundToMember() throws {
+    let fixture = try makeFixture(memberID: nil)
+    let routine = makeRoutine(
+      name: "이미 업로드됨",
+      steps: [makeStep()],
+      isActive: false
+    )
     try fixture.routines.saveRoutine(routine)
-    routine.isActive = true
-    routine.updatedAt = Date(timeIntervalSince1970: 30)
-    try fixture.routines.saveRoutine(routine)
+    _ = try fixture.sync.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: routine.id
+    )
+
+    try RoutineSyncLoginBackfiller(
+      routineRepository: fixture.routines,
+      syncRepository: fixture.sync
+    ).backfillLocalRoutineGroups(memberID: 7, at: .distantPast)
 
     XCTAssertTrue(try fixture.sync.mutations(memberID: 7).isEmpty)
+  }
+
+  @MainActor
+  func testLoginBackfillStagesNewestActiveGroupSelectionAfterCreates() throws {
+    let fixture = try makeFixture(memberID: nil)
+    var older = makeRoutine(
+      name: "이전 활성 루틴",
+      steps: [makeStep()],
+      isActive: true
+    )
+    older.updatedAt = Date(timeIntervalSince1970: 20)
+    var newer = makeRoutine(
+      name: "최신 활성 루틴",
+      steps: [makeStep()],
+      isActive: true
+    )
+    newer.updatedAt = Date(timeIntervalSince1970: 30)
+    try fixture.routines.saveRoutines([older, newer])
+
+    try RoutineSyncLoginBackfiller(
+      routineRepository: fixture.routines,
+      syncRepository: fixture.sync
+    ).backfillLocalRoutineGroups(memberID: 7, at: .distantPast)
+
+    let mutations = try fixture.sync.mutations(memberID: 7)
+    XCTAssertEqual(
+      mutations.filter { $0.operation == .createRoutineGroup }.count,
+      2
+    )
+    let selection = try XCTUnwrap(
+      mutations.first { $0.operation == .setRoutineGroupActive }
+    )
+    XCTAssertEqual(
+      try decodedCommand(selection),
+      .selectActiveRoutineGroup(selectedGroupLocalID: newer.id)
+    )
+  }
+
+  @MainActor
+  func testLoginBackfillFlowsThroughProductionPostAndSettlesBindings()
+    async throws {
+    let fixture = try makeFixture(memberID: nil)
+    let step = makeStep()
+    let routine = makeRoutine(
+      name: "로그인 업로드",
+      steps: [step],
+      isActive: false
+    )
+    try fixture.routines.saveRoutine(routine)
+    fixture.member.signedInMemberID = 7
+
+    let response = Data(
+      """
+      {
+        "isSuccess": true,
+        "code": "COMMON201",
+        "message": "Created",
+        "result": {
+          "routineGroupId": 41,
+          "clientEntityId": "\(routine.id.uuidString.lowercased())",
+          "routines": [
+            {
+              "routineId": 51,
+              "clientEntityId": "\(step.id.uuidString.lowercased())",
+              "type": "CHECK"
+            }
+          ]
+        }
+      }
+      """.utf8
+    )
+    let apiClient = RoutineSyncBackfillAPIClient(response: response)
+    let identity = AccountSessionIdentity(memberID: 7, sessionID: UUID())
+    let identityProvider = RoutineSyncRuntimeIdentityProvider(
+      identity: identity
+    )
+    let sender = RoutineSyncSender(
+      repository: fixture.sync,
+      requestPreparer: ProductionRoutineSyncRequestPreparer(
+        repository: fixture.sync
+      ),
+      transport: ProductionRoutineSyncTransport(
+        apiClient: apiClient,
+        responseDecoder: ProductionRoutineSyncResponseDecoder()
+      ),
+      contract: .productionP0,
+      sessionIdentityProvider: identityProvider
+    )
+    let coordinator = RoutineSyncRuntimeCoordinator(
+      sender: sender,
+      sessionIdentityProvider: identityProvider,
+      loginBackfiller: RoutineSyncLoginBackfiller(
+        routineRepository: fixture.routines,
+        syncRepository: fixture.sync
+      ),
+      isSceneActive: true
+    )
+
+    coordinator.wake()
+    await waitUntilStopped(coordinator)
+
+    let capturedRequest = await apiClient.capturedRequest()
+    let capture = try XCTUnwrap(capturedRequest)
+    XCTAssertEqual(capture.identity, identity)
+    XCTAssertEqual(capture.path, "/routine-groups")
+    XCTAssertNotNil(UUID(uuidString: capture.idempotencyKey))
+    let body = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: capture.body) as? [String: Any]
+    )
+    XCTAssertEqual(
+      body["clientEntityId"] as? String,
+      routine.id.uuidString.lowercased()
+    )
+    let routines = try XCTUnwrap(body["routines"] as? [[String: Any]])
+    XCTAssertEqual(
+      routines.first?["clientEntityId"] as? String,
+      step.id.uuidString.lowercased()
+    )
+    XCTAssertEqual(
+      try fixture.sync.binding(
+        memberID: 7,
+        entityKind: .routineGroup,
+        localEntityID: routine.id
+      )?.remoteID,
+      41
+    )
+    XCTAssertEqual(
+      try fixture.sync.binding(
+        memberID: 7,
+        entityKind: .routine,
+        localEntityID: step.id
+      )?.remoteID,
+      51
+    )
+    XCTAssertTrue(try fixture.sync.mutations(memberID: 7).isEmpty)
+    XCTAssertEqual(coordinator.lastStopReason, .idle)
   }
 
   @MainActor
@@ -1041,6 +1221,18 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
     try JSONDecoder().decode(RoutineSyncCommand.self, from: mutation.payload)
   }
 
+  @MainActor
+  private func waitUntilStopped(
+    _ coordinator: RoutineSyncRuntimeCoordinator,
+    iterations: Int = 100
+  ) async {
+    for _ in 0..<iterations {
+      if !coordinator.isDraining { return }
+      await Task.yield()
+    }
+    XCTFail("Routine sync runtime did not stop.")
+  }
+
   private var verifiedServerContract: RoutineSyncServerContract {
     RoutineSyncServerContract(capabilities: .allRequired, isE2EVerified: true)
   }
@@ -1056,6 +1248,18 @@ private final class RoutineSyncCRUDMemberProvider: SignedInMemberProviding {
 }
 
 @MainActor
+private final class RoutineSyncRuntimeIdentityProvider:
+  CurrentAccountSessionIdentityProviding {
+  var identity: AccountSessionIdentity?
+
+  init(identity: AccountSessionIdentity?) {
+    self.identity = identity
+  }
+
+  var currentAccountSessionIdentity: AccountSessionIdentity? { identity }
+}
+
+@MainActor
 private final class RoutineSyncWakeProbe {
   var count = 0
   var persistedRoutineCount = -1
@@ -1068,6 +1272,69 @@ private struct RoutineSyncCRUDFixture {
   let routines: SwiftDataRoutineRepository
   let runs: SwiftDataRoutineRunRepository
   let onboarding: SwiftDataOnboardingRepository
+}
+
+private struct RoutineSyncBackfillRequestCapture: Equatable, Sendable {
+  let identity: AccountSessionIdentity
+  let path: String
+  let body: Data
+  let idempotencyKey: String
+}
+
+private actor RoutineSyncBackfillAPIClient: AccountBoundAPIClient {
+  private let response: Data
+  private var capture: RoutineSyncBackfillRequestCapture?
+
+  init(response: Data) {
+    self.response = response
+  }
+
+  func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _: Target,
+    as _: Payload.Type
+  ) async throws -> Payload {
+    throw unexpectedRequest()
+  }
+
+  func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _: Target,
+    as _: Payload.Type,
+    authorizedForMemberID _: Int64
+  ) async throws -> Payload {
+    throw unexpectedRequest()
+  }
+
+  func requestVoid<Target: MoruTargetType>(_: Target) async throws {
+    throw unexpectedRequest()
+  }
+
+  func requestData<Target: MoruTargetType>(_: Target) async throws -> Data {
+    throw unexpectedRequest()
+  }
+
+  func requestData<Target: MoruTargetType>(
+    _ target: Target,
+    authorizedFor identity: AccountSessionIdentity
+  ) async throws -> Data {
+    guard let target = target as? RoutineSyncWireTarget else {
+      throw unexpectedRequest()
+    }
+    capture = RoutineSyncBackfillRequestCapture(
+      identity: identity,
+      path: target.path,
+      body: target.wireRequest.body,
+      idempotencyKey: target.idempotencyKey.uuidString
+    )
+    return response
+  }
+
+  func capturedRequest() -> RoutineSyncBackfillRequestCapture? {
+    capture
+  }
+
+  private func unexpectedRequest() -> APIError {
+    APIError.transport(code: -1, message: "Unexpected routine API request")
+  }
 }
 
 private actor RoutineSyncCountingAPIClient: AccountBoundRawResponseClient {

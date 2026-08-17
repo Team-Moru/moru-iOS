@@ -87,56 +87,57 @@ server namespace + memberID + operation + entity kind + localEntityID
 
 ## 현재 API에서 지키는 안전 경계
 
-운영 Swagger는 `clientEntityID`, server idempotency key, `Idempotency-Key`,
-revision, reconciliation 조회를 받지 않습니다. 따라서 모든 새 Outbox 항목은
-`waitingForServerContract`로 시작하며 자동 sender가 처리하면 안 됩니다.
+운영 P0 계약은 `clientEntityId`, `Idempotency-Key`, 생성 응답의 local/remote
+ID 매핑, replay-safe delete를 지원합니다. 새 Outbox 항목은
+`waitingForServerContract`로 시작하고, production contract가 지원하는 operation만
+sender가 `queued`로 승격합니다.
 
 | 현재 API | Outbox의 local ID | 현재 자동 전송 |
 | --- | --- | --- |
-| `POST /routine-groups` | `Routine.id` | 차단 |
-| `POST /routine-groups/{id}/routines` | `RoutineStep.id` | 차단 |
+| `POST /routine-groups` | `Routine.id` | 전송 |
+| `POST /routine-groups/{id}/routines` | `RoutineStep.id` | 전송 |
 | `PATCH /routine-groups/{id}/active` | `Routine.id` | 의미 확인 전 차단 |
-| `DELETE /routine-groups/{id}` | `Routine.id` | 404 규칙 확인 전 차단 |
-| `DELETE /routines/{routineId}` | `RoutineStep.id` | 404 규칙 확인 전 차단 |
-| `POST /routine-executions` | `RoutineStepResult.id` | 차단 |
+| `DELETE /routine-groups/{id}` | `Routine.id` | 전송 |
+| `DELETE /routines/{routineId}` | `RoutineStep.id` | 전송 |
+| `POST /routine-executions` | `RoutineStepResult.id` | 전송 |
 
 `POST /routine-executions/ai-step`은 즉시 답을 받아야 하는 RPC라 Outbox에
 넣지 않습니다. TTS 조회도 읽기 API이므로 mutation이 아닙니다.
 
-특히 아래 POST는 timeout 뒤 자동 재시도하지 않습니다.
+아래 POST가 timeout, 5xx, 응답 decode 실패처럼 성공 여부가 모호한 결과를
+받으면, sender는 최초 시도 전에 영속화한 wire bytes와 generation UUID를
+24시간 replay window 안에서 그대로 재사용합니다.
 
 - `POST /routine-groups`
 - `POST /routine-groups/{routineGroupId}/routines`
 - `POST /routine-executions`
 
-서버가 첫 요청을 처리한 뒤 응답만 유실했을 수 있기 때문입니다. 자동 재전송은
-중복 그룹, 중복 루틴, 중복 실행 기록을 만들 수 있습니다.
+서버가 첫 요청을 처리한 뒤 응답만 유실했더라도 동일 `Idempotency-Key`와 동일
+body로만 재전송되므로 새 요청 identity를 만들지 않습니다.
 
 제목이나 순서 비교로 remote ID를 추측해 연결하지 않습니다. 특히 그룹 생성
 응답에서 그룹 ID만 검증되면 그룹 binding만 저장합니다. 자식 ID가
 `clientEntityID`와 함께 검증되지 않으면 그 mutation은
 `needsReconciliation`으로 남깁니다.
 
-현재 앱은 CRUD intent를 Outbox에 저장하고 contract-gated sender core까지
-제공하지만, production HTTP transport와 실행 trigger는 연결하지 않습니다.
-모든 새 항목은 `waitingForServerContract`이며, 아래 P0 계약이
-Swagger와 실서버에 배포되고 E2E로 검증되기 전에는 어떤 서버 write도
-호출하지 않습니다. timeout, 5xx, decode 실패, 취소, 요청 중 계정 변경처럼
-성공 여부가 모호한 결과도 자동 재전송하지 않습니다.
+현재 앱은 CRUD intent, contract-gated sender, production HTTP transport,
+foreground account-bound runtime을 연결합니다. 로그인 세션별 local group
+backfill도 sender보다 먼저 실행됩니다. 요청 중 계정 session generation이 바뀌면
+기존 응답은 binding이나 Outbox를 정리하지 않습니다.
 
-`RoutineSyncServerContract`는 전체 P0 capability와 `isE2EVerified`를
-동시에 확인합니다. 하나라도 부족하면 admission 결과는 0개입니다.
-검증된 계약이 주입된 테스트에서만 `waitingForServerContract`를 `queued`로
-승격하며, `RoutineSyncSender`는 Outbox `generationID`를 그대로 미래의
-`Idempotency-Key`로 사용합니다. production DI에는 이 sender나 transport가
-없으므로 현재 server write 호출 수는 계속 0회입니다.
+`RoutineSyncServerContract`는 operation별 필수 capability와 `isE2EVerified`를
+동시에 확인합니다. 조건을 만족한 row만 `waitingForServerContract`에서 `queued`로
+승격하며, `RoutineSyncSender`는 Outbox `generationID`를 그대로
+`Idempotency-Key`로 사용합니다.
 
 ## 트랜잭션 경계
 
 - 로그인 중 CRUD는 로컬 변경과 command stage를 같은 `ModelContext`에서 만든
   뒤 한 번만 저장합니다. Outbox 저장이 실패하면 로컬 변경도 저장하지 않습니다.
-- 로그아웃 상태에서는 Outbox를 만들지 않으며, 로그인했다고 기존 로컬 데이터를
-  자동 업로드하지 않습니다.
+- 로그아웃 상태에서는 Outbox를 만들지 않습니다. 계정 세션이 확정되면 아직 해당
+  회원의 binding이 없는 `localOnly` 그룹을 현재 snapshot으로 Outbox에 backfill한
+  뒤 활성 그룹 선택 intent를 로컬 우선순위에 맞춰 등록하고 sender를
+  시작합니다. 동일 snapshot의 재등록은 기존 generation UUID를 재사용합니다.
 - 서버 응답으로 생성 성공을 확정할 때는 검증된 binding과 해당 Outbox 정리를
   한 번의 save로 처리합니다. 삭제 성공은 삭제 대상 binding과 Outbox를 함께
   지웁니다.

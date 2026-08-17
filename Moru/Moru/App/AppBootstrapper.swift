@@ -251,9 +251,14 @@ final class AppBootstrapper: ObservableObject {
           contract: .productionP0,
           sessionIdentityProvider: accountSessionStore
         )
+        let loginBackfiller = RoutineSyncLoginBackfiller(
+          routineRepository: dependencies.routineRepository,
+          syncRepository: routineSyncRepository
+        )
         routineSyncRuntimeCoordinator = RoutineSyncRuntimeCoordinator(
           sender: sender,
           sessionIdentityProvider: accountSessionStore,
+          loginBackfiller: loginBackfiller,
           wakeupRelay: routineSyncWakeupRelay,
           onMutationCompleted: {
             dependencies.routineTTSWarmupCoordinator?.routineSyncDidComplete()

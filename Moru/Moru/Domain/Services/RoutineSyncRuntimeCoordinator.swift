@@ -56,6 +56,7 @@ nonisolated enum RoutineSyncRuntimeStopReason: Equatable, Sendable {
 @MainActor
 final class RoutineSyncRuntimeCoordinator {
   private let sender: any RoutineSyncSending
+  private let loginBackfiller: (any RoutineSyncLoginBackfilling)?
   private weak var sessionIdentityProvider:
     (any CurrentAccountSessionIdentityProviding)?
   private let scheduler: any RoutineSyncRuntimeScheduling
@@ -66,6 +67,7 @@ final class RoutineSyncRuntimeCoordinator {
   private var drainGeneration = 0
   private var wakePending = false
   private var sessionRestartPending = false
+  private var backfilledSessionIdentity: AccountSessionIdentity?
 
   private(set) var isSceneActive: Bool
   private(set) var isDraining = false
@@ -74,6 +76,7 @@ final class RoutineSyncRuntimeCoordinator {
   init(
     sender: any RoutineSyncSending,
     sessionIdentityProvider: any CurrentAccountSessionIdentityProviding,
+    loginBackfiller: (any RoutineSyncLoginBackfilling)? = nil,
     wakeupRelay: RoutineSyncWakeupRelay? = nil,
     scheduler: any RoutineSyncRuntimeScheduling =
       SystemRoutineSyncRuntimeScheduler.shared,
@@ -83,6 +86,7 @@ final class RoutineSyncRuntimeCoordinator {
   ) {
     precondition(unscheduledRetryDelay > 0)
     self.sender = sender
+    self.loginBackfiller = loginBackfiller
     self.sessionIdentityProvider = sessionIdentityProvider
     self.scheduler = scheduler
     self.isSceneActive = isSceneActive
@@ -122,6 +126,7 @@ final class RoutineSyncRuntimeCoordinator {
     guard sessionIdentityProvider?.currentAccountSessionIdentity != nil else {
       wakePending = false
       sessionRestartPending = false
+      backfilledSessionIdentity = nil
       lastStopReason = .signedOut
       drainTask?.cancel()
       return
@@ -169,6 +174,26 @@ final class RoutineSyncRuntimeCoordinator {
   }
 
   private func drain(identity: AccountSessionIdentity) async {
+    if backfilledSessionIdentity != identity {
+      do {
+        try loginBackfiller?.backfillLocalRoutineGroups(
+          memberID: identity.memberID,
+          at: scheduler.now
+        )
+      } catch {
+        wakePending = false
+        lastStopReason = .runtimeFailure
+        return
+      }
+
+      guard sessionIdentityProvider?.currentAccountSessionIdentity
+        == identity else {
+        lastStopReason = .staleSession
+        return
+      }
+      backfilledSessionIdentity = identity
+    }
+
     while !Task.isCancelled {
       guard isSceneActive else {
         lastStopReason = .inactive
