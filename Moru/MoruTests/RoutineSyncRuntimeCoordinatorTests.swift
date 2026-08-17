@@ -93,6 +93,55 @@ final class RoutineSyncRuntimeCoordinatorTests: XCTestCase {
   }
 
   @MainActor
+  func testLoginBackfillRunsBeforeSendOncePerSession() async {
+    var events: [String] = []
+    let sender = ScriptedRoutineSyncSender(
+      results: [.idle, .idle, .idle],
+      onSend: { memberID in
+        events.append("send:\(memberID)")
+      }
+    )
+    let firstIdentity = AccountSessionIdentity(
+      memberID: 7,
+      sessionID: UUID()
+    )
+    let provider = RuntimeSessionIdentityProvider(identity: firstIdentity)
+    let backfiller = RecordingRoutineSyncLoginBackfiller { memberID in
+      events.append("backfill:\(memberID)")
+    }
+    let coordinator = RoutineSyncRuntimeCoordinator(
+      sender: sender,
+      sessionIdentityProvider: provider,
+      loginBackfiller: backfiller,
+      isSceneActive: true
+    )
+
+    coordinator.wake()
+    await waitUntilStopped(coordinator)
+    coordinator.wake()
+    await waitUntilStopped(coordinator)
+
+    provider.identity = AccountSessionIdentity(
+      memberID: firstIdentity.memberID,
+      sessionID: UUID()
+    )
+    coordinator.accountSessionDidChange()
+    await waitUntilStopped(coordinator)
+
+    XCTAssertEqual(
+      events,
+      [
+        "backfill:7",
+        "send:7",
+        "send:7",
+        "backfill:7",
+        "send:7",
+      ]
+    )
+    XCTAssertEqual(backfiller.memberIDs, [7, 7])
+  }
+
+  @MainActor
   func testRetrySleepsUntilPersistedNextAttemptDateThenResumes() async {
     let start = Date(timeIntervalSince1970: 10_000)
     let retryAt = start.addingTimeInterval(8)
@@ -221,6 +270,7 @@ final class RoutineSyncRuntimeCoordinatorTests: XCTestCase {
 private final class ScriptedRoutineSyncSender: RoutineSyncSending {
   private var results: [RoutineSyncSendResult]
   private let yieldsDuringSend: Bool
+  private let onSend: @MainActor (Int64) -> Void
   private var activeCalls = 0
 
   private(set) var callCount = 0
@@ -230,10 +280,12 @@ private final class ScriptedRoutineSyncSender: RoutineSyncSending {
 
   init(
     results: [RoutineSyncSendResult],
-    yieldsDuringSend: Bool = false
+    yieldsDuringSend: Bool = false,
+    onSend: @escaping @MainActor (Int64) -> Void = { _ in }
   ) {
     self.results = results
     self.yieldsDuringSend = yieldsDuringSend
+    self.onSend = onSend
   }
 
   func sendNext(
@@ -247,11 +299,31 @@ private final class ScriptedRoutineSyncSender: RoutineSyncSending {
     callCount += 1
     memberIDs.append(memberID)
     sendDates.append(date)
+    onSend(memberID)
     if yieldsDuringSend {
       await Task.yield()
     }
     guard !results.isEmpty else { return .idle }
     return results.removeFirst()
+  }
+}
+
+@MainActor
+private final class RecordingRoutineSyncLoginBackfiller:
+  RoutineSyncLoginBackfilling {
+  private let onBackfill: @MainActor (Int64) -> Void
+  private(set) var memberIDs: [Int64] = []
+
+  init(onBackfill: @escaping @MainActor (Int64) -> Void) {
+    self.onBackfill = onBackfill
+  }
+
+  func backfillLocalRoutineGroups(
+    memberID: Int64,
+    at _: Date
+  ) throws {
+    memberIDs.append(memberID)
+    onBackfill(memberID)
   }
 }
 
