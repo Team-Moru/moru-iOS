@@ -17,31 +17,36 @@
 | 실행 중 AI 단계 요청 | 원격 요청 전에 오류로 차단 | 원격 요청 가능 |
 | 동의 철회 | 자동 재시도·exact replay도 보류 | 사용자가 다시 동의한 뒤에만 재개 |
 
-## 2. App Privacy 입력 후보
+## 2. App Privacy 입력 후보와 build 3 Privacy Report 대조
 
-아래는 앱 코드가 직접 보여 주는 전송을 기준으로 한 후보입니다. `수집`은 Apple의 App Privacy 정의에 따라 개발자 또는 통합 제3자가 기기 밖에서 접근할 수 있는 전송을 뜻합니다. 실제 서버 보관·로그·제3자 계약을 확인해 값이 늘어나면 이 표와 App Store Connect를 함께 수정해야 합니다.
+`수집`은 Apple의 App Privacy 정의에 따라 개발자 또는 통합 제3자가 기기 밖에서 접근할 수 있는 전송을 뜻합니다. 2026-08-17의 clean archive `2.2.1 (3)` Privacy Report는 앱 자체 manifest뿐 아니라 Google Sign-In 9.1.0과 Kakao SDK의 manifest도 표시했습니다. 따라서 아래 SDK 행을 빼고 5개 앱 자체 행만 입력하면 과소신고 위험이 있습니다.
 
-| Apple 데이터 유형 | 코드 근거 | 사용자와 연결 | 목적 | 추적 | 상태 |
+| Apple 데이터 유형 | 코드·archive 근거 | 사용자와 연결 | 목적 | 추적 | 상태 |
 |---|---|---:|---|---:|---|
-| User ID | 로그인 세션, 서버 member ID, bearer 인증 | 예 | 앱 기능(인증·계정·동기화) | 아니오 | 입력 후보 |
-| Other User Content | 루틴 제목·설명·단계, 자유 입력/전사문, AI 요청 본문 및 Google TTS로 전달될 수 있는 생성 안내 텍스트 | 예 | 앱 기능, 맞춤화 | 아니오 | 입력 후보 |
-| Product Interaction | 루틴 완료·건너뜀·실행 시각·기간·기상 시각 등 실행 기록 | 예 | 앱 기능 | 아니오 | 입력 후보 |
-| Email Address | Apple ID token의 email, Google name 미제공 시 email을 서버 닉네임으로 사용 | 예 | 앱 기능(계정) | 아니오 | 입력 후보 |
-| Name | Google `name` 또는 Kakao 프로필 닉네임을 서버 닉네임으로 저장 | 예 | 앱 기능(계정) | 아니오 | 입력 후보 |
+| User ID | 로그인 세션, 서버 member ID, bearer 인증. Google Sign-In manifest도 선언 | 예 | 앱 기능; Google SDK manifest는 분석도 선언 | 아니오 | 보수적 입력 후보 |
+| Other User Content | 루틴 제목·설명·단계, 자유 입력/전사문, AI 요청 본문 및 Google TTS로 전달될 수 있는 생성 안내 텍스트 | 예 | 앱 기능, 맞춤화 | 아니오 | 보수적 입력 후보 |
+| Product Interaction | 루틴 완료·건너뜀·실행 시각·기간·기상 시각 등 실행 기록 | 예 | 앱 기능 | 아니오 | 보수적 입력 후보 |
+| Email Address | Google ID token의 `email`을 `name` 부재 시 닉네임으로 사용할 수 있고, Apple 서버 구현도 email을 닉네임 후보로 읽음. Google Sign-In manifest도 선언 | 예 | 앱 기능 | 아니오 | 보수적 입력 후보; Apple email scope와 실제 저장 범위 재확인 |
+| Name | Google ID token의 `name`을 닉네임으로 저장할 수 있음. Google Sign-In manifest도 선언 | 예 | 앱 기능 | 아니오 | 보수적 입력 후보 |
+| Phone Number | Google Sign-In 9.1.0 Privacy Report manifest가 선언 | 예 | 앱 기능 | 아니오 | **SDK 선언 후보** — OAuth/SDK 실제 적용 범위를 확인하거나 보수적으로 입력 |
+| Coarse Location | Google Sign-In 9.1.0 Privacy Report manifest가 선언 | 예 | 앱 기능 | 아니오 | **SDK 선언 후보** — WeatherKit 위치와 별도로 확인 |
+| Device ID | Google Sign-In 9.1.0 Privacy Report manifest가 분석 목적으로 선언 | 예 | 분석 | 아니오 | **SDK 선언 후보** |
+| Other Usage Data | Google Sign-In 9.1.0 Privacy Report manifest가 분석 목적으로 선언 | 예 | 분석 | 아니오 | **SDK 선언 후보** |
+| Other Data | Google Sign-In manifest는 앱 기능·분석, KakaoSDKCommon manifest는 앱 기능으로 선언 | 예 | 앱 기능; Google SDK manifest는 분석도 선언 | 아니오 | **SDK 선언 후보** |
 | Location | 앱은 현재 위치를 WeatherKit에 전달하고 MORU API 서버에는 보내지 않음 | Apple Weather는 위치를 예보 제공에만 사용하고 사용자 식별 정보와 연결·요청 간 추적하지 않는다고 안내 | 날씨 표시 | 아니오 | **ASC 확인 필요** |
 | Audio Data / Speech Recognition | 원본 마이크 오디오는 MORU API에 보내는 코드가 없음. Google TTS 결과 오디오는 사용자의 원본 음성이 아니며, Apple 음성 프레임워크의 처리·보관은 Apple 정책 및 설정에 따름 | Apple 서비스 분류 확인 필요 | 음성 단계 입력 | 아니오 | **ASC 분류 확인 필요** |
 
-추적·광고 SDK나 IDFA 전송은 현재 앱 소스에서 확인되지 않았습니다. 그러나 이 문구는 최종 archive의 Privacy Report와 포함 SDK 목록을 확인하기 전에는 제출 답변으로 확정하지 않습니다.
+현재 앱 소스에서 광고 SDK·IDFA 전송·추적은 확인되지 않았고 archive Privacy Report도 모두 `Tracking: NO`입니다. 그러나 Google Sign-In의 기본 `email`·`profile` scope, Google/Kakao 콘솔 동의 항목, 서버가 token claim을 저장·로그하는 범위는 운영 증빙으로 최종 확인해야 합니다. SDK 선언보다 좁게 답하려면 각 SDK 공급자 또는 운영 콘솔의 근거가 필요합니다.
 
-## 3. 앱 번들 Privacy Manifest
+## 3. 앱 번들 Privacy Manifest와 archive 검증
 
-`Moru/PrivacyInfo.xcprivacy`에는 위 코드 근거가 확정적인 `Name`, `Email Address`, `User ID`, `Other User Content`, `Product Interaction`을 모두 사용자와 연결됨·추적 아님으로 선언하고, UserDefaults required-reason API(`CA92.1`)를 선언합니다. 이 manifest는 App Store Connect App Privacy 설문을 대체하지 않습니다.
+`Moru/PrivacyInfo.xcprivacy`에는 앱 자체 코드 근거의 `Name`, `Email Address`, `User ID`, `Other User Content`, `Product Interaction`을 사용자와 연결됨·추적 아님으로 선언하고, UserDefaults required-reason API(`CA92.1`)를 선언합니다. 이 manifest는 App Store Connect App Privacy 설문을 대체하지 않습니다.
 
-archive 단계에서 다음을 확인합니다.
+build 3 clean archive에서 다음을 확인했습니다.
 
-1. `Moru.app/PrivacyInfo.xcprivacy`가 실제 번들에 포함되는지
-2. `plutil -lint` 및 Xcode Privacy Report에 오류·미신고 required-reason API가 없는지
-3. 포함된 SDK privacy manifest와 위 후보 표가 충돌하지 않는지
+1. `Moru.app/PrivacyInfo.xcprivacy`와 포함 SDK manifest 12개가 실제 번들에 있고, root manifest의 `plutil -lint`가 통과했다.
+2. Xcode Organizer Privacy Report를 생성했다. 보고서는 Google Sign-In의 Name, Email Address, Phone Number, Coarse Location, User ID, Device ID, Other Usage Data, Other Data와 KakaoSDKCommon의 Other Data를 추가로 표시한다.
+3. 업로드된 App Store Connect build `2.2.1 (3)`은 검증됨 상태이고 배포 서명 결과 `get-task-allow: false`, `com.apple.developer.applesignin`, `com.apple.developer.weatherkit` entitlement를 표시한다.
 
 ## 4. 공개 정책과 App Review에 확정해야 할 값
 
@@ -53,7 +58,7 @@ archive 단계에서 다음을 확인합니다.
 | MORU API DB·백업·접근 로그의 보관 기간 및 삭제 절차 | 이용자 보관·파기 고지와 탈퇴 설명 |
 | Google Gemini·Google TTS의 실제 프로젝트/계약 주체, 처리 지역·보관·학습 사용 여부 | AI·음성 제3자 제공·위탁 및 국외 처리 고지 |
 | Google TTS 오디오와 AWS S3의 운영 주체·보관·로그 정책 | Gemini → Google TTS → AWS S3 정상 경로와 AWS S3 `ap-northeast-2` 리전은 확인됐으나 실제 운영 보관·백업·로그 정책은 확인 필요 |
-| Apple·Google·Kakao 로그인에서 실제 활성화한 제공 범위와 가입 시 수신·보관하는 필드 | 코드상 Email/Name 후보는 확인됐으나 운영 OAuth scope와 기존 회원 데이터 범위는 확인 필요 |
+| Google OAuth consent screen의 실제 승인 scope, Google Sign-In 9.1.0 manifest 적용 범위, Kakao Developers 동의 항목 | archive Privacy Report는 Google SDK 8개와 Kakao SDK Other Data를 추가로 선언한다. 앱은 Kakao `me()`/프로필 조회를 호출하지 않지만 서버가 token에서 어떤 claim을 저장·로그하는지는 운영 증빙 필요 |
 | 심사용 로그인 계정 또는 심사자가 로그인 없이 재현할 수 있는 경로 | App Review Information |
 
 ## 5. 2.2.1 심사 메모 초안
