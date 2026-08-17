@@ -196,6 +196,29 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertTrue(bundled.calls.isEmpty)
   }
 
+  func testLocalCustomCueCacheMissCompletesWithoutBundleFallback() async {
+    let bundled = GuidancePlayerRecorder()
+    let player = RemoteFirstRoutineGuidancePlayer(
+      bundledPlayer: bundled,
+      remotePlayer: LocalSequencePlayerRecorder(result: .completed),
+      localAudioProvider: LocalAudioProviderStub(urls: nil)
+    )
+
+    let result = await player.play(RoutineGuidanceCueRequest(
+      routineGroupLocalID: UUID(),
+      routineLocalID: UUID(),
+      routineTitle: "로컬 루틴",
+      routineType: .confirm,
+      fallbackItemID: nil,
+      voiceCode: "Aoede",
+      kind: .intro,
+      requiresServerGeneratedIntro: false
+    ))
+
+    XCTAssertEqual(result, .completed)
+    XCTAssertTrue(bundled.calls.isEmpty)
+  }
+
   func testServerRequiredPresetCacheMissDoesNotUseBundledVoice() async {
     let bundled = GuidancePlayerRecorder()
     let player = RemoteFirstRoutineGuidancePlayer(

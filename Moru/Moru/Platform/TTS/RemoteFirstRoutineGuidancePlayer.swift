@@ -198,7 +198,10 @@ final class RemoteFirstRoutineGuidancePlayer:
     }
     guard let itemID = request.fallbackItemID else {
       diagnostics.record(.customCueUnavailable)
-      return .unavailable
+      // A local-only custom cue has no bundled asset by design. It must still
+      // complete so the normal voice-input flow can begin; only a
+      // server-required cue is surfaced as unavailable above.
+      return .completed
     }
 
     await stopRemoteBeforeBundledPlayback()
