@@ -196,6 +196,33 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertTrue(bundled.calls.isEmpty)
   }
 
+  func testDefaultGuidancePlayerDoesNotBundleServerRequiredCue() async {
+    let player = GuidancePlayerRecorder()
+
+    let result = await player.play(RoutineGuidanceCueRequest(
+      fallbackItemID: "ENERGY-02",
+      voiceCode: "Aoede",
+      kind: .intro,
+      requiresServerGeneratedIntro: true
+    ))
+
+    XCTAssertEqual(result, .unavailable)
+    XCTAssertTrue(player.calls.isEmpty)
+  }
+
+  func testDefaultGuidancePlayerCompletesLocalCustomCueWithoutBundleItem() async {
+    let player = GuidancePlayerRecorder()
+
+    let result = await player.play(RoutineGuidanceCueRequest(
+      fallbackItemID: nil,
+      voiceCode: "Aoede",
+      kind: .intro
+    ))
+
+    XCTAssertEqual(result, .completed)
+    XCTAssertTrue(player.calls.isEmpty)
+  }
+
   func testLocalCustomCueCacheMissCompletesWithoutBundleFallback() async {
     let bundled = GuidancePlayerRecorder()
     let player = RemoteFirstRoutineGuidancePlayer(
@@ -479,6 +506,58 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       routineGroupLocalID: fixture.groupID,
       routineLocalID: fixture.routineID
     ))
+  }
+
+  func testUnavailableCacheKeepsSyncedRoutineServerRequired() async throws {
+    let groupID = UUID()
+    let routineID = UUID()
+    let localGroupID = UUID()
+    let localRoutineID = UUID()
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let bindings = SwiftDataRoutineSyncRepository(modelContainer: container)
+    _ = try bindings.recordRemoteIDs(
+      [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: groupID,
+          remoteID: 41
+        ),
+        RoutineServerBindingAssignment(
+          entityKind: .routine,
+          localEntityID: routineID,
+          remoteID: 51,
+          parentEntityKind: .routineGroup,
+          parentLocalEntityID: groupID
+        ),
+      ],
+      memberID: 7,
+      at: .distantPast
+    )
+    let identity = MutableIdentityProvider(
+      identity: AccountSessionIdentity(memberID: 7, sessionID: UUID())
+    )
+    let coordinator = RoutineTTSWarmupCoordinator(
+      remoteService: WarmupRemoteStub(response: []),
+      bindingRepository: bindings,
+      audioCache: nil,
+      downloader: RoutineTTSAudioDownloader(),
+      sessionIdentityProvider: identity,
+      voiceSelectionVersionStore: InMemoryVoiceSelectionVersionStore()
+    )
+
+    XCTAssertTrue(coordinator.expectsServerGeneratedIntro(
+      routineGroupLocalID: groupID,
+      routineLocalID: routineID
+    ))
+    XCTAssertFalse(coordinator.expectsServerGeneratedIntro(
+      routineGroupLocalID: localGroupID,
+      routineLocalID: localRoutineID
+    ))
+    let status = await coordinator.prepareAndWait(
+      routineGroupLocalID: groupID,
+      routineLocalIDs: [routineID]
+    )
+    XCTAssertEqual(status, .unavailable)
   }
 
   func testServerVoiceIntentSurvivesCacheInvalidationUntilPurgeCompletes() async throws {

@@ -152,8 +152,7 @@ struct DependencyContainer {
     let routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator?
     let guidancePlayer: any RoutineGuidancePlaying
     if let routineTTSRemoteService,
-       let sessionIdentityProvider,
-       let routineTTSAudioCache {
+       let sessionIdentityProvider {
       let warmupCoordinator = RoutineTTSWarmupCoordinator(
         remoteService: routineTTSRemoteService,
         bindingRepository: routineSyncRepository,

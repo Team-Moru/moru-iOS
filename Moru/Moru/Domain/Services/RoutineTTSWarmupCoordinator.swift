@@ -166,7 +166,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private let remoteService: any RoutineTTSRemoteServing
   private let bindingRepository: any RoutineSyncRepository
   private let routineRepository: (any RoutineRepository)?
-  private let audioCache: RoutineTTSAudioCache
+  private let audioCache: RoutineTTSAudioCache?
   private let downloader: any RoutineTTSAudioDownloading
   private weak var sessionIdentityProvider:
     (any CurrentAccountSessionIdentityProviding)?
@@ -195,7 +195,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     remoteService: any RoutineTTSRemoteServing,
     bindingRepository: any RoutineSyncRepository,
     routineRepository: (any RoutineRepository)? = nil,
-    audioCache: RoutineTTSAudioCache,
+    audioCache: RoutineTTSAudioCache?,
     downloader: any RoutineTTSAudioDownloading,
     sessionIdentityProvider: any CurrentAccountSessionIdentityProviding,
     serverNamespace: RoutineSyncServerNamespace = .production,
@@ -254,6 +254,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     if let currentIdentity,
        cacheUnavailableMemberIDs.contains(currentIdentity.memberID) {
       memberIDsToPurge.insert(currentIdentity.memberID)
+    }
+    guard let audioCache else {
+      sessionTransitionTask?.cancel()
+      sessionTransitionTask = nil
+      return
     }
     let previousTransition = sessionTransitionTask
     sessionTransitionTask = Task { [weak self, audioCache, diagnostics, serverNamespace] in
@@ -314,6 +319,9 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     }
     preparedPlans.removeAll()
     cacheUnavailableMemberIDs.insert(memberID)
+    guard let audioCache else {
+      return
+    }
     let previousTransition = sessionTransitionTask
     sessionTransitionTask = Task { [weak self, audioCache, diagnostics, serverNamespace] in
       _ = await previousTransition?.value
@@ -522,7 +530,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       routineGroupLocalID: request.routineGroupLocalID,
       routineLocalID: request.routineLocalID
     )
-    guard let identity = sessionIdentityProvider?.currentAccountSessionIdentity,
+    guard let audioCache,
+          let identity = sessionIdentityProvider?.currentAccountSessionIdentity,
           isAudioCacheUsable(for: identity),
           let plan = preparedPlans[planKey],
           plan.identity == identity,
@@ -1046,6 +1055,9 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     groupBinding: RoutineServerBinding,
     identity: AccountSessionIdentity
   ) async throws -> [RoutineTTSAudioCacheKey] {
+    guard let audioCache else {
+      throw RoutineTTSAudioCacheError.storageFailure
+    }
     let keys = assets.map {
       RoutineTTSAudioCacheKey(
         accountID: String(identity.memberID),
@@ -1231,7 +1243,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   }
 
   private func isAudioCacheUsable(for identity: AccountSessionIdentity) -> Bool {
-    !cacheUnavailableMemberIDs.contains(identity.memberID)
+    audioCache != nil && !cacheUnavailableMemberIDs.contains(identity.memberID)
   }
 
   private func currentSelectionVersion(

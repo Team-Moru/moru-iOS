@@ -239,8 +239,11 @@ protocol RoutineGuidancePlaying: GuidancePlaybackControlling {
 
 extension RoutineGuidancePlaying {
   func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult {
-    guard let itemID = request.fallbackItemID else {
+    guard !request.requiresServerGeneratedIntro else {
       return .unavailable
+    }
+    guard let itemID = request.fallbackItemID else {
+      return .completed
     }
 
     return await play(

@@ -804,7 +804,7 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(currentStep.id, step.id)
   }
 
-  func testLocalCustomUnavailableIntroDoesNotShowServerVoiceRetry() async {
+  func testLocalCustomSilentIntroCompletesWithoutServerVoiceRetry() async {
     let warmup = ServerVoiceWarmupStub(
       status: .unavailable,
       expectsServerGeneratedIntro: false
@@ -833,7 +833,7 @@ final class BundledRoutineAudioTests: XCTestCase {
     await drainTasks()
     let didFinish = await viewModel.waitUntilIntroFinishes(for: step.id)
 
-    XCTAssertFalse(didFinish)
+    XCTAssertTrue(didFinish)
     guard case .running(let runningStep) = viewModel.screenState else {
       XCTFail("A local custom cue must not be reclassified as server retry.")
       return
