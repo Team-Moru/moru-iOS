@@ -136,8 +136,8 @@ backfill도 sender보다 먼저 실행됩니다. 요청 중 계정 session gener
   뒤 한 번만 저장합니다. Outbox 저장이 실패하면 로컬 변경도 저장하지 않습니다.
 - 로그아웃 상태에서는 Outbox를 만들지 않습니다. 계정 세션이 확정되면 아직 해당
   회원의 binding이 없는 `localOnly` 그룹을 현재 snapshot으로 Outbox에 backfill한
-  뒤 sender를 시작합니다. 동일 snapshot의 재등록은 기존 generation UUID를
-  재사용합니다.
+  뒤 활성 그룹 선택 intent를 로컬 우선순위에 맞춰 등록하고 sender를
+  시작합니다. 동일 snapshot의 재등록은 기존 generation UUID를 재사용합니다.
 - 서버 응답으로 생성 성공을 확정할 때는 검증된 binding과 해당 Outbox 정리를
   한 번의 save로 처리합니다. 삭제 성공은 삭제 대상 binding과 Outbox를 함께
   지웁니다.

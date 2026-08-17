@@ -106,6 +106,42 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testLoginBackfillStagesNewestActiveGroupSelectionAfterCreates() throws {
+    let fixture = try makeFixture(memberID: nil)
+    var older = makeRoutine(
+      name: "이전 활성 루틴",
+      steps: [makeStep()],
+      isActive: true
+    )
+    older.updatedAt = Date(timeIntervalSince1970: 20)
+    var newer = makeRoutine(
+      name: "최신 활성 루틴",
+      steps: [makeStep()],
+      isActive: true
+    )
+    newer.updatedAt = Date(timeIntervalSince1970: 30)
+    try fixture.routines.saveRoutines([older, newer])
+
+    try RoutineSyncLoginBackfiller(
+      routineRepository: fixture.routines,
+      syncRepository: fixture.sync
+    ).backfillLocalRoutineGroups(memberID: 7, at: .distantPast)
+
+    let mutations = try fixture.sync.mutations(memberID: 7)
+    XCTAssertEqual(
+      mutations.filter { $0.operation == .createRoutineGroup }.count,
+      2
+    )
+    let selection = try XCTUnwrap(
+      mutations.first { $0.operation == .setRoutineGroupActive }
+    )
+    XCTAssertEqual(
+      try decodedCommand(selection),
+      .selectActiveRoutineGroup(selectedGroupLocalID: newer.id)
+    )
+  }
+
+  @MainActor
   func testLoginBackfillFlowsThroughProductionPostAndSettlesBindings()
     async throws {
     let fixture = try makeFixture(memberID: nil)

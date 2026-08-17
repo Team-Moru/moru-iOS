@@ -34,7 +34,10 @@ final class RoutineSyncLoginBackfiller: RoutineSyncLoginBackfilling {
     memberID: Int64,
     at date: Date = Date()
   ) throws {
-    for routine in try routineRepository.fetchRoutines() {
+    let routines = try routineRepository.fetchRoutines()
+    var didBackfillActiveGroup = false
+
+    for routine in routines {
       guard (routine.sync?.status ?? .localOnly) == .localOnly,
             try syncRepository.binding(
               memberID: memberID,
@@ -51,6 +54,49 @@ final class RoutineSyncLoginBackfiller: RoutineSyncLoginBackfilling {
         memberID: memberID,
         at: date
       )
+      didBackfillActiveGroup = didBackfillActiveGroup || routine.isActive
     }
+
+    guard didBackfillActiveGroup,
+          let selection = try routines.filter(\.isActive).sorted(by: isNewer).first(where: {
+            try isServerProjectableGroup($0.id, memberID: memberID)
+          }) else {
+      return
+    }
+
+    _ = try syncRepository.enqueue(
+      command: .selectActiveRoutineGroup(selectedGroupLocalID: selection.id),
+      memberID: memberID,
+      at: date
+    )
+  }
+
+  private func isNewer(_ lhs: Routine, _ rhs: Routine) -> Bool {
+    if lhs.updatedAt == rhs.updatedAt {
+      if lhs.createdAt == rhs.createdAt {
+        return lhs.id.uuidString < rhs.id.uuidString
+      }
+      return lhs.createdAt > rhs.createdAt
+    }
+    return lhs.updatedAt > rhs.updatedAt
+  }
+
+  private func isServerProjectableGroup(
+    _ groupID: UUID,
+    memberID: Int64
+  ) throws -> Bool {
+    if try syncRepository.binding(
+      memberID: memberID,
+      entityKind: .routineGroup,
+      localEntityID: groupID
+    ) != nil {
+      return true
+    }
+    return try syncRepository.mutation(
+      memberID: memberID,
+      operation: .createRoutineGroup,
+      entityKind: .routineGroup,
+      localEntityID: groupID
+    ) != nil
   }
 }
