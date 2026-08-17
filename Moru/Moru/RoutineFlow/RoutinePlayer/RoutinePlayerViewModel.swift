@@ -80,6 +80,13 @@ final class RoutinePlayerViewModel {
     private(set) var dialogState: DialogState?
     private(set) var isSavingRun = false
     private(set) var errorMessage: String?
+
+    #if DEBUG
+    func applyServerVoiceRetryPreviewState() {
+        screenState = .serverVoiceRetry(Routine.mockMorningRoutine.steps[0])
+    }
+    #endif
+
     var isStepInteractionDisabled: Bool {
         !isPresentationActive
             || dialogState != nil

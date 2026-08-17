@@ -721,6 +721,24 @@ private final class RoutinePlayerPreviewRegularFinalizer: RegularRoutineFinalizi
     }
 }
 
+@MainActor
+private extension RoutinePlayerViewModel {
+    static func serverVoiceRetryPreview() -> RoutinePlayerViewModel {
+        let viewModel = RoutinePlayerViewModel(
+            request: RegularRoutineExecutionRequest(
+                routineID: Routine.mockMorningRoutine.id,
+                source: .manual
+            ),
+            resolver: RoutinePlayerPreviewResolver(),
+            finalizer: RoutinePlayerPreviewRegularFinalizer(),
+            presentationToken: UUID(),
+            onEvent: { _, _ in }
+        )
+        viewModel.applyServerVoiceRetryPreviewState()
+        return viewModel
+    }
+}
+
 #Preview {
     RoutinePlayerView(
         viewModel: RoutinePlayerViewModel(
@@ -746,6 +764,11 @@ private final class RoutinePlayerPreviewRegularFinalizer: RegularRoutineFinalizi
             presentationToken: UUID(),
             onEvent: { _, _ in }
         )
+    )
+}
+#Preview("Server voice retry") {
+    RoutinePlayerView(
+        viewModel: .serverVoiceRetryPreview()
     )
 }
 #endif
