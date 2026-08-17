@@ -100,12 +100,15 @@ struct DefaultAppBootstrapPreflight: AppBootstrapPreflightPreparing {
 
 @MainActor
 final class AppBootstrapper: ObservableObject {
+  static let installationMarkerKey = "app-installation-marker-v1"
+
   @Published private(set) var state: AppBootstrapState = .idle
 
   private let modelContainerFactory: () throws -> ModelContainer
   private let accountSessionStoreFactory: () -> AccountSessionStore
   private let appCapabilities: AppCapabilities
   private let preflight: any AppBootstrapPreflightPreparing
+  private let installationMarkerUserDefaults: UserDefaults
 
   init(
     modelContainerFactory: @escaping () throws -> ModelContainer = {
@@ -119,12 +122,14 @@ final class AppBootstrapper: ObservableObject {
       )
     },
     appCapabilities: AppCapabilities = .production,
-    preflight: any AppBootstrapPreflightPreparing = DefaultAppBootstrapPreflight()
+    preflight: any AppBootstrapPreflightPreparing = DefaultAppBootstrapPreflight(),
+    installationMarkerUserDefaults: UserDefaults = .standard
   ) {
     self.modelContainerFactory = modelContainerFactory
     self.accountSessionStoreFactory = accountSessionStoreFactory
     self.appCapabilities = appCapabilities
     self.preflight = preflight
+    self.installationMarkerUserDefaults = installationMarkerUserDefaults
   }
 
   func start() {
@@ -244,6 +249,11 @@ final class AppBootstrapper: ObservableObject {
         sessionIdentityProvider: accountSessionStore,
         geminiDataConsent: geminiDataConsentStore,
         routineSyncWakeupRelay: routineSyncWakeupRelay
+      )
+      let shouldSkipAccountRestoration = try prepareInstallationState(
+        dependencies: dependencies,
+        accountSessionStore: accountSessionStore,
+        appCapabilities: appCapabilities
       )
       // Recovery changes no request identity. The sender can only replay a
       // complete stored wire artifact inside the server's retention window.
@@ -434,7 +444,8 @@ final class AppBootstrapper: ObservableObject {
         app,
         accountSessionStore: accountSessionStore,
         accountScopedDataCleaner: accountScopedDataCleaner,
-        appCapabilities: appCapabilities
+        appCapabilities: appCapabilities,
+        shouldSkipAccountRestoration: shouldSkipAccountRestoration
       )
     } catch {
       state = .failed(
@@ -459,14 +470,19 @@ final class AppBootstrapper: ObservableObject {
     _ app: BootstrappedApp,
     accountSessionStore: AccountSessionStore,
     accountScopedDataCleaner: any AccountScopedDataCleaning,
-    appCapabilities: AppCapabilities
+    appCapabilities: AppCapabilities,
+    shouldSkipAccountRestoration: Bool
   ) {
     Task { @MainActor in
-      let shouldRestoreAccount = await shouldRestoreAccountSession(
-        accountSessionStore,
-        accountScopedDataCleaner: accountScopedDataCleaner,
-        appCapabilities: appCapabilities
-      )
+      let shouldRestoreAccount = if shouldSkipAccountRestoration {
+        false
+      } else {
+        await shouldRestoreAccountSession(
+          accountSessionStore,
+          accountScopedDataCleaner: accountScopedDataCleaner,
+          appCapabilities: appCapabilities
+        )
+      }
       await preflight.prepare(dependencies: app.dependencies)
       state = .ready(app)
 
@@ -480,6 +496,37 @@ final class AppBootstrapper: ObservableObject {
         accountSessionStore.restore()
       }
     }
+  }
+
+  private func prepareInstallationState(
+    dependencies: DependencyContainer,
+    accountSessionStore: AccountSessionStore,
+    appCapabilities: AppCapabilities
+  ) throws -> Bool {
+    guard appCapabilities.shouldRestoreAccountSession,
+          installationMarkerUserDefaults.object(
+            forKey: Self.installationMarkerKey
+          ) == nil else {
+      return false
+    }
+
+    let profile = try dependencies.localProfileRepository.fetchProfile()
+    let routines = try dependencies.routineRepository.fetchRoutines()
+    let isLocalStoreEmpty = profile == nil && routines.isEmpty
+
+    if isLocalStoreEmpty {
+      // App deletion removes SwiftData and UserDefaults but can leave this
+      // device-only Keychain item behind. Do not invoke provider sign-out:
+      // only discard MORU credentials and the in-memory bearer. The session
+      // store remains signed out even when Keychain deletion fails.
+      try? accountSessionStore.removeLocalAccountSession()
+    }
+
+    installationMarkerUserDefaults.set(
+      true,
+      forKey: Self.installationMarkerKey
+    )
+    return isLocalStoreEmpty
   }
 
   private func shouldRestoreAccountSession(
