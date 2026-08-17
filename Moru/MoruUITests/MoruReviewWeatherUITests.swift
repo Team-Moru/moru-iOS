@@ -10,7 +10,7 @@ final class MoruReviewWeatherUITests: XCTestCase {
   private let app = XCUIApplication()
 
   func testAccountConnectionShowsRoundSocialLoginButtons() {
-    launchApp(locationAuthorization: .denied)
+    launchAppForAccountConnection()
 
     let profileTab = app.buttons["app.tab.my"]
     XCTAssertTrue(profileTab.waitForExistence(timeout: 5))
@@ -47,6 +47,16 @@ final class MoruReviewWeatherUITests: XCTestCase {
         ? "-ui-testing-weather-location-authorized"
         : "-ui-testing-weather-location-denied",
     ]
+    app.launch()
+    XCTAssertTrue(
+      app.wait(for: .runningForeground, timeout: 10),
+      "MORU가 foreground로 실행되어야 합니다."
+    )
+  }
+
+  private func launchAppForAccountConnection() {
+    continueAfterFailure = false
+    app.launchArguments = ["-ui-testing-account-connection-fixture"]
     app.launch()
     XCTAssertTrue(
       app.wait(for: .runningForeground, timeout: 10),

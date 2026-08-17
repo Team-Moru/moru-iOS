@@ -285,10 +285,10 @@ final class AppBootstrapper: ObservableObject {
       }
       let sessionStore = dependencies.makeSessionStore()
       #if DEBUG
-      if ProcessInfo.processInfo.arguments.contains("-ui-testing-weather-fixture") {
+      if usesReviewUIFixture {
         // Review UI tests need to reach Home before exercising the operating
-        // system's real location-permission screens. This is Debug-only and
-        // never changes a Release user's onboarding state.
+        // system's real location-permission screens or account entry. This is
+        // Debug-only and never changes a Release user's onboarding state.
         _ = try? dependencies.localProfileRepository.loadOrCreateDefaultProfile()
       }
       #endif
@@ -403,6 +403,16 @@ final class AppBootstrapper: ObservableObject {
         )
       )
     }
+  }
+
+  private var usesReviewUIFixture: Bool {
+    #if DEBUG
+    let arguments = ProcessInfo.processInfo.arguments
+    return arguments.contains("-ui-testing-weather-fixture")
+      || arguments.contains("-ui-testing-account-connection-fixture")
+    #else
+    false
+    #endif
   }
 
   private func finishBootstrap(
