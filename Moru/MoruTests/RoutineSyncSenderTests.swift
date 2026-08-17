@@ -20,7 +20,8 @@ final class RoutineSyncSenderTests: XCTestCase {
       repository: fixture.repository,
       requestPreparer: RejectingRoutineSyncWireRequestPreparer(),
       transport: fixture.transport,
-      contract: .productionP0
+      contract: .productionP0,
+      geminiDataConsent: GeminiDataConsentStub()
     )
 
     let result = try await sender.sendNext(
@@ -63,6 +64,132 @@ final class RoutineSyncSenderTests: XCTestCase {
       try fixture.repository.mutations(memberID: 7).first?.state,
       .waitingForServerContract
     )
+  }
+
+  @MainActor
+  func testGeminiConsentHoldsCreateBeforeClaimAndExactReplayAfterRevocation()
+    async throws {
+    let fixture = try makeFixture(actions: [.ambiguous])
+    let mutation = try fixture.repository.enqueue(
+      command: createCommand(groupID: UUID()),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let sender = RoutineSyncSender(
+      repository: fixture.repository,
+      requestPreparer: fixture.preparer,
+      transport: fixture.transport,
+      contract: .productionP0,
+      geminiDataConsent: consent
+    )
+
+    let held = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+
+    XCTAssertEqual(held, .consentRequired(mutationID: mutation.id))
+    XCTAssertEqual(consent.requestCount, 1)
+    XCTAssertEqual(fixture.preparer.callCount, 0)
+    let heldRequests = await fixture.transport.requests()
+    XCTAssertTrue(heldRequests.isEmpty)
+    let beforeConsent = try XCTUnwrap(
+      try fixture.repository.mutations(memberID: 7).first
+    )
+    XCTAssertEqual(beforeConsent.state, .queued)
+    XCTAssertNil(beforeConsent.attempt)
+
+    consent.hasExplicitGeminiDataConsent = true
+    let firstSend = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+    XCTAssertEqual(
+      firstSend,
+      .retryScheduled(mutationID: mutation.id, nextAttemptAt: nil)
+    )
+    let attempted = try XCTUnwrap(
+      try fixture.repository.mutations(memberID: 7).first
+    )
+    XCTAssertEqual(attempted.state, .needsReconciliation)
+    XCTAssertNotNil(attempted.attempt)
+    let attemptedRequests = await fixture.transport.requests()
+    XCTAssertEqual(attemptedRequests.count, 1)
+
+    consent.hasExplicitGeminiDataConsent = false
+    let replayHeld = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 4)
+    )
+
+    XCTAssertEqual(replayHeld, .consentRequired(mutationID: mutation.id))
+    XCTAssertEqual(consent.requestCount, 2)
+    XCTAssertEqual(fixture.preparer.callCount, 1)
+    let replayRequests = await fixture.transport.requests()
+    XCTAssertEqual(replayRequests.count, 1)
+    let heldReplay = try XCTUnwrap(
+      try fixture.repository.mutations(memberID: 7).first
+    )
+    XCTAssertEqual(heldReplay.state, .needsReconciliation)
+    XCTAssertEqual(
+      heldReplay.attempt?.generationID,
+      attempted.attempt?.generationID
+    )
+  }
+
+  @MainActor
+  func testGeminiConsentHoldsAddRoutineBeforeWirePreparation() async throws {
+    let fixture = try makeFixture(actions: [])
+    let groupID = UUID()
+    let routineID = UUID()
+    _ = try fixture.repository.recordRemoteIDs(
+      [
+        RoutineServerBindingAssignment(
+          entityKind: .routineGroup,
+          localEntityID: groupID,
+          remoteID: 41
+        ),
+      ],
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let mutation = try fixture.repository.enqueue(
+      command: .addRoutine(
+        groupLocalID: groupID,
+        routine: RoutineSyncRoutineSnapshot(
+          localID: routineID,
+          title: "동의 전 단계",
+          type: "confirm",
+          durationSeconds: nil,
+          order: 0
+        )
+      ),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let sender = RoutineSyncSender(
+      repository: fixture.repository,
+      requestPreparer: fixture.preparer,
+      transport: fixture.transport,
+      contract: .productionP0,
+      geminiDataConsent: consent
+    )
+
+    let result = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 3)
+    )
+
+    XCTAssertEqual(result, .consentRequired(mutationID: mutation.id))
+    XCTAssertEqual(consent.requestCount, 1)
+    XCTAssertEqual(fixture.preparer.callCount, 0)
+    let capturedRequests = await fixture.transport.requests()
+    XCTAssertTrue(capturedRequests.isEmpty)
+    let held = try XCTUnwrap(try fixture.repository.mutations(memberID: 7).first)
+    XCTAssertEqual(held.state, .queued)
+    XCTAssertNil(held.attempt)
   }
 
   @MainActor
@@ -213,7 +340,8 @@ final class RoutineSyncSenderTests: XCTestCase {
         repository: repository,
         requestPreparer: preparer,
         transport: transport,
-        contract: .productionP0
+        contract: .productionP0,
+        geminiDataConsent: GeminiDataConsentStub()
       )
       _ = try await sender.sendNext(
         memberID: 7,
@@ -246,7 +374,8 @@ final class RoutineSyncSenderTests: XCTestCase {
       repository: repository,
       requestPreparer: trapPreparer,
       transport: transport,
-      contract: .productionP0
+      contract: .productionP0,
+      geminiDataConsent: GeminiDataConsentStub()
     )
 
     _ = try await sender.sendNext(
@@ -377,7 +506,8 @@ final class RoutineSyncSenderTests: XCTestCase {
       requestPreparer: fixture.preparer,
       transport: transport,
       contract: .productionP0,
-      sessionIdentityProvider: provider
+      sessionIdentityProvider: provider,
+      geminiDataConsent: GeminiDataConsentStub()
     )
 
     let result = try await sender.sendNext(
@@ -424,7 +554,8 @@ final class RoutineSyncSenderTests: XCTestCase {
       repository: fixture.repository,
       requestPreparer: fixture.preparer,
       transport: fixture.transport,
-      contract: contract
+      contract: contract,
+      geminiDataConsent: GeminiDataConsentStub()
     )
   }
 

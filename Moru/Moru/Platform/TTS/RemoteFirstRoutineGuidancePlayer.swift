@@ -192,8 +192,15 @@ final class RemoteFirstRoutineGuidancePlayer:
   ) async -> GuidancePlaybackResult {
     guard !Task.isCancelled,
           expectedPlaybackGeneration == playbackGeneration else { return .cancelled }
+    guard !request.requiresServerGeneratedIntro else {
+      diagnostics.record(.serverCueUnavailable)
+      return .unavailable
+    }
     guard let itemID = request.fallbackItemID else {
       diagnostics.record(.customCueUnavailable)
+      // A local-only custom cue has no bundled asset by design. It must still
+      // complete so the normal voice-input flow can begin; only a
+      // server-required cue is surfaced as unavailable above.
       return .completed
     }
 

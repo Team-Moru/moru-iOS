@@ -1,5 +1,7 @@
 # MORU 개인정보·App Review 답변
 
+> **2.2.1에 사용 금지 — 과거 2.1.1 가정 기록.** 이 문서는 “계정 없음·개발자 서버 없음·외부 전송 없음”이라는 현재와 다른 전제를 포함합니다. 2.2.1의 공개 문서·App Privacy·심사 입력에는 사용하지 마십시오. 현재 작업본은 [`app-privacy-2.2.1-draft-ko.md`](app-privacy-2.2.1-draft-ko.md), [`store-metadata-2.2.1-draft-ko.md`](store-metadata-2.2.1-draft-ko.md), `public-*-2.2.1-draft-ko.md`입니다.
+
 ## 사실의 출처와 증거 등급
 
 | 등급 | 이 문서에서의 사용 원칙 | 현재 상태 |

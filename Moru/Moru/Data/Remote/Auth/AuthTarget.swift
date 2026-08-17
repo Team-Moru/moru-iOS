@@ -134,6 +134,7 @@ nonisolated enum AuthTarget: MoruTargetType {
           "code": "COMMON200",
           "message": "성공입니다.",
           "result": {
+            "status": "COMPLETED",
             "message": "회원 탈퇴가 완료되었습니다."
           }
         }

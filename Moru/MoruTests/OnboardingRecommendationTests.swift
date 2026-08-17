@@ -140,7 +140,8 @@ final class OnboardingRecommendationTests: XCTestCase {
           )
         ),
         localService: local,
-        signedInMemberProvider: account
+        signedInMemberProvider: account,
+        geminiDataConsent: GeminiDataConsentStub()
       )
 
       let result = try await coordinator.suggest(from: suggestionInput)
@@ -151,6 +152,30 @@ final class OnboardingRecommendationTests: XCTestCase {
     }
   }
 
+  func testMissingGeminiConsentUsesLocalRecommendationWithoutCallingServer()
+    async throws {
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let local = OnboardingRecommendationLocalStub()
+    let server = OnboardingRecommendationServerStub(
+      result: .success(serverRoutine)
+    )
+    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+
+    let result = try await coordinator.suggest(from: suggestionInput)
+
+    XCTAssertEqual(result.source, .localFallback(.geminiConsentRequired))
+    XCTAssertEqual(result.routine.name, "로컬 fallback")
+    XCTAssertEqual(local.callCount, 1)
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(consent.requestCount, 1)
+  }
+
   func testFailureFallsBackButCancellationDoesNot() async throws {
     let local = OnboardingRecommendationLocalStub()
     let account = MutableOnboardingRecommendationAccount(memberID: 98)
@@ -159,7 +184,8 @@ final class OnboardingRecommendationTests: XCTestCase {
         result: .failure(RoutineSuggestionRemoteFailure.offline)
       ),
       localService: local,
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
 
     let fallback = try await fallbackCoordinator.suggest(
@@ -173,7 +199,8 @@ final class OnboardingRecommendationTests: XCTestCase {
         result: .failure(RoutineSuggestionRemoteFailure.cancelled)
       ),
       localService: local,
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
 
     do {
@@ -196,7 +223,8 @@ final class OnboardingRecommendationTests: XCTestCase {
     let coordinator = OnboardingRecommendationCoordinator(
       serverService: server,
       localService: local,
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     var input = suggestionInput
     input.goalTags = ["unknown", "health"]
@@ -216,7 +244,8 @@ final class OnboardingRecommendationTests: XCTestCase {
     let coordinator = OnboardingRecommendationCoordinator(
       serverService: GatedOnboardingRecommendationServer(gate: gate),
       localService: local,
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let task = _Concurrency.Task {
       try await coordinator.suggest(from: suggestionInput)

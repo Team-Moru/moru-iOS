@@ -488,21 +488,21 @@ private enum VisualBaseline {
 
   static let hashes: [String: String] = [
     "moru-pr32-final-home-light-M.png":
-      "AAAEAAYAnwQ8QDjgMOBw8XDweOC4wMwAzgDWAClBGTM0MTTxHMR5cDFhggRgAGAAAgBAAOAMwjjkyGTIAAAAAA==",
+      "AAAEAAYAnwQ8QDjgMOBw8XDweOD8wMwAzgDWAClBHTMwMTTxHMR5cDFhgQR0AOAA4QEGAHEM4yRsyGTIAAAAAA==",
     "moru-pr32-final-home-light-AX3.png":
-      "AAAEAAYAnwQ8QDhgzuLGYfBw+eH9gO2C1oDWgAQhQYFFaSYBRkEmoSXJLYkOSUxhgIADAEMgIyBkyGTIAAAAAA==",
+      "AAAEAAcAjwTuAOSA2GDScfFg+eH9gO2C1oDWgAQhQYFCySZBRyEkoSXJLYkOSUxhgIADAEMgIyBkyGTIAAAAAA==",
     "moru-pr32-final-routine-light-M.png":
       "AAAAACAAwADEAOAA4ATUCNgwyDDQCAAByACGAFg4yDhCEIYEWBDYOEgQgAJHAE4AAAAAAAAAESJsyGTIAAAAAA==",
     "moru-pr32-final-routine-light-AX3.png":
       "AAAAADgAxADEAOQQykDKQspg2RTZDNpk2mTAYMBgxBCoAugApMBZAN0QXGBaSERwQHCAylsA2wBkSGTIAAAAAA==",
     "moru-pr32-final-history-light-M.png":
-      "AAAAACAAwALAANoUzBjcmMSEQADgAuQIGCBxcXnhOdgCAsAA5CAWAEYBVVFVUX9QdRhxUFVUVUBk2GTIAAAAAA==",
+      "AAAAAIAAwALAAMoUzBjcmMSESACgAuIEOHBxMXlhMHACAMAApCAXAEYBIUFVVW9wz3D1MPU8c1BkyGTIAAAAAA==",
     "moru-pr32-final-history-light-AX3.png":
       "AAAIAOAA5ADUAcgEwWTBNMCkwLTBVMAkwjTDNMjMyMzIjMjQyNDIzMiEyATIBMgEYMDKAsogCYBkyGTIAAAAAA==",
     "moru-pr32-final-profile-light-M.png":
-      "AAAAAEAAkACRgOoB6kHkAZEAggA8gPSk8iQQEMgA4ADyBMAEyADMAHIA8gEYAMAAoBDwhPKEEzBsyGTIAAAAAA==",
+      "AAAAAEAAkACBgLpCakLIAjEAyACAAOAE4ASQAJAAYATgBJgAwALCIMIg6ATpBJYAwACAAMkE0STkyGTIAAAAAA==",
     "moru-pr32-final-profile-light-AX3.png":
-      "AAAQAOAAxADBLG7R6tHtwW3JMjDIAMiIMyAxJTqh9mT2ZDYZMQE4AAYA2QDZADIA9kXwBDMBCiBkyGTIAAAAAA==",
+      "AAAQAOAAxADBLB7SutJNQp1KIqDZANkA5ADohMgExgDIAMUA6kTqRBGA8yChCOIkxMDFwuWZ1Z1kyGTIAAAAAA==",
     "moru-pr32-final-current-routine-light-M.png":
       "AAAAAAAA4ARiBfKY8pjoGFANUA1RDVEFWQ1RBVAN0AyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr32-final-current-routine-light-AX3.png":
@@ -520,9 +520,9 @@ private enum VisualBaseline {
     "moru-pr44-bundled-voices-light-AX3.png":
       "AAAAAEABsAywTAgL5eTlZOVI1UL1Yuaw2QDJQMyolAAGAjAHUA16BQYDMEdQDVoHBgM4A1gNcgXJPM0ccIEAAg==",
     "moru-pr50-session-empty-home-light-M.png":
-      "AAAEAAYAnwQ8QDjgMOBw8XDweOC4wMwAzgDWAAQhYQFgAQIAAAAAgAMAAzANSD1AMbAGhwaDEWJkyGTIAAAAAA==",
+      "AAAEAAYAnwQ8QDjgMOBw8XDweOD8wMwAzgDWAAAhdIFgAWADAAAAAACAAwADMA1IPUAxsgaDEoPkyGTIAAAAAA==",
     "moru-pr50-session-empty-home-light-AX3.png":
-      "AAAEAAYAnwQ8QDhgzuLGYfBw+eH9gO2C1oDWkDkhaWdKQVpBEJAGAAYABoAaATs4EoQwpH2xdZFkyGTIAAAAAA==",
+      "AAAEAAYAnwQ8QDji2vD6cPBw+eH9gO2C1oD2gGpBalFDAUMjSkla0aYmBoAGgQaAOyAzODCmOaJkSGTIAAAAAA==",
     "moru-pr50-session-empty-routine-light-M.png":
       "AAAAACAAwADAACAAAAAAgAMAAxANSB2AGOIGgwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAESJsyGTIAAAAAA==",
     "moru-pr50-session-empty-routine-light-AX3.png":

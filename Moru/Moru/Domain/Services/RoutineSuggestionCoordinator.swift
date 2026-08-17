@@ -7,6 +7,7 @@ import Foundation
 
 enum RoutineSuggestionFallbackReason: Equatable {
   case signedOut
+  case geminiConsentRequired
   case offline
   case timeout
   case serverUnavailable
@@ -66,15 +67,18 @@ final class RoutineSuggestionCoordinator: RoutineSuggestionCoordinating {
   private let serverService: (any ServerRoutineSuggestionServing)?
   private let localService: any RoutineSuggestionService
   private weak var signedInMemberProvider: (any SignedInMemberProviding)?
+  private let geminiDataConsent: any GeminiDataConsentAuthorizing
 
   init(
     serverService: (any ServerRoutineSuggestionServing)?,
     localService: any RoutineSuggestionService,
-    signedInMemberProvider: (any SignedInMemberProviding)?
+    signedInMemberProvider: (any SignedInMemberProviding)?,
+    geminiDataConsent: any GeminiDataConsentAuthorizing
   ) {
     self.serverService = serverService
     self.localService = localService
     self.signedInMemberProvider = signedInMemberProvider
+    self.geminiDataConsent = geminiDataConsent
   }
 
   func suggest(
@@ -85,6 +89,10 @@ final class RoutineSuggestionCoordinator: RoutineSuggestionCoordinating {
     }
     guard let serverService else {
       return try localResult(from: input, reason: .serverUnavailable)
+    }
+    guard geminiDataConsent.hasExplicitGeminiDataConsent else {
+      geminiDataConsent.requestGeminiDataConsentIfNeeded()
+      return try localResult(from: input, reason: .geminiConsentRequired)
     }
 
     do {

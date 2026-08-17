@@ -167,7 +167,13 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   }
 
   var authorizationStatus: HomeWeatherAuthorizationStatus {
-    switch locationManager.authorizationStatus {
+    #if DEBUG
+    if let uiTestingAuthorizationStatus = Self.uiTestingAuthorizationStatus {
+      return uiTestingAuthorizationStatus
+    }
+    #endif
+
+    return switch locationManager.authorizationStatus {
     case .notDetermined:
       .notDetermined
     case .authorizedAlways, .authorizedWhenInUse:
@@ -182,6 +188,12 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   }
 
   func locationServicesEnabled() async -> Bool {
+    #if DEBUG
+    if Self.uiTestingAuthorizationStatus != nil {
+      return true
+    }
+    #endif
+
     let probe = locationServicesEnabledProbe
     return await Task.detached(priority: .userInitiated) {
       probe()
@@ -189,6 +201,12 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   }
 
   func requestWhenInUseAuthorization() async -> HomeWeatherAuthorizationStatus {
+    #if DEBUG
+    if let uiTestingAuthorizationStatus = Self.uiTestingAuthorizationStatus {
+      return uiTestingAuthorizationStatus
+    }
+    #endif
+
     guard authorizationStatus == .notDetermined else {
       return authorizationStatus
     }
@@ -217,6 +235,14 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
     case .notDetermined:
       throw HomeWeatherServiceError.noLocationFix
     }
+
+    #if DEBUG
+    if Self.usesUITestingWeatherFixture {
+      // UI review uses a deterministic coordinate after the fixture has
+      // supplied its authorization state.
+      return Self.uiTestingLocation
+    }
+    #endif
 
     return try await withCheckedThrowingContinuation { continuation in
       let shouldRequestLocation = locationContinuations.isEmpty
@@ -528,10 +554,38 @@ final class CoreLocationWeatherService: NSObject, HomeWeatherService {
   #if DEBUG
   private static let uiTestingWeatherFixtureArgument =
     "-ui-testing-weather-fixture"
+  private static let uiTestingLocationAuthorizedArgument =
+    "-ui-testing-weather-location-authorized"
+  private static let uiTestingLocationDeniedArgument =
+    "-ui-testing-weather-location-denied"
 
   private static var usesUITestingWeatherFixture: Bool {
     ProcessInfo.processInfo.arguments.contains(uiTestingWeatherFixtureArgument)
   }
+
+  // Physical-device XCUITest cannot consistently invoke interruption monitors
+  // for the system location prompt. This fixture lets the review test exercise
+  // MORU's authorized and denied UI states without changing device permissions.
+  // It is compiled only into Debug builds and requires the weather fixture flag.
+  private static var uiTestingAuthorizationStatus: HomeWeatherAuthorizationStatus? {
+    guard usesUITestingWeatherFixture else {
+      return nil
+    }
+
+    let arguments = ProcessInfo.processInfo.arguments
+    if arguments.contains(uiTestingLocationAuthorizedArgument) {
+      return .authorized
+    }
+    if arguments.contains(uiTestingLocationDeniedArgument) {
+      return .denied
+    }
+    return nil
+  }
+
+  private static let uiTestingLocation = CLLocation(
+    latitude: 37.5665,
+    longitude: 126.9780
+  )
 
   private static func uiTestingWeatherSnapshot(
     for location: CLLocation

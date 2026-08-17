@@ -11,15 +11,18 @@ final class OnboardingRecommendationCoordinator:
   private let serverService: (any ServerOnboardingRecommendationServing)?
   private let localService: any RoutineSuggestionService
   private weak var signedInMemberProvider: (any SignedInMemberProviding)?
+  private let geminiDataConsent: any GeminiDataConsentAuthorizing
 
   init(
     serverService: (any ServerOnboardingRecommendationServing)?,
     localService: any RoutineSuggestionService,
-    signedInMemberProvider: (any SignedInMemberProviding)?
+    signedInMemberProvider: (any SignedInMemberProviding)?,
+    geminiDataConsent: any GeminiDataConsentAuthorizing
   ) {
     self.serverService = serverService
     self.localService = localService
     self.signedInMemberProvider = signedInMemberProvider
+    self.geminiDataConsent = geminiDataConsent
   }
 
   func suggest(
@@ -36,6 +39,10 @@ final class OnboardingRecommendationCoordinator:
     }
     guard let serverService else {
       return try localResult(from: input, reason: .serverUnavailable)
+    }
+    guard geminiDataConsent.hasExplicitGeminiDataConsent else {
+      geminiDataConsent.requestGeminiDataConsentIfNeeded()
+      return try localResult(from: input, reason: .geminiConsentRequired)
     }
 
     do {

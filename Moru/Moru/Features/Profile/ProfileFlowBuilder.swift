@@ -27,6 +27,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
   private let kakaoAuthorizationSession: any KakaoAuthorizationStarting
   private let accountLifecycleService: any AccountLifecycleManaging
+  private let geminiDataConsentStore: GeminiDataConsentStore
   private let appCapabilities: AppCapabilities
   private let resetUseCase: (any ResetLocalDataUseCaseProtocol)?
   private let resetAvailability: @MainActor () -> Bool
@@ -49,6 +50,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     googleAuthorizationSession: any GoogleAuthorizationStarting,
     kakaoAuthorizationSession: any KakaoAuthorizationStarting,
     accountLifecycleService: any AccountLifecycleManaging,
+    geminiDataConsentStore: GeminiDataConsentStore,
     appCapabilities: AppCapabilities,
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
     resetAvailability: @escaping @MainActor () -> Bool,
@@ -69,6 +71,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.googleAuthorizationSession = googleAuthorizationSession
     self.kakaoAuthorizationSession = kakaoAuthorizationSession
     self.accountLifecycleService = accountLifecycleService
+    self.geminiDataConsentStore = geminiDataConsentStore
     self.appCapabilities = appCapabilities
     self.resetUseCase = resetUseCase
     self.resetAvailability = resetAvailability
@@ -102,6 +105,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
         accountSessionStore: accountSessionStore,
         googleAuthorizationSession: googleAuthorizationSession,
         kakaoAuthorizationSession: kakaoAuthorizationSession,
+        geminiDataConsentStore: geminiDataConsentStore,
         appCapabilities: appCapabilities
       )
     )

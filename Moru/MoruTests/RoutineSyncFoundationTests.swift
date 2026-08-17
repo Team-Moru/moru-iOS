@@ -865,7 +865,7 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
-  func testFreshResetDeletesBindingsAndMutations() throws {
+  func testFreshResetDeletesBindingsAndMutationsButPreservesWithdrawalRecovery() throws {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let repository = SwiftDataRoutineSyncRepository(
       modelContext: container.mainContext
@@ -908,10 +908,11 @@ final class RoutineSyncFoundationTests: XCTestCase {
         FetchDescriptor<PersistedRoutineSyncMutation>()
       ).isEmpty
     )
-    XCTAssertTrue(
+    XCTAssertEqual(
       try container.mainContext.fetch(
         FetchDescriptor<PersistedPendingAccountCleanup>()
-      ).isEmpty
+      ).count,
+      1
     )
   }
 
@@ -1394,6 +1395,33 @@ final class RoutineSyncFoundationTests: XCTestCase {
     try repository.finalizePendingAccountCleanup(memberID: 7)
     XCTAssertTrue(
       try container.mainContext.fetch(FetchDescriptor<PersistedPendingAccountCleanup>()).isEmpty
+    )
+  }
+
+  @MainActor
+  func testAttemptingPendingCleanupCanBeginAgainForExplicitRemoteRetry() throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataRoutineSyncRepository(
+      modelContext: container.mainContext
+    )
+
+    try repository.preparePendingAccountCleanup(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    try repository.beginPendingAccountCleanupAttempt(memberID: 7)
+
+    // A timeout or lost response leaves `.attempting`. A user-confirmed retry
+    // must be able to cross the same durable boundary and issue DELETE again.
+    try repository.preparePendingAccountCleanup(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+    try repository.beginPendingAccountCleanupAttempt(memberID: 7)
+
+    XCTAssertEqual(
+      try repository.pendingAccountCleanupRecovery().ambiguousMemberIDs,
+      [7]
     )
   }
 

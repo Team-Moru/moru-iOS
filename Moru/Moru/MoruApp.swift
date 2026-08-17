@@ -46,6 +46,7 @@ struct MoruApp: App {
             dependencies: app.dependencies,
             sessionStore: app.sessionStore,
             accountSessionStore: app.accountSessionStore,
+            geminiDataConsentStore: app.geminiDataConsentStore,
             socialLoginCoordinator: app.socialLoginCoordinator,
             googleAuthorizationSession: app.googleAuthorizationSession,
             kakaoAuthorizationSession: app.kakaoAuthorizationSession,

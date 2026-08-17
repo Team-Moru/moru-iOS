@@ -38,6 +38,8 @@ nonisolated struct NoAccountScopedDataCleaner: AccountScopedDataCleaning {
 nonisolated enum AccountLifecycleError: Error, Equatable, Sendable {
   case sessionUnavailable
   case localCleanupFailed
+  case withdrawalStateUnavailable
+  case appleReauthenticationRequired
 }
 
 nonisolated enum SocialProviderSessionSignOutReason: Equatable, Sendable {
@@ -83,6 +85,9 @@ final class SocialProviderSessionSignOutRouter:
 protocol AccountLifecycleManaging: AnyObject {
   func logout() async throws
   func withdraw() async throws
+  func reauthenticateAppleWithdrawal(
+    with authorization: SocialAuthorization
+  ) async throws
 }
 
 @MainActor
@@ -93,6 +98,7 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
   private let providerSessionSignOut: any SocialProviderSessionSigningOut
   private let routineTTSAudioCacheCleaner:
     (any RoutineTTSAudioCacheCleaning)?
+  private var withdrawalTask: Task<Void, Error>?
 
   init(
     authRemoteDataSource: any AuthRemoteDataSource,
@@ -111,6 +117,14 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
   }
 
   func logout() async throws {
+    guard !accountSessionStore.isWithdrawalPending,
+          accountSessionStore.beginAccountLifecycleOperation(.logout) else {
+      // A competing lifecycle operation owns the exact credential until its
+      // remote and local settlement has finished.
+      throw AccountLifecycleError.sessionUnavailable
+    }
+    defer { accountSessionStore.endAccountLifecycleOperation(.logout) }
+
     let credentials = try? accountSessionStore.credentialsForAccountLifecycle()
     let provider = credentials?.provider ?? accountSessionStore.signedInProvider
     let memberID = credentials?.memberID ?? accountSessionStore.signedInMemberID
@@ -146,12 +160,106 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
   }
 
   func withdraw() async throws {
+    if let withdrawalTask {
+      try await withdrawalTask.value
+      return
+    }
+
+    guard accountSessionStore.beginAccountLifecycleOperation(.withdrawal) else {
+      throw AccountLifecycleError.sessionUnavailable
+    }
+
+    let task = Task { @MainActor in
+      try await self.performWithdrawal()
+    }
+    withdrawalTask = task
+    defer {
+      withdrawalTask = nil
+      accountSessionStore.endAccountLifecycleOperation(.withdrawal)
+    }
+    try await task.value
+  }
+
+  func reauthenticateAppleWithdrawal(
+    with authorization: SocialAuthorization
+  ) async throws {
+    guard accountSessionStore.beginAccountLifecycleOperation(.withdrawal) else {
+      throw AccountLifecycleError.sessionUnavailable
+    }
+    defer { accountSessionStore.endAccountLifecycleOperation(.withdrawal) }
+
+    let pendingCredentials: AccountLifecycleCredentials
+    do {
+      pendingCredentials = try accountSessionStore.credentialsForAccountLifecycle()
+    } catch {
+      throw AccountLifecycleError.sessionUnavailable
+    }
+
+    guard pendingCredentials.provider == .apple,
+          authorization.provider == .apple,
+          Self.hasValue(authorization.token),
+          Self.hasValue(authorization.authorizationCode),
+          Self.hasValue(authorization.providerUserIdentifier) else {
+      throw AccountLifecycleError.sessionUnavailable
+    }
+
+    let response = try await authRemoteDataSource.login(
+      provider: .apple,
+      request: SocialLoginRequestDTO(
+        token: authorization.token,
+        authorizationCode: authorization.authorizationCode
+      )
+    )
+    guard response.memberId == pendingCredentials.memberID,
+          response.isNewMember != true else {
+      throw AccountLifecycleError.sessionUnavailable
+    }
+
+    try accountSessionStore
+      .replacePendingWithdrawalCredentialsAfterAppleReauthentication(
+        AccountCredentials(
+          memberID: response.memberId,
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+          onboardingCompleted: response.onboardingCompleted,
+          provider: .apple,
+          providerUserIdentifier: authorization.providerUserIdentifier
+        )
+      )
+  }
+
+  private func performWithdrawal() async throws {
     let credentials: AccountLifecycleCredentials
 
     do {
       credentials = try accountSessionStore.credentialsForAccountLifecycle()
     } catch {
       throw AccountLifecycleError.sessionUnavailable
+    }
+
+    guard accountSessionStore.beginWithdrawalOperation(
+      memberID: credentials.memberID
+    ) else {
+      throw AccountLifecycleError.sessionUnavailable
+    }
+
+    let recovery: PendingAccountCleanupRecovery
+    do {
+      recovery = try await accountScopedDataCleaner
+        .recoverPendingAccountCleanups()
+    } catch {
+      accountSessionStore.suspendPendingWithdrawalAuthorization(
+        memberID: credentials.memberID
+      )
+      throw AccountLifecycleError.withdrawalStateUnavailable
+    }
+
+    if recovery.completedMemberIDs.contains(credentials.memberID) {
+      // The server response was durably confirmed before a prior local
+      // cleanup failure or process exit. Resume local/session cleanup without
+      // issuing another DELETE.
+      try await settleConfirmedWithdrawal(credentials: credentials)
+      return
     }
 
     do {
@@ -164,14 +272,39 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
         memberID: credentials.memberID
       )
     } catch {
-      throw AccountLifecycleError.localCleanupFailed
+      accountSessionStore.suspendPendingWithdrawalAuthorization(
+        memberID: credentials.memberID
+      )
+      throw AccountLifecycleError.withdrawalStateUnavailable
     }
 
     do {
-      _ = try await authRemoteDataSource.withdraw()
+      _ = try await authRemoteDataSource.withdraw(
+        accessToken: credentials.accessToken
+      )
     } catch {
+      if requiresAppleReauthentication(error, credentials: credentials) {
+        accountSessionStore.suspendPendingWithdrawalAuthorization(
+          memberID: credentials.memberID
+        )
+        throw AccountLifecycleError.appleReauthenticationRequired
+      }
       if isDefinitivePreCommitFailure(error) {
-        try? await accountScopedDataCleaner.cancelPendingAccountCleanup(
+        do {
+          try await accountScopedDataCleaner.cancelPendingAccountCleanup(
+            memberID: credentials.memberID
+          )
+          accountSessionStore.resumeAfterDefinitiveWithdrawalFailure(
+            memberID: credentials.memberID
+          )
+        } catch {
+          accountSessionStore.suspendPendingWithdrawalAuthorization(
+            memberID: credentials.memberID
+          )
+          throw AccountLifecycleError.withdrawalStateUnavailable
+        }
+      } else {
+        accountSessionStore.suspendPendingWithdrawalAuthorization(
           memberID: credentials.memberID
         )
       }
@@ -188,9 +321,18 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
     } catch {
       // Remote deletion may have succeeded. Keep the marker and this exact
       // session intact so startup can retry only the local, confirmed cleanup.
+      accountSessionStore.suspendPendingWithdrawalAuthorization(
+        memberID: credentials.memberID
+      )
       throw AccountLifecycleError.localCleanupFailed
     }
 
+    try await settleConfirmedWithdrawal(credentials: credentials)
+  }
+
+  private func settleConfirmedWithdrawal(
+    credentials: AccountLifecycleCredentials
+  ) async throws {
     var cleanupFailed = false
 
     if accountSessionStore.isCurrentSession(matching: credentials.memberID) {
@@ -206,9 +348,9 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
 
     var sessionCleanupSettled = false
     do {
-      // A provider await may have allowed a new account B to replace A. A
-      // false result is safe: B was intentionally left untouched, while A's
-      // server-confirmed cleanup marker may still be finalized.
+      // The lifecycle gate blocks normal account replacement. Keep the
+      // member-scoped removal as defense in depth for any out-of-band state
+      // change while a provider callback is suspended.
       _ = try accountSessionStore.removeLocalAccountSessionIfMatching(
         memberID: credentials.memberID
       )
@@ -233,12 +375,38 @@ final class DefaultAccountLifecycleService: AccountLifecycleManaging {
   }
 
   private func isDefinitivePreCommitFailure(_ error: Error) -> Bool {
-    guard case .server(let statusCode, _, _) = error as? APIError else {
+    // The backend documents MEMBER4091 as a retryable lock conflict. Any
+    // server response that is not a locally detected pre-transport failure
+    // remains durable recovery evidence rather than being inferred as a
+    // completed or failed deletion.
+    guard let apiError = error as? APIError else {
       return false
     }
-    return (400..<500).contains(statusCode)
-      && statusCode != 408
-      && statusCode != 429
+    return switch apiError {
+    case .invalidRequest, .authenticationRequired, .capabilityDisabled:
+      true
+    case .transport, .server, .decoding, .missingResult, .cancelled:
+      false
+    }
+  }
+
+  private func requiresAppleReauthentication(
+    _ error: Error,
+    credentials: AccountLifecycleCredentials
+  ) -> Bool {
+    guard credentials.provider == .apple,
+          let apiError = error as? APIError,
+          case .server(let statusCode, let code, _) = apiError else {
+      return false
+    }
+    return statusCode == 409 && code == "AUTH4091"
+  }
+
+  private static func hasValue(_ value: String?) -> Bool {
+    guard let value else {
+      return false
+    }
+    return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
 }
 
@@ -249,6 +417,12 @@ final class UnavailableAccountLifecycleService: AccountLifecycleManaging {
   }
 
   func withdraw() async throws {
+    throw AccountLifecycleError.sessionUnavailable
+  }
+
+  func reauthenticateAppleWithdrawal(
+    with _: SocialAuthorization
+  ) async throws {
     throw AccountLifecycleError.sessionUnavailable
   }
 }

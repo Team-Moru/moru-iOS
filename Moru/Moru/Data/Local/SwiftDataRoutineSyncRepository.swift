@@ -836,8 +836,18 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
   }
 
   func beginPendingAccountCleanupAttempt(memberID: Int64) throws {
-    guard let marker = try pendingCleanup(memberID: memberID),
-          marker.phaseRawValue == PendingAccountCleanupPhase.prepared.rawValue else {
+    guard let marker = try pendingCleanup(memberID: memberID) else {
+      throw RoutineSyncRepositoryError.missingPendingAccountCleanup
+    }
+
+    if marker.phaseRawValue == PendingAccountCleanupPhase.attempting.rawValue {
+      // A timeout, lost response, or process interruption leaves this phase
+      // deliberately ambiguous. An explicit user retry may issue DELETE again
+      // without pretending the previous attempt failed or succeeded.
+      return
+    }
+
+    guard marker.phaseRawValue == PendingAccountCleanupPhase.prepared.rawValue else {
       throw RoutineSyncRepositoryError.missingPendingAccountCleanup
     }
     marker.phaseRawValue = PendingAccountCleanupPhase.attempting.rawValue

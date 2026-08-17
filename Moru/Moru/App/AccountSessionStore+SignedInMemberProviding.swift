@@ -15,7 +15,10 @@ extension AccountSessionStore:
   }
 
   var currentAccountSessionIdentity: AccountSessionIdentity? {
-    currentAuthorizationContext().map {
+    guard case .signedIn = state else {
+      return nil
+    }
+    return currentAuthorizationContext().map {
       AccountSessionIdentity(memberID: $0.memberID, sessionID: $0.sessionID)
     }
   }

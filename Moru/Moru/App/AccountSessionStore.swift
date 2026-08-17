@@ -27,6 +27,7 @@ nonisolated struct SignedInAccount: Equatable, Sendable {
 
 nonisolated struct AccountLifecycleCredentials: Equatable, Sendable {
   let memberID: Int64
+  let accessToken: String
   let refreshToken: String
   let provider: AuthProvider
 }
@@ -43,6 +44,7 @@ nonisolated extension AccountLifecycleCredentials:
     """
     AccountLifecycleCredentials(\
     memberID: \(memberID), \
+    accessToken: <redacted>, \
     refreshToken: <redacted>, \
     provider: \(provider.serverValue)\
     )
@@ -63,7 +65,16 @@ nonisolated enum AccountSessionState: Equatable, Sendable {
   case signedOut
   case restoring
   case signedIn(SignedInAccount)
+  /// A prior DELETE may or may not have reached the server. Credentials stay
+  /// available only for withdrawal retry/reconciliation; account sync and
+  /// other signed-in features must treat this as signed out.
+  case withdrawalPending(SignedInAccount)
   case failure(AccountSessionFailure)
+}
+
+nonisolated enum AccountLifecycleOperation: Equatable, Sendable {
+  case logout
+  case withdrawal
 }
 
 @MainActor
@@ -74,13 +85,26 @@ final class AccountSessionStore: ObservableObject {
 
   private let credentialStore: any CredentialStore
   private let restorationGuard: any AccountSessionRestorationGuarding
+  private var activeAccountLifecycleOperation: AccountLifecycleOperation?
 
   var signedInProvider: AuthProvider? {
-    guard case .signedIn(let account) = state else {
-      return nil
-    }
+    lifecycleAccount?.provider
+  }
 
-    return account.provider
+  var isWithdrawalPending: Bool {
+    if case .withdrawalPending = state {
+      return true
+    }
+    return false
+  }
+
+  private var lifecycleAccount: SignedInAccount? {
+    switch state {
+    case .signedIn(let account), .withdrawalPending(let account):
+      account
+    case .signedOut, .restoring, .failure:
+      nil
+    }
   }
 
   init(
@@ -154,6 +178,46 @@ final class AccountSessionStore: ObservableObject {
   }
 
   func establishSession(
+    credentials: AccountCredentials
+  ) throws {
+    guard activeAccountLifecycleOperation == nil else {
+      // A social-login response can arrive while logout or withdrawal is
+      // suspended in provider/network work. It must not replace the exact
+      // credential captured by that lifecycle operation.
+      throw CredentialStoreError.invalidCredentials
+    }
+
+    if case .withdrawalPending = state {
+      // Replacing the only credential that can reconcile an ambiguous DELETE
+      // would strand the pending account and may revive it later.
+      throw CredentialStoreError.invalidCredentials
+    }
+
+    try establishValidatedSession(credentials: credentials)
+  }
+
+  @discardableResult
+  func beginAccountLifecycleOperation(
+    _ operation: AccountLifecycleOperation
+  ) -> Bool {
+    guard activeAccountLifecycleOperation == nil else {
+      return false
+    }
+
+    activeAccountLifecycleOperation = operation
+    return true
+  }
+
+  func endAccountLifecycleOperation(
+    _ operation: AccountLifecycleOperation
+  ) {
+    guard activeAccountLifecycleOperation == operation else {
+      return
+    }
+    activeAccountLifecycleOperation = nil
+  }
+
+  private func establishValidatedSession(
     credentials: AccountCredentials
   ) throws {
     guard credentials.isValid else {
@@ -232,29 +296,38 @@ final class AccountSessionStore: ObservableObject {
     ) else {
       throw CredentialStoreError.invalidCredentials
     }
-    state = .signedIn(
-      SignedInAccount(
-        memberID: credentials.memberID,
-        onboardingCompleted: credentials.onboardingCompleted,
-        provider: credentials.provider,
-        providerUserIdentifier: credentials.providerUserIdentifier
-      )
+    let updatedAccount = SignedInAccount(
+      memberID: credentials.memberID,
+      onboardingCompleted: credentials.onboardingCompleted,
+      provider: credentials.provider,
+      providerUserIdentifier: credentials.providerUserIdentifier
     )
+    state = .signedIn(updatedAccount)
   }
 
   func credentialsForAccountLifecycle() throws -> AccountLifecycleCredentials {
-    guard case .signedIn(let account) = state,
-          let accessToken = accessTokenProvider.accessToken,
+    guard let account = lifecycleAccount,
           let credentials = try credentialStore.load(),
           credentials.isValid,
           credentials.memberID == account.memberID,
-          credentials.provider == account.provider,
-          credentials.accessToken == accessToken else {
+          credentials.provider == account.provider else {
+      throw CredentialStoreError.invalidCredentials
+    }
+
+    switch state {
+    case .signedIn:
+      guard credentials.accessToken == accessTokenProvider.accessToken else {
+        throw CredentialStoreError.invalidCredentials
+      }
+    case .withdrawalPending:
+      break
+    case .signedOut, .restoring, .failure:
       throw CredentialStoreError.invalidCredentials
     }
 
     return AccountLifecycleCredentials(
       memberID: credentials.memberID,
+      accessToken: credentials.accessToken,
       refreshToken: credentials.refreshToken,
       provider: credentials.provider
     )
@@ -272,11 +345,7 @@ final class AccountSessionStore: ObservableObject {
   /// awaiting a provider callback, it deliberately does nothing.
   @discardableResult
   func removeLocalAccountSessionIfMatching(memberID: Int64) throws -> Bool {
-    let activeMemberID: Int64? = if case .signedIn(let account) = state {
-      account.memberID
-    } else {
-      nil
-    }
+    let activeMemberID = lifecycleAccount?.memberID
     let storedCredentials = try credentialStore.load()
     let storedMemberID = storedCredentials?.memberID
 
@@ -311,10 +380,7 @@ final class AccountSessionStore: ObservableObject {
   }
 
   func isCurrentSession(matching memberID: Int64) -> Bool {
-    guard case .signedIn(let account) = state else {
-      return false
-    }
-    return account.memberID == memberID
+    lifecycleAccount?.memberID == memberID
   }
 
   /// Reads only the member identity needed to decide whether an ambiguous
@@ -327,12 +393,129 @@ final class AccountSessionStore: ObservableObject {
     return memberIDs.contains(credentials.memberID)
   }
 
-  /// Stops this launch from restoring credentials without deleting them.
-  /// Used when withdrawal state is ambiguous and only a later reconciliation
-  /// can decide whether the account still exists.
+  /// Restores only the authorization needed to retry an ambiguous withdrawal.
+  /// `signedInMemberID` and `currentAccountSessionIdentity` remain unavailable,
+  /// so routine sync, server TTS, and account feature requests stay disabled.
+  @discardableResult
+  func preparePendingWithdrawalRetry(
+    matching memberIDs: [Int64]
+  ) throws -> Bool {
+    guard !memberIDs.isEmpty,
+          let credentials = try credentialStore.load(),
+          credentials.isValid,
+          memberIDs.contains(credentials.memberID) else {
+      return false
+    }
+
+    // Do not restore a generally usable bearer token during bootstrap. The
+    // withdrawal service establishes it only for an explicit retry.
+    accessTokenProvider.remove()
+    state = .withdrawalPending(
+      SignedInAccount(
+        memberID: credentials.memberID,
+        onboardingCompleted: credentials.onboardingCompleted,
+        provider: credentials.provider,
+        providerUserIdentifier: credentials.providerUserIdentifier
+      )
+    )
+    return true
+  }
+
+  @discardableResult
+  func beginWithdrawalOperation(memberID: Int64) -> Bool {
+    let account: SignedInAccount
+    switch state {
+    case .signedIn(let signedInAccount),
+         .withdrawalPending(let signedInAccount):
+      account = signedInAccount
+    case .signedOut, .restoring, .failure:
+      return false
+    }
+    guard account.memberID == memberID else {
+      return false
+    }
+
+    // Invalidate ordinary and already-captured account-bound requests before
+    // the first suspension point. The withdrawal request uses its own captured
+    // credential instead of republishing this token.
+    accessTokenProvider.remove()
+    state = .withdrawalPending(account)
+    return true
+  }
+
+  func suspendPendingWithdrawalAuthorization(memberID: Int64) {
+    guard case .withdrawalPending(let account) = state,
+          account.memberID == memberID else {
+      return
+    }
+    accessTokenProvider.remove()
+  }
+
+  func resumeAfterDefinitiveWithdrawalFailure(memberID: Int64) {
+    guard case .withdrawalPending(let account) = state,
+          account.memberID == memberID else {
+      return
+    }
+    guard let credentials = try? credentialStore.load(),
+          credentials.isValid,
+          credentials.memberID == memberID else {
+      accessTokenProvider.remove()
+      return
+    }
+    accessTokenProvider.establishAccountSession(
+      with: credentials.accessToken,
+      memberID: memberID
+    )
+    state = .signedIn(account)
+  }
+
+  /// Replaces only the credentials for the exact Apple account that is held
+  /// in a withdrawal-pending state. The refreshed bearer remains unavailable
+  /// to normal account features; it is used solely by the next explicit
+  /// withdrawal retry.
+  func replacePendingWithdrawalCredentialsAfterAppleReauthentication(
+    _ credentials: AccountCredentials
+  ) throws {
+    guard credentials.isValid,
+          case .withdrawalPending(let account) = state,
+          account.provider == .apple,
+          credentials.memberID == account.memberID,
+          credentials.provider == .apple,
+          account.providerUserIdentifier == nil
+            || account.providerUserIdentifier == credentials.providerUserIdentifier else {
+      throw CredentialStoreError.invalidCredentials
+    }
+
+    try credentialStore.save(credentials)
+    restorationGuard.allowRestoration()
+    accessTokenProvider.remove()
+    state = .withdrawalPending(
+      SignedInAccount(
+        memberID: credentials.memberID,
+        onboardingCompleted: credentials.onboardingCompleted,
+        provider: .apple,
+        providerUserIdentifier: credentials.providerUserIdentifier
+      )
+    )
+  }
+
+  /// Fail closed when cleanup recovery cannot be read. The credential remains
+  /// in Keychain, but no bearer token is exposed to normal app requests.
   func deferRestorationWithoutDeletingCredentials() {
     accessTokenProvider.remove()
-    state = .signedOut
+    guard let credentials = try? credentialStore.load(),
+          credentials.isValid else {
+      state = .signedOut
+      return
+    }
+    state = .withdrawalPending(
+      SignedInAccount(
+        memberID: credentials.memberID,
+        onboardingCompleted: credentials.onboardingCompleted,
+        provider: credentials.provider,
+        providerUserIdentifier: credentials.providerUserIdentifier
+      )
+    )
   }
 
   func removeLocalAccountSession() throws {

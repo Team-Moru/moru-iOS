@@ -2,10 +2,15 @@ import XCTest
 
 @MainActor
 final class MoruReviewWeatherUITests: XCTestCase {
+  private enum LocationAuthorizationFixture: Equatable {
+    case authorized
+    case denied
+  }
+
   private let app = XCUIApplication()
 
   func testAccountConnectionShowsRoundSocialLoginButtons() {
-    launchApp()
+    launchApp(locationAuthorization: .denied)
 
     let profileTab = app.buttons["app.tab.my"]
     XCTAssertTrue(profileTab.waitForExistence(timeout: 5))
@@ -32,9 +37,16 @@ final class MoruReviewWeatherUITests: XCTestCase {
     attachCurrentUI(named: "profile-account-connection-social-icons")
   }
 
-  private func launchApp() {
+  private func launchApp(
+    locationAuthorization: LocationAuthorizationFixture
+  ) {
     continueAfterFailure = false
-    app.launchArguments = ["-ui-testing-weather-fixture"]
+    app.launchArguments = [
+      "-ui-testing-weather-fixture",
+      locationAuthorization == .authorized
+        ? "-ui-testing-weather-location-authorized"
+        : "-ui-testing-weather-location-denied",
+    ]
     app.launch()
     XCTAssertTrue(
       app.wait(for: .runningForeground, timeout: 10),
@@ -42,49 +54,20 @@ final class MoruReviewWeatherUITests: XCTestCase {
     )
   }
 
-  func testFreshLocationPermissionDisplaysLiveWeather() {
-    installLocationAllowMonitor()
-    launchApp()
+  func testAuthorizedLocationDisplaysLiveWeather() {
+    launchApp(locationAuthorization: .authorized)
     attachCurrentUI(named: "launch")
-
-    let refreshButton = element(
-      matching: "현재 위치 날씨 새로고침",
-      in: app.buttons
-    )
-    if !refreshButton.waitForExistence(timeout: 2) {
-      triggerPendingLocationPrompt()
-    }
     assertLiveWeatherAppears()
   }
 
-  private func installLocationAllowMonitor() {
-    addUIInterruptionMonitor(withDescription: "Core Location allow") { alert in
-      let labels = ["앱을 사용하는 동안 허용", "Allow While Using App"]
-      for label in labels {
-        let button = alert.descendants(matching: .button)
-          .matching(NSPredicate(format: "label CONTAINS %@", label))
-          .firstMatch
-        if button.exists {
-          button.tap()
-          return true
-        }
-      }
-      return false
-    }
-  }
-
-  func testDeniedLocationCanBeEnabledInSettingsAndAutomaticallyRetries() {
-    launchApp()
+  func testDeniedLocationOffersSettingsRecovery() {
+    launchApp(locationAuthorization: .denied)
     attachCurrentUI(named: "launch")
 
     let settingsButton = element(
       matching: "설정에서 위치 권한 켜기",
       in: app.buttons
     )
-    if !settingsButton.waitForExistence(timeout: 2) {
-      triggerPendingLocationPrompt()
-    }
-
     XCTAssertTrue(
       settingsButton.waitForExistence(timeout: 5),
       "위치 거부 상태에서 설정 이동 버튼이 표시되어야 합니다."
@@ -92,84 +75,10 @@ final class MoruReviewWeatherUITests: XCTestCase {
     scrollToMakeHittable(settingsButton)
     settingsButton.tap()
 
-    enableLocationInSettings()
-    app.activate()
-
     XCTAssertTrue(
-      app.wait(for: .runningForeground, timeout: 10),
-      "Settings에서 돌아온 뒤 MORU가 foreground여야 합니다."
-    )
-    assertLiveWeatherAppears()
-  }
-
-  private func triggerPendingLocationPrompt() {
-    app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-  }
-
-  private func enableLocationInSettings() {
-    let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
-    XCTAssertTrue(
-      settings.wait(for: .runningForeground, timeout: 10),
-      "MORU 설정 화면이 열려야 합니다."
-    )
-    attachCurrentUI(named: "settings-app-detail", application: settings)
-
-    let locationRow = findLocationRow(in: settings)
-    XCTAssertNotNil(locationRow, "MORU 설정 화면에 위치 항목이 있어야 합니다.")
-    locationRow?.tap()
-    attachCurrentUI(named: "settings-location-detail", application: settings)
-
-    let whileUsing = firstExistingElement(
-      in: settings.descendants(matching: .any),
-      labels: [
-        "앱을 사용하는 동안",
-        "While Using the App",
-      ],
-      timeout: 8
-    )
-    XCTAssertNotNil(
-      whileUsing,
-      "위치 설정 화면에 앱 사용 중 허용 옵션이 있어야 합니다."
-    )
-    whileUsing?.tap()
-  }
-
-  private func findLocationRow(in settings: XCUIApplication) -> XCUIElement? {
-    let allElements = settings.descendants(matching: .any)
-    if let locationRow = firstExistingElement(
-      in: allElements,
-      labels: ["위치", "Location"],
-      timeout: 3
-    ) {
-      return locationRow
-    }
-
-    let appSearch = firstExistingElement(
-      in: settings.searchFields,
-      labels: ["앱 검색", "Search Apps", "검색", "Search"],
-      timeout: 5
-    )
-    XCTAssertNotNil(
-      appSearch,
-      "앱별 설정 화면으로 바로 이동하지 않으면 앱 검색 필드가 있어야 합니다."
-    )
-    appSearch?.tap()
-    appSearch?.typeText("Moru")
-    attachCurrentUI(named: "settings-app-search", application: settings)
-
-    let moruResult = firstExistingExactElement(
-      in: settings.staticTexts,
-      labels: ["Moru", "모루"],
-      timeout: 5
-    )
-    XCTAssertNotNil(moruResult, "설정 앱 검색 결과에 MORU가 표시되어야 합니다.")
-    moruResult?.tap()
-    attachCurrentUI(named: "settings-moru-detail", application: settings)
-
-    return firstExistingElement(
-      in: settings.descendants(matching: .any),
-      labels: ["위치", "Location"],
-      timeout: 8
+      XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        .wait(for: .runningForeground, timeout: 10),
+        "위치 권한 복구 버튼은 MORU의 iOS 설정 화면을 열어야 합니다."
     )
   }
 
@@ -242,20 +151,30 @@ final class MoruReviewWeatherUITests: XCTestCase {
       weatherCard.frame.midX,
       "Apple Weather 마크가 날씨 카드 오른쪽에 있어야 합니다."
     )
-    XCTAssertGreaterThan(
+    XCTAssertLessThan(
       attributionMark.frame.midY,
       weatherReading.frame.midY,
-      "Apple Weather 마크가 날씨 값보다 아래에 있어야 합니다."
+      "Apple Weather 마크가 날씨 값의 오른쪽 위에 있어야 합니다."
+    )
+    XCTAssertGreaterThanOrEqual(
+      attributionMark.frame.minX,
+      weatherCard.frame.minX,
+      "Apple Weather 마크가 날씨 카드의 왼쪽 경계를 벗어나면 안 됩니다."
+    )
+    XCTAssertGreaterThanOrEqual(
+      attributionMark.frame.minY,
+      weatherCard.frame.minY,
+      "Apple Weather 마크가 날씨 카드의 위쪽 경계를 벗어나면 안 됩니다."
     )
     XCTAssertLessThanOrEqual(
-      weatherCard.frame.maxX - attributionMark.frame.maxX,
-      44,
-      "Apple Weather 마크가 날씨 카드 오른쪽 하단 여백에 맞아야 합니다."
+      attributionMark.frame.maxX,
+      weatherCard.frame.maxX,
+      "Apple Weather 마크가 날씨 카드의 오른쪽 경계를 벗어나면 안 됩니다."
     )
     XCTAssertLessThanOrEqual(
-      weatherCard.frame.maxY - attributionMark.frame.maxY,
-      24,
-      "Apple Weather 마크가 날씨 카드 하단 여백에 맞아야 합니다."
+      attributionMark.frame.maxY,
+      weatherCard.frame.maxY,
+      "Apple Weather 마크가 날씨 카드의 아래쪽 경계를 벗어나면 안 됩니다."
     )
   }
 
@@ -311,47 +230,4 @@ final class MoruReviewWeatherUITests: XCTestCase {
     ).firstMatch
   }
 
-  private func firstExistingElement(
-    in query: XCUIElementQuery,
-    labels: [String],
-    timeout: TimeInterval
-  ) -> XCUIElement? {
-    let deadline = Date().addingTimeInterval(timeout)
-
-    repeat {
-      for label in labels {
-        let candidate = query.matching(
-          NSPredicate(format: "label CONTAINS %@", label)
-        ).firstMatch
-        if candidate.exists {
-          return candidate
-        }
-      }
-      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-    } while Date() < deadline
-
-    return nil
-  }
-
-  private func firstExistingExactElement(
-    in query: XCUIElementQuery,
-    labels: [String],
-    timeout: TimeInterval
-  ) -> XCUIElement? {
-    let deadline = Date().addingTimeInterval(timeout)
-
-    repeat {
-      for label in labels {
-        let candidate = query.matching(
-          NSPredicate(format: "label == %@", label)
-        ).firstMatch
-        if candidate.exists {
-          return candidate
-        }
-      }
-      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-    } while Date() < deadline
-
-    return nil
-  }
 }

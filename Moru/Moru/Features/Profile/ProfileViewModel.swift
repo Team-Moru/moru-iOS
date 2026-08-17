@@ -37,6 +37,8 @@ final class ProfileViewModel {
   private(set) var isAlarmRequestInProgress = false
   private(set) var isResetInProgress = false
   private(set) var isAccountLinkInProgress = false
+  private(set) var isAppleWithdrawalReauthenticationInProgress = false
+  private(set) var requiresAppleWithdrawalReauthentication = false
   private(set) var accountLifecycleAction: AccountLifecycleAction?
 
   var isResetAvailable: Bool {
@@ -44,7 +46,13 @@ final class ProfileViewModel {
   }
 
   var isAccountLifecycleInProgress: Bool {
-    accountLifecycleAction != nil
+    accountLifecycleAction != nil || isAppleWithdrawalReauthenticationInProgress
+  }
+
+  var canBeginAppleWithdrawalReauthentication: Bool {
+    requiresAppleWithdrawalReauthentication
+      && !isAppleWithdrawalReauthenticationInProgress
+      && accountLifecycleAction == nil
   }
 
   var resetAvailabilityMessage: String? {
@@ -303,6 +311,7 @@ final class ProfileViewModel {
 
     accountLifecycleAction = .withdrawal
     accountErrorMessage = nil
+    requiresAppleWithdrawalReauthentication = false
     defer { accountLifecycleAction = nil }
 
     do {
@@ -313,11 +322,97 @@ final class ProfileViewModel {
         "회원 탈퇴는 완료됐지만 "
           + "기기의 계정 정보를 모두 정리하지 못했어요."
       )
+    } catch AccountLifecycleError.withdrawalStateUnavailable {
+      reportAccountError(
+        "회원 탈퇴 상태를 확인하지 못했어요. "
+          + "계정 삭제 완료로 처리하지 않았으며 다시 시도할 수 있어요."
+      )
+    } catch AccountLifecycleError.appleReauthenticationRequired {
+      requiresAppleWithdrawalReauthentication = true
+      reportAccountError(
+        "Apple로 다시 인증한 뒤 회원탈퇴를 계속해 주세요. "
+          + "로컬 데이터는 유지되며, 인증 전에는 삭제를 완료하지 않아요."
+      )
     } catch {
       reportAccountError(
         "회원 탈퇴를 완료하지 못했어요. "
-          + "계정 연결은 유지되며 다시 시도할 수 있어요."
+          + "서버 처리 결과를 확인할 수 없어 다시 시도해야 해요."
       )
+    }
+  }
+
+  @discardableResult
+  func appleWithdrawalReauthenticationWillBegin() -> Bool {
+    guard requiresAppleWithdrawalReauthentication,
+          !isAppleWithdrawalReauthenticationInProgress,
+          accountLifecycleAction == nil else {
+      return false
+    }
+    accountErrorMessage = nil
+    isAppleWithdrawalReauthenticationInProgress = true
+    return true
+  }
+
+  func appleWithdrawalReauthenticationPreparationDidFail() {
+    guard isAppleWithdrawalReauthenticationInProgress else {
+      return
+    }
+    isAppleWithdrawalReauthenticationInProgress = false
+    reportAccountError(
+      "Apple 재인증을 시작하지 못했어요. "
+        + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+    )
+  }
+
+  func appleWithdrawalReauthenticationDidComplete(
+    _ outcome: SocialAuthorizationOutcome
+  ) async {
+    guard isAppleWithdrawalReauthenticationInProgress else {
+      return
+    }
+    defer { isAppleWithdrawalReauthenticationInProgress = false }
+
+    switch outcome {
+    case .cancelled:
+      reportAccountError(
+        "Apple 재인증을 취소했어요. "
+          + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+      )
+
+    case .failed:
+      reportAccountError(
+        "Apple 인증 정보를 확인하지 못했어요. "
+          + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+      )
+
+    case .authorized(let authorization):
+      accountLifecycleAction = .withdrawal
+      defer { accountLifecycleAction = nil }
+
+      do {
+        try await accountLifecycleService.reauthenticateAppleWithdrawal(
+          with: authorization
+        )
+        requiresAppleWithdrawalReauthentication = false
+        try await accountLifecycleService.withdraw()
+        announce("회원 탈퇴가 완료됐어요. 로컬 루틴과 기록은 유지됩니다.")
+      } catch AccountLifecycleError.appleReauthenticationRequired {
+        requiresAppleWithdrawalReauthentication = true
+        reportAccountError(
+          "Apple 재인증이 다시 필요해요. "
+            + "회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+        )
+      } catch AccountLifecycleError.localCleanupFailed {
+        reportAccountError(
+          "회원 탈퇴는 완료됐지만 "
+            + "기기의 계정 정보를 모두 정리하지 못했어요."
+        )
+      } catch {
+        reportAccountError(
+          "Apple 재인증 또는 회원탈퇴를 완료하지 못했어요. "
+            + "로컬 데이터는 유지되며 다시 시도할 수 있어요."
+        )
+      }
     }
   }
 

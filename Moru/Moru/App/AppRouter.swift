@@ -55,6 +55,7 @@ struct AppRouter: View {
   @Environment(\.scenePhase) private var scenePhase
   @ObservedObject private var sessionStore: SessionStore
   @ObservedObject private var accountSessionStore: AccountSessionStore
+  @ObservedObject private var geminiDataConsentStore: GeminiDataConsentStore
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
@@ -81,6 +82,7 @@ struct AppRouter: View {
     dependencies: DependencyContainer,
     sessionStore: SessionStore,
     accountSessionStore: AccountSessionStore,
+    geminiDataConsentStore: GeminiDataConsentStore = GeminiDataConsentStore(),
     socialLoginCoordinator: any SocialLoginCoordinating,
     googleAuthorizationSession: any GoogleAuthorizationStarting =
       UnavailableGoogleAuthorizationSession(),
@@ -100,6 +102,9 @@ struct AppRouter: View {
   ) {
     _sessionStore = ObservedObject(wrappedValue: sessionStore)
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
+    _geminiDataConsentStore = ObservedObject(
+      wrappedValue: geminiDataConsentStore
+    )
     _coordinator = ObservedObject(wrappedValue: coordinator)
     self.dependencies = dependencies
     self.socialLoginCoordinator = socialLoginCoordinator
@@ -209,6 +214,9 @@ struct AppRouter: View {
         .id(presentation.id)
         .interactiveDismissDisabled()
     }
+    .sheet(isPresented: geminiConsentPresentationBinding) {
+      GeminiDataConsentView(consentStore: geminiDataConsentStore)
+    }
     .task {
       onboardingStatusRuntimeCoordinator?.start()
       routineSyncRuntimeCoordinator?.setSceneActive(scenePhase == .active)
@@ -242,6 +250,9 @@ struct AppRouter: View {
       routineSyncRuntimeCoordinator?.accountSessionDidChange()
       dependencies.routineTTSWarmupCoordinator?.accountSessionDidChange()
     }
+    .onChange(of: geminiDataConsentStore.status) { _, _ in
+      routineSyncRuntimeCoordinator?.geminiDataConsentDidChange()
+    }
     .onChange(of: sessionStore.phase) { _, newPhase in
       guard newPhase == .ready else {
         return
@@ -260,6 +271,17 @@ struct AppRouter: View {
         await consumePendingAlarmIngress()
       }
     }
+  }
+
+  private var geminiConsentPresentationBinding: Binding<Bool> {
+    Binding(
+      get: { geminiDataConsentStore.isConsentPresentationRequested },
+      set: { isPresented in
+        if !isPresented {
+          geminiDataConsentStore.dismissConsentChoices()
+        }
+      }
+    )
   }
 
   nonisolated static func rootDestination(
@@ -299,6 +321,8 @@ struct AppRouter: View {
       case .restoring:
         return .splash(showStartCTA: false)
       case .signedIn:
+        return .main
+      case .withdrawalPending:
         return .main
       case .signedOut:
         return .accountEntry(nil)
@@ -484,6 +508,7 @@ struct AppRouter: View {
       googleAuthorizationSession: googleAuthorizationSession,
       kakaoAuthorizationSession: kakaoAuthorizationSession,
       accountLifecycleService: accountLifecycleService,
+      geminiDataConsentStore: geminiDataConsentStore,
       appCapabilities: appCapabilities,
       resetUseCase: resetUseCase,
       resetAvailability: {

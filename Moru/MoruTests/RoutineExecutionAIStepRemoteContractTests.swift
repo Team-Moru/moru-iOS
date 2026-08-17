@@ -673,6 +673,25 @@ final class RoutineExecutionAIStepRemoteContractTests: XCTestCase {
     }
   }
 
+  func testUseCaseWithoutGeminiConsentDoesNotStartRemoteRequest() async {
+    let account = MutableAIStepSessionIdentityProvider(identity: identity)
+    let remote = DeferredRoutineExecutionAIStepRemoteService()
+    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let useCase = EvaluateRoutineExecutionAIStepUseCase(
+      remoteService: remote,
+      sessionIdentityProvider: account,
+      geminiDataConsent: consent
+    )
+
+    await assertAIStepError(.geminiConsentRequired) {
+      _ = try await useCase.evaluate(self.validRequest())
+    }
+
+    XCTAssertEqual(consent.requestCount, 1)
+    let callCount = await remote.callCount
+    XCTAssertEqual(callCount, 0)
+  }
+
   func testUseCaseRejectsDifferentAccountAndSameMemberRelogin()
     async throws {
     for newMemberID in [Int64(99), identity.memberID] {
@@ -680,7 +699,8 @@ final class RoutineExecutionAIStepRemoteContractTests: XCTestCase {
       let remote = DeferredRoutineExecutionAIStepRemoteService()
       let useCase = EvaluateRoutineExecutionAIStepUseCase(
         remoteService: remote,
-        sessionIdentityProvider: account
+        sessionIdentityProvider: account,
+        geminiDataConsent: GeminiDataConsentStub()
       )
       let task = _Concurrency.Task {
         try await useCase.evaluate(self.validRequest())
@@ -706,7 +726,8 @@ final class RoutineExecutionAIStepRemoteContractTests: XCTestCase {
     let remote = DeferredFailingRoutineExecutionAIStepRemoteService()
     let useCase = EvaluateRoutineExecutionAIStepUseCase(
       remoteService: remote,
-      sessionIdentityProvider: account
+      sessionIdentityProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let task = _Concurrency.Task {
       try await useCase.evaluate(self.validRequest())
@@ -731,7 +752,8 @@ final class RoutineExecutionAIStepRemoteContractTests: XCTestCase {
     let remote = DeferredFailingRoutineExecutionAIStepRemoteService()
     let useCase = EvaluateRoutineExecutionAIStepUseCase(
       remoteService: remote,
-      sessionIdentityProvider: account
+      sessionIdentityProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let task = _Concurrency.Task {
       try await useCase.evaluate(self.validRequest())
@@ -760,7 +782,8 @@ final class RoutineExecutionAIStepRemoteContractTests: XCTestCase {
     let unused = DeferredRoutineExecutionAIStepRemoteService()
     let signedOutUseCase = EvaluateRoutineExecutionAIStepUseCase(
       remoteService: unused,
-      sessionIdentityProvider: signedOut
+      sessionIdentityProvider: signedOut,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     await assertAIStepError(.accountSessionUnavailable) {
       _ = try await signedOutUseCase.evaluate(self.validRequest())
@@ -772,7 +795,8 @@ final class RoutineExecutionAIStepRemoteContractTests: XCTestCase {
     let remote = DeferredRoutineExecutionAIStepRemoteService()
     let useCase = EvaluateRoutineExecutionAIStepUseCase(
       remoteService: remote,
-      sessionIdentityProvider: account
+      sessionIdentityProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let task = _Concurrency.Task {
       try await useCase.evaluate(self.validRequest())

@@ -16,6 +16,19 @@ nonisolated protocol AuthRemoteDataSource: Sendable {
   func logout(refreshToken: String) async throws
 
   func withdraw() async throws -> WithdrawalResponseDTO
+
+  /// Uses the credential captured before the account enters its restricted
+  /// withdrawal state. Production sends this DELETE once without sharing the
+  /// bearer token or automatically replaying after a 401.
+  func withdraw(accessToken: String) async throws -> WithdrawalResponseDTO
+}
+
+nonisolated extension AuthRemoteDataSource {
+  func withdraw(accessToken _: String) async throws -> WithdrawalResponseDTO {
+    // Compatibility for test doubles. Production overrides this with the
+    // explicit-bearer, single-request implementation below.
+    try await withdraw()
+  }
 }
 
 nonisolated enum AuthRemoteDataSourceError: Error, Equatable, Sendable {
@@ -76,6 +89,20 @@ nonisolated final class DefaultAuthRemoteDataSource: AuthRemoteDataSource {
     try await apiClient.request(
       AuthTarget.withdrawal,
       as: WithdrawalResponseDTO.self
+    )
+  }
+
+  func withdraw(accessToken: String) async throws -> WithdrawalResponseDTO {
+    guard let explicitBearerClient = apiClient as? any ExplicitBearerAPIClient else {
+      throw APIError.invalidRequest(
+        "Account withdrawal requires an explicit-bearer API client"
+      )
+    }
+
+    return try await explicitBearerClient.requestOnce(
+      AuthTarget.withdrawal,
+      as: WithdrawalResponseDTO.self,
+      usingAccessToken: accessToken
     )
   }
 }

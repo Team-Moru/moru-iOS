@@ -21,7 +21,9 @@ nonisolated final class SwiftDataLocalDataResetRepository: LocalDataResetReposit
       try deleteAll(PersistedRoutineSyncMutation.self)
       try deleteAll(PersistedRoutineSyncAttemptArtifact.self)
       try deleteAll(PersistedRoutineServerBinding.self)
-      try deleteAll(PersistedPendingAccountCleanup.self)
+      // A pending withdrawal marker is recovery evidence paired with a
+      // Keychain credential. Local content reset must not erase that evidence
+      // and later allow an ambiguous account session to revive.
       try deleteAll(PersistedSnoozedAlarm.self)
       try deleteAll(PersistedAlarmPlatformState.self)
       try deleteAll(PersistedHomeWeatherSnapshot.self)

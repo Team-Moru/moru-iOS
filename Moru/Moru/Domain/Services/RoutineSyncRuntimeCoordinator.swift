@@ -44,6 +44,7 @@ nonisolated enum RoutineSyncRuntimeStopReason: Equatable, Sendable {
   case signedOut
   case idle
   case blocked(RoutineSyncBlockReason)
+  case consentRequired
   case staleSession
   case runtimeFailure
 }
@@ -138,6 +139,18 @@ final class RoutineSyncRuntimeCoordinator {
     } else {
       wake()
     }
+  }
+
+  /// Consent can be withdrawn while a foreground drain is waiting between
+  /// Outbox operations. Cancel that turn and re-evaluate consent before any
+  /// subsequent request is claimed.
+  func geminiDataConsentDidChange() {
+    guard isSceneActive else {
+      return
+    }
+    wakePending = true
+    drainTask?.cancel()
+    startDrainIfEligible()
   }
 
   /// Coalesces any number of wakeups into the current serial drain.
@@ -250,6 +263,11 @@ final class RoutineSyncRuntimeCoordinator {
       case .blocked(_, let reason):
         wakePending = false
         lastStopReason = .blocked(reason)
+        return
+
+      case .consentRequired:
+        wakePending = false
+        lastStopReason = .consentRequired
         return
 
       case .staleSession:

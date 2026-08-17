@@ -91,6 +91,9 @@ nonisolated enum RoutineSyncSendResult: Equatable, Sendable {
   case completed(mutationID: UUID)
   case retryScheduled(mutationID: UUID, nextAttemptAt: Date?)
   case blocked(mutationID: UUID, reason: RoutineSyncBlockReason)
+  /// A command that may lead to Google Gemini processing is held locally
+  /// until the user has made an explicit, affirmative choice.
+  case consentRequired(mutationID: UUID)
   case staleSession(mutationID: UUID)
 }
 
@@ -105,6 +108,7 @@ final class RoutineSyncSender {
   private let contract: RoutineSyncServerContract
   private weak var sessionIdentityProvider:
     (any CurrentAccountSessionIdentityProviding)?
+  private let geminiDataConsent: any GeminiDataConsentAuthorizing
   private let retryPolicy: RoutineSyncProcessingRetryPolicy
 
   init(
@@ -114,6 +118,7 @@ final class RoutineSyncSender {
     contract: RoutineSyncServerContract,
     sessionIdentityProvider:
       (any CurrentAccountSessionIdentityProviding)? = nil,
+    geminiDataConsent: any GeminiDataConsentAuthorizing,
     retryPolicy: RoutineSyncProcessingRetryPolicy = .init()
   ) {
     self.repository = repository
@@ -121,6 +126,7 @@ final class RoutineSyncSender {
     self.transport = transport
     self.contract = contract
     self.sessionIdentityProvider = sessionIdentityProvider
+    self.geminiDataConsent = geminiDataConsent
     self.retryPolicy = retryPolicy
   }
 
@@ -144,6 +150,9 @@ final class RoutineSyncSender {
           && contract.serverNamespace == $0.serverNamespace
           && contract.supports($0.operation)
       }) {
+      guard isAuthorizedToTransmit(pendingReplay) else {
+        return .consentRequired(mutationID: pendingReplay.id)
+      }
       let prepared = try repository.prepareExactReplay(
         id: pendingReplay.id,
         expectedGenerationID: pendingReplay.attempt!.generationID,
@@ -170,6 +179,10 @@ final class RoutineSyncSender {
           && contract.supports($0.operation)
       }) else {
       return .idle
+    }
+
+    guard isAuthorizedToTransmit(mutation) else {
+      return .consentRequired(mutationID: mutation.id)
     }
 
     let capturedIdentity = sessionIdentityProvider?.currentAccountSessionIdentity
@@ -241,6 +254,22 @@ final class RoutineSyncSender {
     } catch {
       throw RoutineSyncSenderError.invalidAttemptPayload
     }
+  }
+
+  /// Group creation and routine addition can cause the server to derive
+  /// timer steps or other routine content using Gemini. Do not even claim an
+  /// Outbox attempt before consent: a claimed attempt is eligible for an
+  /// automatic exact replay after an interruption.
+  private func isAuthorizedToTransmit(_ mutation: RoutineSyncMutation) -> Bool {
+    guard mutation.operation.requiresGeminiDataConsent else {
+      return true
+    }
+
+    guard geminiDataConsent.hasExplicitGeminiDataConsent else {
+      geminiDataConsent.requestGeminiDataConsentIfNeeded()
+      return false
+    }
+    return true
   }
 
   private func makeRequest(
@@ -368,6 +397,20 @@ final class RoutineSyncSender {
 
     default:
       throw RoutineSyncSenderError.unexpectedCommit(operation: mutation.operation)
+    }
+  }
+}
+
+nonisolated private extension RoutineSyncOperation {
+  var requiresGeminiDataConsent: Bool {
+    switch self {
+    case .createRoutineGroup, .addRoutine:
+      true
+    case .deleteRoutineGroup,
+         .deleteRoutine,
+         .saveRoutineExecution,
+         .setRoutineGroupActive:
+      false
     }
   }
 }

@@ -250,6 +250,7 @@ final class AuthRemoteContractTests: XCTestCase {
 
     let response = try await dataSource.withdraw()
 
+    XCTAssertEqual(response.status, .completed)
     XCTAssertEqual(response.message, "회원 탈퇴가 완료되었습니다.")
 
     let request = try XCTUnwrap(requestCapture.request)
@@ -260,6 +261,147 @@ final class AuthRemoteContractTests: XCTestCase {
       "Bearer access-token"
     )
     XCTAssertNil(request.httpBody)
+  }
+
+  func testWithdrawalExplicitBearerIgnoresSharedTokenAndSendsOneDelete()
+    async throws {
+    let requestCapture = AuthRequestCapturePlugin()
+    let client = makeClient(
+      data: withdrawalResponseData(),
+      tokenProvider: AuthStubAccessTokenProvider(
+        accessToken: "wrong-shared-token"
+      ),
+      additionalPlugins: [requestCapture]
+    )
+    let dataSource = DefaultAuthRemoteDataSource(apiClient: client)
+
+    let response = try await dataSource.withdraw(
+      accessToken: "captured-withdrawal-token"
+    )
+
+    XCTAssertEqual(response.status, .completed)
+    XCTAssertEqual(response.message, "회원 탈퇴가 완료되었습니다.")
+    let request = try XCTUnwrap(requestCapture.request)
+    XCTAssertEqual(request.url?.path, "/auth/withdrawal")
+    XCTAssertEqual(request.httpMethod, "DELETE")
+    XCTAssertEqual(
+      request.value(forHTTPHeaderField: "Authorization"),
+      "Bearer captured-withdrawal-token"
+    )
+    XCTAssertNil(request.httpBody)
+  }
+
+  func testWithdrawalExplicitBearer401DoesNotRefreshOrReplay() async {
+    let errorData = Data(
+      """
+      {
+        "isSuccess": false,
+        "code": "AUTH4004",
+        "message": "expired"
+      }
+      """.utf8
+    )
+    let requestCapture = AuthRequestCapturePlugin()
+    let refresher = AuthAccessTokenRefresherSpy()
+    let client = makeClient(
+      statusCode: 401,
+      data: errorData,
+      tokenProvider: AuthStubAccessTokenProvider(
+        accessToken: "wrong-shared-token"
+      ),
+      accessTokenRefresher: refresher,
+      additionalPlugins: [requestCapture]
+    )
+    let dataSource = DefaultAuthRemoteDataSource(apiClient: client)
+
+    await assertAPIError(
+      .server(
+        statusCode: 401,
+        code: "AUTH4004",
+        message: "expired"
+      )
+    ) {
+      _ = try await dataSource.withdraw(
+        accessToken: "captured-withdrawal-token"
+      )
+    }
+
+    XCTAssertEqual(requestCapture.requestCount, 1)
+    let refreshCallCount = await refresher.callCount
+    XCTAssertEqual(refreshCallCount, 0)
+    XCTAssertEqual(
+      requestCapture.request?.value(forHTTPHeaderField: "Authorization"),
+      "Bearer captured-withdrawal-token"
+    )
+  }
+
+  func testWithdrawalDocumentedConflictsStayFailuresAndSendOneDelete() async {
+    for (code, message) in [
+      ("MEMBER4091", "회원탈퇴가 이미 처리 중입니다."),
+      ("AUTH4091", "회원탈퇴를 위해 Apple 재로그인이 필요합니다."),
+    ] {
+      let errorData = Data(
+        """
+        {
+          "isSuccess": false,
+          "code": "\(code)",
+          "message": "\(message)"
+        }
+        """.utf8
+      )
+      let requestCapture = AuthRequestCapturePlugin()
+      let refresher = AuthAccessTokenRefresherSpy()
+      let client = makeClient(
+        statusCode: 409,
+        data: errorData,
+        tokenProvider: AuthStubAccessTokenProvider(accessToken: "shared-token"),
+        accessTokenRefresher: refresher,
+        additionalPlugins: [requestCapture]
+      )
+      let dataSource = DefaultAuthRemoteDataSource(apiClient: client)
+
+      await assertAPIError(
+        .server(statusCode: 409, code: code, message: message)
+      ) {
+        _ = try await dataSource.withdraw(
+          accessToken: "captured-withdrawal-token"
+        )
+      }
+
+      XCTAssertEqual(requestCapture.requestCount, 1)
+      let refreshCallCount = await refresher.callCount
+      XCTAssertEqual(refreshCallCount, 0)
+    }
+  }
+
+  func testWithdrawalRejectsUnknownSuccessfulStatus() async {
+    let data = Data(
+      """
+      {
+        "isSuccess": true,
+        "code": "COMMON200",
+        "message": "성공입니다.",
+        "result": {
+          "status": "PENDING",
+          "message": "처리 중"
+        }
+      }
+      """.utf8
+    )
+    let dataSource = DefaultAuthRemoteDataSource(
+      apiClient: makeClient(data: data)
+    )
+
+    do {
+      _ = try await dataSource.withdraw(accessToken: "withdrawal-token")
+      XCTFail("Unknown withdrawal status must not confirm account deletion.")
+    } catch let error as APIError {
+      guard case .decoding = error else {
+        return XCTFail("Expected decoding failure, got \(error)")
+      }
+    } catch {
+      XCTFail("Expected APIError, got \(error)")
+    }
   }
 
   func testUnsupportedProviderFailsBeforeTransport() async {
@@ -415,10 +557,12 @@ final class AuthRemoteContractTests: XCTestCase {
     statusCode: Int = 200,
     data: Data,
     tokenProvider: any AccessTokenProviding = EmptyAccessTokenProvider(),
+    accessTokenRefresher: (any AccessTokenRefreshing)? = nil,
     additionalPlugins: [any PluginType & Sendable] = []
   ) -> DefaultAPIClient {
     DefaultAPIClient(
       tokenProvider: tokenProvider,
+      accessTokenRefresher: accessTokenRefresher,
       providerFactory: MoyaProviderFactory(
         endpointBuilder: { target in
           let endpoint = MoyaProvider<MultiTarget>.defaultEndpointMapping(
@@ -499,6 +643,7 @@ final class AuthRemoteContractTests: XCTestCase {
         "code": "COMMON200",
         "message": "성공입니다.",
         "result": {
+          "status": "COMPLETED",
           "message": "회원 탈퇴가 완료되었습니다."
         }
       }
@@ -523,6 +668,7 @@ nonisolated private final class AuthRequestCapturePlugin:
 {
   private let lock = NSLock()
   private var capturedRequest: URLRequest?
+  private var capturedRequestCount = 0
 
   var request: URLRequest? {
     lock.lock()
@@ -530,11 +676,32 @@ nonisolated private final class AuthRequestCapturePlugin:
     return capturedRequest
   }
 
+  var requestCount: Int {
+    lock.lock()
+    defer { lock.unlock() }
+    return capturedRequestCount
+  }
+
   func prepare(_ request: URLRequest, target: TargetType) -> URLRequest {
     lock.lock()
     capturedRequest = request
+    capturedRequestCount += 1
     lock.unlock()
     return request
+  }
+}
+
+private actor AuthAccessTokenRefresherSpy: AccessTokenRefreshing {
+  private(set) var callCount = 0
+
+  func refreshAccessToken(
+    afterUnauthorized failedAccessToken: String
+  ) async throws -> AccessTokenRefreshResult {
+    callCount += 1
+    return AccessTokenRefreshResult(
+      accessToken: "unexpected-refreshed-access",
+      refreshToken: "unexpected-refreshed-refresh"
+    )
   }
 }
 

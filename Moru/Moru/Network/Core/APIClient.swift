@@ -47,6 +47,18 @@ nonisolated protocol AccountBoundRawResponseClient: AccountBoundAPIClient {
   ) async throws -> AccountBoundHTTPResponse
 }
 
+/// A narrow escape hatch for account-lifecycle operations that must use a
+/// captured credential without publishing it through the app-wide token
+/// provider. The request is sent exactly once and never enters the normal
+/// 401 refresh-and-replay path.
+nonisolated protocol ExplicitBearerAPIClient: APIClient {
+  func requestOnce<Target: MoruTargetType, Payload: Decodable & Sendable>(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    usingAccessToken accessToken: String
+  ) async throws -> Payload
+}
+
 nonisolated struct AccountBoundHTTPResponse: Equatable, Sendable {
   let statusCode: Int
   let data: Data
@@ -91,7 +103,7 @@ nonisolated extension AccountBoundAPIClient {
   }
 }
 
-actor DefaultAPIClient: AccountBoundRawResponseClient {
+actor DefaultAPIClient: AccountBoundRawResponseClient, ExplicitBearerAPIClient {
   private let provider: MoyaProvider<MultiTarget>
   private let configuration: NetworkConfiguration
   private let tokenProvider: any AccessTokenProviding
@@ -224,6 +236,31 @@ actor DefaultAPIClient: AccountBoundRawResponseClient {
       try validateAuthorizationContext(authorizationContext)
       throw error
     }
+  }
+
+  func requestOnce<
+    Target: MoruTargetType,
+    Payload: Decodable & Sendable
+  >(
+    _ target: Target,
+    as payloadType: Payload.Type,
+    usingAccessToken accessToken: String
+  ) async throws -> Payload {
+    try ensureServerRequestsEnabled()
+    let normalizedToken = accessToken.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    guard target.authenticationRequirement == .bearer,
+          !normalizedToken.isEmpty else {
+      throw APIError.authenticationRequired
+    }
+
+    let response = try await send(
+      target,
+      accessToken: normalizedToken
+    )
+    try validateStatus(response)
+    return try successfulPayload(payloadType, from: response)
   }
 
   func request<Target: MoruTargetType, Payload: Decodable & Sendable>(
