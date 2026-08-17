@@ -12,6 +12,54 @@ import XCTest
 
 final class ProfileSettingsTests: XCTestCase {
   @MainActor
+  func testProfileSummaryUsesTheSignedInAccountNickname() {
+    let localProfile = LocalProfile(displayName: "모루 사용자")
+    let signedInAccount = SignedInAccount(
+      memberID: 42,
+      onboardingCompleted: true,
+      provider: .kakao
+    )
+    let serverProfile = ServerAccountProfile(
+      memberID: 42,
+      nickname: "카카오 이름",
+      loginType: .kakao,
+      profileImageKey: nil,
+      selectedTTSID: 1
+    )
+
+    XCTAssertEqual(
+      ProfileSummaryDisplayNameResolver.resolve(
+        localProfile: localProfile,
+        sessionState: .signedIn(signedInAccount),
+        serverProfile: serverProfile
+      ),
+      "카카오 이름"
+    )
+    XCTAssertEqual(
+      ProfileSummaryDisplayNameResolver.resolve(
+        localProfile: localProfile,
+        sessionState: .signedOut,
+        serverProfile: serverProfile
+      ),
+      "모루 사용자"
+    )
+    XCTAssertEqual(
+      ProfileSummaryDisplayNameResolver.resolve(
+        localProfile: localProfile,
+        sessionState: .signedIn(signedInAccount),
+        serverProfile: ServerAccountProfile(
+          memberID: 99,
+          nickname: "다른 계정",
+          loginType: .kakao,
+          profileImageKey: nil,
+          selectedTTSID: 1
+        )
+      ),
+      "모루 사용자"
+    )
+  }
+
+  @MainActor
   func testDisplayNameIsTrimmedAndInvalidNamesAreRejected() throws {
     let repository = ProfileTestProfileRepository(
       profile: LocalProfile(displayName: "기존 이름")

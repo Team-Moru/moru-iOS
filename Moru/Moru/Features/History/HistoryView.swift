@@ -182,10 +182,6 @@ struct HistoryView: View {
           .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
 
         VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
-          if overview.summarySource == .account {
-            HistoryAccountSummaryNotice()
-          }
-
           HistoryStreakWeeklyCard(
             streak: overview.streak,
             action: { isWeeklyReportPresented = true }
@@ -358,27 +354,6 @@ struct HistoryView: View {
   private func dismissMissingDestination() {
     pendingDestination = nil
     isDestinationMissing = false
-  }
-}
-
-private struct HistoryAccountSummaryNotice: View {
-  var body: some View {
-    Label {
-      Text(HistoryCopy.accountSummaryNotice)
-        .historyOverviewTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-    } icon: {
-      Image(systemName: "icloud.and.arrow.down")
-        .foregroundStyle(MoruPilotColor.accent)
-        .accessibilityHidden(true)
-    }
-    .padding(MoruPilotSpacing.sixteen)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(AppColor.grayWhite.opacity(0.72))
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-    .accessibilityElement(children: .combine)
-    .accessibilityIdentifier("history.accountSummaryNotice")
   }
 }
 
@@ -1130,10 +1105,6 @@ struct HistoryWeeklyReportView: View {
 
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
-          if report.summarySource == .account {
-            HistoryAccountSummaryNotice()
-          }
-
           HistoryWeeklySummaryCard(
             title: weekRangeText,
             completedRuns: report.completedRunCount,

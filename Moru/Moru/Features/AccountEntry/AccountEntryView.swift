@@ -419,7 +419,7 @@ struct AccountEntryView: View {
       .accessibilityHint(appleAccessibilityHint)
       .accessibilityIdentifier(AccountEntryAccessibility.appleIdentifier)
 
-      AccountEntrySocialIconButton(
+      MoruSocialLoginIconButton(
         provider: .apple,
         isLoading: viewModel.activeProvider == .apple,
         isDisabled: appleButtonDisabled
@@ -431,7 +431,7 @@ struct AccountEntryView: View {
   }
 
   private var googleButton: some View {
-    AccountEntrySocialIconButton(
+    MoruSocialLoginIconButton(
       provider: .google,
       isLoading: viewModel.activeProvider == .google,
       isDisabled: googleButtonDisabled
@@ -451,7 +451,7 @@ struct AccountEntryView: View {
   }
 
   private var kakaoButton: some View {
-    AccountEntrySocialIconButton(
+    MoruSocialLoginIconButton(
       provider: .kakao,
       isLoading: viewModel.activeProvider == .kakao,
       isDisabled: kakaoButtonDisabled
@@ -648,49 +648,5 @@ struct AccountEntryView: View {
     return kakaoAuthorizationSession.isConfigured
       ? "Kakao 인증을 시작합니다."
       : "공개 Native app key 설정이 없어 현재 빌드에서는 사용할 수 없습니다."
-  }
-}
-
-private struct AccountEntrySocialIconButton: View {
-  let provider: AccountEntryProvider
-  let isLoading: Bool
-  let isDisabled: Bool
-  let action: @MainActor () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      ZStack {
-        Image(provider.assetName)
-          .resizable()
-          .scaledToFit()
-
-        if isLoading {
-          Circle()
-            .fill(AppColor.grayWhite.opacity(0.72))
-
-          ProgressView()
-            .tint(AppColor.grayBlack)
-            .controlSize(.small)
-        }
-      }
-      .frame(width: 56, height: 56)
-      .opacity(isDisabled ? 0.45 : 1)
-      .contentShape(Circle())
-    }
-    .buttonStyle(.plain)
-    .disabled(isDisabled)
-  }
-}
-
-private extension AccountEntryProvider {
-  var assetName: String {
-    switch self {
-    case .apple:
-      return AppImage.moruLoginApple
-    case .google:
-      return AppImage.moruLoginGoogle
-    case .kakao:
-      return AppImage.moruLoginKakao
-    }
   }
 }

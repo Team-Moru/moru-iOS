@@ -8,7 +8,24 @@
 import AuthenticationServices
 import SwiftUI
 
-import GoogleSignInSwift
+enum ProfileSummaryDisplayNameResolver {
+  static func resolve(
+    localProfile: LocalProfile,
+    sessionState: AccountSessionState,
+    serverProfile: ServerAccountProfile?
+  ) -> String {
+    guard case .signedIn(let account) = sessionState,
+          let serverProfile,
+          serverProfile.memberID == account.memberID else {
+      return localProfile.displayName
+    }
+
+    let nickname = serverProfile.nickname.trimmingCharacters(
+      in: .whitespacesAndNewlines
+    )
+    return nickname.isEmpty ? localProfile.displayName : nickname
+  }
+}
 
 struct ProfileView: View {
   static let rootAccessibilityIdentifier = "profile.root"
@@ -242,7 +259,9 @@ struct ProfileView: View {
       VStack(alignment: .leading, spacing: 0) {
         profileTitle
 
-        profileCard(content.profile)
+        profileCard(
+          displayName: profileSummaryDisplayName(for: content.profile)
+        )
           .padding(.top, MoruPilotSpacing.twelve)
 
         settingsSection(title: ProfileCopy.voiceSettings) {
@@ -292,12 +311,12 @@ struct ProfileView: View {
     }
   }
 
-  private func profileCard(_ profile: LocalProfile) -> some View {
+  private func profileCard(displayName: String) -> some View {
     HStack(spacing: 14) {
-      profileAvatar(for: profile)
+      profileAvatar(displayName: displayName)
 
       VStack(alignment: .leading, spacing: 0) {
-        Text(profile.displayName)
+        Text(displayName)
           .profileFigmaTextStyle(.b2.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -315,18 +334,28 @@ struct ProfileView: View {
     .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
     .profilePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
     .accessibilityElement(children: .combine)
-    .accessibilityLabel("\(profile.displayName), \(profileSubtitle)")
+    .accessibilityLabel("\(displayName), \(profileSubtitle)")
     .accessibilityIdentifier("profile.summary")
   }
 
+  private func profileSummaryDisplayName(
+    for localProfile: LocalProfile
+  ) -> String {
+    ProfileSummaryDisplayNameResolver.resolve(
+      localProfile: localProfile,
+      sessionState: accountSessionStore.state,
+      serverProfile: accountServerViewModel.profileState.value
+    )
+  }
+
   @ViewBuilder
-  private func profileAvatar(for profile: LocalProfile) -> some View {
+  private func profileAvatar(displayName: String) -> some View {
     if case .signedIn = accountSessionStore.state {
       Circle()
         .fill(MoruPilotColor.accent)
         .frame(width: 58, height: 58)
         .overlay {
-          Text(profileInitial(for: profile.displayName))
+          Text(profileInitial(for: displayName))
             .profileFigmaTextStyle(.b2.weight(.semiBold))
             .foregroundStyle(AppColor.grayWhite)
         }
@@ -673,11 +702,12 @@ struct ProfileView: View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 0) {
         accountConnectionHeader
+          .padding(.top, MoruPilotSpacing.twenty)
 
         Text(ProfileCopy.accountConnection)
           .profileFigmaTextStyle(.h3.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
-          .padding(.top, MoruPilotSpacing.twenty + MoruPilotSpacing.four)
+          .padding(.top, MoruPilotSpacing.sixteen)
 
         Text(ProfileCopy.accountConnectionDescription)
           .profileFigmaTextStyle(.b4)
@@ -685,75 +715,96 @@ struct ProfileView: View {
           .padding(.top, MoruPilotSpacing.twelve)
           .fixedSize(horizontal: false, vertical: true)
 
-        VStack(spacing: MoruPilotSpacing.twelve) {
-          SignInWithAppleButton(.continue) { request in
-            _ = appleAuthorizationSession.configure(request)
-          } onCompletion: { result in
-            let outcome = appleAuthorizationSession.outcome(for: result)
-            isAppleSignInPresented = false
-
-            Task {
-              await viewModel.appleAuthorizationDidComplete(outcome)
-            }
-          }
-          .signInWithAppleButtonStyle(.black)
-          .frame(maxWidth: .infinity, minHeight: 64)
-          .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
-          .disabled(viewModel.isAccountLinkInProgress)
-          .accessibilityLabel("Apple로 계속하기")
-          .accessibilityHint("Apple 인증을 시작합니다.")
-          .accessibilityIdentifier(Self.appleSignInAccessibilityIdentifier)
-
-          GoogleSignInButton {
-            Task {
-              let outcome = await googleAuthorizationSession.authorize()
-              isAppleSignInPresented = false
-              await viewModel.googleAuthorizationDidComplete(outcome)
-            }
-          }
-          .frame(maxWidth: .infinity, minHeight: 52)
-          .disabled(
-            viewModel.isAccountLinkInProgress
-              || !googleAuthorizationSession.isConfigured
-          )
-          .accessibilityLabel("Google로 계속하기")
-          .accessibilityHint("Google 인증을 시작합니다.")
-          .accessibilityIdentifier(Self.googleSignInAccessibilityIdentifier)
-
-          Button {
-            Task {
-              let outcome = await kakaoAuthorizationSession.authorize()
-              isAppleSignInPresented = false
-              await viewModel.kakaoAuthorizationDidComplete(outcome)
-            }
-          } label: {
-            Image("KakaoLoginButton")
-              .resizable()
-              .scaledToFit()
-              .frame(maxWidth: .infinity, minHeight: 52, maxHeight: 52)
-          }
-          .buttonStyle(.plain)
-          .disabled(
-            viewModel.isAccountLinkInProgress
-              || !kakaoAuthorizationSession.isConfigured
-          )
-          .accessibilityLabel("카카오로 계속하기")
-          .accessibilityHint("카카오 인증을 시작합니다.")
-          .accessibilityIdentifier(Self.kakaoSignInAccessibilityIdentifier)
+        HStack(spacing: MoruPilotSpacing.twenty) {
+          googleSocialLoginButton
+          kakaoSocialLoginButton
+          appleSocialLoginButton
         }
-        .padding(.top, MoruPilotSpacing.eight)
+        .frame(maxWidth: .infinity)
+        .padding(.top, MoruPilotSpacing.thirtyEight)
       }
       .padding(.horizontal, MoruPilotSpacing.twentyEight)
       .padding(.bottom, MoruPilotSpacing.twentyEight)
     }
     .background(MoruPilotColor.profileSurface)
     .presentationDetents([
-      .height(dynamicTypeSize.isAccessibilitySize ? 608 : 420),
+      .height(dynamicTypeSize.isAccessibilitySize ? 608 : 288),
     ])
     .presentationDragIndicator(.visible)
     .presentationCornerRadius(32)
     .presentationBackground(MoruPilotColor.profileSurface)
     .accessibilityIdentifier("profile.account.sheet")
+  }
+
+  private var appleSocialLoginButton: some View {
+    ZStack {
+      SignInWithAppleButton(.continue) { request in
+        _ = appleAuthorizationSession.configure(request)
+      } onCompletion: { result in
+        let outcome = appleAuthorizationSession.outcome(for: result)
+        isAppleSignInPresented = false
+
+        Task {
+          await viewModel.appleAuthorizationDidComplete(outcome)
+        }
+      }
+      .signInWithAppleButtonStyle(.black)
+      .frame(width: 56, height: 56)
+      .clipShape(Circle())
+      .disabled(viewModel.isAccountLinkInProgress)
+      .accessibilityLabel("Apple로 계속하기")
+      .accessibilityHint("Apple 인증을 시작합니다.")
+      .accessibilityIdentifier(Self.appleSignInAccessibilityIdentifier)
+
+      MoruSocialLoginIconButton(
+        provider: .apple,
+        isLoading: viewModel.isAccountLinkInProgress,
+        isDisabled: viewModel.isAccountLinkInProgress
+      ) {}
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
+    }
+    .frame(width: 56, height: 56)
+  }
+
+  private var googleSocialLoginButton: some View {
+    let isDisabled = viewModel.isAccountLinkInProgress
+      || !googleAuthorizationSession.isConfigured
+
+    return MoruSocialLoginIconButton(
+      provider: .google,
+      isLoading: false,
+      isDisabled: isDisabled
+    ) {
+      Task {
+        let outcome = await googleAuthorizationSession.authorize()
+        isAppleSignInPresented = false
+        await viewModel.googleAuthorizationDidComplete(outcome)
+      }
+    }
+    .accessibilityLabel("Google로 계속하기")
+    .accessibilityHint("Google 인증을 시작합니다.")
+    .accessibilityIdentifier(Self.googleSignInAccessibilityIdentifier)
+  }
+
+  private var kakaoSocialLoginButton: some View {
+    let isDisabled = viewModel.isAccountLinkInProgress
+      || !kakaoAuthorizationSession.isConfigured
+
+    return MoruSocialLoginIconButton(
+      provider: .kakao,
+      isLoading: false,
+      isDisabled: isDisabled
+    ) {
+      Task {
+        let outcome = await kakaoAuthorizationSession.authorize()
+        isAppleSignInPresented = false
+        await viewModel.kakaoAuthorizationDidComplete(outcome)
+      }
+    }
+    .accessibilityLabel("카카오로 계속하기")
+    .accessibilityHint("카카오 인증을 시작합니다.")
+    .accessibilityIdentifier(Self.kakaoSignInAccessibilityIdentifier)
   }
 
   private var accountConnectionHeader: some View {
@@ -764,6 +815,8 @@ struct ProfileView: View {
         .frame(maxWidth: .infinity)
 
       HStack {
+        Spacer(minLength: 0)
+
         Button {
           isAppleSignInPresented = false
         } label: {
@@ -776,8 +829,6 @@ struct ProfileView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(ProfileCopy.close)
-
-        Spacer(minLength: 0)
       }
     }
     .frame(maxWidth: .infinity, minHeight: 40)
