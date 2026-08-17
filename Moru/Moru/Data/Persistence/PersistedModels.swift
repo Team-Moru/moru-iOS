@@ -517,6 +517,38 @@ final class PersistedRoutineSyncAttemptArtifact {
   }
 }
 
+/// V6 singleton provenance for the exact local projection created by
+/// onboarding. Full snapshots make any profile, routine, step, or alarm edit
+/// fail closed before replacement is considered.
+@Model
+final class PersistedProvisionalOnboardingMarker {
+  @Attribute(.unique) var id: UUID
+  @Attribute(.unique) var generationID: UUID
+  var profileID: UUID
+  var routineIDsRawValue: String
+  var profileSnapshot: Data
+  var routineSnapshots: Data
+  var createdAt: Date
+
+  init(
+    id: UUID,
+    generationID: UUID,
+    profileID: UUID,
+    routineIDsRawValue: String,
+    profileSnapshot: Data,
+    routineSnapshots: Data,
+    createdAt: Date
+  ) {
+    self.id = id
+    self.generationID = generationID
+    self.profileID = profileID
+    self.routineIDsRawValue = routineIDsRawValue
+    self.profileSnapshot = profileSnapshot
+    self.routineSnapshots = routineSnapshots
+    self.createdAt = createdAt
+  }
+}
+
 /// Written before remote account withdrawal. It is intentionally keyed by
 /// namespace and account so a retry cannot clear another environment/account.
 @Model

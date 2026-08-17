@@ -58,6 +58,13 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
   @MainActor
   func saveRoutines(_ routines: [Routine]) throws {
     do {
+      if !routines.isEmpty {
+        // Any routine CRUD after onboarding establishes the whole local
+        // projection. Rollback restores the marker if this transaction fails.
+        try SwiftDataProvisionalOnboardingDataStore(
+          modelContext: modelContext
+        ).stageInvalidate()
+      }
       let memberID = signedInMemberProvider?.signedInMemberID
       let now = Date()
       var activeProjectionChanged = false
@@ -151,6 +158,9 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       return
     }
     do {
+      try SwiftDataProvisionalOnboardingDataStore(
+        modelContext: modelContext
+      ).stageInvalidate()
       let routine = try SwiftDataMapper.makeDomainRoutine(from: persisted)
       let memberID = signedInMemberProvider?.signedInMemberID
       modelContext.delete(persisted)

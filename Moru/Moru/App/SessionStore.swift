@@ -67,15 +67,19 @@ nonisolated final class SessionStore: ObservableObject {
 
   @MainActor
   func beginServerRoutineRestoration() {
-    guard profile == nil else {
-      return
-    }
     phase = .loading
   }
 
   @MainActor
   func finishServerRoutineRestoration() {
     load()
+  }
+
+  @MainActor
+  func failServerRoutineRestoration() {
+    phase = .failed(
+      "서버 루틴을 불러오지 못했어요. 네트워크를 확인하고 다시 시도해 주세요."
+    )
   }
 
   static func isSessionReady(profile: LocalProfile?) -> Bool {

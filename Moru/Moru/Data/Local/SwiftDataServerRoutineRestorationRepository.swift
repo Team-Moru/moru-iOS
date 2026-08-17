@@ -22,21 +22,44 @@ final class SwiftDataServerRoutineRestorationRepository:
     self.syncRepository = syncRepository
   }
 
-  func isLocalProfileAndRoutineStoreEmpty() throws -> Bool {
-    try hasNoRows(PersistedLocalProfile.self)
-      && hasNoRows(PersistedRoutine.self)
+  func localDataState() throws -> ServerRoutineRestorationLocalDataState {
+    try provisionalStore.localDataState()
   }
 
   func persistServerRestoration(
     _ snapshot: ServerRoutineRestorationSnapshot,
     memberID: Int64,
+    replacing source: ServerRoutineRestorationSource,
     at date: Date
   ) throws -> Bool {
     do {
-      // Recheck in the same main-actor transaction after every remote read.
-      // A local onboarding completion that won the race must always win.
-      guard try isLocalProfileAndRoutineStoreEmpty() else {
+      // Recheck the complete marker snapshot in the same main-actor
+      // transaction after every remote read. Any user change wins the race.
+      guard try localDataState().restorationSource == source else {
         return false
+      }
+
+      // Validate every local/remote identity pair before deleting a
+      // relationship graph. This stage-only call inserts no durable row until
+      // the one save below and avoids asking SwiftData to roll back a deleted
+      // cascade for a known binding conflict.
+      _ = try syncRepository.stageRecordRemoteIDs(
+        snapshot.bindingAssignments,
+        memberID: memberID,
+        at: date
+      )
+
+      switch source {
+      case .empty:
+        // Clear only an orphan marker. There is no local content to delete.
+        try provisionalStore.stageInvalidate()
+      case .provisional(let generationID):
+        guard try provisionalStore.stageDeleteValidatedProvisionalData(
+          generationID: generationID
+        ) else {
+          modelContext.rollback()
+          return false
+        }
       }
 
       modelContext.insert(
@@ -47,12 +70,6 @@ final class SwiftDataServerRoutineRestorationRepository:
           SwiftDataMapper.makePersistedRoutine(from: routine)
         )
       }
-      _ = try syncRepository.stageRecordRemoteIDs(
-        snapshot.bindingAssignments,
-        memberID: memberID,
-        at: date
-      )
-
       try modelContext.save()
       return true
     } catch {
@@ -61,11 +78,15 @@ final class SwiftDataServerRoutineRestorationRepository:
     }
   }
 
-  private func hasNoRows<Model: PersistentModel>(
-    _ modelType: Model.Type
+  func finalizeProvisionalDataAsEstablished(
+    generationID: UUID
   ) throws -> Bool {
-    var descriptor = FetchDescriptor<Model>()
-    descriptor.fetchLimit = 1
-    return try modelContext.fetch(descriptor).isEmpty
+    try provisionalStore.finalizeAsEstablished(
+      expectedGenerationID: generationID
+    )
+  }
+
+  private var provisionalStore: SwiftDataProvisionalOnboardingDataStore {
+    SwiftDataProvisionalOnboardingDataStore(modelContext: modelContext)
   }
 }

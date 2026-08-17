@@ -201,7 +201,10 @@ struct AppRouter: View {
           title: title,
           message: message,
           onRetry: { @MainActor in
-            sessionStore.load()
+            if onboardingStatusRuntimeCoordinator?
+              .retryRestorationForCurrentSession() != true {
+              sessionStore.load()
+            }
           }
         )
       }
@@ -243,6 +246,9 @@ struct AppRouter: View {
       }
     }
     .onChange(of: accountSessionStore.state) { _, newState in
+      // Establish loading/barrier state before AccountEntry marks the login as
+      // complete, otherwise a provisional profile can route to Home first.
+      onboardingStatusRuntimeCoordinator?.accountSessionDidChange()
       if didCompleteOnboardingTrial,
          case .signedIn = newState {
         didCompleteAccountEntry = true
@@ -260,6 +266,7 @@ struct AppRouter: View {
 
       Task {
         await consumePendingAlarmIngress()
+        await dependencies.alarmScheduleMutator?.reconcile()
       }
     }
     .onReceive(

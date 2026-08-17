@@ -45,6 +45,7 @@ nonisolated enum RoutineSyncRuntimeStopReason: Equatable, Sendable {
   case idle
   case blocked(RoutineSyncBlockReason)
   case consentRequired
+  case restorationPending
   case staleSession
   case runtimeFailure
 }
@@ -63,6 +64,8 @@ final class RoutineSyncRuntimeCoordinator {
   private let scheduler: any RoutineSyncRuntimeScheduling
   private let unscheduledRetryDelay: TimeInterval
   private let onMutationCompleted: @MainActor () -> Void
+  private let restorationBackfillBarrier:
+    RoutineRestorationBackfillBarrier?
 
   private var drainTask: Task<Void, Never>?
   private var drainGeneration = 0
@@ -83,6 +86,8 @@ final class RoutineSyncRuntimeCoordinator {
       SystemRoutineSyncRuntimeScheduler.shared,
     isSceneActive: Bool = false,
     unscheduledRetryDelay: TimeInterval = 1,
+    restorationBackfillBarrier:
+      RoutineRestorationBackfillBarrier? = nil,
     onMutationCompleted: @escaping @MainActor () -> Void = {}
   ) {
     precondition(unscheduledRetryDelay > 0)
@@ -92,9 +97,18 @@ final class RoutineSyncRuntimeCoordinator {
     self.scheduler = scheduler
     self.isSceneActive = isSceneActive
     self.unscheduledRetryDelay = unscheduledRetryDelay
+    self.restorationBackfillBarrier = restorationBackfillBarrier
     self.onMutationCompleted = onMutationCompleted
 
     wakeupRelay?.setHandler { [weak self] in
+      self?.wake()
+    }
+    restorationBackfillBarrier?.setResolutionHandler {
+      [weak self] identity in
+      guard self?.sessionIdentityProvider?
+        .currentAccountSessionIdentity == identity else {
+        return
+      }
       self?.wake()
     }
   }
@@ -187,6 +201,13 @@ final class RoutineSyncRuntimeCoordinator {
   }
 
   private func drain(identity: AccountSessionIdentity) async {
+    guard restorationBackfillBarrier?.allowsBackfill(for: identity)
+      ?? true else {
+      wakePending = false
+      lastStopReason = .restorationPending
+      return
+    }
+
     if backfilledSessionIdentity != identity {
       do {
         try loginBackfiller?.backfillLocalRoutineGroups(

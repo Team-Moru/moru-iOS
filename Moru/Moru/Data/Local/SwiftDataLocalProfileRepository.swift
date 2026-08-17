@@ -47,20 +47,38 @@ nonisolated final class SwiftDataLocalProfileRepository: LocalProfileRepository 
 
   @MainActor
   func saveProfile(_ profile: LocalProfile) throws {
-    if let persisted = try persistedProfile(id: profile.id) {
-      SwiftDataMapper.update(persisted, with: profile)
-    } else {
-      modelContext.insert(SwiftDataMapper.makePersistedProfile(from: profile))
-    }
+    do {
+      try SwiftDataProvisionalOnboardingDataStore(
+        modelContext: modelContext
+      ).stageInvalidate()
+      if let persisted = try persistedProfile(id: profile.id) {
+        SwiftDataMapper.update(persisted, with: profile)
+      } else {
+        modelContext.insert(
+          SwiftDataMapper.makePersistedProfile(from: profile)
+        )
+      }
 
-    try modelContext.save()
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
   }
 
   @MainActor
   func deleteProfile() throws {
-    let descriptor = FetchDescriptor<PersistedLocalProfile>()
-    try modelContext.fetch(descriptor).forEach { modelContext.delete($0) }
-    try modelContext.save()
+    do {
+      try SwiftDataProvisionalOnboardingDataStore(
+        modelContext: modelContext
+      ).stageInvalidate()
+      let descriptor = FetchDescriptor<PersistedLocalProfile>()
+      try modelContext.fetch(descriptor).forEach(modelContext.delete)
+      try modelContext.save()
+    } catch {
+      modelContext.rollback()
+      throw error
+    }
   }
 
   @MainActor

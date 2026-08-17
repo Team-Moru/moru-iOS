@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 protocol ServerRoutineRestorationPersisting: AnyObject {
-  func isLocalProfileAndRoutineStoreEmpty() throws -> Bool
+  func localDataState() throws -> ServerRoutineRestorationLocalDataState
 
   /// Returns `false` when local data appeared while remote reads were in
   /// flight. Implementations must persist the profile, routines, and bindings
@@ -15,17 +15,28 @@ protocol ServerRoutineRestorationPersisting: AnyObject {
   func persistServerRestoration(
     _ snapshot: ServerRoutineRestorationSnapshot,
     memberID: Int64,
+    replacing source: ServerRoutineRestorationSource,
     at date: Date
+  ) throws -> Bool
+
+  func finalizeProvisionalDataAsEstablished(
+    generationID: UUID
   ) throws -> Bool
 }
 
 @MainActor
 protocol ServerRoutineRestoring: AnyObject {
-  func isLocalProfileAndRoutineStoreEmpty() throws -> Bool
+  func localDataState() throws -> ServerRoutineRestorationLocalDataState
 
-  func restoreIfLocalStoreIsEmpty(
-    for identity: AccountSessionIdentity
+  func restore(
+    for identity: AccountSessionIdentity,
+    replacing source: ServerRoutineRestorationSource
   ) async throws -> ServerRoutineRestorationResult
+
+  func finalizeLocalDataForBackfill(
+    for identity: AccountSessionIdentity,
+    source: ServerRoutineRestorationSource
+  ) throws
 }
 
 nonisolated enum ServerRoutineRestorationResult: Equatable, Sendable {
@@ -38,6 +49,7 @@ nonisolated enum ServerRoutineRestorationError:
   Equatable,
   Sendable {
   case invalidResponse
+  case localDataChanged
   case staleSession
 }
 
@@ -75,15 +87,16 @@ final class DefaultServerRoutineRestorationService:
     self.now = now
   }
 
-  func isLocalProfileAndRoutineStoreEmpty() throws -> Bool {
-    try persistence.isLocalProfileAndRoutineStoreEmpty()
+  func localDataState() throws -> ServerRoutineRestorationLocalDataState {
+    try persistence.localDataState()
   }
 
-  func restoreIfLocalStoreIsEmpty(
-    for identity: AccountSessionIdentity
+  func restore(
+    for identity: AccountSessionIdentity,
+    replacing source: ServerRoutineRestorationSource
   ) async throws -> ServerRoutineRestorationResult {
-    guard try persistence.isLocalProfileAndRoutineStoreEmpty() else {
-      return .localDataPresent
+    guard try persistence.localDataState().restorationSource == source else {
+      return try resultForChangedLocalData()
     }
     try requireCurrent(identity)
 
@@ -117,11 +130,29 @@ final class DefaultServerRoutineRestorationService:
     let didPersist = try persistence.persistServerRestoration(
       snapshot,
       memberID: identity.memberID,
+      replacing: source,
       at: restorationDate
     )
-    return didPersist
-      ? .restored(routineCount: snapshot.routines.count)
-      : .localDataPresent
+    guard didPersist else {
+      return try resultForChangedLocalData()
+    }
+    return .restored(routineCount: snapshot.routines.count)
+  }
+
+  func finalizeLocalDataForBackfill(
+    for identity: AccountSessionIdentity,
+    source: ServerRoutineRestorationSource
+  ) throws {
+    try requireCurrent(identity)
+    guard case .provisional(let generationID) = source else {
+      return
+    }
+    guard try persistence.finalizeProvisionalDataAsEstablished(
+      generationID: generationID
+    ) else {
+      throw ServerRoutineRestorationError.localDataChanged
+    }
+    try requireCurrent(identity)
   }
 
   private func requireCurrent(
@@ -131,6 +162,14 @@ final class DefaultServerRoutineRestorationService:
       == identity else {
       throw ServerRoutineRestorationError.staleSession
     }
+  }
+
+  private func resultForChangedLocalData()
+    throws -> ServerRoutineRestorationResult {
+    guard try persistence.localDataState() == .established else {
+      throw ServerRoutineRestorationError.localDataChanged
+    }
+    return .localDataPresent
   }
 }
 
