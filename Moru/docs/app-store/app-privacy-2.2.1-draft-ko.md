@@ -27,7 +27,7 @@
 | Other User Content | 루틴 제목·설명·단계, 자유 입력/전사문, AI 요청 본문 및 Google TTS로 전달될 수 있는 생성 안내 텍스트 | 예 | 앱 기능, 맞춤화 | 아니오 | 보수적 입력 후보 |
 | Product Interaction | 루틴 완료·건너뜀·실행 시각·기간·기상 시각 등 실행 기록 | 예 | 앱 기능 | 아니오 | 보수적 입력 후보 |
 | Email Address | Google ID token의 `email`을 `name` 부재 시 닉네임으로 사용할 수 있고, Apple 서버 구현도 email을 닉네임 후보로 읽음. Google Sign-In manifest도 선언 | 예 | 앱 기능 | 아니오 | 보수적 입력 후보; Apple email scope와 실제 저장 범위 재확인 |
-| Name | Google ID token의 `name`을 닉네임으로 저장할 수 있음. Google Sign-In manifest도 선언 | 예 | 앱 기능 | 아니오 | 보수적 입력 후보 |
+| Name | Google ID token의 `name`과 Kakao token을 받은 서버의 사용자 정보 API 프로필 닉네임을 계정 닉네임으로 저장할 수 있음. Google Sign-In manifest도 선언 | 예 | 앱 기능 | 아니오 | 보수적 입력 후보 |
 | Phone Number | Google Sign-In 9.1.0 Privacy Report manifest가 선언 | 예 | 앱 기능 | 아니오 | **SDK 선언 후보** — OAuth/SDK 실제 적용 범위를 확인하거나 보수적으로 입력 |
 | Coarse Location | Google Sign-In 9.1.0 Privacy Report manifest가 선언 | 예 | 앱 기능 | 아니오 | **SDK 선언 후보** — WeatherKit 위치와 별도로 확인 |
 | Device ID | Google Sign-In 9.1.0 Privacy Report manifest가 분석 목적으로 선언 | 예 | 분석 | 아니오 | **SDK 선언 후보** |
@@ -58,7 +58,7 @@ build 3 clean archive에서 다음을 확인했습니다.
 | MORU API DB·백업·접근 로그의 보관 기간 및 삭제 절차 | 이용자 보관·파기 고지와 탈퇴 설명 |
 | Google Gemini·Google TTS의 실제 프로젝트/계약 주체, 처리 지역·보관·학습 사용 여부 | AI·음성 제3자 제공·위탁 및 국외 처리 고지 |
 | Google TTS 오디오와 AWS S3의 운영 주체·보관·로그 정책 | Gemini → Google TTS → AWS S3 정상 경로와 AWS S3 `ap-northeast-2` 리전은 확인됐으나 실제 운영 보관·백업·로그 정책은 확인 필요 |
-| Google OAuth consent screen의 실제 승인 scope, Google Sign-In 9.1.0 manifest 적용 범위, Kakao Developers 동의 항목 | archive Privacy Report는 Google SDK 8개와 Kakao SDK Other Data를 추가로 선언한다. 앱은 Kakao `me()`/프로필 조회를 호출하지 않지만 서버가 token에서 어떤 claim을 저장·로그하는지는 운영 증빙 필요 |
+| Google OAuth consent screen의 실제 승인 scope, Google Sign-In 9.1.0 manifest 적용 범위, Kakao Developers 동의 항목 | archive Privacy Report는 Google SDK 8개와 Kakao SDK Other Data를 추가로 선언한다. iOS 앱은 Kakao 프로필 API를 직접 호출하지 않지만 서버는 전달받은 token으로 Kakao 사용자 정보 API를 호출한다. 실제 콘솔 동의 항목과 서버 보관·로그 범위는 운영 증빙 필요 |
 | 심사용 로그인 계정 또는 심사자가 로그인 없이 재현할 수 있는 경로 | App Review Information |
 
 ## 5. 2.2.1 심사 메모 초안
