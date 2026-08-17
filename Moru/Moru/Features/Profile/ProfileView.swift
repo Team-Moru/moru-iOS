@@ -7,6 +7,7 @@
 
 import AuthenticationServices
 import SwiftUI
+import UIKit
 
 enum ProfileSummaryDisplayNameResolver {
   static func resolve(
@@ -36,10 +37,16 @@ struct ProfileView: View {
   static let kakaoSignInAccessibilityIdentifier = "profile.account.kakao-sign-in"
   static let accountLogoutAccessibilityIdentifier = "profile.account.logout"
   static let accountWithdrawalAccessibilityIdentifier = "profile.account.withdrawal"
+  static let accountWithdrawalRetryAccessibilityIdentifier =
+    "profile.account.withdrawal-retry"
+  static let appleWithdrawalReauthenticationAccessibilityIdentifier =
+    "profile.account.withdrawal.apple-reauthentication"
   static let accountRoutineArchiveAccessibilityIdentifier =
     "profile.account.routine-archive"
+  static let privacyPolicyAccessibilityIdentifier = "profile.support.privacy"
   static let termsOfServiceAccessibilityIdentifier = "profile.support.terms"
   static let contactAccessibilityIdentifier = "profile.support.contact"
+  static let geminiDataConsentAccessibilityIdentifier = "profile.gemini-consent"
 
   @State private var viewModel: ProfileViewModel
   @State private var accountServerViewModel: AccountServerSettingsViewModel
@@ -49,6 +56,7 @@ struct ProfileView: View {
   @State private var accountRoutineGroupDetailViewModel:
     AccountRoutineGroupDetailViewModel
   @ObservedObject private var accountSessionStore: AccountSessionStore
+  @ObservedObject private var geminiDataConsentStore: GeminiDataConsentStore
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.scenePhase) private var scenePhase
   @State private var displayNameDraft = ""
@@ -59,6 +67,7 @@ struct ProfileView: View {
   @State private var isResetConfirmationPresented = false
   @State private var isAppleSignInPresented = false
   @State private var isWithdrawalConfirmationPresented = false
+  @State private var supportLinkAlert: ProfileSupportLinkAlert?
   @State private var routineArchiveNavigation =
     AccountRoutineGroupArchiveNavigationState()
   @State private var appleAuthorizationSession = AppleAuthorizationSession()
@@ -67,6 +76,7 @@ struct ProfileView: View {
   private let appCapabilities: AppCapabilities
   private let automaticallyLoads: Bool
   private let supportLinks: ProfileSupportLinks
+  private let supportLinkOpener: ProfileSupportLinkOpener
 
   init(
     viewModel: ProfileViewModel,
@@ -80,9 +90,13 @@ struct ProfileView: View {
       UnavailableGoogleAuthorizationSession(),
     kakaoAuthorizationSession: any KakaoAuthorizationStarting =
       UnavailableKakaoAuthorizationSession(),
+    geminiDataConsentStore: GeminiDataConsentStore = GeminiDataConsentStore(),
     appCapabilities: AppCapabilities = .production,
     automaticallyLoads: Bool = true,
-    supportLinks: ProfileSupportLinks? = nil
+    supportLinks: ProfileSupportLinks? = nil,
+    supportURLOpener: @escaping ProfileSupportLinkOpener.OpenURL = { url in
+      await UIApplication.shared.open(url)
+    }
   ) {
     _viewModel = State(initialValue: viewModel)
     _accountServerViewModel = State(initialValue: accountServerViewModel)
@@ -100,10 +114,16 @@ struct ProfileView: View {
       )
     )
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
+    _geminiDataConsentStore = ObservedObject(
+      wrappedValue: geminiDataConsentStore
+    )
     self.googleAuthorizationSession = googleAuthorizationSession
     self.kakaoAuthorizationSession = kakaoAuthorizationSession
     self.appCapabilities = appCapabilities
     self.automaticallyLoads = automaticallyLoads
+    self.supportLinkOpener = ProfileSupportLinkOpener(
+      openURL: supportURLOpener
+    )
     self.supportLinks = supportLinks ?? ProfileSupportLinks(
       policyConfiguration: AccountEntryPolicyConfiguration(
         infoDictionary: Bundle.main.infoDictionary
@@ -236,20 +256,24 @@ struct ProfileView: View {
       Text("프로필, 루틴, 수행 기록을 삭제하며 되돌릴 수 없어요.")
     }
     .confirmationDialog(
-      "MORU 계정을 탈퇴할까요?",
+      withdrawalConfirmationTitle,
       isPresented: $isWithdrawalConfirmationPresented,
       titleVisibility: .visible
     ) {
-      Button("회원 탈퇴", role: .destructive) {
+      Button(withdrawalConfirmationButtonTitle, role: .destructive) {
         Task {
           await viewModel.withdrawalConfirmationButtonDidTap()
         }
       }
       Button("취소", role: .cancel) {}
     } message: {
-      Text(
-        "서버 계정은 삭제되며 되돌릴 수 없어요. "
-          + "이 기기의 로컬 프로필, 루틴과 수행 기록은 유지됩니다."
+      Text(withdrawalConfirmationMessage)
+    }
+    .alert(item: $supportLinkAlert) { alert in
+      Alert(
+        title: Text(alert.title),
+        message: Text(alert.message),
+        dismissButton: .default(Text(ProfileCopy.confirm))
       )
     }
   }
@@ -276,15 +300,18 @@ struct ProfileView: View {
           .padding(.top, MoruPilotSpacing.twentyEight)
         }
 
+        settingsSection(title: ProfileCopy.aiDataHandling) {
+          geminiDataConsentCard
+        }
+        .padding(.top, MoruPilotSpacing.twentyEight)
+
         settingsSection(title: ProfileCopy.dataManagement) {
           dataManagementCard
         }
         .padding(.top, MoruPilotSpacing.twentyEight)
 
-        settingsSection(title: ProfileCopy.support) {
-          supportCard
-        }
-        .padding(.top, MoruPilotSpacing.twentyEight)
+        supportSection
+          .padding(.top, MoruPilotSpacing.twentyEight)
       }
       .padding(.horizontal, MoruPilotSpacing.twenty)
       .padding(.bottom, MoruPilotSpacing.sixtyFour)
@@ -375,6 +402,8 @@ struct ProfileView: View {
       "\(Self.providerDisplayName(account.provider)) 계정 연결됨"
     case .restoring:
       "계정 확인 중"
+    case .withdrawalPending:
+      ProfileCopy.withdrawalPending
     case .signedOut, .failure:
       ProfileCopy.socialLogin
     }
@@ -395,6 +424,8 @@ struct ProfileView: View {
         }
       case .signedIn:
         signedInAccountActions
+      case .withdrawalPending:
+        pendingWithdrawalActions
       case .failure:
         accountConnectButton
       }
@@ -455,6 +486,121 @@ struct ProfileView: View {
       .accessibilityHint("확인 후 서버 계정을 영구 삭제합니다.")
       .accessibilityIdentifier(Self.accountWithdrawalAccessibilityIdentifier)
     }
+  }
+
+  private var geminiDataConsentCard: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+      Text(geminiDataConsentDescription)
+        .profileFigmaTextStyle(.c1)
+        .foregroundStyle(MoruPilotColor.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Button {
+        geminiDataConsentStore.presentConsentChoices()
+      } label: {
+        figmaNavigationRow(title: ProfileCopy.aiDataConsentManage)
+      }
+      .buttonStyle(.plain)
+      .accessibilityHint("Google Gemini 데이터 처리 동의 내용을 확인합니다.")
+      .accessibilityIdentifier(Self.geminiDataConsentAccessibilityIdentifier)
+
+      if geminiDataConsentStore.hasExplicitGeminiDataConsent {
+        Button(role: .destructive) {
+          geminiDataConsentStore.revoke()
+        } label: {
+          figmaNavigationRow(title: ProfileCopy.aiDataConsentWithdraw)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("앞으로 AI 처리로 이어질 수 있는 새 데이터 전송을 중단합니다.")
+        .accessibilityIdentifier("profile.gemini-consent.revoke")
+      }
+    }
+    .accessibilityElement(children: .contain)
+  }
+
+  private var geminiDataConsentDescription: String {
+    if geminiDataConsentStore.hasExplicitGeminiDataConsent {
+      return "AI 루틴 기능에 필요한 데이터 전송에 동의했어요. 언제든 철회할 수 있어요."
+    }
+    return "동의하지 않아도 로컬 루틴은 계속 사용할 수 있어요. AI 처리로 이어질 수 있는 데이터는 전송하지 않아요."
+  }
+
+  private var pendingWithdrawalActions: some View {
+    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+      if viewModel.requiresAppleWithdrawalReauthentication {
+        profileMessage(
+          ProfileCopy.appleWithdrawalReauthenticationDescription,
+          color: MoruPilotColor.textSecondary
+        )
+        .accessibilityIdentifier(
+          "profile.account.withdrawal-apple-reauthentication-message"
+        )
+
+        SignInWithAppleButton(.continue) { request in
+          guard viewModel.appleWithdrawalReauthenticationWillBegin() else {
+            return
+          }
+          guard appleAuthorizationSession.configure(request) else {
+            viewModel.appleWithdrawalReauthenticationPreparationDidFail()
+            return
+          }
+        } onCompletion: { result in
+          let outcome = appleAuthorizationSession.outcome(for: result)
+          Task {
+            await viewModel.appleWithdrawalReauthenticationDidComplete(outcome)
+          }
+        }
+        .signInWithAppleButtonStyle(.black)
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .disabled(!viewModel.canBeginAppleWithdrawalReauthentication)
+        .accessibilityLabel(ProfileCopy.appleWithdrawalReauthentication)
+        .accessibilityHint("Apple 인증 뒤 회원탈퇴를 계속합니다.")
+        .accessibilityIdentifier(
+          Self.appleWithdrawalReauthenticationAccessibilityIdentifier
+        )
+      } else {
+        profileMessage(
+          ProfileCopy.withdrawalPendingDescription,
+          color: MoruPilotColor.textSecondary
+        )
+        .accessibilityIdentifier("profile.account.withdrawal-pending-message")
+
+        Button(role: .destructive) {
+          isWithdrawalConfirmationPresented = true
+        } label: {
+          figmaNavigationRow(title: ProfileCopy.retryWithdrawal)
+        }
+        .buttonStyle(.plain)
+        .disabled(viewModel.isAccountLifecycleInProgress)
+        .accessibilityHint(
+          "서버 처리 결과가 불확실한 회원탈퇴 요청을 다시 보냅니다."
+        )
+        .accessibilityIdentifier(
+          Self.accountWithdrawalRetryAccessibilityIdentifier
+        )
+      }
+    }
+  }
+
+  private var withdrawalConfirmationTitle: String {
+    accountSessionStore.isWithdrawalPending
+      ? "회원탈퇴를 다시 확인할까요?"
+      : "MORU 계정을 탈퇴할까요?"
+  }
+
+  private var withdrawalConfirmationButtonTitle: String {
+    accountSessionStore.isWithdrawalPending ? "다시 시도" : "회원 탈퇴"
+  }
+
+  private var withdrawalConfirmationMessage: String {
+    if accountSessionStore.isWithdrawalPending {
+      return "이전 요청의 서버 처리 결과를 확인하지 못했어요. "
+        + "다시 요청한 뒤 서버 응답이 확인되어야 완료돼요. "
+        + "이 기기의 로컬 프로필, 루틴과 수행 기록은 유지됩니다."
+    }
+
+    return "서버 계정은 삭제되며 되돌릴 수 없어요. "
+      + "이 기기의 로컬 프로필, 루틴과 수행 기록은 유지됩니다."
   }
 
   static func providerDisplayName(_ provider: AuthProvider) -> String {
@@ -534,7 +680,7 @@ struct ProfileView: View {
         figmaNavigationRow(title: ProfileCopy.resetLocalData)
       }
       .buttonStyle(.plain)
-      .disabled(!viewModel.isResetAvailable)
+      .disabled(!viewModel.isResetAvailable || accountSessionStore.isWithdrawalPending)
       .accessibilityIdentifier("profile.reset")
 
       if viewModel.isResetInProgress {
@@ -546,7 +692,12 @@ struct ProfileView: View {
         }
       }
 
-      if let message = viewModel.resetAvailabilityMessage {
+      if accountSessionStore.isWithdrawalPending {
+        profileMessage(
+          ProfileCopy.withdrawalResetUnavailable,
+          color: AppColor.moruTextSecondary
+        )
+      } else if let message = viewModel.resetAvailabilityMessage {
         profileMessage(message, color: AppColor.moruTextSecondary)
       }
 
@@ -558,29 +709,58 @@ struct ProfileView: View {
 
   private var supportCard: some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
-      if let termsOfServiceURL = supportLinks.termsOfServiceURL {
-        Link(destination: termsOfServiceURL) {
-          figmaNavigationRow(title: ProfileCopy.termsOfService)
+      ForEach(ProfileSupportLinkDestination.allCases, id: \.self) { destination in
+        Button {
+          openSupportLink(destination)
+        } label: {
+          figmaNavigationRow(title: destination.title)
         }
         .buttonStyle(.plain)
-        .accessibilityHint("웹 브라우저에서 이용약관을 엽니다.")
-        .accessibilityIdentifier(Self.termsOfServiceAccessibilityIdentifier)
-      } else {
-        Button {} label: {
-          figmaNavigationRow(title: ProfileCopy.termsOfService)
-        }
-        .buttonStyle(.plain)
-        .disabled(true)
-        .accessibilityHint("이용약관 주소가 구성되지 않아 열 수 없습니다.")
-        .accessibilityIdentifier(Self.termsOfServiceAccessibilityIdentifier)
+        .accessibilityLabel(destination.accessibilityLabel)
+        .accessibilityHint(destination.accessibilityHint)
+        .accessibilityIdentifier(
+          Self.supportAccessibilityIdentifier(for: destination)
+        )
       }
+    }
+  }
 
-      Link(destination: supportLinks.contactURL) {
-        figmaNavigationRow(title: ProfileCopy.contact)
-      }
-      .buttonStyle(.plain)
-      .accessibilityHint("메일 앱에서 문의 메일을 작성합니다.")
-      .accessibilityIdentifier(Self.contactAccessibilityIdentifier)
+  private var supportSection: some View {
+    settingsSection(title: ProfileCopy.support) {
+      supportCard
+    }
+  }
+
+  private func openSupportLink(_ destination: ProfileSupportLinkDestination) {
+    Task {
+      supportLinkAlert = await supportLinkOpener.open(
+        destination: destination,
+        url: supportURL(for: destination)
+      )
+    }
+  }
+
+  private func supportURL(for destination: ProfileSupportLinkDestination) -> URL? {
+    switch destination {
+    case .privacyPolicy:
+      supportLinks.privacyPolicyURL
+    case .termsOfService:
+      supportLinks.termsOfServiceURL
+    case .contact:
+      supportLinks.contactURL
+    }
+  }
+
+  static func supportAccessibilityIdentifier(
+    for destination: ProfileSupportLinkDestination
+  ) -> String {
+    switch destination {
+    case .privacyPolicy:
+      privacyPolicyAccessibilityIdentifier
+    case .termsOfService:
+      termsOfServiceAccessibilityIdentifier
+    case .contact:
+      contactAccessibilityIdentifier
     }
   }
 
@@ -603,11 +783,14 @@ struct ProfileView: View {
           .profileFigmaTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .padding(.top, MoruPilotSpacing.sixteen)
+
+        supportSection
+          .padding(.top, MoruPilotSpacing.twentyEight)
       }
       .padding(.horizontal, MoruPilotSpacing.twenty)
       .padding(.bottom, MoruPilotSpacing.sixtyFour)
     }
-    .accessibilityElement(children: .combine)
+    .accessibilityElement(children: .contain)
   }
 
   private func failureView(_ message: String) -> some View {
@@ -631,6 +814,9 @@ struct ProfileView: View {
             .tint(MoruPilotColor.accent)
         }
         .frame(maxWidth: .infinity, minHeight: 320)
+
+        supportSection
+          .padding(.top, MoruPilotSpacing.twentyEight)
       }
       .padding(.horizontal, MoruPilotSpacing.twenty)
       .padding(.bottom, MoruPilotSpacing.sixtyFour)
@@ -934,6 +1120,101 @@ struct ProfileView: View {
     .padding(.vertical, MoruPilotSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
     .profilePilotSurface(cornerRadius: MoruPilotSpacing.twelve)
+  }
+}
+
+nonisolated enum ProfileSupportLinkDestination: CaseIterable, Hashable, Sendable {
+  case privacyPolicy
+  case termsOfService
+  case contact
+
+  var title: String {
+    switch self {
+    case .privacyPolicy:
+      ProfileCopy.privacyPolicy
+    case .termsOfService:
+      ProfileCopy.termsOfService
+    case .contact:
+      ProfileCopy.contact
+    }
+  }
+
+  var accessibilityLabel: String {
+    title
+  }
+
+  var accessibilityHint: String {
+    switch self {
+    case .privacyPolicy:
+      "웹 브라우저에서 개인정보처리방침을 엽니다."
+    case .termsOfService:
+      "웹 브라우저에서 이용약관을 엽니다."
+    case .contact:
+      "메일 앱에서 문의 메일을 작성합니다."
+    }
+  }
+}
+
+nonisolated struct ProfileSupportLinkAlert: Equatable, Identifiable, Sendable {
+  enum Reason: String, Equatable, Sendable {
+    case misconfigured
+    case openFailed
+  }
+
+  let destination: ProfileSupportLinkDestination
+  let reason: Reason
+
+  var id: String {
+    "\(destination)-\(reason.rawValue)"
+  }
+
+  var title: String {
+    ProfileCopy.supportLinkErrorTitle
+  }
+
+  var message: String {
+    switch reason {
+    case .misconfigured:
+      ProfileCopy.supportLinkConfigurationError
+    case .openFailed:
+      ProfileCopy.supportLinkOpenError(title: destination.title)
+    }
+  }
+}
+
+@MainActor
+struct ProfileSupportLinkOpener {
+  typealias OpenURL = @MainActor (URL) async -> Bool
+
+  private let openURL: OpenURL
+
+  init(
+    openURL: @escaping OpenURL = { url in
+      await UIApplication.shared.open(url)
+    }
+  ) {
+    self.openURL = openURL
+  }
+
+  func open(
+    destination: ProfileSupportLinkDestination,
+    url: URL?
+  ) async -> ProfileSupportLinkAlert? {
+    guard let url else {
+      return ProfileSupportLinkAlert(
+        destination: destination,
+        reason: .misconfigured
+      )
+    }
+
+    guard await openURL(url) else {
+      return ProfileSupportLinkAlert(
+        destination: destination,
+        reason: .openFailed
+      )
+    }
+
+    return nil
   }
 }
 

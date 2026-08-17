@@ -18,19 +18,27 @@ final class EvaluateRoutineExecutionAIStepUseCase:
   private let remoteService: any RoutineExecutionAIStepRemoteServing
   private let sessionIdentityProvider:
     any CurrentAccountSessionIdentityProviding
+  private let geminiDataConsent: any GeminiDataConsentAuthorizing
 
   init(
     remoteService: any RoutineExecutionAIStepRemoteServing,
-    sessionIdentityProvider: any CurrentAccountSessionIdentityProviding
+    sessionIdentityProvider: any CurrentAccountSessionIdentityProviding,
+    geminiDataConsent: any GeminiDataConsentAuthorizing
   ) {
     self.remoteService = remoteService
     self.sessionIdentityProvider = sessionIdentityProvider
+    self.geminiDataConsent = geminiDataConsent
   }
 
   func evaluate(
     _ request: RoutineExecutionAIStepRequest
   ) async throws -> RoutineExecutionAIStepDecision {
     try Task.checkCancellation()
+    guard geminiDataConsent.hasExplicitGeminiDataConsent else {
+      geminiDataConsent.requestGeminiDataConsentIfNeeded()
+      throw RoutineExecutionAIStepError.geminiConsentRequired
+    }
+
     guard let identity = sessionIdentityProvider
       .currentAccountSessionIdentity else {
       throw RoutineExecutionAIStepError.accountSessionUnavailable

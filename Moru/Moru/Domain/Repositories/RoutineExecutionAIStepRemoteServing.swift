@@ -36,6 +36,10 @@ nonisolated enum RoutineExecutionAIStepError:
   Sendable {
   case invalidRequest(RoutineExecutionAIStepInvalidRequest)
   case invalidResponse
+  /// The request may contain free-form routine input that is processed by
+  /// Google Gemini through the MORU service. Never begin that transmission
+  /// without the separate, explicit AI-data consent.
+  case geminiConsentRequired
   case accountSessionUnavailable
   case accountAuthorizationChanged
   case timeout

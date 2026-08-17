@@ -36,6 +36,19 @@ nonisolated struct LogoutRequestDTO: Encodable, Equatable, Sendable {
   let refreshToken: String
 }
 
+nonisolated enum WithdrawalStatusDTO: String, Decodable, Equatable, Sendable {
+  case completed = "COMPLETED"
+}
+
 nonisolated struct WithdrawalResponseDTO: Decodable, Equatable, Sendable {
+  let status: WithdrawalStatusDTO
   let message: String
+
+  init(
+    status: WithdrawalStatusDTO,
+    message: String
+  ) {
+    self.status = status
+    self.message = message
+  }
 }

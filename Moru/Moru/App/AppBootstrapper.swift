@@ -14,6 +14,7 @@ struct BootstrappedApp {
   let dependencies: DependencyContainer
   let sessionStore: SessionStore
   let accountSessionStore: AccountSessionStore
+  let geminiDataConsentStore: GeminiDataConsentStore
   let appleCredentialMonitor: AppleCredentialMonitor
   let socialLoginCoordinator: any SocialLoginCoordinating
   let googleAuthorizationSession: GoogleSignInSession
@@ -142,11 +143,24 @@ final class AppBootstrapper: ObservableObject {
     constructReadyGraph()
   }
 
+  private var runtimeAppCapabilities: AppCapabilities {
+    #if DEBUG
+    // The review weather fixture must never restore a personal account or
+    // make MORU-server requests on a developer's physical device.
+    if ProcessInfo.processInfo.arguments.contains("-ui-testing-weather-fixture") {
+      return .localOnly
+    }
+    #endif
+    return appCapabilities
+  }
+
   private func constructReadyGraph() {
     state = .loading
 
     do {
+      let appCapabilities = runtimeAppCapabilities
       let accountSessionStore = accountSessionStoreFactory()
+      let geminiDataConsentStore = GeminiDataConsentStore()
       if appCapabilities.shouldRestoreAccountSession {
         // Publish this synchronously with start(). Credential loading still
         // waits for pending-cleanup recovery below.
@@ -228,6 +242,7 @@ final class AppBootstrapper: ObservableObject {
           accountRoutineGroupRemoteService,
         routineTTSRemoteService: routineTTSRemoteService,
         sessionIdentityProvider: accountSessionStore,
+        geminiDataConsent: geminiDataConsentStore,
         routineSyncWakeupRelay: routineSyncWakeupRelay
       )
       // Recovery changes no request identity. The sender can only replay a
@@ -249,7 +264,8 @@ final class AppBootstrapper: ObservableObject {
           requestPreparer: requestPreparer,
           transport: transport,
           contract: .productionP0,
-          sessionIdentityProvider: accountSessionStore
+          sessionIdentityProvider: accountSessionStore,
+          geminiDataConsent: geminiDataConsentStore
         )
         let loginBackfiller = RoutineSyncLoginBackfiller(
           routineRepository: dependencies.routineRepository,
@@ -268,6 +284,14 @@ final class AppBootstrapper: ObservableObject {
         routineSyncRuntimeCoordinator = nil
       }
       let sessionStore = dependencies.makeSessionStore()
+      #if DEBUG
+      if ProcessInfo.processInfo.arguments.contains("-ui-testing-weather-fixture") {
+        // Review UI tests need to reach Home before exercising the operating
+        // system's real location-permission screens. This is Debug-only and
+        // never changes a Release user's onboarding state.
+        _ = try? dependencies.localProfileRepository.loadOrCreateDefaultProfile()
+      }
+      #endif
       sessionStore.load()
       let onboardingStatusRuntimeCoordinator =
         appCapabilities.shouldAllowServerRequests
@@ -350,6 +374,7 @@ final class AppBootstrapper: ObservableObject {
         dependencies: dependencies,
         sessionStore: sessionStore,
         accountSessionStore: accountSessionStore,
+        geminiDataConsentStore: geminiDataConsentStore,
         appleCredentialMonitor: appleCredentialMonitor,
         socialLoginCoordinator: socialLoginCoordinator,
         googleAuthorizationSession: googleAuthorizationSession,
@@ -368,7 +393,8 @@ final class AppBootstrapper: ObservableObject {
       finishBootstrap(
         app,
         accountSessionStore: accountSessionStore,
-        accountScopedDataCleaner: accountScopedDataCleaner
+        accountScopedDataCleaner: accountScopedDataCleaner,
+        appCapabilities: appCapabilities
       )
     } catch {
       state = .failed(
@@ -382,12 +408,14 @@ final class AppBootstrapper: ObservableObject {
   private func finishBootstrap(
     _ app: BootstrappedApp,
     accountSessionStore: AccountSessionStore,
-    accountScopedDataCleaner: any AccountScopedDataCleaning
+    accountScopedDataCleaner: any AccountScopedDataCleaning,
+    appCapabilities: AppCapabilities
   ) {
     Task { @MainActor in
       let shouldRestoreAccount = await shouldRestoreAccountSession(
         accountSessionStore,
-        accountScopedDataCleaner: accountScopedDataCleaner
+        accountScopedDataCleaner: accountScopedDataCleaner,
+        appCapabilities: appCapabilities
       )
       await preflight.prepare(dependencies: app.dependencies)
       state = .ready(app)
@@ -406,7 +434,8 @@ final class AppBootstrapper: ObservableObject {
 
   private func shouldRestoreAccountSession(
     _ accountSessionStore: AccountSessionStore,
-    accountScopedDataCleaner: any AccountScopedDataCleaning
+    accountScopedDataCleaner: any AccountScopedDataCleaning,
+    appCapabilities: AppCapabilities
   ) async -> Bool {
     guard appCapabilities.shouldRestoreAccountSession else {
       return false
@@ -431,13 +460,13 @@ final class AppBootstrapper: ObservableObject {
     }
 
     do {
-      let hasAmbiguousStoredSession = try accountSessionStore.hasStoredSession(
-        matching: recovery.ambiguousMemberIDs
-      )
-      guard !hasAmbiguousStoredSession else {
-        // An attempting marker is not proof of withdrawal. Keep credentials,
-        // but do not restore that exact account into an uncertain session.
-        accountSessionStore.deferRestorationWithoutDeletingCredentials()
+      let preparedPendingRetry = try accountSessionStore
+        .preparePendingWithdrawalRetry(
+          matching: recovery.ambiguousMemberIDs
+        )
+      guard !preparedPendingRetry else {
+        // Keep ordinary account identity unavailable while preserving a
+        // visible, user-retryable withdrawal-only state.
         return false
       }
     } catch {

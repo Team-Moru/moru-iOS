@@ -242,6 +242,114 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testGuestCreateThenCancelledLoginAccountEventKeepsOutboxAndTransportEmpty()
+    async throws {
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let session = RoutineSyncCRUDSessionProvider(identity: nil)
+    let sync = SwiftDataRoutineSyncRepository(
+      modelContext: container.mainContext
+    )
+    let relay = RoutineSyncWakeupRelay()
+    let routines = SwiftDataRoutineRepository(
+      modelContext: container.mainContext,
+      routineSyncRepository: sync,
+      signedInMemberProvider: session,
+      routineSyncWakeupRelay: relay
+    )
+    let transport = RoutineSyncCRUDTransportProbe()
+    let sender = RoutineSyncSender(
+      repository: sync,
+      requestPreparer: ProductionRoutineSyncRequestPreparer(repository: sync),
+      transport: transport,
+      contract: .productionP0,
+      sessionIdentityProvider: session,
+      geminiDataConsent: GeminiDataConsentStub()
+    )
+    let coordinator = RoutineSyncRuntimeCoordinator(
+      sender: sender,
+      sessionIdentityProvider: session,
+      wakeupRelay: relay,
+      isSceneActive: true
+    )
+
+    try routines.saveRoutine(
+      makeRoutine(name: "게스트 생성", steps: [makeStep()], isActive: false)
+    )
+
+    // A cancelled or failed login has no successful identity transition. An
+    // account event alone must not turn the guest save into an implicit upload.
+    coordinator.accountSessionDidChange()
+    await waitUntilStopped(coordinator)
+
+    XCTAssertTrue(
+      try container.mainContext.fetch(
+        FetchDescriptor<PersistedRoutineSyncMutation>()
+      ).isEmpty
+    )
+    XCTAssertTrue(try sync.mutations(memberID: 7).isEmpty)
+    let requestCount = await transport.requestCount()
+    XCTAssertEqual(requestCount, 0)
+    XCTAssertEqual(coordinator.lastStopReason, .signedOut)
+  }
+
+  @MainActor
+  func testPersistedGuestCreateStaysLocalAfterSignedOutRuntimeGraphRecreation()
+    async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: directory,
+      withIntermediateDirectories: true
+    )
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let storeURL = directory.appendingPathComponent("moru.store")
+    let routineID = try persistGuestRoutine(to: storeURL)
+
+    let reopenedContainer = try ModelContainer.moruContainer(storeURL: storeURL)
+    let session = RoutineSyncCRUDSessionProvider(identity: nil)
+    let reopenedSync = SwiftDataRoutineSyncRepository(
+      modelContext: reopenedContainer.mainContext
+    )
+    let reopenedRoutines = SwiftDataRoutineRepository(
+      modelContext: reopenedContainer.mainContext,
+      routineSyncRepository: reopenedSync,
+      signedInMemberProvider: session
+    )
+    let transport = RoutineSyncCRUDTransportProbe()
+    let sender = RoutineSyncSender(
+      repository: reopenedSync,
+      requestPreparer: ProductionRoutineSyncRequestPreparer(
+        repository: reopenedSync
+      ),
+      transport: transport,
+      contract: .productionP0,
+      sessionIdentityProvider: session,
+      geminiDataConsent: GeminiDataConsentStub()
+    )
+    let coordinator = RoutineSyncRuntimeCoordinator(
+      sender: sender,
+      sessionIdentityProvider: session,
+      isSceneActive: true
+    )
+
+    XCTAssertNotNil(try reopenedRoutines.routine(id: routineID))
+    coordinator.accountSessionDidChange()
+    await waitUntilStopped(coordinator)
+
+    // Reopening SwiftData and rebuilding the signed-out runtime graph must not
+    // itself scan a signed-out guest routine into a new create mutation.
+    XCTAssertTrue(
+      try reopenedContainer.mainContext.fetch(
+        FetchDescriptor<PersistedRoutineSyncMutation>()
+      ).isEmpty
+    )
+    XCTAssertTrue(try reopenedSync.mutations(memberID: 7).isEmpty)
+    let requestCount = await transport.requestCount()
+    XCTAssertEqual(requestCount, 0)
+    XCTAssertEqual(coordinator.lastStopReason, .signedOut)
+  }
+
+  @MainActor
   func testUnsentActiveGroupDeletionCancelsCreateAndSelectionWithoutNilReplacement() throws {
     let fixture = try makeFixture(memberID: 7)
     let step = makeStep()
@@ -1249,6 +1357,7 @@ private final class RoutineSyncCRUDMemberProvider: SignedInMemberProviding {
 
 @MainActor
 private final class RoutineSyncRuntimeIdentityProvider:
+  SignedInMemberProviding,
   CurrentAccountSessionIdentityProviding {
   var identity: AccountSessionIdentity?
 
@@ -1256,8 +1365,11 @@ private final class RoutineSyncRuntimeIdentityProvider:
     self.identity = identity
   }
 
+  var signedInMemberID: Int64? { identity?.memberID }
   var currentAccountSessionIdentity: AccountSessionIdentity? { identity }
 }
+
+private typealias RoutineSyncCRUDSessionProvider = RoutineSyncRuntimeIdentityProvider
 
 @MainActor
 private final class RoutineSyncWakeProbe {
@@ -1335,6 +1447,19 @@ private actor RoutineSyncBackfillAPIClient: AccountBoundAPIClient {
   private func unexpectedRequest() -> APIError {
     APIError.transport(code: -1, message: "Unexpected routine API request")
   }
+}
+
+private actor RoutineSyncCRUDTransportProbe: RoutineSyncTransport {
+  private var count = 0
+
+  func execute(
+    _ request: RoutineSyncTransportRequest
+  ) async -> RoutineSyncTransportOutcome {
+    count += 1
+    return .ambiguous
+  }
+
+  func requestCount() -> Int { count }
 }
 
 private actor RoutineSyncCountingAPIClient: AccountBoundRawResponseClient {

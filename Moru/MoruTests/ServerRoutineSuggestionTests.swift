@@ -220,7 +220,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     let coordinator = RoutineSuggestionCoordinator(
       serverService: RoutineSuggestionServerStub(result: .success(serverRoutine)),
       localService: local,
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
 
     let server = try await coordinator.suggest(from: input())
@@ -232,6 +233,29 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     let fallback = try await coordinator.suggest(from: input())
     XCTAssertEqual(fallback.source, .localFallback(.signedOut))
     XCTAssertEqual(local.callCount, 1)
+  }
+
+  func testMissingGeminiConsentUsesLocalDraftWithoutCallingServer() async throws {
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let server = RoutineSuggestionServerStub(
+      result: .success(makeRoutine(name: "서버에 보내면 안 되는 초안"))
+    )
+    let local = RoutineSuggestionLocalStub()
+    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+
+    let result = try await coordinator.suggest(from: input())
+
+    XCTAssertEqual(result.source, .localFallback(.geminiConsentRequired))
+    XCTAssertEqual(result.routine.name, "로컬 fallback")
+    XCTAssertEqual(local.callCount, 1)
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(consent.requestCount, 1)
   }
 
   func testAirplaneTimeoutFiveHundredMalformedAndInvalidPayloadUseLocalFallback()
@@ -297,7 +321,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
       let coordinator = RoutineSuggestionCoordinator(
         serverService: server,
         localService: local,
-        signedInMemberProvider: account
+        signedInMemberProvider: account,
+        geminiDataConsent: GeminiDataConsentStub()
       )
 
       let result = try await coordinator.suggest(from: input())
@@ -376,7 +401,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     let coordinator = RoutineSuggestionCoordinator(
       serverService: GatedRoutineSuggestionServer(gate: gate),
       localService: local,
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let task: _Concurrency.Task<RoutineSuggestionResult, Error> =
       _Concurrency.Task {
@@ -456,7 +482,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
         )
       ),
       localService: RoutineSuggestionLocalStub(),
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let viewModel = OnboardingViewModel(
       draft: originalDraft,
@@ -527,7 +554,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     let coordinator = RoutineSuggestionCoordinator(
       serverService: GatedRoutineSuggestionServer(gate: gate),
       localService: RoutineSuggestionLocalStub(),
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let viewModel = OnboardingViewModel(
       draft: OnboardingDraft(freeformText: "실제 요청을 기다려요"),
@@ -572,7 +600,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
         result: .success(makeRoutine(name: "빠른 서버 루틴"))
       ),
       localService: RoutineSuggestionLocalStub(),
-      signedInMemberProvider: account
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub()
     )
     let viewModel = OnboardingViewModel(
       draft: OnboardingDraft(freeformText: "빠른 응답도 단계별로 보여줘요"),
@@ -854,6 +883,7 @@ private final class RoutineSuggestionLocalStub: RoutineSuggestionService {
 private final class RoutineSuggestionServerStub:
   ServerRoutineSuggestionServing {
   private let result: Result<Routine, Error>
+  private(set) var callCount = 0
 
   init(result: Result<Routine, Error>) {
     self.result = result
@@ -863,7 +893,8 @@ private final class RoutineSuggestionServerStub:
     from input: RoutineSuggestionInput,
     memberID: Int64
   ) async throws -> Routine {
-    try result.get()
+    callCount += 1
+    return try result.get()
   }
 }
 

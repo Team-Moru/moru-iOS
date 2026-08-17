@@ -74,7 +74,8 @@ struct DependencyContainer {
       ?? RoutineSuggestionCoordinator(
         serverService: nil,
         localService: routineSuggestionService,
-        signedInMemberProvider: nil
+        signedInMemberProvider: nil,
+        geminiDataConsent: UnavailableGeminiDataConsentAuthorizer()
       )
     self.routineSuggestionCoordinator = resolvedRoutineSuggestionCoordinator
     self.onboardingRecommendationCoordinator =
@@ -119,6 +120,8 @@ struct DependencyContainer {
     routineTTSRemoteService: (any RoutineTTSRemoteServing)? = nil,
     sessionIdentityProvider:
       (any CurrentAccountSessionIdentityProviding)? = nil,
+    geminiDataConsent: any GeminiDataConsentAuthorizing =
+      UnavailableGeminiDataConsentAuthorizer(),
     routineSyncWakeupRelay: RoutineSyncWakeupRelay? = nil
   ) -> DependencyContainer {
     let audioResourceLoader = RoutineAudioResourceLoader()
@@ -203,7 +206,8 @@ struct DependencyContainer {
     let routineSuggestionCoordinator = RoutineSuggestionCoordinator(
       serverService: serverSuggestionService,
       localService: localSuggestionService,
-      signedInMemberProvider: signedInMemberProvider
+      signedInMemberProvider: signedInMemberProvider,
+      geminiDataConsent: geminiDataConsent
     )
     let serverOnboardingRecommendationService =
       onboardingRecommendationRemoteDataSource.map {
@@ -213,7 +217,8 @@ struct DependencyContainer {
       OnboardingRecommendationCoordinator(
         serverService: serverOnboardingRecommendationService,
         localService: localSuggestionService,
-        signedInMemberProvider: signedInMemberProvider
+        signedInMemberProvider: signedInMemberProvider,
+        geminiDataConsent: geminiDataConsent
       )
     let alarmRuntimeHandler = DefaultAlarmRuntimeCoordinator(
       routineRepository: routineRepository,

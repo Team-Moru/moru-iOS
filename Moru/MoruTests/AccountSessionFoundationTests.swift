@@ -592,7 +592,7 @@ final class AccountSessionFoundationTests: XCTestCase {
     XCTAssertEqual(preflight.events, ["started", "finished"])
   }
 
-  func testAmbiguousCleanupForStoredAccountDefersRestorationWithoutDeletingCredentials()
+  func testAmbiguousCleanupForStoredAccountPublishesRestrictedWithdrawalRecovery()
     async throws {
     let credentials = makeCredentials()
     let credentialStore = StubCredentialStore(loadResult: .success(credentials))
@@ -622,7 +622,14 @@ final class AccountSessionFoundationTests: XCTestCase {
 
     try await waitUntil {
       if case .ready = bootstrapper.state {
-        return accountSessionStore.state == .signedOut
+        return accountSessionStore.state == .withdrawalPending(
+          SignedInAccount(
+            memberID: credentials.memberID,
+            onboardingCompleted: credentials.onboardingCompleted,
+            provider: credentials.provider,
+            providerUserIdentifier: credentials.providerUserIdentifier
+          )
+        )
       }
       return false
     }
@@ -630,6 +637,13 @@ final class AccountSessionFoundationTests: XCTestCase {
     XCTAssertEqual(credentialStore.removeCount, 0)
     XCTAssertEqual(credentialStore.loadCount, 1)
     XCTAssertNil(accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertNil(accountSessionStore.signedInMemberID)
+    XCTAssertNil(accountSessionStore.currentAccountSessionIdentity)
+    XCTAssertFalse(
+      AppCapabilities.production.canUseAccountFeatures(
+        sessionState: accountSessionStore.state
+      )
+    )
   }
 
   func testAmbiguousCleanupForAnotherMemberDoesNotBlockStoredAccountRestoration()
@@ -674,6 +688,46 @@ final class AccountSessionFoundationTests: XCTestCase {
       accountSessionStore.accessTokenProvider.accessToken,
       credentials.accessToken
     )
+  }
+
+  func testCleanupRecoveryReadFailureKeepsCredentialRestrictedAndBlocksOverwrite()
+    throws {
+    let credentials = makeCredentials()
+    let credentialStore = MutableSessionCredentialStore(
+      credentials: credentials
+    )
+    let accountSessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    accountSessionStore.restore()
+
+    accountSessionStore.deferRestorationWithoutDeletingCredentials()
+
+    XCTAssertEqual(
+      accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(
+          memberID: credentials.memberID,
+          onboardingCompleted: credentials.onboardingCompleted,
+          provider: credentials.provider,
+          providerUserIdentifier: credentials.providerUserIdentifier
+        )
+      )
+    )
+    XCTAssertNil(accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertEqual(credentialStore.credentials, credentials)
+    XCTAssertThrowsError(
+      try accountSessionStore.establishSession(
+        credentials: AccountCredentials(
+          memberID: credentials.memberID + 1,
+          accessToken: "replacement-access",
+          refreshToken: "replacement-refresh",
+          onboardingCompleted: true
+        )
+      )
+    )
+    XCTAssertEqual(credentialStore.credentials, credentials)
   }
 
   private func makeCredentials() -> AccountCredentials {

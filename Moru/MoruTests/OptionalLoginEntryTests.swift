@@ -23,6 +23,13 @@ final class OptionalLoginEntryTests: XCTestCase {
           provider: .google
         )
       ),
+      .withdrawalPending(
+        SignedInAccount(
+          memberID: 1,
+          onboardingCompleted: false,
+          provider: .google
+        )
+      ),
       .failure(.invalidCredentials),
       .failure(.credentialStoreUnavailable),
     ]

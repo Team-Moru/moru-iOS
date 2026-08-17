@@ -25,7 +25,7 @@ final class AccountLifecycleTests: XCTestCase {
     XCTAssertEqual(logoutRefreshTokens, ["refresh-token"])
     XCTAssertEqual(fixture.cleaner.memberIDs, [])
     XCTAssertNil(fixture.credentialStore.credentials)
-    XCTAssertNil(fixture.tokenProvider.accessToken)
+    XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
     XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
   }
 
@@ -82,7 +82,7 @@ final class AccountLifecycleTests: XCTestCase {
     let logoutRefreshTokens = await fixture.remote.logoutRefreshTokens
     XCTAssertEqual(logoutRefreshTokens, [])
     XCTAssertNil(fixture.credentialStore.credentials)
-    XCTAssertNil(fixture.tokenProvider.accessToken)
+    XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
     XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
   }
 
@@ -145,7 +145,7 @@ final class AccountLifecycleTests: XCTestCase {
   }
 
   @MainActor
-  func testWithdrawalFailureKeepsSignedInAndSkipsEveryLocalCleanup() async {
+  func testAmbiguousWithdrawalFailureEntersRestrictedRecoveryAndSkipsCleanup() async {
     let remoteError = APIError.server(
       statusCode: 503,
       code: "COMMON503",
@@ -166,11 +166,17 @@ final class AccountLifecycleTests: XCTestCase {
     XCTAssertEqual(fixture.cleaner.memberIDs, [])
     XCTAssertEqual(fixture.credentialStore.removeCallCount, 0)
     XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
-    XCTAssertEqual(fixture.tokenProvider.accessToken, "access-token")
+    XCTAssertNil(fixture.tokenProvider.accessToken)
+    let withdrawalAccessTokens = await fixture.remote.withdrawalAccessTokens
+    XCTAssertEqual(withdrawalAccessTokens, ["access-token"])
     XCTAssertEqual(
       fixture.accountSessionStore.state,
-      .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true))
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
     )
+    XCTAssertNil(fixture.accountSessionStore.signedInMemberID)
+    XCTAssertNil(fixture.accountSessionStore.currentAccountSessionIdentity)
   }
 
   @MainActor
@@ -211,7 +217,7 @@ final class AccountLifecycleTests: XCTestCase {
   }
 
   @MainActor
-  func testWithdrawalCleanupFailureKeepsSessionForConfirmedCleanupRecovery() async {
+  func testWithdrawalCleanupFailureKeepsRestrictedConfirmedRecovery() async {
     let fixture = makeFixture(cleanupError: AccountLifecycleTestError.cleanupFailed)
 
     do {
@@ -228,10 +234,12 @@ final class AccountLifecycleTests: XCTestCase {
       ["remote withdrawal", "account cleanup 92"]
     )
     XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
-    XCTAssertEqual(fixture.tokenProvider.accessToken, "access-token")
+    XCTAssertNil(fixture.tokenProvider.accessToken)
     XCTAssertEqual(
       fixture.accountSessionStore.state,
-      .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true))
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
     )
   }
 
@@ -277,7 +285,7 @@ final class AccountLifecycleTests: XCTestCase {
         try await fixture.service.withdraw()
         XCTFail("Expected local cleanup failure for \(phase)")
       } catch let error as AccountLifecycleError {
-        XCTAssertEqual(error, .localCleanupFailed)
+        XCTAssertEqual(error, .withdrawalStateUnavailable)
       } catch {
         XCTFail("Expected AccountLifecycleError, got \(error)")
       }
@@ -286,13 +294,16 @@ final class AccountLifecycleTests: XCTestCase {
       XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
       XCTAssertEqual(
         fixture.accountSessionStore.state,
-        .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true))
+        .withdrawalPending(
+          SignedInAccount(memberID: 92, onboardingCompleted: true)
+        )
       )
+      XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
     }
   }
 
   @MainActor
-  func testDefinitiveWithdrawalFailureCancelsMarkerAndKeepsSession() async {
+  func testUndocumentedBadRequestStaysAmbiguousAndPreservesCredential() async {
     let events = AccountLifecycleEventRecorder()
     let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
     let fixture = makePhaseFixture(
@@ -308,9 +319,17 @@ final class AccountLifecycleTests: XCTestCase {
 
     XCTAssertEqual(
       events.values,
-      ["prepare", "attempting", "remote withdrawal", "cancelled"]
+      ["prepare", "attempting", "remote withdrawal"]
     )
     XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertEqual(cleaner.completedPhases, [.prepare, .attempting])
+    XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
+    )
   }
 
   @MainActor
@@ -331,6 +350,548 @@ final class AccountLifecycleTests: XCTestCase {
     XCTAssertEqual(events.values, ["prepare", "attempting", "remote withdrawal"])
     XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
     XCTAssertEqual(cleaner.completedPhases, [.prepare, .attempting])
+    XCTAssertNil(
+      fixture.accountSessionStore.accessTokenProvider.accessToken
+    )
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
+    )
+  }
+
+  @MainActor
+  func testAmbiguousTransportWithdrawalRetrySendsDeleteAgainAndCompletes() async throws {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let timeout = APIError.transport(code: -1001, message: "timeout")
+    let fixture = makePhaseFixture(
+      events: events,
+      cleaner: cleaner,
+      withdrawalErrors: [timeout, nil]
+    )
+
+    do {
+      try await fixture.service.withdraw()
+      XCTFail("The first ambiguous DELETE must not be reported as success.")
+    } catch let error as APIError {
+      XCTAssertEqual(error, timeout)
+    } catch {
+      XCTFail("Expected the transport error, got \(error)")
+    }
+
+    try await fixture.service.withdraw()
+
+    XCTAssertEqual(
+      events.values,
+      [
+        "prepare",
+        "attempting",
+        "remote withdrawal",
+        "prepare",
+        "attempting",
+        "remote withdrawal",
+        "confirmed",
+        "localDataCleaned",
+        "provider withdrawal",
+        "credential remove",
+        "finalize",
+      ]
+    )
+    XCTAssertNil(fixture.credentialStore.credentials)
+    XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testPersistentAttemptingMarkerRetriesActualDeleteAndThenFinalizes() async throws {
+    let events = AccountLifecycleEventRecorder()
+    let credentialStore = AccountLifecycleCredentialStore(
+      credentials: makeCredentials(),
+      events: events
+    )
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    sessionStore.restore()
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataRoutineSyncRepository(
+      modelContext: container.mainContext
+    )
+    let remote = AccountLifecycleAuthRemoteDataSource(
+      events: events,
+      logoutError: nil,
+      withdrawalErrors: [
+        APIError.transport(code: -1001, message: "timeout"),
+        nil,
+      ]
+    )
+    let service = DefaultAccountLifecycleService(
+      authRemoteDataSource: remote,
+      accountSessionStore: sessionStore,
+      accountScopedDataCleaner: SwiftDataRoutineSyncAccountCleaner(
+        repository: repository
+      )
+    )
+
+    do {
+      try await service.withdraw()
+      XCTFail("The first timeout must remain ambiguous.")
+    } catch let error as APIError {
+      XCTAssertEqual(
+        error,
+        APIError.transport(code: -1001, message: "timeout")
+      )
+    }
+
+    XCTAssertEqual(
+      try repository.pendingAccountCleanupRecovery().ambiguousMemberIDs,
+      [92]
+    )
+    XCTAssertEqual(sessionStore.signedInMemberID, nil)
+
+    try await service.withdraw()
+
+    let retryRequestCount = await remote.withdrawalRequestCount
+    XCTAssertEqual(retryRequestCount, 2)
+    XCTAssertEqual(try repository.pendingAccountCleanupRecovery(), .none)
+    XCTAssertNil(credentialStore.credentials)
+    XCTAssertEqual(sessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testRecoveredRemoteConfirmationCompletesLocallyWithoutSecondDelete()
+    async throws {
+    let events = AccountLifecycleEventRecorder()
+    let credentials = makeCredentials()
+    let credentialStore = AccountLifecycleCredentialStore(
+      credentials: credentials,
+      events: events
+    )
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
+    let repository = SwiftDataRoutineSyncRepository(
+      modelContext: container.mainContext
+    )
+    try repository.preparePendingAccountCleanup(memberID: 92, at: Date())
+    try repository.beginPendingAccountCleanupAttempt(memberID: 92)
+    try repository.confirmPendingAccountCleanup(memberID: 92)
+    XCTAssertTrue(
+      try sessionStore.preparePendingWithdrawalRetry(matching: [92])
+    )
+    let remote = AccountLifecycleAuthRemoteDataSource(
+      events: events,
+      logoutError: nil,
+      withdrawalError: nil
+    )
+    let service = DefaultAccountLifecycleService(
+      authRemoteDataSource: remote,
+      accountSessionStore: sessionStore,
+      accountScopedDataCleaner: SwiftDataRoutineSyncAccountCleaner(
+        repository: repository
+      )
+    )
+
+    try await service.withdraw()
+
+    let recoveredRequestCount = await remote.withdrawalRequestCount
+    XCTAssertEqual(recoveredRequestCount, 0)
+    XCTAssertEqual(try repository.pendingAccountCleanupRecovery(), .none)
+    XCTAssertNil(credentialStore.credentials)
+    XCTAssertNil(tokenProvider.accessToken)
+    XCTAssertEqual(sessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testConcurrentWithdrawalCallsShareOneActiveDelete() async throws {
+    let events = AccountLifecycleEventRecorder()
+    let credentialStore = AccountLifecycleCredentialStore(
+      credentials: makeCredentials(),
+      events: events
+    )
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    sessionStore.restore()
+    let remote = BlockingAccountLifecycleAuthRemoteDataSource()
+    let service = DefaultAccountLifecycleService(
+      authRemoteDataSource: remote,
+      accountSessionStore: sessionStore,
+      accountScopedDataCleaner: PhaseAwareAccountLifecycleDataCleaner(
+        events: events
+      )
+    )
+
+    let first = Task { try await service.withdraw() }
+    await remote.waitUntilWithdrawalStarts()
+    let second = Task { try await service.withdraw() }
+    await Task.yield()
+
+    let activeRequestCount = await remote.withdrawalRequestCount
+    XCTAssertEqual(activeRequestCount, 1)
+    await remote.releaseWithdrawal()
+    try await first.value
+    try await second.value
+    let finalRequestCount = await remote.withdrawalRequestCount
+    XCTAssertEqual(finalRequestCount, 1)
+    XCTAssertEqual(sessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testLogoutInFlightRejectsWithdrawalBeforeDeleteStarts() async throws {
+    let events = AccountLifecycleEventRecorder()
+    let credentialStore = AccountLifecycleCredentialStore(
+      credentials: makeCredentials(),
+      events: events
+    )
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+    sessionStore.restore()
+    let remote = BlockingLogoutAccountLifecycleAuthRemoteDataSource()
+    let service = DefaultAccountLifecycleService(
+      authRemoteDataSource: remote,
+      accountSessionStore: sessionStore,
+      accountScopedDataCleaner: NoAccountScopedDataCleaner()
+    )
+
+    let logoutTask = Task { try await service.logout() }
+    await remote.waitUntilLogoutStarts()
+
+    do {
+      try await service.withdraw()
+      XCTFail("Withdrawal must not enter while logout owns the credential.")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .sessionUnavailable)
+    } catch {
+      XCTFail("Expected AccountLifecycleError, got \(error)")
+    }
+
+    let withdrawalRequestCount = await remote.withdrawalRequestCount
+    XCTAssertEqual(withdrawalRequestCount, 0)
+    XCTAssertEqual(credentialStore.credentials, makeCredentials())
+
+    await remote.releaseLogout()
+    try await logoutTask.value
+
+    XCTAssertNil(credentialStore.credentials)
+    XCTAssertEqual(sessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testLogoutInFlightRejectsReplacementCredentialSave() async throws {
+    let events = AccountLifecycleEventRecorder()
+    let originalCredentials = makeCredentials()
+    let credentialStore = AccountLifecycleCredentialStore(
+      credentials: originalCredentials,
+      events: events
+    )
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    sessionStore.restore()
+    let remote = BlockingLogoutAccountLifecycleAuthRemoteDataSource()
+    let service = DefaultAccountLifecycleService(
+      authRemoteDataSource: remote,
+      accountSessionStore: sessionStore,
+      accountScopedDataCleaner: NoAccountScopedDataCleaner()
+    )
+    let replacementCredentials = AccountCredentials(
+      memberID: 93,
+      accessToken: "replacement-access",
+      refreshToken: "replacement-refresh",
+      onboardingCompleted: false,
+      provider: .google
+    )
+
+    let logoutTask = Task { try await service.logout() }
+    await remote.waitUntilLogoutStarts()
+
+    XCTAssertThrowsError(
+      try sessionStore.establishSession(credentials: replacementCredentials)
+    ) { error in
+      XCTAssertEqual(error as? CredentialStoreError, .invalidCredentials)
+    }
+    XCTAssertEqual(credentialStore.credentials, originalCredentials)
+    XCTAssertEqual(tokenProvider.accessToken, originalCredentials.accessToken)
+
+    await remote.releaseLogout()
+    try await logoutTask.value
+
+    XCTAssertNil(credentialStore.credentials)
+    XCTAssertNil(tokenProvider.accessToken)
+    XCTAssertEqual(sessionStore.state, .signedOut)
+  }
+
+  @MainActor
+  func testPendingWithdrawalRejectsLogoutAndPreservesRecoveryCredential() async {
+    let events = AccountLifecycleEventRecorder()
+    let fixture = makePhaseFixture(
+      events: events,
+      cleaner: PhaseAwareAccountLifecycleDataCleaner(
+        events: events
+      ),
+      withdrawalError: APIError.transport(code: -1001, message: "timeout")
+    )
+
+    do { try await fixture.service.withdraw() } catch {}
+
+    do {
+      try await fixture.service.logout()
+      XCTFail("Logout must not discard an ambiguous withdrawal credential.")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .sessionUnavailable)
+    } catch {
+      XCTFail("Expected AccountLifecycleError, got \(error)")
+    }
+
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertNil(fixture.accountSessionStore.signedInMemberID)
+  }
+
+  @MainActor
+  func testUndocumentedAuthenticationMissingConflictAndGoneStayAmbiguous() async {
+    for statusCode in [401, 404, 409, 410] {
+      let events = AccountLifecycleEventRecorder()
+      let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+      let fixture = makePhaseFixture(
+        events: events,
+        cleaner: cleaner,
+        withdrawalError: APIError.server(
+          statusCode: statusCode,
+          code: "UNCONFIRMED_CONTRACT",
+          message: "meaning not documented"
+        )
+      )
+
+      do {
+        try await fixture.service.withdraw()
+        XCTFail("HTTP \(statusCode) must not be inferred as deletion success.")
+      } catch {}
+
+      XCTAssertEqual(
+        events.values,
+        ["prepare", "attempting", "remote withdrawal"],
+        "HTTP \(statusCode) must retain the attempting marker until the backend contract is confirmed."
+      )
+      XCTAssertEqual(cleaner.completedPhases, [.prepare, .attempting])
+      XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+      XCTAssertNil(fixture.accountSessionStore.signedInMemberID)
+      XCTAssertNil(fixture.accountSessionStore.currentAccountSessionIdentity)
+    }
+  }
+
+  @MainActor
+  func testMember4091RemainsPendingWithoutCleanup() async {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let fixture = makePhaseFixture(
+      events: events,
+      cleaner: cleaner,
+      withdrawalError: APIError.server(
+        statusCode: 409,
+        code: "MEMBER4091",
+        message: "documented withdrawal conflict"
+      )
+    )
+
+    do {
+      try await fixture.service.withdraw()
+      XCTFail("MEMBER4091 must not be reported as deletion success.")
+    } catch let error as APIError {
+      XCTAssertEqual(
+        error,
+        APIError.server(
+          statusCode: 409,
+          code: "MEMBER4091",
+          message: "documented withdrawal conflict"
+        )
+      )
+    } catch {
+      XCTFail("Expected APIError, got \(error)")
+    }
+
+    XCTAssertEqual(
+      events.values,
+      ["prepare", "attempting", "remote withdrawal"]
+    )
+    XCTAssertEqual(cleaner.completedPhases, [.prepare, .attempting])
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
+    )
+    XCTAssertNil(fixture.accountSessionStore.signedInMemberID)
+    XCTAssertNil(fixture.accountSessionStore.currentAccountSessionIdentity)
+    let requestCount = await fixture.remote.withdrawalRequestCount
+    XCTAssertEqual(requestCount, 1)
+  }
+
+  @MainActor
+  func testAuth4091RequiresAppleReauthenticationAndKeepsDeletionPending()
+    async throws {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let refreshedLogin = LoginResponseDTO(
+      memberId: 92,
+      accessToken: "reauthenticated-access-token",
+      refreshToken: "reauthenticated-refresh-token",
+      isNewMember: false,
+      onboardingCompleted: true
+    )
+    let fixture = makePhaseFixture(
+      events: events,
+      cleaner: cleaner,
+      withdrawalErrors: [
+        APIError.server(
+          statusCode: 409,
+          code: "AUTH4091",
+          message: "Apple reauthentication required"
+        ),
+        nil,
+      ],
+      loginResponse: refreshedLogin
+    )
+
+    do {
+      try await fixture.service.withdraw()
+      XCTFail("AUTH4091 must not be reported as deletion success.")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .appleReauthenticationRequired)
+    } catch {
+      XCTFail("Expected Apple reauthentication requirement, got \(error)")
+    }
+
+    XCTAssertEqual(
+      events.values,
+      ["prepare", "attempting", "remote withdrawal"]
+    )
+    XCTAssertEqual(cleaner.completedPhases, [.prepare, .attempting])
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
+    )
+
+    let authorization = makeAppleWithdrawalAuthorization()
+    try await fixture.service.reauthenticateAppleWithdrawal(
+      with: authorization
+    )
+
+    let loginProviders = await fixture.remote.loginProviders
+    let loginRequests = await fixture.remote.loginRequests
+    XCTAssertEqual(loginProviders, [.apple])
+    XCTAssertEqual(
+      loginRequests,
+      [
+        SocialLoginRequestDTO(
+          token: authorization.token,
+          authorizationCode: authorization.authorizationCode
+        ),
+      ]
+    )
+    XCTAssertEqual(
+      fixture.credentialStore.credentials,
+      AccountCredentials(
+        memberID: 92,
+        accessToken: "reauthenticated-access-token",
+        refreshToken: "reauthenticated-refresh-token",
+        onboardingCompleted: true,
+        provider: .apple,
+        providerUserIdentifier: "apple-user-92"
+      )
+    )
+    XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(
+          memberID: 92,
+          onboardingCompleted: true,
+          provider: .apple,
+          providerUserIdentifier: "apple-user-92"
+        )
+      )
+    )
+
+    try await fixture.service.withdraw()
+
+    let withdrawalTokens = await fixture.remote.withdrawalAccessTokens
+    XCTAssertEqual(
+      withdrawalTokens,
+      ["access-token", "reauthenticated-access-token"]
+    )
+    XCTAssertEqual(fixture.accountSessionStore.state, .signedOut)
+    XCTAssertNil(fixture.credentialStore.credentials)
+  }
+
+  @MainActor
+  func testAppleWithdrawalReauthenticationRejectsDifferentAccount() async {
+    let events = AccountLifecycleEventRecorder()
+    let cleaner = PhaseAwareAccountLifecycleDataCleaner(events: events)
+    let fixture = makePhaseFixture(
+      events: events,
+      cleaner: cleaner,
+      withdrawalError: APIError.server(
+        statusCode: 409,
+        code: "AUTH4091",
+        message: "Apple reauthentication required"
+      ),
+      loginResponse: LoginResponseDTO(
+        memberId: 93,
+        accessToken: "other-access-token",
+        refreshToken: "other-refresh-token",
+        isNewMember: false,
+        onboardingCompleted: true
+      )
+    )
+
+    do {
+      try await fixture.service.withdraw()
+      XCTFail("Expected Apple reauthentication requirement.")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .appleReauthenticationRequired)
+    } catch {
+      XCTFail("Expected Apple reauthentication requirement, got \(error)")
+    }
+
+    do {
+      try await fixture.service.reauthenticateAppleWithdrawal(
+        with: makeAppleWithdrawalAuthorization()
+      )
+      XCTFail("A different Apple account must be rejected.")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .sessionUnavailable)
+    } catch {
+      XCTFail("Expected AccountLifecycleError, got \(error)")
+    }
+
+    XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
+    XCTAssertNil(fixture.accountSessionStore.accessTokenProvider.accessToken)
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
+    )
+    let withdrawalRequestCount = await fixture.remote.withdrawalRequestCount
+    XCTAssertEqual(withdrawalRequestCount, 1)
   }
 
   @MainActor
@@ -356,11 +917,19 @@ final class AccountLifecycleTests: XCTestCase {
       ["prepare", "attempting", "remote withdrawal", "confirmed", "localDataCleaned"]
     )
     XCTAssertEqual(fixture.credentialStore.credentials, makeCredentials())
-    XCTAssertEqual(fixture.accountSessionStore.state, .signedIn(SignedInAccount(memberID: 92, onboardingCompleted: true)))
+    XCTAssertNil(
+      fixture.accountSessionStore.accessTokenProvider.accessToken
+    )
+    XCTAssertEqual(
+      fixture.accountSessionStore.state,
+      .withdrawalPending(
+        SignedInAccount(memberID: 92, onboardingCompleted: true)
+      )
+    )
   }
 
   @MainActor
-  func testWithdrawalDoesNotDeleteNewAccountThatReplacesCapturedAccountDuringProviderAwait() async throws {
+  func testWithdrawalBlocksAccountReplacementUntilConfirmedCleanupSettles() async {
     let events = AccountLifecycleEventRecorder()
     let capturedCredentials = makeCredentials()
     let replacementCredentials = AccountCredentials(
@@ -397,20 +966,18 @@ final class AccountLifecycleTests: XCTestCase {
       )
     )
 
-    try await service.withdraw()
+    do {
+      try await service.withdraw()
+      XCTFail("The rejected provider account switch must be reported.")
+    } catch let error as AccountLifecycleError {
+      XCTAssertEqual(error, .localCleanupFailed)
+    } catch {
+      XCTFail("Expected AccountLifecycleError, got \(error)")
+    }
 
-    XCTAssertEqual(credentialStore.credentials, replacementCredentials)
-    XCTAssertEqual(tokenProvider.accessToken, replacementCredentials.accessToken)
-    XCTAssertEqual(
-      sessionStore.state,
-      .signedIn(
-        SignedInAccount(
-          memberID: replacementCredentials.memberID,
-          onboardingCompleted: replacementCredentials.onboardingCompleted,
-          provider: replacementCredentials.provider
-        )
-      )
-    )
+    XCTAssertNil(credentialStore.credentials)
+    XCTAssertNil(tokenProvider.accessToken)
+    XCTAssertEqual(sessionStore.state, .signedOut)
     XCTAssertEqual(
       cleaner.completedPhases,
       [.prepare, .attempting, .confirmed, .localDataCleaned, .finalize]
@@ -424,6 +991,7 @@ final class AccountLifecycleTests: XCTestCase {
         "confirmed",
         "localDataCleaned",
         "provider switches account",
+        "credential remove",
         "finalize",
       ]
     )
@@ -541,7 +1109,7 @@ final class AccountLifecycleTests: XCTestCase {
     XCTAssertEqual(
       viewModel.accountErrorMessage,
       "회원 탈퇴를 완료하지 못했어요. "
-        + "계정 연결은 유지되며 다시 시도할 수 있어요."
+        + "서버 처리 결과를 확인할 수 없어 다시 시도해야 해요."
     )
     guard case .content(let content) = viewModel.state else {
       return XCTFail("Account failure must not replace the local Profile state.")
@@ -556,16 +1124,65 @@ final class AccountLifecycleTests: XCTestCase {
   }
 
   @MainActor
+  func testWithdrawalViewModelKeepsPendingStateWhenAppleReauthenticationIsCancelled()
+    async {
+    let lifecycleService = AccountLifecycleServiceSpy(
+      withdrawalErrors: [AccountLifecycleError.appleReauthenticationRequired, nil]
+    )
+    let viewModel = makeViewModel(lifecycleService: lifecycleService)
+    viewModel.loadProfileSettings()
+
+    await viewModel.withdrawalConfirmationButtonDidTap()
+
+    XCTAssertEqual(lifecycleService.withdrawalCallCount, 1)
+    XCTAssertTrue(viewModel.requiresAppleWithdrawalReauthentication)
+    XCTAssertTrue(viewModel.canBeginAppleWithdrawalReauthentication)
+    XCTAssertEqual(
+      viewModel.accountErrorMessage,
+      "Apple로 다시 인증한 뒤 회원탈퇴를 계속해 주세요. "
+        + "로컬 데이터는 유지되며, 인증 전에는 삭제를 완료하지 않아요."
+    )
+
+    XCTAssertTrue(viewModel.appleWithdrawalReauthenticationWillBegin())
+    XCTAssertTrue(viewModel.isAppleWithdrawalReauthenticationInProgress)
+    await viewModel.appleWithdrawalReauthenticationDidComplete(.cancelled)
+
+    XCTAssertEqual(lifecycleService.reauthenticationCallCount, 0)
+    XCTAssertEqual(lifecycleService.withdrawalCallCount, 1)
+    XCTAssertTrue(viewModel.requiresAppleWithdrawalReauthentication)
+    XCTAssertFalse(viewModel.isAppleWithdrawalReauthenticationInProgress)
+    XCTAssertTrue(viewModel.canBeginAppleWithdrawalReauthentication)
+    XCTAssertEqual(
+      viewModel.accountErrorMessage,
+      "Apple 재인증을 취소했어요. 회원탈퇴는 완료되지 않았으며 다시 시도할 수 있어요."
+    )
+
+    XCTAssertTrue(viewModel.appleWithdrawalReauthenticationWillBegin())
+    await viewModel.appleWithdrawalReauthenticationDidComplete(
+      .authorized(makeAppleWithdrawalAuthorization())
+    )
+
+    XCTAssertEqual(lifecycleService.reauthenticationCallCount, 1)
+    XCTAssertEqual(lifecycleService.withdrawalCallCount, 2)
+    XCTAssertFalse(viewModel.requiresAppleWithdrawalReauthentication)
+    XCTAssertFalse(viewModel.isAccountLifecycleInProgress)
+  }
+
+  @MainActor
   func testLifecycleAccessibilityIdentifiersAreStableAndUnique() {
     let identifiers = [
       ProfileView.accountLogoutAccessibilityIdentifier,
       ProfileView.accountWithdrawalAccessibilityIdentifier,
+      ProfileView.accountWithdrawalRetryAccessibilityIdentifier,
+      ProfileView.appleWithdrawalReauthenticationAccessibilityIdentifier,
     ]
 
     XCTAssertEqual(Set(identifiers).count, identifiers.count)
     XCTAssertEqual(identifiers, [
       "profile.account.logout",
       "profile.account.withdrawal",
+      "profile.account.withdrawal-retry",
+      "profile.account.withdrawal.apple-reauthentication",
     ])
   }
 
@@ -578,6 +1195,8 @@ final class AccountLifecycleTests: XCTestCase {
 
     XCTAssertFalse(description.contains("refresh-token"))
     XCTAssertFalse(debugDescription.contains("refresh-token"))
+    XCTAssertFalse(description.contains("access-token"))
+    XCTAssertFalse(debugDescription.contains("access-token"))
     XCTAssertTrue(description.contains("<redacted>"))
   }
 
@@ -662,7 +1281,9 @@ final class AccountLifecycleTests: XCTestCase {
   private func makePhaseFixture(
     events: AccountLifecycleEventRecorder,
     cleaner: PhaseAwareAccountLifecycleDataCleaner,
-    withdrawalError: Error? = nil
+    withdrawalError: Error? = nil,
+    withdrawalErrors: [Error?]? = nil,
+    loginResponse: LoginResponseDTO? = nil
   ) -> AccountLifecyclePhaseFixture {
     let credentialStore = AccountLifecycleCredentialStore(
       credentials: makeCredentials(),
@@ -678,7 +1299,8 @@ final class AccountLifecycleTests: XCTestCase {
     let remote = AccountLifecycleAuthRemoteDataSource(
       events: events,
       logoutError: nil,
-      withdrawalError: withdrawalError
+      withdrawalErrors: withdrawalErrors ?? [withdrawalError],
+      loginResponse: loginResponse
     )
     let service = DefaultAccountLifecycleService(
       authRemoteDataSource: remote,
@@ -688,6 +1310,7 @@ final class AccountLifecycleTests: XCTestCase {
     )
     return AccountLifecyclePhaseFixture(
       service: service,
+      remote: remote,
       credentialStore: credentialStore,
       accountSessionStore: accountSessionStore
     )
@@ -718,6 +1341,15 @@ final class AccountLifecycleTests: XCTestCase {
       refreshToken: "refresh-token",
       onboardingCompleted: true,
       provider: provider
+    )
+  }
+
+  private func makeAppleWithdrawalAuthorization() -> SocialAuthorization {
+    SocialAuthorization(
+      provider: .apple,
+      token: "reauthenticated-identity-token",
+      authorizationCode: "reauthenticated-authorization-code",
+      providerUserIdentifier: "apple-user-92"
     )
   }
 
@@ -804,6 +1436,7 @@ private struct AccountLifecycleFixture {
 @MainActor
 private struct AccountLifecyclePhaseFixture {
   let service: DefaultAccountLifecycleService
+  let remote: AccountLifecycleAuthRemoteDataSource
   let credentialStore: AccountLifecycleCredentialStore
   let accountSessionStore: AccountSessionStore
 }
@@ -904,24 +1537,52 @@ nonisolated private final class AccountLifecycleCredentialStore:
 private actor AccountLifecycleAuthRemoteDataSource: AuthRemoteDataSource {
   private let events: AccountLifecycleEventRecorder
   private let logoutError: Error?
-  private let withdrawalError: Error?
+  private let withdrawalErrors: [Error?]
+  private let loginResponse: LoginResponseDTO?
   private(set) var logoutRefreshTokens: [String] = []
+  private(set) var loginProviders: [AuthProvider] = []
+  private(set) var loginRequests: [SocialLoginRequestDTO] = []
+  private var withdrawalCallCount = 0
+  private(set) var withdrawalAccessTokens: [String] = []
+
+  var withdrawalRequestCount: Int { withdrawalCallCount }
 
   init(
     events: AccountLifecycleEventRecorder,
     logoutError: Error?,
-    withdrawalError: Error?
+    withdrawalError: Error?,
+    loginResponse: LoginResponseDTO? = nil
+  ) {
+    self.init(
+      events: events,
+      logoutError: logoutError,
+      withdrawalErrors: [withdrawalError],
+      loginResponse: loginResponse
+    )
+  }
+
+  init(
+    events: AccountLifecycleEventRecorder,
+    logoutError: Error?,
+    withdrawalErrors: [Error?],
+    loginResponse: LoginResponseDTO? = nil
   ) {
     self.events = events
     self.logoutError = logoutError
-    self.withdrawalError = withdrawalError
+    self.withdrawalErrors = withdrawalErrors
+    self.loginResponse = loginResponse
   }
 
   func login(
     provider: AuthProvider,
     request: SocialLoginRequestDTO
   ) async throws -> LoginResponseDTO {
-    throw AccountLifecycleTestError.remoteFailed
+    loginProviders.append(provider)
+    loginRequests.append(request)
+    guard let loginResponse else {
+      throw AccountLifecycleTestError.remoteFailed
+    }
+    return loginResponse
   }
 
   func reissue(refreshToken: String) async throws -> TokenReissueResponseDTO {
@@ -940,11 +1601,108 @@ private actor AccountLifecycleAuthRemoteDataSource: AuthRemoteDataSource {
   func withdraw() async throws -> WithdrawalResponseDTO {
     events.record("remote withdrawal")
 
-    if let withdrawalError {
-      throw withdrawalError
+    let error: Error? = if withdrawalErrors.indices.contains(withdrawalCallCount) {
+      withdrawalErrors[withdrawalCallCount]
+    } else {
+      withdrawalErrors.last ?? nil
+    }
+    withdrawalCallCount += 1
+
+    if let error {
+      throw error
     }
 
-    return WithdrawalResponseDTO(message: "withdrawn")
+    return WithdrawalResponseDTO(status: .completed, message: "withdrawn")
+  }
+
+  func withdraw(accessToken: String) async throws -> WithdrawalResponseDTO {
+    withdrawalAccessTokens.append(accessToken)
+    return try await withdraw()
+  }
+}
+
+private actor BlockingAccountLifecycleAuthRemoteDataSource:
+  AuthRemoteDataSource {
+  private var continuation: CheckedContinuation<Void, Never>?
+  private var startedCount = 0
+  private(set) var withdrawalAccessTokens: [String] = []
+
+  var withdrawalRequestCount: Int { startedCount }
+
+  func login(
+    provider: AuthProvider,
+    request: SocialLoginRequestDTO
+  ) async throws -> LoginResponseDTO {
+    throw AccountLifecycleTestError.remoteFailed
+  }
+
+  func reissue(refreshToken: String) async throws -> TokenReissueResponseDTO {
+    throw AccountLifecycleTestError.remoteFailed
+  }
+
+  func logout(refreshToken: String) async throws {
+    throw AccountLifecycleTestError.remoteFailed
+  }
+
+  func withdraw() async throws -> WithdrawalResponseDTO {
+    startedCount += 1
+    await withCheckedContinuation { continuation = $0 }
+    return WithdrawalResponseDTO(status: .completed, message: "withdrawn")
+  }
+
+  func withdraw(accessToken: String) async throws -> WithdrawalResponseDTO {
+    withdrawalAccessTokens.append(accessToken)
+    return try await withdraw()
+  }
+
+  func waitUntilWithdrawalStarts() async {
+    while startedCount == 0 {
+      await Task.yield()
+    }
+  }
+
+  func releaseWithdrawal() {
+    continuation?.resume()
+    continuation = nil
+  }
+}
+
+private actor BlockingLogoutAccountLifecycleAuthRemoteDataSource:
+  AuthRemoteDataSource {
+  private var logoutContinuation: CheckedContinuation<Void, Never>?
+  private var logoutStartedCount = 0
+  private(set) var withdrawalRequestCount = 0
+
+  func login(
+    provider: AuthProvider,
+    request: SocialLoginRequestDTO
+  ) async throws -> LoginResponseDTO {
+    throw AccountLifecycleTestError.remoteFailed
+  }
+
+  func reissue(refreshToken: String) async throws -> TokenReissueResponseDTO {
+    throw AccountLifecycleTestError.remoteFailed
+  }
+
+  func logout(refreshToken: String) async throws {
+    logoutStartedCount += 1
+    await withCheckedContinuation { logoutContinuation = $0 }
+  }
+
+  func withdraw() async throws -> WithdrawalResponseDTO {
+    withdrawalRequestCount += 1
+    return WithdrawalResponseDTO(status: .completed, message: "withdrawn")
+  }
+
+  func waitUntilLogoutStarts() async {
+    while logoutStartedCount == 0 {
+      await Task.yield()
+    }
+  }
+
+  func releaseLogout() {
+    logoutContinuation?.resume()
+    logoutContinuation = nil
   }
 }
 
@@ -1127,10 +1885,16 @@ nonisolated private final class AccountLifecycleRoutineTTSAudioCacheCleaner:
 @MainActor
 private final class AccountLifecycleServiceSpy: AccountLifecycleManaging {
   private var withdrawalErrors: [Error?]
+  private var reauthenticationErrors: [Error?]
   private(set) var withdrawalCallCount = 0
+  private(set) var reauthenticationCallCount = 0
 
-  init(withdrawalErrors: [Error?]) {
+  init(
+    withdrawalErrors: [Error?],
+    reauthenticationErrors: [Error?] = []
+  ) {
     self.withdrawalErrors = withdrawalErrors
+    self.reauthenticationErrors = reauthenticationErrors
   }
 
   func logout() async throws {}
@@ -1138,6 +1902,23 @@ private final class AccountLifecycleServiceSpy: AccountLifecycleManaging {
   func withdraw() async throws {
     let error = withdrawalErrors[withdrawalCallCount]
     withdrawalCallCount += 1
+
+    if let error {
+      throw error
+    }
+  }
+
+  func reauthenticateAppleWithdrawal(
+    with authorization: SocialAuthorization
+  ) async throws {
+    let error: Error? = if reauthenticationErrors.indices.contains(
+      reauthenticationCallCount
+    ) {
+      reauthenticationErrors[reauthenticationCallCount]
+    } else {
+      nil
+    }
+    reauthenticationCallCount += 1
 
     if let error {
       throw error

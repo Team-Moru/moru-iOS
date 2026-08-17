@@ -247,6 +247,37 @@ final class RoutineSyncRuntimeCoordinatorTests: XCTestCase {
   }
 
   @MainActor
+  func testGeminiConsentRequiredStopsThenExplicitConsentWakeResumesDrain()
+    async {
+    let sender = ScriptedRoutineSyncSender(
+      results: [
+        .consentRequired(mutationID: UUID()),
+        .idle,
+      ]
+    )
+    let provider = RuntimeSessionIdentityProvider(
+      identity: AccountSessionIdentity(memberID: 21, sessionID: UUID())
+    )
+    let coordinator = RoutineSyncRuntimeCoordinator(
+      sender: sender,
+      sessionIdentityProvider: provider,
+      isSceneActive: true
+    )
+
+    coordinator.wake()
+    await waitUntilStopped(coordinator)
+
+    XCTAssertEqual(sender.callCount, 1)
+    XCTAssertEqual(coordinator.lastStopReason, .consentRequired)
+
+    coordinator.geminiDataConsentDidChange()
+    await waitUntilStopped(coordinator)
+
+    XCTAssertEqual(sender.callCount, 2)
+    XCTAssertEqual(coordinator.lastStopReason, .idle)
+  }
+
+  @MainActor
   private func waitUntilStopped(
     _ coordinator: RoutineSyncRuntimeCoordinator,
     iterations: Int = 100

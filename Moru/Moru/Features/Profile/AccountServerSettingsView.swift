@@ -33,7 +33,7 @@ struct AccountServerSettingsSummaryView: View {
       .buttonStyle(.plain)
       .disabled(!canOpenVoiceSelection)
       .accessibilityHint(
-        "기기 내 안내 음성과 별도입니다. 미리듣기는 제공되지 않습니다."
+        "기기 내 안내 음성과 별도입니다. 준비된 음성은 공통 샘플로 미리 들을 수 있습니다."
       )
       .accessibilityIdentifier("profile.account.server-voice")
 
@@ -208,7 +208,7 @@ struct AccountServerVoiceSelectionView: View {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
           Text(
             "서버에서 루틴 음성을 만들 때 쓰는 선택입니다. "
-              + "기기 내 안내 음성과 별도이며 미리듣기는 제공되지 않습니다."
+              + "기기 내 안내 음성과 별도이며, 준비된 음성은 공통 샘플로 미리 들을 수 있습니다."
           )
           .moruPilotTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textSecondary)

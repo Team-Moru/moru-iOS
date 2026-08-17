@@ -8,6 +8,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import Vision
 import XCTest
 @testable import Moru
 
@@ -30,6 +31,7 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     XCTAssertEqual(ProfileCopy.dataManagement, "데이터 관리")
     XCTAssertEqual(ProfileCopy.resetLocalData, "로컬 데이터 초기화")
     XCTAssertEqual(ProfileCopy.support, "고객 지원")
+    XCTAssertEqual(ProfileCopy.privacyPolicy, "개인정보처리방침")
     XCTAssertEqual(ProfileCopy.termsOfService, "이용약관")
     XCTAssertEqual(ProfileCopy.contact, "문의하기")
     XCTAssertEqual(ProfileCopy.contactEmail, "mmoru2026@gmail.com")
@@ -73,15 +75,20 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     )
   }
 
-  func testProfileSupportLinksReuseValidatedTermsAndExactContactEmail() {
+  func testProfileSupportLinksReuseValidatedPolicyURLsAndExactContactEmail() {
     let links = ProfileSupportLinks(
       policyConfiguration: AccountEntryPolicyConfiguration(
         infoDictionary: [
+          "MoruPrivacyPolicyURL": "https://team-moru.github.io/privacy",
           "MoruTermsOfServiceURL": "https://team-moru.github.io/terms",
         ]
       )
     )
 
+    XCTAssertEqual(
+      links.privacyPolicyURL?.absoluteString,
+      "https://team-moru.github.io/privacy"
+    )
     XCTAssertEqual(
       links.termsOfServiceURL?.absoluteString,
       "https://team-moru.github.io/terms"
@@ -89,6 +96,10 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     XCTAssertEqual(
       links.contactURL.absoluteString,
       "mailto:mmoru2026@gmail.com"
+    )
+    XCTAssertEqual(
+      ProfileView.privacyPolicyAccessibilityIdentifier,
+      "profile.support.privacy"
     )
     XCTAssertEqual(
       ProfileView.termsOfServiceAccessibilityIdentifier,
@@ -100,20 +111,192 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     )
   }
 
-  func testProfileSupportLinksKeepContactAvailableWhenTermsAreMisconfigured() {
+  func testProfileSupportLinksKeepContactAvailableWhenPoliciesAreMisconfigured() {
     let links = ProfileSupportLinks(
       policyConfiguration: AccountEntryPolicyConfiguration(
         infoDictionary: [
+          "MoruPrivacyPolicyURL": "https://example.com/privacy",
           "MoruTermsOfServiceURL": "http://example.com/terms",
         ]
       )
     )
 
+    XCTAssertNil(links.privacyPolicyURL)
     XCTAssertNil(links.termsOfServiceURL)
     XCTAssertEqual(
       links.contactURL.absoluteString,
       "mailto:mmoru2026@gmail.com"
     )
+  }
+
+  func testProfileSupportRowsUseStableOrderCopyAndAccessibilityContracts() {
+    XCTAssertEqual(
+      ProfileSupportLinkDestination.allCases,
+      [.privacyPolicy, .termsOfService, .contact]
+    )
+    XCTAssertEqual(
+      ProfileSupportLinkDestination.allCases.map(\.title),
+      ["개인정보처리방침", "이용약관", "문의하기"]
+    )
+    XCTAssertEqual(
+      ProfileSupportLinkDestination.allCases.map {
+        ProfileView.supportAccessibilityIdentifier(for: $0)
+      },
+      [
+        "profile.support.privacy",
+        "profile.support.terms",
+        "profile.support.contact",
+      ]
+    )
+    XCTAssertEqual(
+      ProfileSupportLinkDestination.privacyPolicy.accessibilityLabel,
+      "개인정보처리방침"
+    )
+    XCTAssertEqual(
+      ProfileSupportLinkDestination.privacyPolicy.accessibilityHint,
+      "웹 브라우저에서 개인정보처리방침을 엽니다."
+    )
+  }
+
+  func testProfileSupportLinkOpenerReportsMisconfigurationWithoutOpening() async {
+    var openedURLs: [URL] = []
+    let opener = ProfileSupportLinkOpener { url in
+      openedURLs.append(url)
+      return true
+    }
+
+    let alert = await opener.open(destination: .privacyPolicy, url: nil)
+
+    XCTAssertTrue(openedURLs.isEmpty)
+    XCTAssertEqual(
+      alert,
+      ProfileSupportLinkAlert(
+        destination: .privacyPolicy,
+        reason: .misconfigured
+      )
+    )
+    XCTAssertEqual(alert?.title, "링크를 열 수 없어요")
+    XCTAssertEqual(
+      alert?.message,
+      "주소 설정을 확인하지 못했어요. 잠시 후 다시 시도해 주세요."
+    )
+  }
+
+  func testProfileSupportLinkOpenerReportsSystemOpenFailure() async throws {
+    let privacyURL = try XCTUnwrap(
+      URL(string: "https://team-moru.github.io/privacy")
+    )
+    var openedURLs: [URL] = []
+    let opener = ProfileSupportLinkOpener { url in
+      openedURLs.append(url)
+      return false
+    }
+
+    let alert = await opener.open(
+      destination: .privacyPolicy,
+      url: privacyURL
+    )
+
+    XCTAssertEqual(openedURLs, [privacyURL])
+    XCTAssertEqual(alert?.reason, .openFailed)
+    XCTAssertEqual(
+      alert?.message,
+      "개인정보처리방침을 열지 못했어요. 잠시 후 다시 시도해 주세요."
+    )
+  }
+
+  func testProfileSupportLinkOpenerReturnsNoAlertAfterSuccess() async throws {
+    let termsURL = try XCTUnwrap(
+      URL(string: "https://team-moru.github.io/terms")
+    )
+    let opener = ProfileSupportLinkOpener { _ in true }
+
+    let alert = await opener.open(
+      destination: .termsOfService,
+      url: termsURL
+    )
+
+    XCTAssertNil(alert)
+  }
+
+  func testLoadingAndFailedProfilesRenderPrivacyRow() throws {
+    for shouldFail in [false, true] {
+      let profileUseCase = shouldFail
+        ? HomeProfileCaptureProfileUseCase(error: .unavailable)
+        : HomeProfileCaptureProfileUseCase(
+          result: ProfileSettingsLoadResult(
+            profile: LocalProfile(displayName: "김모루", selectedVoice: .aoede),
+            fallbackNotice: nil
+          )
+        )
+      let viewModel = makeProfileViewModel(profileUseCase: profileUseCase)
+      if shouldFail {
+        viewModel.loadProfileSettings()
+      }
+
+      let renderedText = try renderRecognizedText(
+        ProfileView(
+          viewModel: viewModel,
+          accountSessionStore: makeAccountSessionStore(),
+          automaticallyLoads: false,
+          supportLinks: profileSupportLinks
+        ),
+        filename: "profile-support-\(shouldFail ? "failed" : "loading").png"
+      )
+
+      XCTAssertTrue(
+        renderedText.contains(ProfileCopy.privacyPolicy),
+        "\(shouldFail ? "failed" : "loading") 렌더에 개인정보처리방침 행이 있어야 합니다. "
+          + "인식된 문구: \(renderedText)"
+      )
+    }
+  }
+
+  func testGuestAndSignedInContentProfilesRenderOneCompleteSupportSection() throws {
+    for isSignedIn in [false, true] {
+      let accountSessionStore = makeAccountSessionStore()
+      if isSignedIn {
+        try accountSessionStore.establishSession(
+          credentials: AccountCredentials(
+            memberID: 68,
+            accessToken: "support-access-token",
+            refreshToken: "support-refresh-token",
+            onboardingCompleted: true,
+            provider: .kakao
+          )
+        )
+      }
+      let viewModel = makeProfileViewModel(
+        profileUseCase: HomeProfileCaptureProfileUseCase(
+          result: ProfileSettingsLoadResult(
+            profile: LocalProfile(displayName: "김모루", selectedVoice: .aoede),
+            fallbackNotice: nil
+          )
+        )
+      )
+      viewModel.loadProfileSettings()
+
+      let renderedText = try renderRecognizedText(
+        ProfileView(
+          viewModel: viewModel,
+          accountSessionStore: accountSessionStore,
+          automaticallyLoads: false,
+          supportLinks: profileSupportLinks
+        ),
+        filename: "profile-support-\(isSignedIn ? "signed-in" : "guest").png"
+      )
+
+      let supportTitles = [
+        ProfileCopy.privacyPolicy,
+        ProfileCopy.termsOfService,
+        ProfileCopy.contact,
+      ]
+      XCTAssertTrue(
+        supportTitles.allSatisfy(renderedText.contains),
+        "\(isSignedIn ? "signed-in" : "guest") content 렌더에 고객 지원 3개 행이 있어야 합니다. "
+          + "인식된 문구: \(renderedText)"
+      )
+    }
   }
 
   func testWeatherCardHeightContract() {
@@ -618,6 +801,67 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       ),
       fallbackNotice: fallbackNotice
     )
+  }
+
+  private var profileSupportLinks: ProfileSupportLinks {
+    ProfileSupportLinks(
+      policyConfiguration: AccountEntryPolicyConfiguration(
+        infoDictionary: [
+          "MoruPrivacyPolicyURL": "https://team-moru.github.io/privacy",
+          "MoruTermsOfServiceURL": "https://team-moru.github.io/terms",
+        ]
+      )
+    )
+  }
+
+  private func makeProfileViewModel(
+    profileUseCase: any ProfileSettingsUseCaseProtocol
+  ) -> ProfileViewModel {
+    ProfileViewModel(
+      profileSettingsUseCase: profileUseCase,
+      voicePreviewPlayer: HomeProfileCaptureVoicePlayer(),
+      alarmService: HomeProfileCaptureAlarmService(status: .configured),
+      resetUseCase: HomeProfileCaptureResetUseCase(),
+      resetAvailability: { true },
+      onOpenSettings: {},
+      onResetSucceeded: {}
+    )
+  }
+
+  private func makeAccountSessionStore() -> AccountSessionStore {
+    AccountSessionStore(
+      credentialStore: HomeProfileCaptureCredentialStore(),
+      accessTokenProvider: MemoryAccessTokenProvider()
+    )
+  }
+
+  private func renderRecognizedText<Content: View>(
+    _ content: Content,
+    filename: String
+  ) throws -> String {
+    let image = try MoruVisualCaptureFixture.render(
+      content,
+      filename: filename,
+      variant: .lightMedium,
+      outputDirectory: URL(
+        fileURLWithPath: "/private/tmp/moru-profile-support-fallback"
+      ),
+      configuration: MoruVisualCaptureConfiguration(
+        size: CGSize(width: 393, height: 1_200),
+        scale: 3
+      )
+    )
+    let cgImage = try XCTUnwrap(image.cgImage)
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.recognitionLanguages = ["ko-KR"]
+    request.usesLanguageCorrection = false
+    try VNImageRequestHandler(cgImage: cgImage).perform([request])
+
+    return (request.results ?? [])
+      .compactMap { $0.topCandidates(1).first?.string }
+      .joined()
+      .replacingOccurrences(of: " ", with: "")
   }
 }
 
