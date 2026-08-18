@@ -436,6 +436,15 @@ private struct SuggestedRoutinePreviewView: View {
           )
 
           if viewModel.hasRecommendedRoutineStepCandidates {
+            if let selectionLimitText = viewModel.recommendedRoutineSelectionLimitText {
+              Text(selectionLimitText)
+                .onboardingTextStyle(.c2.weight(.semiBold))
+                .foregroundStyle(MoruPilotColor.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityLabel("체험 루틴 선택 개수")
+                .accessibilityValue(selectionLimitText)
+            }
+
             RecommendedRoutineStepCandidateList(
               viewModel: viewModel,
               candidates: displayedSteps
