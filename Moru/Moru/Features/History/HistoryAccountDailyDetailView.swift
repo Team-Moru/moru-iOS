@@ -130,7 +130,7 @@ struct HistoryAccountDailyDetailView: View {
           accountSectionTitle(HistoryCopy.todayRecords)
 
           let records = report.routines.filter {
-            $0.memberInput?.isEmpty == false
+            DailyReportInputAnswerPolicy.answer(for: $0) != nil
           }
           if records.isEmpty {
             HistoryInlineEmptyCard(message: HistoryCopy.noTranscripts)
@@ -191,7 +191,10 @@ struct HistoryAccountDailyDetailView: View {
         .historyOverviewTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
 
-      Text(routine.memberInput ?? HistoryCopy.noTranscripts)
+      Text(
+        DailyReportInputAnswerPolicy.answer(for: routine)
+          ?? HistoryCopy.noTranscripts
+      )
         .historyOverviewTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
