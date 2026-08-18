@@ -80,15 +80,6 @@ struct RoutineTimerState: Equatable {
         return [.announce(remainingSeconds)]
     }
 
-    mutating func complete() -> Bool {
-        guard !didComplete else {
-            return false
-        }
-
-        didComplete = true
-        remainingSeconds = 0
-        return true
-    }
 }
 
 struct TimerStepContentView: View {
@@ -153,41 +144,10 @@ struct TimerStepContentView: View {
             Spacer()
                 .frame(height: timerSegments == nil ? 116 : 16)
 
-            HStack(spacing: 0) {
-                Button {
-                    completeTimer()
-                } label: {
-                    Text("완료했어요")
-                        .font(
-                            AppFont.pretendardMedium(
-                                size: 14,
-                                relativeTo: .caption
-                            )
-                        )
-                        .foregroundStyle(AppColor.gray400)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 52)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("타이머를 끝내고 이 단계를 완료합니다")
-
-                Button(action: onSkip) {
-                    Text("건너뛰기")
-                        .font(
-                            AppFont.pretendardMedium(
-                                size: 14,
-                                relativeTo: .caption
-                            )
-                        )
-                        .foregroundStyle(AppColor.gray300)
-                        .frame(maxWidth: .infinity)
-                        .frame(minHeight: 52)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 16)
+            RoutineStepSkipFooterView(
+                horizontalPadding: 16,
+                onSkip: onSkip
+            )
         }
         .padding(.horizontal, 24)
         .onReceive(timer) { _ in
@@ -402,12 +362,6 @@ struct TimerStepContentView: View {
 
     private func updateTimer() {
         handleTimerActions(timerState.tick())
-    }
-
-    private func completeTimer() {
-        guard timerState.complete() else { return }
-
-        onComplete()
     }
 
     private func handleTimerActions(_ actions: [RoutineTimerState.Action]) {
