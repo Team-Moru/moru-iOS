@@ -42,12 +42,10 @@ struct TodayRoutineRecordView: View {
 
     // MARK: - Filtered Results
 
-    /// 전체 루틴 결과 중 입력형 항목만 필터링
-    /// 오늘의 기록 영역에서는 사용자가 말하거나 입력한 내용이 있는
-    /// 입력형 루틴만 표시
+    /// 오늘의 기록 영역에는 답변이 남은 완료 입력형 항목만 표시합니다.
     private var inputResults: [RoutineStepResult] {
         results.filter {
-            $0.stepType == .input
+            DailyReportInputAnswerPolicy.answer(for: $0) != nil
         }
     }
 
@@ -314,32 +312,12 @@ struct TodayRoutineRecordView: View {
     }
 
     /// 클립보드 복사 및 공유에 사용할 원본 텍스트를 반환
-    /// transcript가 있으면 transcript를 우선 사용하고,
-    /// 없으면 inputText를 사용
+    /// 완료 입력형 항목의 transcript를 우선 사용하고, 없으면 inputText를 사용합니다.
     private func recordText(
         for result: RoutineStepResult
     ) -> String {
-        let transcript = result.transcript?
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-
-        if let transcript,
-           !transcript.isEmpty {
-            return transcript
-        }
-
-        let inputText = result.inputText?
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-
-        if let inputText,
-           !inputText.isEmpty {
-            return inputText
-        }
-
-        return "인식된 내용이 없습니다."
+        DailyReportInputAnswerPolicy.answer(for: result)
+            ?? "인식된 내용이 없습니다."
     }
 
     /// 입력형 기록 카드의 상단 영역입니다.
@@ -550,29 +528,12 @@ struct TodayRoutineRecordView: View {
     }
 
     /// 화면에 표시할 입력형 루틴의 인식 결과를 반환
-    /// transcript를 우선 사용하며, 값이 없으면 inputText를 사용
-    /// 화면 표시용이므로 실제 문장이 있을 때 따옴표를 추가.
+    /// 화면 표시용이므로 실제 문장이 있을 때 따옴표를 추가합니다.
     private func recognizedText(
         for result: RoutineStepResult
     ) -> String {
-        let transcript = result.transcript?
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-
-        if let transcript,
-           !transcript.isEmpty {
-            return "\"\(transcript)\""
-        }
-
-        let inputText = result.inputText?
-            .trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
-
-        if let inputText,
-           !inputText.isEmpty {
-            return "\"\(inputText)\""
+        if let answer = DailyReportInputAnswerPolicy.answer(for: result) {
+            return "\"\(answer)\""
         }
 
         return "인식된 내용이 없습니다."
