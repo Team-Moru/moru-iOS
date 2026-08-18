@@ -126,7 +126,8 @@ final class OnboardingRecommendationTests: XCTestCase {
     XCTAssertTrue(routine.steps.allSatisfy { $0.presetItemID == nil })
   }
 
-  func testEmptyAndAllInvalidResponsesUseLocalFallback() async throws {
+  func testEmptyAndAllInvalidResponsesSurfaceForRetryWithoutLocalFallback()
+    async throws {
     for responses in [
       [ServerRoutineSuggestionResponse](),
       [invalidServerResponse],
@@ -144,22 +145,60 @@ final class OnboardingRecommendationTests: XCTestCase {
         geminiDataConsent: GeminiDataConsentStub()
       )
 
-      let result = try await coordinator.suggest(from: suggestionInput)
+      do {
+        _ = try await coordinator.suggest(from: suggestionInput)
+        XCTFail("Expected an invalid server recommendation to be surfaced.")
+      } catch {
+        // The onboarding UI keeps the input and offers an explicit retry.
+      }
 
-      XCTAssertEqual(result.source, .localFallback(.invalidResponse))
-      XCTAssertEqual(result.routine.name, "로컬 fallback")
-      XCTAssertEqual(local.callCount, 1)
+      XCTAssertEqual(local.callCount, 0)
     }
   }
 
-  func testMissingGeminiConsentUsesLocalRecommendationWithoutCallingServer()
+  func testUndecidedGeminiConsentHoldsThenResumesServerRecommendation()
     async throws {
     let account = MutableOnboardingRecommendationAccount(memberID: 98)
     let local = OnboardingRecommendationLocalStub()
     let server = OnboardingRecommendationServerStub(
       result: .success(serverRoutine)
     )
-    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+
+    XCTAssertEqual(local.callCount, 0)
+    XCTAssertEqual(server.callCount, 0)
+
+    consent.grant()
+    let result = try await task.value
+
+    XCTAssertEqual(result.source, .server)
+    XCTAssertEqual(result.routine.name, serverRoutine.name)
+    XCTAssertEqual(local.callCount, 0)
+    XCTAssertEqual(server.callCount, 1)
+  }
+
+  func testDeclinedGeminiConsentUsesExplicitLocalRecommendation()
+    async throws {
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let local = OnboardingRecommendationLocalStub()
+    let server = OnboardingRecommendationServerStub(
+      result: .success(serverRoutine)
+    )
+    let consent = GeminiDataConsentStub(status: .declined)
     let coordinator = OnboardingRecommendationCoordinator(
       serverService: server,
       localService: local,
@@ -169,14 +208,51 @@ final class OnboardingRecommendationTests: XCTestCase {
 
     let result = try await coordinator.suggest(from: suggestionInput)
 
-    XCTAssertEqual(result.source, .localFallback(.geminiConsentRequired))
+    XCTAssertEqual(result.source, .localFallback(.geminiConsentDeclined))
     XCTAssertEqual(result.routine.name, "로컬 fallback")
     XCTAssertEqual(local.callCount, 1)
     XCTAssertEqual(server.callCount, 0)
-    XCTAssertEqual(consent.requestCount, 1)
+    XCTAssertEqual(consent.requestCount, 0)
   }
 
-  func testFailureFallsBackButCancellationDoesNot() async throws {
+  func testDeferringGeminiConsentDoesNotFallbackOnboardingRecommendation()
+    async throws {
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let local = OnboardingRecommendationLocalStub()
+    let server = OnboardingRecommendationServerStub(
+      result: .success(serverRoutine)
+    )
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+    consent.dismissConsentChoices()
+
+    do {
+      _ = try await task.value
+      XCTFail("Expected a deferred-consent error without a recommendation.")
+    } catch let error as RoutineSuggestionRequestError {
+      XCTAssertEqual(error, .geminiConsentDeferred)
+    } catch {
+      XCTFail("Expected RoutineSuggestionRequestError, got \(error)")
+    }
+
+    XCTAssertEqual(local.callCount, 0)
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(consent.geminiDataConsentStatus, .undecided)
+  }
+
+  func testFailureAndCancellationDoNotCreateLocalFallback() async throws {
     let local = OnboardingRecommendationLocalStub()
     let account = MutableOnboardingRecommendationAccount(memberID: 98)
     let fallbackCoordinator = OnboardingRecommendationCoordinator(
@@ -188,11 +264,15 @@ final class OnboardingRecommendationTests: XCTestCase {
       geminiDataConsent: GeminiDataConsentStub()
     )
 
-    let fallback = try await fallbackCoordinator.suggest(
-      from: suggestionInput
-    )
-    XCTAssertEqual(fallback.source, .localFallback(.offline))
-    XCTAssertEqual(local.callCount, 1)
+    do {
+      _ = try await fallbackCoordinator.suggest(from: suggestionInput)
+      XCTFail("Expected the offline failure to be surfaced for retry.")
+    } catch let error as RoutineSuggestionRemoteFailure {
+      XCTAssertEqual(error, .offline)
+    } catch {
+      XCTFail("Expected RoutineSuggestionRemoteFailure, got \(error)")
+    }
+    XCTAssertEqual(local.callCount, 0)
 
     let cancelledCoordinator = OnboardingRecommendationCoordinator(
       serverService: OnboardingRecommendationServerStub(
@@ -207,7 +287,7 @@ final class OnboardingRecommendationTests: XCTestCase {
       _ = try await cancelledCoordinator.suggest(from: suggestionInput)
       XCTFail("Expected cancellation.")
     } catch is CancellationError {
-      XCTAssertEqual(local.callCount, 1)
+      XCTAssertEqual(local.callCount, 0)
     } catch {
       XCTFail("Expected CancellationError, got \(error)")
     }
@@ -229,10 +309,16 @@ final class OnboardingRecommendationTests: XCTestCase {
     var input = suggestionInput
     input.goalTags = ["unknown", "health"]
 
-    let result = try await coordinator.suggest(from: input)
+    do {
+      _ = try await coordinator.suggest(from: input)
+      XCTFail("Expected the unsupported primary goal to be surfaced.")
+    } catch let error as RoutineSuggestionRequestError {
+      XCTAssertEqual(error, .unsupportedOnboardingGoal)
+    } catch {
+      XCTFail("Expected RoutineSuggestionRequestError, got \(error)")
+    }
 
-    XCTAssertEqual(result.source, .localFallback(.unavailable))
-    XCTAssertEqual(local.callCount, 1)
+    XCTAssertEqual(local.callCount, 0)
     XCTAssertEqual(server.callCount, 0)
   }
 
@@ -255,10 +341,15 @@ final class OnboardingRecommendationTests: XCTestCase {
     account.memberID = 99
     await gate.finish(with: serverRoutine)
 
-    let result = try await task.value
-    XCTAssertEqual(result.source, .localFallback(.accountChanged))
-    XCTAssertEqual(result.routine.name, "로컬 fallback")
-    XCTAssertEqual(local.callCount, 1)
+    do {
+      _ = try await task.value
+      XCTFail("Expected the account-changed response to be discarded.")
+    } catch let error as RoutineSuggestionRequestError {
+      XCTAssertEqual(error, .accountChanged)
+    } catch {
+      XCTFail("Expected RoutineSuggestionRequestError, got \(error)")
+    }
+    XCTAssertEqual(local.callCount, 0)
   }
 
   func testOnboardingRoutesExperienceChoicesToRecommendationAndFreeformAI()

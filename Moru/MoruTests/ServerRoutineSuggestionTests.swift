@@ -24,6 +24,16 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     )
   }
 
+  func testSuggestionSourceHasNonSensitiveDiagnosticLabel() {
+    XCTAssertEqual(RoutineSuggestionSource.server.diagnosticLabel, "server")
+    XCTAssertEqual(
+      RoutineSuggestionSource.localFallback(
+        .geminiConsentDeclined
+      ).diagnosticLabel,
+      "local_gemini_consent_declined"
+    )
+  }
+
   func testTargetMatchesSwaggerUsesBearerAndRedactsSensitiveInput() throws {
     let request = RoutineGroupAiGenerateRequestDTO(
       userInput: "개인적인 아침 계획"
@@ -235,13 +245,49 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     XCTAssertEqual(local.callCount, 1)
   }
 
-  func testMissingGeminiConsentUsesLocalDraftWithoutCallingServer() async throws {
+  func testUndecidedGeminiConsentHoldsRequestThenResumesServerSuggestion()
+    async throws {
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let server = RoutineSuggestionServerStub(
+      result: .success(makeRoutine(name: "동의 뒤 서버 초안"))
+    )
+    let local = RoutineSuggestionLocalStub()
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+    let pendingInput = input()
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: pendingInput)
+    }
+
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(local.callCount, 0)
+
+    consent.grant()
+    let result = try await task.value
+
+    XCTAssertEqual(result.source, .server)
+    XCTAssertEqual(result.routine.name, "동의 뒤 서버 초안")
+    XCTAssertEqual(server.inputs, [pendingInput])
+    XCTAssertEqual(local.callCount, 0)
+  }
+
+  func testDeclinedGeminiConsentUsesExplicitLocalDraftWithoutCallingServer()
+    async throws {
     let account = MutableRoutineSuggestionAccount(memberID: 98)
     let server = RoutineSuggestionServerStub(
       result: .success(makeRoutine(name: "서버에 보내면 안 되는 초안"))
     )
     let local = RoutineSuggestionLocalStub()
-    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let consent = GeminiDataConsentStub(status: .declined)
     let coordinator = RoutineSuggestionCoordinator(
       serverService: server,
       localService: local,
@@ -251,49 +297,73 @@ final class ServerRoutineSuggestionTests: XCTestCase {
 
     let result = try await coordinator.suggest(from: input())
 
-    XCTAssertEqual(result.source, .localFallback(.geminiConsentRequired))
+    XCTAssertEqual(result.source, .localFallback(.geminiConsentDeclined))
     XCTAssertEqual(result.routine.name, "로컬 fallback")
     XCTAssertEqual(local.callCount, 1)
     XCTAssertEqual(server.callCount, 0)
-    XCTAssertEqual(consent.requestCount, 1)
+    XCTAssertEqual(consent.requestCount, 0)
   }
 
-  func testAirplaneTimeoutFiveHundredMalformedAndInvalidPayloadUseLocalFallback()
+  func testDeferringGeminiConsentDoesNotCompleteOrFallbackTheRequest()
     async throws {
-    let failures: [(any ServerRoutineSuggestionServing, RoutineSuggestionFallbackReason)] = [
-      (
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let server = RoutineSuggestionServerStub(
+      result: .success(makeRoutine(name: "서버에 보내면 안 되는 초안"))
+    )
+    let local = RoutineSuggestionLocalStub()
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: input())
+    }
+
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+    consent.dismissConsentChoices()
+
+    do {
+      _ = try await task.value
+      XCTFail("Expected the deferred consent request to return without a draft.")
+    } catch let error as RoutineSuggestionRequestError {
+      XCTAssertEqual(error, .geminiConsentDeferred)
+    } catch {
+      XCTFail("Expected a deferred-consent error, got \(error)")
+    }
+
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(local.callCount, 0)
+    XCTAssertEqual(consent.geminiDataConsentStatus, .undecided)
+  }
+
+  func testServerFailuresSurfaceForRetryWithoutLocalFallback()
+    async throws {
+    let failures: [any ServerRoutineSuggestionServing] = [
         RoutineSuggestionServerStub(
           result: .failure(
             RoutineSuggestionRemoteFailure.offline
           )
         ),
-        .offline
-      ),
-      (
         RoutineSuggestionServerStub(
           result: .failure(
             RoutineSuggestionRemoteFailure.timeout
           )
         ),
-        .timeout
-      ),
-      (
         RoutineSuggestionServerStub(
           result: .failure(
             RoutineSuggestionRemoteFailure.serverUnavailable
           )
         ),
-        .serverUnavailable
-      ),
-      (
         ServerRoutineSuggestionService(
           remoteDataSource: DefaultRoutineSuggestionRemoteDataSource(
             apiClient: makeClient(data: Data("{malformed".utf8))
           )
         ),
-        .invalidResponse
-      ),
-      (
         ServerRoutineSuggestionService(
           remoteDataSource: RoutineSuggestionRemoteStub(
             result: .success(
@@ -311,11 +381,9 @@ final class ServerRoutineSuggestionTests: XCTestCase {
             )
           )
         ),
-        .invalidResponse
-      ),
     ]
 
-    for (server, reason) in failures {
+    for server in failures {
       let local = RoutineSuggestionLocalStub()
       let account = MutableRoutineSuggestionAccount(memberID: 98)
       let coordinator = RoutineSuggestionCoordinator(
@@ -325,11 +393,16 @@ final class ServerRoutineSuggestionTests: XCTestCase {
         geminiDataConsent: GeminiDataConsentStub()
       )
 
-      let result = try await coordinator.suggest(from: input())
+      do {
+        _ = try await coordinator.suggest(from: input())
+        XCTFail("Expected the server failure to be surfaced for retry.")
+      } catch is CancellationError {
+        XCTFail("A server failure must not be converted into cancellation.")
+      } catch {
+        // The caller keeps the same input and can explicitly retry here.
+      }
 
-      XCTAssertEqual(result.source, .localFallback(reason))
-      XCTAssertEqual(result.routine.name, "로컬 fallback")
-      XCTAssertEqual(local.callCount, 1)
+      XCTAssertEqual(local.callCount, 0)
     }
   }
 
@@ -393,7 +466,7 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     }
   }
 
-  func testAccountSwitchDiscardsStaleServerResponseAndUsesLocalDraft()
+  func testAccountSwitchDiscardsStaleServerResponseWithoutLocalDraft()
     async throws {
     let account = MutableRoutineSuggestionAccount(memberID: 98)
     let gate = RoutineSuggestionServerGate()
@@ -412,11 +485,187 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     await gate.waitUntilRequested()
     account.memberID = 1_098
     await gate.finish(with: makeRoutine(name: "이전 계정 서버 루틴"))
-    let result = try await task.value
 
-    XCTAssertEqual(result.source, .localFallback(.accountChanged))
-    XCTAssertEqual(result.routine.name, "로컬 fallback")
-    XCTAssertNotEqual(result.routine.name, "이전 계정 서버 루틴")
+    do {
+      _ = try await task.value
+      XCTFail("Expected the stale account response to be discarded.")
+    } catch let error as RoutineSuggestionRequestError {
+      XCTAssertEqual(error, .accountChanged)
+    } catch {
+      XCTFail("Expected an account-changed error, got \(error)")
+    }
+
+    XCTAssertEqual(local.callCount, 0)
+  }
+
+  func testCancellingHeldConsentRequestNeverStartsServerAfterLaterGrant()
+    async throws {
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let server = RoutineSuggestionServerStub(
+      result: .success(makeRoutine(name: "시작되면 안 되는 서버 초안"))
+    )
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: server,
+      localService: RoutineSuggestionLocalStub(),
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: input())
+    }
+
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+    task.cancel()
+    await assertCancellation(task)
+
+    consent.grant()
+    try await _Concurrency.Task<Never, Never>.sleep(for: .milliseconds(50))
+
+    XCTAssertEqual(server.callCount, 0)
+  }
+
+  func testAccountChangeWhileConsentIsHeldDiscardsInputBeforeServerRequest()
+    async throws {
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let server = RoutineSuggestionServerStub(
+      result: .success(makeRoutine(name: "다른 계정에는 보내면 안 되는 초안"))
+    )
+    let local = RoutineSuggestionLocalStub()
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: input())
+    }
+
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+    account.memberID = 1_098
+    consent.grant()
+
+    do {
+      _ = try await task.value
+      XCTFail("Expected the account-changed request to be discarded.")
+    } catch let error as RoutineSuggestionRequestError {
+      XCTAssertEqual(error, .accountChanged)
+    } catch {
+      XCTFail("Expected an account-changed error, got \(error)")
+    }
+
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(local.callCount, 0)
+  }
+
+  func testFreeformInputWaitsForConsentThenAutomaticallyUsesServerResult()
+    async throws {
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let server = RoutineSuggestionServerStub(
+      result: .success(makeRoutine(name: "동의 뒤 정리된 루틴"))
+    )
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let local = RoutineSuggestionLocalStub()
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+    let freeformText = "물을 마시고 스트레칭하고 싶어요"
+    let viewModel = OnboardingViewModel(
+      draft: OnboardingDraft(freeformText: freeformText),
+      step: .freeform,
+      routineSuggestionService: local,
+      routineSuggestionCoordinator: coordinator
+    )
+
+    viewModel.primaryButtonDidTap()
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+
+    XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertTrue(viewModel.isSuggesting)
+    XCTAssertNil(viewModel.draft.previewRoutine)
+    XCTAssertNil(viewModel.draft.suggestionSource)
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(local.callCount, 0)
+
+    let pendingInput = viewModel.draft.suggestionInput
+    consent.grant()
+
+    try await waitUntil(timeout: .seconds(6)) {
+      viewModel.step == .review
+    }
+
+    XCTAssertFalse(viewModel.isSuggesting)
+    XCTAssertEqual(viewModel.draft.previewRoutine?.name, "동의 뒤 정리된 루틴")
+    XCTAssertEqual(viewModel.draft.suggestionSource, .server)
+    XCTAssertEqual(server.inputs, [pendingInput])
+    XCTAssertEqual(local.callCount, 0)
+  }
+
+  func testFreeformInputReturnsToInputAfterDeferringConsentWithoutFallback()
+    async throws {
+    let account = MutableRoutineSuggestionAccount(memberID: 98)
+    let server = RoutineSuggestionServerStub(
+      result: .success(makeRoutine(name: "나중에 동의한 뒤 정리된 루틴"))
+    )
+    let consent = GeminiDataConsentStub(status: .undecided)
+    let local = RoutineSuggestionLocalStub()
+    let coordinator = RoutineSuggestionCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: consent
+    )
+    let freeformText = "물을 마시고 스트레칭하고 싶어요"
+    let viewModel = OnboardingViewModel(
+      draft: OnboardingDraft(freeformText: freeformText),
+      step: .freeform,
+      routineSuggestionService: local,
+      routineSuggestionCoordinator: coordinator
+    )
+
+    viewModel.primaryButtonDidTap()
+    try await waitUntil {
+      consent.requestCount == 1
+    }
+    consent.dismissConsentChoices()
+
+    try await waitUntil {
+      viewModel.step == .freeform && !viewModel.isSuggesting
+    }
+
+    XCTAssertEqual(viewModel.draft.freeformText, freeformText)
+    XCTAssertNil(viewModel.draft.previewRoutine)
+    XCTAssertNil(viewModel.draft.suggestionSource)
+    XCTAssertEqual(
+      viewModel.errorMessage,
+      "AI 데이터 처리 동의 후 루틴 구조화를 다시 진행할 수 있어요."
+    )
+    XCTAssertEqual(server.callCount, 0)
+    XCTAssertEqual(local.callCount, 0)
+
+    viewModel.primaryButtonDidTap()
+    try await waitUntil {
+      consent.requestCount == 2
+    }
+    consent.grant()
+
+    try await waitUntil(timeout: .seconds(6)) {
+      viewModel.step == .review
+    }
+
+    XCTAssertEqual(server.callCount, 1)
+    XCTAssertEqual(local.callCount, 0)
   }
 
   func testSuggestionDoesNotWriteSwiftDataBeforeConfirmationAndSavesSameDraftID()
@@ -825,8 +1074,8 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     }
   }
 
-  private func assertCancellation(
-    _ task: _Concurrency.Task<Bool, Error>
+  private func assertCancellation<Value>(
+    _ task: _Concurrency.Task<Value, Error>
   ) async {
     do {
       _ = try await task.value
@@ -884,6 +1133,7 @@ private final class RoutineSuggestionServerStub:
   ServerRoutineSuggestionServing {
   private let result: Result<Routine, Error>
   private(set) var callCount = 0
+  private(set) var inputs: [RoutineSuggestionInput] = []
 
   init(result: Result<Routine, Error>) {
     self.result = result
@@ -894,6 +1144,7 @@ private final class RoutineSuggestionServerStub:
     memberID: Int64
   ) async throws -> Routine {
     callCount += 1
+    inputs.append(input)
     return try result.get()
   }
 }

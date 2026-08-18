@@ -590,6 +590,9 @@ final class OnboardingViewModel: ObservableObject {
         errorMessage = "루틴 항목을 불러올 수 없어요."
         return false
       }
+      if let source = draft.suggestionSource {
+        RoutineSuggestionDiagnostics.record(source)
+      }
       errorMessage = nil
       return true
     } catch {
@@ -659,6 +662,8 @@ final class OnboardingViewModel: ObservableObject {
         return false
       }
 
+      RoutineSuggestionDiagnostics.record(result.source)
+
       try await completeOrganizingPresentation(requestID: requestID)
       finishSuggestion(requestID: requestID)
 
@@ -671,7 +676,7 @@ final class OnboardingViewModel: ObservableObject {
         return false
       }
       finishSuggestion(requestID: requestID)
-      errorMessage = "루틴 추천을 불러올 수 없어요."
+      errorMessage = suggestionErrorMessage(for: error)
       return false
     }
   }
@@ -805,6 +810,15 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     updateFreeformText(appendedText)
+  }
+
+  private func suggestionErrorMessage(for error: Error) -> String {
+    if let localizedError = error as? LocalizedError,
+       let description = localizedError.errorDescription {
+      return description
+    }
+
+    return "루틴 추천을 불러올 수 없어요."
   }
 
   private func updatePreviewAlarm() {
@@ -983,7 +997,7 @@ final class OnboardingViewModel: ObservableObject {
       } catch is CancellationError {
         return
       } catch {
-        errorMessage = "루틴 추천을 불러올 수 없어요."
+        errorMessage = suggestionErrorMessage(for: error)
         if let failureStep {
           step = failureStep
         }

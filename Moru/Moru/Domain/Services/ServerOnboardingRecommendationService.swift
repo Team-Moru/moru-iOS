@@ -25,8 +25,7 @@ nonisolated protocol ServerOnboardingRecommendationFetching: Sendable {
 
 enum ServerOnboardingRecommendationError:
   Error,
-  Equatable,
-  RoutineSuggestionInvalidDraftError {
+  Equatable {
   case noValidRecommendation
 }
 
