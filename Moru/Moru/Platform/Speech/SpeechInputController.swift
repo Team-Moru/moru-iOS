@@ -45,6 +45,18 @@ protocol SpeechSilenceScheduling: AnyObject {
 }
 
 @MainActor
+protocol SpeechInputTimeProviding: AnyObject {
+  var now: Date { get }
+}
+
+@MainActor
+final class SystemSpeechInputTimeProvider: SpeechInputTimeProviding {
+  var now: Date {
+    Date()
+  }
+}
+
+@MainActor
 final class TaskSpeechSilenceScheduler: SpeechSilenceScheduling {
   private var task: Task<Void, Never>?
 
@@ -96,12 +108,26 @@ final class SpeechInputController {
     case failed(SpeechInputFailure)
   }
 
+  enum SpeechActivityState: Equatable {
+    case awaitingRecognizedSpeech
+    case recognizedSpeech
+    case sustainedVoiceActivity
+  }
+
   private enum Metric {
     static let waveformUpdateInterval: TimeInterval = 0.05
     static let audibleLevelThreshold: Float = 0.12
+    static let sustainedVoiceActivityDuration: TimeInterval = 0.4
+    static let sustainedVoiceQuietDuration: TimeInterval = 0.15
+    static let maximumVoiceActivityFrameGap: TimeInterval = 0.2
+    /// Energy alone cannot identify a person with certainty. Keep a
+    /// continuously noisy microphone from postponing automatic completion
+    /// indefinitely while still allowing a spoken phrase to finish.
+    static let maximumSustainedVoiceActivityDuration: TimeInterval = 8
   }
 
   private let makeSession: @MainActor () -> any SpeechInputSession
+  private let timeProvider: any SpeechInputTimeProviding
   private let postSpeechSilenceTimeout: TimeInterval
   private let noSpeechTimeout: TimeInterval
   private let silenceScheduler: any SpeechSilenceScheduling
@@ -112,6 +138,11 @@ final class SpeechInputController {
   private var currentFinalTranscript = ""
   private var currentVolatileTranscript = ""
   private var lastWaveformUpdate = Date.distantPast
+  private var silenceDeadlineID: UUID?
+  private var audibleActivityStartedAt: Date?
+  private var lastAudibleActivityAt: Date?
+  private var quietActivityStartedAt: Date?
+  private var isSustainedVoiceActivity = false
 
   private(set) var phase: Phase = .idle
   private(set) var isPreparing = false
@@ -120,11 +151,14 @@ final class SpeechInputController {
   private(set) var latestFinalTranscript = ""
   private(set) var latestTranscriptUpdate: SpeechTranscriptUpdate?
   private(set) var latestSilenceCompletion: SpeechSilenceCompletion?
+  private(set) var speechActivityState: SpeechActivityState = .awaitingRecognizedSpeech
 
   init(
     silenceTimeout: TimeInterval = 3,
     noSpeechTimeout: TimeInterval = 30,
     silenceScheduler: any SpeechSilenceScheduling = TaskSpeechSilenceScheduler(),
+    timeProvider: any SpeechInputTimeProviding =
+      SystemSpeechInputTimeProvider(),
     makeSession: @escaping @MainActor () -> any SpeechInputSession = {
       AppleSpeechRecognitionSession()
     }
@@ -132,6 +166,7 @@ final class SpeechInputController {
     self.postSpeechSilenceTimeout = silenceTimeout
     self.noSpeechTimeout = noSpeechTimeout
     self.silenceScheduler = silenceScheduler
+    self.timeProvider = timeProvider
     self.makeSession = makeSession
   }
 
@@ -175,7 +210,9 @@ final class SpeechInputController {
     activeAttemptID = attemptID
     isPreparing = true
     latestSilenceCompletion = nil
+    cancelSilenceDeadline()
     resetCurrentSegment()
+    resetVoiceActivity()
 
     let newSession = makeSession()
     newSession.eventHandler = { [weak self] event in
@@ -191,7 +228,7 @@ final class SpeechInputController {
 
       isPreparing = false
       phase = .listening
-      scheduleSilenceDeadline(for: attemptID)
+      scheduleNoSpeechDeadline(for: attemptID)
     } catch {
       guard activeAttemptID == attemptID else {
         return
@@ -199,9 +236,11 @@ final class SpeechInputController {
 
       newSession.eventHandler = nil
       newSession.cancel()
+      cancelSilenceDeadline()
       isPreparing = false
       session = nil
       activeAttemptID = nil
+      resetVoiceActivity()
       phase = .failed(failure(from: error))
     }
   }
@@ -215,7 +254,7 @@ final class SpeechInputController {
       return
     }
 
-    silenceScheduler.cancel()
+    cancelSilenceDeadline()
     phase = .finishing
 
     do {
@@ -268,7 +307,7 @@ final class SpeechInputController {
       return nil
     }
 
-    silenceScheduler.cancel()
+    cancelSilenceDeadline()
     phase = .finishing
 
     do {
@@ -308,7 +347,7 @@ final class SpeechInputController {
     }
 
     activeAttemptID = nil
-    silenceScheduler.cancel()
+    cancelSilenceDeadline()
     phase = .finishing
 
     session?.cancel()
@@ -324,7 +363,7 @@ final class SpeechInputController {
 
   func cancel() {
     activeAttemptID = nil
-    silenceScheduler.cancel()
+    cancelSilenceDeadline()
     session?.eventHandler = nil
     session?.cancel()
     session = nil
@@ -333,6 +372,8 @@ final class SpeechInputController {
     resetCurrentSegment()
     levelProcessor.reset()
     waveformLevels = levelProcessor.levels
+    lastWaveformUpdate = .distantPast
+    resetVoiceActivity()
     isPreparing = false
     phase = .idle
   }
@@ -349,6 +390,7 @@ final class SpeechInputController {
 
     switch event {
     case .transcript(let transcript, let isFinal):
+      let previousTranscript = joinedTranscript()
       let cleanedTranscript = cleaned(transcript)
       if isFinal {
         currentFinalTranscript = cleanedTranscript
@@ -362,23 +404,34 @@ final class SpeechInputController {
         isFinal: isFinal
       )
       updateDisplayTranscript()
-      if !cleanedTranscript.isEmpty {
-        scheduleSilenceDeadline(for: attemptID)
+      let currentTranscript = joinedTranscript()
+      if isRecognizedSpeechActivity(
+        from: previousTranscript,
+        to: currentTranscript
+      ) {
+        if isSustainedVoiceActivity {
+          scheduleSustainedVoiceSafetyDeadline(for: attemptID)
+        } else {
+          speechActivityState = .recognizedSpeech
+          schedulePostSpeechSilenceDeadline(for: attemptID)
+        }
       }
 
     case .audioLevels(let levels):
-      guard Date().timeIntervalSince(lastWaveformUpdate) >= Metric.waveformUpdateInterval else {
+      let currentDate = timeProvider.now
+      guard currentDate.timeIntervalSince(lastWaveformUpdate)
+        >= Metric.waveformUpdateInterval else {
         return
       }
 
-      lastWaveformUpdate = Date()
-      if (levels.max() ?? .zero) >= Metric.audibleLevelThreshold {
-        if !joinedTranscript().isEmpty {
-          scheduleSilenceDeadline(for: attemptID)
-        }
-      }
+      lastWaveformUpdate = currentDate
       _ = levelProcessor.append(normalizedLevels: levels)
       waveformLevels = levelProcessor.levels
+      updateVoiceActivity(
+        with: levels,
+        at: currentDate,
+        for: attemptID
+      )
 
     case .interrupted, .routeChanged:
       Task { [weak self] in
@@ -393,42 +446,199 @@ final class SpeechInputController {
       let failedSession = session
       session = nil
       activeAttemptID = nil
-      silenceScheduler.cancel()
+      cancelSilenceDeadline()
       failedSession?.eventHandler = nil
       failedSession?.cancel()
+      resetVoiceActivity()
       phase = .failed(failure)
     }
   }
 
-  private func scheduleSilenceDeadline(for attemptID: UUID) {
-    let delay = joinedTranscript().isEmpty
-      ? noSpeechTimeout
-      : postSpeechSilenceTimeout
+  private func scheduleNoSpeechDeadline(for attemptID: UUID) {
+    scheduleDeadline(after: noSpeechTimeout, for: attemptID) { [weak self] in
+      self?.finishForSilenceDeadline()
+    }
+  }
+
+  private func schedulePostSpeechSilenceDeadline(for attemptID: UUID) {
+    scheduleDeadline(
+      after: postSpeechSilenceTimeout,
+      for: attemptID
+    ) { [weak self] in
+      self?.finishForSilenceDeadline()
+    }
+  }
+
+  private func scheduleSustainedVoiceSafetyDeadline(for attemptID: UUID) {
+    scheduleDeadline(
+      after: Metric.maximumSustainedVoiceActivityDuration,
+      for: attemptID
+    ) { [weak self] in
+      guard let self else {
+        return
+      }
+
+      // A microphone level cannot distinguish every persistent ambient sound
+      // from a voice. Finish this one bounded activity window, then begin the
+      // ordinary three-second quiet period instead of rearming forever.
+      self.endSustainedVoiceActivity()
+      self.schedulePostSpeechSilenceDeadline(for: attemptID)
+    }
+  }
+
+  private func scheduleDeadline(
+    after delay: TimeInterval,
+    for attemptID: UUID,
+    action: @escaping @MainActor () -> Void
+  ) {
+    let deadlineID = UUID()
+    silenceDeadlineID = deadlineID
 
     silenceScheduler.schedule(after: delay) { [weak self] in
       guard let self,
             self.activeAttemptID == attemptID,
+            self.silenceDeadlineID == deadlineID,
             self.phase == .listening else {
         return
       }
 
-      let transcript = self.joinedTranscript()
-      let silentSession = self.session
-      self.session = nil
-      self.activeAttemptID = nil
-      silentSession?.eventHandler = nil
-      silentSession?.cancel()
-
-      if transcript.isEmpty {
-        self.phase = .failed(.silence)
-      } else {
-        self.resetAfterFinish()
-        self.latestSilenceCompletion = SpeechSilenceCompletion(
-          id: UUID(),
-          transcript: transcript
-        )
-      }
+      self.silenceDeadlineID = nil
+      action()
     }
+  }
+
+  private func finishForSilenceDeadline() {
+    let transcript = joinedTranscript()
+    let silentSession = session
+    session = nil
+    activeAttemptID = nil
+    silentSession?.eventHandler = nil
+    silentSession?.cancel()
+
+    if speechActivityState == .awaitingRecognizedSpeech
+      || transcript.isEmpty {
+      resetVoiceActivity()
+      phase = .failed(.silence)
+    } else {
+      resetAfterFinish()
+      latestSilenceCompletion = SpeechSilenceCompletion(
+        id: UUID(),
+        transcript: transcript
+      )
+    }
+  }
+
+  private func cancelSilenceDeadline() {
+    silenceDeadlineID = nil
+    silenceScheduler.cancel()
+  }
+
+  private func isRecognizedSpeechActivity(
+    from previousTranscript: String,
+    to currentTranscript: String
+  ) -> Bool {
+    !currentTranscript.isEmpty && currentTranscript != previousTranscript
+  }
+
+  private func updateVoiceActivity(
+    with levels: [Float],
+    at date: Date,
+    for attemptID: UUID
+  ) {
+    guard (levels.max() ?? .zero) >= Metric.audibleLevelThreshold else {
+      registerQuietAudio(at: date, for: attemptID)
+      return
+    }
+
+    let isContinuousAudioActivity: Bool
+    if let lastAudibleActivityAt {
+      isContinuousAudioActivity = date.timeIntervalSince(lastAudibleActivityAt)
+        <= Metric.maximumVoiceActivityFrameGap
+    } else {
+      isContinuousAudioActivity = false
+    }
+    lastAudibleActivityAt = date
+    quietActivityStartedAt = nil
+
+    guard isContinuousAudioActivity else {
+      if isSustainedVoiceActivity {
+        endSustainedVoiceActivity()
+      }
+      audibleActivityStartedAt = date
+      lastAudibleActivityAt = date
+      return
+    }
+
+    if isSustainedVoiceActivity {
+      return
+    }
+
+    guard let audibleActivityStartedAt else {
+      self.audibleActivityStartedAt = date
+      return
+    }
+
+    guard date.timeIntervalSince(audibleActivityStartedAt)
+      >= Metric.sustainedVoiceActivityDuration else {
+      return
+    }
+
+    isSustainedVoiceActivity = true
+    speechActivityState = .sustainedVoiceActivity
+
+    // Without a recognized transcript there is nothing valid to complete.
+    // Keep the original no-speech deadline, so sustained ambient sound never
+    // suppresses the existing reminder and automatic-skip policy.
+    guard !joinedTranscript().isEmpty else {
+      return
+    }
+
+    scheduleSustainedVoiceSafetyDeadline(for: attemptID)
+  }
+
+  private func registerQuietAudio(at date: Date, for attemptID: UUID) {
+    lastAudibleActivityAt = nil
+
+    guard isSustainedVoiceActivity else {
+      audibleActivityStartedAt = nil
+      quietActivityStartedAt = nil
+      return
+    }
+
+    guard let quietActivityStartedAt else {
+      self.quietActivityStartedAt = date
+      return
+    }
+
+    guard date.timeIntervalSince(quietActivityStartedAt)
+      >= Metric.sustainedVoiceQuietDuration else {
+      return
+    }
+
+    endSustainedVoiceActivity()
+    guard !joinedTranscript().isEmpty else {
+      return
+    }
+
+    schedulePostSpeechSilenceDeadline(for: attemptID)
+  }
+
+  private func endSustainedVoiceActivity() {
+    isSustainedVoiceActivity = false
+    audibleActivityStartedAt = nil
+    lastAudibleActivityAt = nil
+    quietActivityStartedAt = nil
+    speechActivityState = joinedTranscript().isEmpty
+      ? .awaitingRecognizedSpeech
+      : .recognizedSpeech
+  }
+
+  private func resetVoiceActivity() {
+    audibleActivityStartedAt = nil
+    lastAudibleActivityAt = nil
+    quietActivityStartedAt = nil
+    isSustainedVoiceActivity = false
+    speechActivityState = .awaitingRecognizedSpeech
   }
 
   private func appendCommittedSegment(_ transcript: String) {
@@ -471,11 +681,14 @@ final class SpeechInputController {
   }
 
   private func resetAfterFinish() {
+    cancelSilenceDeadline()
     activeAttemptID = nil
     committedSegments = []
     resetCurrentSegment()
     levelProcessor.reset()
     waveformLevels = levelProcessor.levels
+    lastWaveformUpdate = .distantPast
+    resetVoiceActivity()
     phase = .idle
   }
 
