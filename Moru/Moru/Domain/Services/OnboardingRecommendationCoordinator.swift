@@ -35,14 +35,27 @@ final class OnboardingRecommendationCoordinator:
           let goal = OnboardingRecommendationGoal(
             rawValue: primaryGoalTag
           ) else {
-      return try localResult(from: input, reason: .unavailable)
+      throw RoutineSuggestionRequestError.unsupportedOnboardingGoal
     }
     guard let serverService else {
       return try localResult(from: input, reason: .serverUnavailable)
     }
-    guard geminiDataConsent.hasExplicitGeminiDataConsent else {
-      geminiDataConsent.requestGeminiDataConsentIfNeeded()
-      return try localResult(from: input, reason: .geminiConsentRequired)
+
+    switch try await RoutineSuggestionConsentPolicy.resolve(
+      using: geminiDataConsent
+    ) {
+    case .useLocalFallbackAfterDecline:
+      return try localResult(
+        from: input,
+        reason: .geminiConsentDeclined
+      )
+    case .useServer:
+      break
+    }
+
+    try Task.checkCancellation()
+    guard signedInMemberProvider?.signedInMemberID == memberID else {
+      throw RoutineSuggestionRequestError.accountChanged
     }
 
     do {
@@ -51,9 +64,10 @@ final class OnboardingRecommendationCoordinator:
         goal: goal,
         memberID: memberID
       )
+      try Task.checkCancellation()
 
       guard signedInMemberProvider?.signedInMemberID == memberID else {
-        return try localResult(from: input, reason: .accountChanged)
+        throw RoutineSuggestionRequestError.accountChanged
       }
 
       return RoutineSuggestionResult(routine: routine, source: .server)
@@ -62,14 +76,12 @@ final class OnboardingRecommendationCoordinator:
     } catch RoutineSuggestionRemoteFailure.cancelled {
       throw CancellationError()
     } catch {
+      try Task.checkCancellation()
       guard signedInMemberProvider?.signedInMemberID == memberID else {
-        return try localResult(from: input, reason: .accountChanged)
+        throw RoutineSuggestionRequestError.accountChanged
       }
 
-      return try localResult(
-        from: input,
-        reason: RoutineSuggestionFallbackPolicy.reason(for: error)
-      )
+      throw error
     }
   }
 

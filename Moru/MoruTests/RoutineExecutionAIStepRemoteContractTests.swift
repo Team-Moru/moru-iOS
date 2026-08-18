@@ -676,7 +676,7 @@ final class RoutineExecutionAIStepRemoteContractTests: XCTestCase {
   func testUseCaseWithoutGeminiConsentDoesNotStartRemoteRequest() async {
     let account = MutableAIStepSessionIdentityProvider(identity: identity)
     let remote = DeferredRoutineExecutionAIStepRemoteService()
-    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let consent = GeminiDataConsentStub(status: .undecided)
     let useCase = EvaluateRoutineExecutionAIStepUseCase(
       remoteService: remote,
       sessionIdentityProvider: account,

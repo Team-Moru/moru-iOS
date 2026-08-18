@@ -60,6 +60,49 @@ final class GeminiDataConsentStoreTests: XCTestCase {
     )
   }
 
+  func testUndecidedRequestWaitsForDecisionThenResumesWithGrantedStatus()
+    async throws {
+    let suiteName = "GeminiDataConsentStoreTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = GeminiDataConsentStore(
+      defaults: defaults,
+      storageKey: "gemini-consent"
+    )
+    store.requestGeminiDataConsentIfNeeded()
+    let task = _Concurrency.Task {
+      try await store.waitForGeminiDataConsentDecision()
+    }
+
+    await _Concurrency.Task<Never, Never>.yield()
+    store.grant()
+
+    let decision = try await task.value
+    XCTAssertEqual(decision, .granted)
+  }
+
+  func testUndecidedRequestDismissalResumesAsDeferredWithoutPersistingChoice()
+    async throws {
+    let suiteName = "GeminiDataConsentStoreTests.\(UUID().uuidString)"
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+    let store = GeminiDataConsentStore(
+      defaults: defaults,
+      storageKey: "gemini-consent"
+    )
+    store.requestGeminiDataConsentIfNeeded()
+    let task = _Concurrency.Task {
+      try await store.waitForGeminiDataConsentDecision()
+    }
+
+    store.dismissConsentChoices()
+
+    let decision = try await task.value
+    XCTAssertEqual(decision, .deferred)
+    XCTAssertEqual(store.status, .undecided)
+    XCTAssertFalse(store.isConsentPresentationRequested)
+  }
+
   func testMaterialDisclosureChangeDoesNotReusePreviousApproval() {
     let suiteName = "GeminiDataConsentStoreTests.\(UUID().uuidString)"
     let defaults = try! XCTUnwrap(UserDefaults(suiteName: suiteName))

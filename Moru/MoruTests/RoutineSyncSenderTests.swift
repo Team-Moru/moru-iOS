@@ -75,7 +75,7 @@ final class RoutineSyncSenderTests: XCTestCase {
       memberID: 7,
       at: Date(timeIntervalSince1970: 1)
     )
-    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let consent = GeminiDataConsentStub(status: .undecided)
     let sender = RoutineSyncSender(
       repository: fixture.repository,
       requestPreparer: fixture.preparer,
@@ -117,14 +117,14 @@ final class RoutineSyncSenderTests: XCTestCase {
     let attemptedRequests = await fixture.transport.requests()
     XCTAssertEqual(attemptedRequests.count, 1)
 
-    consent.hasExplicitGeminiDataConsent = false
+    consent.decline()
     let replayHeld = try await sender.sendNext(
       memberID: 7,
       at: Date(timeIntervalSince1970: 4)
     )
 
     XCTAssertEqual(replayHeld, .consentRequired(mutationID: mutation.id))
-    XCTAssertEqual(consent.requestCount, 2)
+    XCTAssertEqual(consent.requestCount, 1)
     XCTAssertEqual(fixture.preparer.callCount, 1)
     let replayRequests = await fixture.transport.requests()
     XCTAssertEqual(replayRequests.count, 1)
@@ -168,7 +168,7 @@ final class RoutineSyncSenderTests: XCTestCase {
       memberID: 7,
       at: Date(timeIntervalSince1970: 2)
     )
-    let consent = GeminiDataConsentStub(hasExplicitGeminiDataConsent: false)
+    let consent = GeminiDataConsentStub(status: .undecided)
     let sender = RoutineSyncSender(
       repository: fixture.repository,
       requestPreparer: fixture.preparer,

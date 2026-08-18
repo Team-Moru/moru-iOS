@@ -17,14 +17,131 @@ nonisolated enum GeminiDataConsentStatus: String, Codable, Equatable, Sendable {
   case declined
 }
 
+/// The outcome for one consent-gated request. `.deferred` deliberately does
+/// not change the persisted consent status: the caller must keep its input
+/// and wait for an explicit retry after the user has made a choice.
+nonisolated enum GeminiDataConsentDecision: Equatable, Sendable {
+  case granted
+  case declined
+  case deferred
+}
+
 @MainActor
 protocol GeminiDataConsentAuthorizing: AnyObject {
+  /// The full choice is needed by flows that must hold an AI request until
+  /// the user decides, rather than silently producing a local result.
+  var geminiDataConsentStatus: GeminiDataConsentStatus { get }
   var hasExplicitGeminiDataConsent: Bool { get }
 
   /// Requests a disclosure only while the user has not yet made a choice.
   /// A previous refusal must not repeatedly surface a modal from a background
   /// Outbox wake-up.
   func requestGeminiDataConsentIfNeeded()
+
+  /// Suspends a consent-gated request while the choice is undecided. It
+  /// returns immediately once the user has already granted, declined, or
+  /// dismissed the current choice sheet for later.
+  func waitForGeminiDataConsentDecision()
+    async throws -> GeminiDataConsentDecision
+}
+
+/// Keeps cancellation and consent changes race-safe for the requests that
+/// are intentionally held while the disclosure sheet is visible.
+@MainActor
+final class GeminiDataConsentDecisionGate {
+  private var status: GeminiDataConsentStatus
+  private var waiters: [
+    UUID: CheckedContinuation<GeminiDataConsentDecision, Error>
+  ] = [:]
+  private var cancelledWaiterIDs = Set<UUID>()
+
+  init(status: GeminiDataConsentStatus) {
+    self.status = status
+  }
+
+  func waitForDecision() async throws -> GeminiDataConsentDecision {
+    if let decision = finalizedDecision(for: status) {
+      return decision
+    }
+
+    let waiterID = UUID()
+    return try await withTaskCancellationHandler(
+      operation: {
+        try Task.checkCancellation()
+        return try await withCheckedThrowingContinuation {
+          (
+            continuation: CheckedContinuation<GeminiDataConsentDecision, Error>
+          ) in
+          if let decision = finalizedDecision(for: status) {
+            continuation.resume(returning: decision)
+          } else if cancelledWaiterIDs.remove(waiterID) != nil {
+            continuation.resume(throwing: CancellationError())
+          } else {
+            waiters[waiterID] = continuation
+          }
+        }
+      },
+      onCancel: {
+        Task { @MainActor [weak self] in
+          self?.cancelWaiter(id: waiterID)
+        }
+      }
+    )
+  }
+
+  func update(_ nextStatus: GeminiDataConsentStatus) {
+    status = nextStatus
+    guard let decision = finalizedDecision(for: nextStatus) else {
+      return
+    }
+
+    let pendingWaiters = Array(waiters.values)
+    waiters.removeAll()
+    cancelledWaiterIDs.removeAll()
+    for waiter in pendingWaiters {
+      waiter.resume(returning: decision)
+    }
+  }
+
+  /// Releases all currently held requests without interpreting dismissal as a
+  /// refusal. The status remains `.undecided`, so a later user retry presents
+  /// the disclosure again instead of using a local fallback.
+  func deferDecision() {
+    guard status == .undecided else {
+      return
+    }
+
+    let pendingWaiters = Array(waiters.values)
+    waiters.removeAll()
+    cancelledWaiterIDs.removeAll()
+    for waiter in pendingWaiters {
+      waiter.resume(returning: .deferred)
+    }
+  }
+
+  private func cancelWaiter(id: UUID) {
+    if let waiter = waiters.removeValue(forKey: id) {
+      waiter.resume(throwing: CancellationError())
+    } else if status == .undecided {
+      // Cancellation can arrive just before the continuation is registered.
+      // Remember it so the registration path resumes immediately instead of
+      // retaining a request that has already disappeared.
+      cancelledWaiterIDs.insert(id)
+    }
+  }
+
+  private func finalizedDecision(
+    for status: GeminiDataConsentStatus
+  ) -> GeminiDataConsentDecision? {
+    switch status {
+    case .undecided:
+      nil
+    case .granted:
+      .granted
+    case .declined:
+      .declined
+    }
+  }
 }
 
 /// Versioned consent for AI features whose server processing may
@@ -43,6 +160,11 @@ final class GeminiDataConsentStore: ObservableObject,
 
   private let defaults: UserDefaults
   private let storageKey: String
+  private let decisionGate: GeminiDataConsentDecisionGate
+
+  var geminiDataConsentStatus: GeminiDataConsentStatus {
+    status
+  }
 
   var hasExplicitGeminiDataConsent: Bool {
     status == .granted
@@ -55,12 +177,15 @@ final class GeminiDataConsentStore: ObservableObject,
     self.defaults = defaults
     self.storageKey = storageKey
 
-    guard let stored = defaults.string(forKey: storageKey),
-          let decoded = GeminiDataConsentStatus(rawValue: stored) else {
-      status = .undecided
-      return
+    let initialStatus: GeminiDataConsentStatus
+    if let stored = defaults.string(forKey: storageKey),
+       let decoded = GeminiDataConsentStatus(rawValue: stored) {
+      initialStatus = decoded
+    } else {
+      initialStatus = .undecided
     }
-    status = decoded
+    status = initialStatus
+    decisionGate = GeminiDataConsentDecisionGate(status: initialStatus)
   }
 
   func requestGeminiDataConsentIfNeeded() {
@@ -68,6 +193,28 @@ final class GeminiDataConsentStore: ObservableObject,
       return
     }
     isConsentPresentationRequested = true
+  }
+
+  func waitForGeminiDataConsentDecision()
+    async throws -> GeminiDataConsentDecision {
+    switch status {
+    case .granted:
+      return .granted
+    case .declined:
+      return .declined
+    case .undecided:
+      break
+    }
+
+    // A dismissal can happen between requesting the sheet and registering the
+    // actor continuation. Treat that exact request as deferred rather than
+    // leaving it suspended forever; a subsequent retry will request the sheet
+    // again before calling this method.
+    guard isConsentPresentationRequested else {
+      return .deferred
+    }
+
+    return try await decisionGate.waitForDecision()
   }
 
   /// Opens the disclosure from a user-initiated setting even after a prior
@@ -78,6 +225,11 @@ final class GeminiDataConsentStore: ObservableObject,
 
   func dismissConsentChoices() {
     isConsentPresentationRequested = false
+    guard status == .undecided else {
+      return
+    }
+
+    decisionGate.deferDecision()
   }
 
   func grant() {
@@ -97,13 +249,20 @@ final class GeminiDataConsentStore: ObservableObject,
   private func save(_ nextStatus: GeminiDataConsentStatus) {
     status = nextStatus
     defaults.set(nextStatus.rawValue, forKey: storageKey)
+    decisionGate.update(nextStatus)
   }
 }
 
 @MainActor
 final class UnavailableGeminiDataConsentAuthorizer:
   GeminiDataConsentAuthorizing {
+  var geminiDataConsentStatus: GeminiDataConsentStatus { .declined }
   var hasExplicitGeminiDataConsent: Bool { false }
 
   func requestGeminiDataConsentIfNeeded() {}
+
+  func waitForGeminiDataConsentDecision()
+    async throws -> GeminiDataConsentDecision {
+    .declined
+  }
 }
