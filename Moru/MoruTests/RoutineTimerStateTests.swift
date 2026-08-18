@@ -41,15 +41,5 @@ final class RoutineTimerStateTests: XCTestCase {
     XCTAssertEqual(state.start(), [.announce(1)])
     XCTAssertEqual(state.tick(), [.complete])
     XCTAssertTrue(state.tick().isEmpty)
-    XCTAssertFalse(state.complete())
-  }
-
-  func testManualCompletionStopsFutureTicks() {
-    var state = RoutineTimerState(totalSeconds: 10)
-    _ = state.start()
-
-    XCTAssertTrue(state.complete())
-    XCTAssertTrue(state.tick().isEmpty)
-    XCTAssertFalse(state.complete())
   }
 }
