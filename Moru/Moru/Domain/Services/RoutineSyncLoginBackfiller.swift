@@ -20,13 +20,16 @@ protocol RoutineSyncLoginBackfilling: AnyObject {
 @MainActor
 final class RoutineSyncLoginBackfiller: RoutineSyncLoginBackfilling {
   private let routineRepository: any RoutineRepository
+  private let localProfileRepository: (any LocalProfileRepository)?
   private let syncRepository: any RoutineSyncRepository
 
   init(
     routineRepository: any RoutineRepository,
+    localProfileRepository: (any LocalProfileRepository)? = nil,
     syncRepository: any RoutineSyncRepository
   ) {
     self.routineRepository = routineRepository
+    self.localProfileRepository = localProfileRepository
     self.syncRepository = syncRepository
   }
 
@@ -57,15 +60,30 @@ final class RoutineSyncLoginBackfiller: RoutineSyncLoginBackfilling {
       didBackfillActiveGroup = didBackfillActiveGroup || routine.isActive
     }
 
-    guard didBackfillActiveGroup,
-          let selection = try routines.filter(\.isActive).sorted(by: isNewer).first(where: {
-            try isServerProjectableGroup($0.id, memberID: memberID)
-          }) else {
-      return
+    let activeSelection = try routines.filter(\.isActive).sorted(by: isNewer).first(where: {
+      try isServerProjectableGroup($0.id, memberID: memberID)
+    })
+    if didBackfillActiveGroup, let activeSelection {
+      _ = try syncRepository.enqueue(
+        command: .selectActiveRoutineGroup(selectedGroupLocalID: activeSelection.id),
+        memberID: memberID,
+        at: date
+      )
     }
 
+    // A LocalProfile exists only after local onboarding has been completed.
+    // Backfill one stable active/projectable group for local-first login.
+    let onboardingCandidate = try routines
+      .sorted(by: isNewer)
+      .first(where: { routine in
+        try isServerProjectableGroup(routine.id, memberID: memberID)
+      })
+    guard try localProfileRepository?.fetchProfile() != nil,
+          let onboardingGroup = activeSelection ?? onboardingCandidate else {
+      return
+    }
     _ = try syncRepository.enqueue(
-      command: .selectActiveRoutineGroup(selectedGroupLocalID: selection.id),
+      command: .completeOnboarding(groupLocalID: onboardingGroup.id),
       memberID: memberID,
       at: date
     )

@@ -117,6 +117,33 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
         responseData: responseData
       )
 
+    case .completeOnboarding:
+      guard request.operation == .completeOnboarding,
+            request.wireRequest.method == .post,
+            request.wireRequest.path == "/onboarding/complete",
+            metadata.code == "COMMON200" else {
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      let completionRequest: ProductionOnboardingCompletionRequestDTO
+      do {
+        completionRequest = try decoder.decode(
+          ProductionOnboardingCompletionRequestDTO.self,
+          from: request.wireRequest.body
+        )
+      } catch {
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      guard completionRequest.routineGroupId > 0 else {
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      let envelope: ProductionRoutineSyncEnvelope<
+        ProductionOnboardingCompletionResponseDTO
+      > = try decodeEnvelope(from: responseData)
+      guard envelope.result?.onboardingCompleted == true else {
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      return .onboardingCompleted
+
     case .selectActiveRoutineGroup:
       throw RoutineSyncResponseDecodingError.invalidResponse
     }
@@ -392,4 +419,16 @@ nonisolated private struct ProductionRoutineExecutionResponseDTO:
   let routineId: Int64?
   let durationSecond: Int?
   let isCompleted: Bool?
+}
+
+nonisolated private struct ProductionOnboardingCompletionResponseDTO:
+  Decodable,
+  Sendable {
+  let onboardingCompleted: Bool?
+}
+
+nonisolated private struct ProductionOnboardingCompletionRequestDTO:
+  Decodable,
+  Sendable {
+  let routineGroupId: Int64
 }

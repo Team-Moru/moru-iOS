@@ -119,7 +119,20 @@ final class AccountServerRemoteContractTests: XCTestCase {
           isProOnly: false,
           previewAudioURL: URL(
             string: "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/minseo.mp3"
-          )
+          ),
+          doneAudio: ServerTTSCommonAudio(
+            status: .ready,
+            audioURL: URL(
+              string: "https://moru-tts.s3.ap-northeast-2.amazonaws.com/common/minseo-done.mp3"
+            )
+          ),
+          remindAudio: ServerTTSCommonAudio(
+            status: .ready,
+            audioURL: URL(
+              string: "https://moru-tts.s3.ap-northeast-2.amazonaws.com/common/minseo-remind.mp3"
+            )
+          ),
+          commonAudioVersion: 1
         ),
         ServerTTSVoice(
           ttsID: 2,
@@ -129,7 +142,10 @@ final class AccountServerRemoteContractTests: XCTestCase {
           isProOnly: true,
           previewAudioURL: URL(
             string: "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/hyeonu.mp3"
-          )
+          ),
+          doneAudio: .unavailable,
+          remindAudio: .unavailable,
+          commonAudioVersion: 1
         ),
       ]
     )
@@ -400,6 +416,34 @@ final class AccountServerRemoteContractTests: XCTestCase {
     XCTAssertEqual(emptyVoices, [])
   }
 
+  func testVoiceCommonAudioTreatsMissingOrInvalidCueFieldsAsUnavailable()
+    async throws {
+    let service = DefaultAccountServerRemoteService(
+      apiClient: AccountServerPayloadAPIClient(
+        voices: TTSVoiceListResponseDTO(
+          voices: [
+            ttsVoiceDTO(
+              doneAudioUrl: "http://audio.example.test/done.mp3",
+              doneAudioStatus: "READY",
+              remindAudioUrl: "https://audio.example.test/remind.mp3",
+              remindAudioStatus: "PENDING",
+              selectionVersion: 3
+            ),
+          ]
+        )
+      )
+    )
+
+    let voices = try await service.fetchVoices(memberID: 98)
+    let voice = try XCTUnwrap(voices.first)
+
+    XCTAssertFalse(voice.doneAudio.isPlayable)
+    XCTAssertEqual(voice.doneAudio.status, .ready)
+    XCTAssertFalse(voice.remindAudio.isPlayable)
+    XCTAssertEqual(voice.remindAudio.status, .pending)
+    XCTAssertEqual(voice.commonAudioVersion, 3)
+  }
+
   func testTTSUpdateRequiresMatchingMemberAndRequestedTTSID()
     async {
     let invalidUpdates = [
@@ -548,7 +592,12 @@ nonisolated private func ttsVoiceDTO(
   displayName: String? = "민서",
   description: String? = "따뜻한 친구",
   proOnly: Bool? = false,
-  previewAudioUrl: String? = nil
+  previewAudioUrl: String? = nil,
+  doneAudioUrl: String? = nil,
+  doneAudioStatus: String? = nil,
+  remindAudioUrl: String? = nil,
+  remindAudioStatus: String? = nil,
+  selectionVersion: Int64? = nil
 ) -> TTSVoiceResponseDTO {
   TTSVoiceResponseDTO(
     ttsId: ttsId,
@@ -556,7 +605,12 @@ nonisolated private func ttsVoiceDTO(
     displayName: displayName,
     description: description,
     proOnly: proOnly,
-    previewAudioUrl: previewAudioUrl
+    previewAudioUrl: previewAudioUrl,
+    doneAudioUrl: doneAudioUrl,
+    doneAudioStatus: doneAudioStatus,
+    remindAudioUrl: remindAudioUrl,
+    remindAudioStatus: remindAudioStatus,
+    selectionVersion: selectionVersion
   )
 }
 

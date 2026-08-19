@@ -149,46 +149,10 @@ final class RoutineGuidanceCoordinator {
       ))
     }
 
-    guard step.type == .timer,
-          let estimatedSeconds = step.estimatedSeconds,
-          estimatedSeconds > 0 else {
-      return
-    }
-
-    let halfwayDelay = Duration.milliseconds(estimatedSeconds * 500)
-    reminderTask = Task { [weak self] in
-      guard let self else {
-        return
-      }
-
-      do {
-        try await delay.wait(for: halfwayDelay)
-      } catch {
-        return
-      }
-
-      guard !Task.isCancelled, activeGeneration == generation else {
-        return
-      }
-
-      guard let itemID = step.presetItemID else {
-        return
-      }
-
-      _ = await player.play(
-        itemID: itemID,
-        voiceCode: voiceCode,
-        kind: .remind
-      )
-    }
   }
 
   func stepDidComplete(_ step: RoutineStep) {
     stopCurrentCue()
-
-    guard let itemID = step.presetItemID else {
-      return
-    }
 
     let activeGeneration = generation
     playTask = Task { [weak self] in
@@ -201,7 +165,7 @@ final class RoutineGuidanceCoordinator {
         routineLocalID: step.id,
         routineTitle: step.title,
         routineType: step.type,
-        fallbackItemID: itemID,
+        fallbackItemID: step.presetItemID,
         voiceCode: voiceCode,
         kind: .done
       ))

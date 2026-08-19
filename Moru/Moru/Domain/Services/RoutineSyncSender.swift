@@ -36,6 +36,7 @@ nonisolated enum RoutineSyncTransportCommit: Equatable, Sendable {
   case createRoutineGroup(assignments: [RoutineServerBindingAssignment])
   case mutation(assignments: [RoutineServerBindingAssignment])
   case deleted
+  case onboardingCompleted
 }
 
 nonisolated enum RoutineSyncTransportOutcome: Equatable, Sendable {
@@ -110,6 +111,8 @@ final class RoutineSyncSender {
     (any CurrentAccountSessionIdentityProviding)?
   private let geminiDataConsent: any GeminiDataConsentAuthorizing
   private let retryPolicy: RoutineSyncProcessingRetryPolicy
+  private let onOnboardingCompletionCommitted:
+    @MainActor (AccountSessionIdentity) -> Void
 
   init(
     repository: any RoutineSyncRepository,
@@ -119,7 +122,9 @@ final class RoutineSyncSender {
     sessionIdentityProvider:
       (any CurrentAccountSessionIdentityProviding)? = nil,
     geminiDataConsent: any GeminiDataConsentAuthorizing,
-    retryPolicy: RoutineSyncProcessingRetryPolicy = .init()
+    retryPolicy: RoutineSyncProcessingRetryPolicy = .init(),
+    onOnboardingCompletionCommitted:
+      @escaping @MainActor (AccountSessionIdentity) -> Void = { _ in }
   ) {
     self.repository = repository
     self.requestPreparer = requestPreparer
@@ -128,6 +133,7 @@ final class RoutineSyncSender {
     self.sessionIdentityProvider = sessionIdentityProvider
     self.geminiDataConsent = geminiDataConsent
     self.retryPolicy = retryPolicy
+    self.onOnboardingCompletionCommitted = onOnboardingCompletionCommitted
   }
 
   func sendNext(
@@ -244,6 +250,7 @@ final class RoutineSyncSender {
       outcome,
       mutation: mutation,
       attempt: attempt,
+      sessionIdentity: capturedIdentity,
       at: date
     )
   }
@@ -304,6 +311,7 @@ final class RoutineSyncSender {
     _ outcome: RoutineSyncTransportOutcome,
     mutation: RoutineSyncMutation,
     attempt: RoutineSyncAttempt,
+    sessionIdentity: AccountSessionIdentity?,
     at date: Date
   ) throws -> RoutineSyncSendResult {
     switch outcome {
@@ -354,6 +362,10 @@ final class RoutineSyncSender {
         attempt: attempt,
         at: date
       )
+      if mutation.operation == .completeOnboarding,
+         let sessionIdentity {
+        onOnboardingCompletionCommitted(sessionIdentity)
+      }
       let remaining = try repository.mutations(memberID: mutation.memberID)
         .first { $0.id == mutation.id }
       if let reason = remaining?.blockReason {
@@ -395,6 +407,12 @@ final class RoutineSyncSender {
         at: date
       )
 
+    case (.completeOnboarding, .onboardingCompleted):
+      try repository.removeCompleted(
+        id: mutation.id,
+        expectedGenerationID: attempt.generationID
+      )
+
     default:
       throw RoutineSyncSenderError.unexpectedCommit(operation: mutation.operation)
     }
@@ -409,7 +427,8 @@ nonisolated private extension RoutineSyncOperation {
     case .deleteRoutineGroup,
          .deleteRoutine,
          .saveRoutineExecution,
-         .setRoutineGroupActive:
+         .setRoutineGroupActive,
+         .completeOnboarding:
       false
     }
   }

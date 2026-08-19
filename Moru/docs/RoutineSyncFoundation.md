@@ -60,7 +60,7 @@ conflict로 처리합니다.
 
 `PersistedRoutineSyncMutation`은 typed `RoutineSyncCommand`의 버전 있는
 payload를 보관합니다. 그룹 생성, 자식 루틴 추가, 활성 그룹 선택/해제,
-그룹·자식 삭제, 실행 결과 저장만 command가 됩니다. 일반 편집과 재정렬은
+그룹·자식 삭제, 실행 결과 저장, 서버 온보딩 완료만 command가 됩니다. 일반 편집과 재정렬은
 현재 서버가 표현하지 못하므로 로컬 저장만 합니다.
 
 엔터티 command는 다음 자연키로 변경을 하나만 보관합니다.
@@ -100,6 +100,7 @@ sender가 `queued`로 승격합니다.
 | `DELETE /routine-groups/{id}` | `Routine.id` | 전송 |
 | `DELETE /routines/{routineId}` | `RoutineStep.id` | 전송 |
 | `POST /routine-executions` | `RoutineStepResult.id` | 전송 |
+| `POST /onboarding/complete` | account intent + `Routine.id` 참조 | 전송 |
 
 `POST /routine-executions/ai-step`은 즉시 답을 받아야 하는 RPC라 Outbox에
 넣지 않습니다. TTS 조회도 읽기 API이므로 mutation이 아닙니다.
@@ -111,6 +112,7 @@ sender가 `queued`로 승격합니다.
 - `POST /routine-groups`
 - `POST /routine-groups/{routineGroupId}/routines`
 - `POST /routine-executions`
+- `POST /onboarding/complete`
 
 서버가 첫 요청을 처리한 뒤 응답만 유실했더라도 동일 `Idempotency-Key`와 동일
 body로만 재전송되므로 새 요청 identity를 만들지 않습니다.
@@ -137,7 +139,9 @@ backfill도 sender보다 먼저 실행됩니다. 요청 중 계정 session gener
 - 로그아웃 상태에서는 Outbox를 만들지 않습니다. 계정 세션이 확정되면 아직 해당
   회원의 binding이 없는 `localOnly` 그룹을 현재 snapshot으로 Outbox에 backfill한
   뒤 활성 그룹 선택 intent를 로컬 우선순위에 맞춰 등록하고 sender를
-  시작합니다. 동일 snapshot의 재등록은 기존 generation UUID를 재사용합니다.
+  시작합니다. 완료된 로컬 온보딩에는 같은 그룹의 remote binding이 생긴 뒤
+  `POST /onboarding/complete`가 전송되도록 account-level intent도 등록합니다.
+  동일 snapshot의 재등록은 기존 generation UUID를 재사용합니다.
 - 서버 응답으로 생성 성공을 확정할 때는 검증된 binding과 해당 Outbox 정리를
   한 번의 save로 처리합니다. 삭제 성공은 삭제 대상 binding과 Outbox를 함께
   지웁니다.

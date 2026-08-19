@@ -196,6 +196,47 @@ final class AccountSessionStore: ObservableObject {
     try establishValidatedSession(credentials: credentials)
   }
 
+  /// Applies only a server-confirmed onboarding completion to the exact
+  /// account/session that issued the Outbox request. The bearer token and its
+  /// generation stay unchanged, so an in-flight response for an old session
+  /// can never update a replacement credential.
+  @discardableResult
+  func markOnboardingCompleted(
+    for identity: AccountSessionIdentity
+  ) throws -> Bool {
+    guard case .signedIn(let account) = state,
+          account.memberID == identity.memberID,
+          currentAccountSessionIdentity == identity,
+          let credentials = try credentialStore.load(),
+          credentials.isValid,
+          credentials.memberID == identity.memberID,
+          credentials.provider == account.provider else {
+      return false
+    }
+
+    guard !credentials.onboardingCompleted || !account.onboardingCompleted else {
+      return true
+    }
+    let updatedCredentials = AccountCredentials(
+      memberID: credentials.memberID,
+      accessToken: credentials.accessToken,
+      refreshToken: credentials.refreshToken,
+      onboardingCompleted: true,
+      provider: credentials.provider,
+      providerUserIdentifier: credentials.providerUserIdentifier
+    )
+    try credentialStore.save(updatedCredentials)
+    state = .signedIn(
+      SignedInAccount(
+        memberID: account.memberID,
+        onboardingCompleted: true,
+        provider: account.provider,
+        providerUserIdentifier: account.providerUserIdentifier
+      )
+    )
+    return true
+  }
+
   @discardableResult
   func beginAccountLifecycleOperation(
     _ operation: AccountLifecycleOperation

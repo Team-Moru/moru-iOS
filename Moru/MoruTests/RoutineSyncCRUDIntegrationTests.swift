@@ -81,6 +81,39 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testLoginBackfillStagesOnboardingCompletionForCompletedLocalOnboarding()
+    throws {
+    let fixture = try makeFixture(memberID: nil)
+    let routine = makeRoutine(
+      name: "로컬 온보딩",
+      steps: [makeStep()],
+      isActive: false
+    )
+    let profile = LocalProfile()
+    try fixture.onboarding.saveCompletion(profile: profile, routine: routine)
+    fixture.member.signedInMemberID = 7
+    let profileRepository = SwiftDataLocalProfileRepository(
+      modelContext: fixture.container.mainContext
+    )
+
+    try RoutineSyncLoginBackfiller(
+      routineRepository: fixture.routines,
+      localProfileRepository: profileRepository,
+      syncRepository: fixture.sync
+    ).backfillLocalRoutineGroups(memberID: 7, at: .distantPast)
+
+    let completion = try XCTUnwrap(
+      try fixture.sync.mutations(memberID: 7).first {
+        $0.operation == .completeOnboarding
+      }
+    )
+    XCTAssertEqual(
+      try decodedCommand(completion),
+      .completeOnboarding(groupLocalID: routine.id)
+    )
+  }
+
+  @MainActor
   func testLoginBackfillSkipsGroupAlreadyBoundToMember() throws {
     let fixture = try makeFixture(memberID: nil)
     let routine = makeRoutine(
@@ -1126,9 +1159,19 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
 
     try fixture.onboarding.saveCompletion(profile: LocalProfile(), routine: routine)
 
-    let mutation = try XCTUnwrap(try fixture.sync.mutations(memberID: 7).first)
-    XCTAssertEqual(mutation.operation, .createRoutineGroup)
-    XCTAssertEqual(mutation.state, .waitingForServerContract)
+    let mutations = try fixture.sync.mutations(memberID: 7)
+    let create = try XCTUnwrap(
+      mutations.first { $0.operation == .createRoutineGroup }
+    )
+    let completion = try XCTUnwrap(
+      mutations.first { $0.operation == .completeOnboarding }
+    )
+    XCTAssertEqual(create.state, .waitingForServerContract)
+    XCTAssertEqual(completion.state, .waitingForServerContract)
+    XCTAssertEqual(
+      try decodedCommand(completion),
+      .completeOnboarding(groupLocalID: routine.id)
+    )
   }
 
   @MainActor
@@ -1159,7 +1202,8 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
     XCTAssertTrue(try fixture.routines.routine(id: onboarding.id)?.isActive ?? false)
     XCTAssertEqual(
       try fixture.sync.mutations(memberID: 7).map(\.operation).sorted { $0.rawValue < $1.rawValue },
-      [.createRoutineGroup, .setRoutineGroupActive].sorted { $0.rawValue < $1.rawValue }
+      [.createRoutineGroup, .setRoutineGroupActive, .completeOnboarding]
+        .sorted { $0.rawValue < $1.rawValue }
     )
   }
 

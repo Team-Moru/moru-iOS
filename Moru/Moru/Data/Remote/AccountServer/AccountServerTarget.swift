@@ -98,7 +98,12 @@ nonisolated enum AccountServerTarget: MoruTargetType {
                 "displayName": "민서",
                 "description": "따뜻한 친구",
                 "proOnly": false,
-                "previewAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/minseo.mp3"
+                "previewAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/minseo.mp3",
+                "doneAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/common/minseo-done.mp3",
+                "doneAudioStatus": "READY",
+                "remindAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/common/minseo-remind.mp3",
+                "remindAudioStatus": "READY",
+                "selectionVersion": 1
               },
               {
                 "ttsId": 2,
@@ -106,7 +111,12 @@ nonisolated enum AccountServerTarget: MoruTargetType {
                 "displayName": "현우",
                 "description": "차분한 친구",
                 "proOnly": true,
-                "previewAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/hyeonu.mp3"
+                "previewAudioUrl": "https://moru-tts.s3.ap-northeast-2.amazonaws.com/previews/hyeonu.mp3",
+                "doneAudioUrl": null,
+                "doneAudioStatus": "PENDING",
+                "remindAudioUrl": null,
+                "remindAudioStatus": "PENDING",
+                "selectionVersion": 1
               }
             ]
           }

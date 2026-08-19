@@ -176,6 +176,14 @@ nonisolated private extension TTSVoiceListResponseDTO {
         throw AccountServerRemoteError.invalidResponse
       }
       let previewAudioURL = try previewAudioURL(from: voice.previewAudioUrl)
+      let doneAudio = try commonAudio(
+        status: voice.doneAudioStatus,
+        url: voice.doneAudioUrl
+      )
+      let remindAudio = try commonAudio(
+        status: voice.remindAudioStatus,
+        url: voice.remindAudioUrl
+      )
 
       return ServerTTSVoice(
         ttsID: ttsId,
@@ -183,7 +191,10 @@ nonisolated private extension TTSVoiceListResponseDTO {
         displayName: displayName,
         description: description,
         isProOnly: proOnly,
-        previewAudioURL: previewAudioURL
+        previewAudioURL: previewAudioURL,
+        doneAudio: doneAudio,
+        remindAudio: remindAudio,
+        commonAudioVersion: try validSelectionVersion(voice.selectionVersion)
       )
     }
   }
@@ -284,4 +295,24 @@ nonisolated private func previewAudioURL(
     throw AccountServerRemoteError.invalidResponse
   }
   return url
+}
+
+nonisolated private func commonAudio(
+  status: String?,
+  url: String?
+) throws -> ServerTTSCommonAudio {
+  let resolvedStatus = ServerTTSCommonAudioStatus(serverValue: status)
+  let resolvedURL: URL?
+  do {
+    resolvedURL = try previewAudioURL(from: url)
+  } catch {
+    return ServerTTSCommonAudio(status: resolvedStatus, audioURL: nil)
+  }
+
+  // The server may roll these optional fields out independently. A missing or
+  // malformed pairing affects only this cue, never the complete voice list.
+  guard resolvedStatus == .ready, let resolvedURL else {
+    return ServerTTSCommonAudio(status: resolvedStatus, audioURL: nil)
+  }
+  return ServerTTSCommonAudio(status: .ready, audioURL: resolvedURL)
 }

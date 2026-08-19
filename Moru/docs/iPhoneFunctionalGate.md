@@ -26,10 +26,15 @@
 ## 음성 계약
 
 - 로그인 계정의 서버 binding과 검증된 로컬 캐시가 준비된 경우
-  RoutinePlayer의 `intro`는 원격 TTS를 우선 재생한다.
-- 네 종류의 번들 MP3는 원격 TTS가 없거나 PENDING/FAILED인 경우,
-  오프라인·다운로드·검증 실패 시 fallback과 `done`·`remind`에 사용한다.
+  RoutinePlayer의 `intro`는 루틴별 원격 TTS를, `done`·`remind`는 선택 음성별
+  공통 원격 TTS를 우선 재생한다.
+- 서버 공통 `done`·`remind`가 PENDING/FAILED이거나 캐시·재생에 실패하면
+  로그인 세션은 무음으로 진행한다. 다른 번들 목소리로 fallback하지 않는다.
+- 네 종류의 번들 MP3는 로그인하지 않은 로컬 루틴의 `intro`·`done`·`remind`와
+  루틴별 원격 TTS가 없는 로컬 fallback에만 사용한다.
 - 재생 시 원격 URL을 직접 스트리밍하거나 네트워크 완료를 기다리지 않는다.
+- 타이머 진행 중간의 `remind`는 재생하지 않는다. 마지막 5초 system countdown과
+  자동 다음 단계 전환은 유지한다.
 - 원격·번들 매핑이 모두 없는 cue는 무음으로 정상 진행한다.
 - 로컬 TTS fallback, 키보드 입력, 별도 확인 버튼은 추가하지 않는다.
 - STT 침묵 자동 종료 기준은 3초다.
@@ -61,8 +66,8 @@ Light 고정, README와 이 문서의 핵심 계약을 CI에서 검사한다.
 → 앱 종료/재실행 → 데이터와 예약 유지
 → locked/killed 상태의 실제 AlarmKit → RoutinePlayer 직접 진입
 → fallback 알림 → AlarmRing → 시작 또는 다시 알림
-→ 캐시된 원격 TTS intro 또는 번들 MP3 fallback
-→ STT → done 번들 MP3 → 다음 step
+→ 캐시된 원격 TTS intro 또는 로컬 번들 MP3 fallback
+→ STT → 캐시된 선택 음성 done 또는 로그인 상태에 맞는 fail-open → 다음 step
 → RoutineRun 저장 → Home/History 반영
 → 추천/직접 루틴 추가
 → 모든 루틴 삭제 후 Main empty state 유지

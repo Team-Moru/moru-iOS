@@ -277,10 +277,17 @@ final class AppBootstrapper: ObservableObject {
           transport: transport,
           contract: .productionP0,
           sessionIdentityProvider: accountSessionStore,
-          geminiDataConsent: geminiDataConsentStore
+          geminiDataConsent: geminiDataConsentStore,
+          onOnboardingCompletionCommitted: { identity in
+            // The remote set-to-true already committed. A local Keychain
+            // failure cannot safely resurrect the Outbox row, so retain the
+            // server result and let the next status refresh repair the hint.
+            _ = try? accountSessionStore.markOnboardingCompleted(for: identity)
+          }
         )
         let loginBackfiller = RoutineSyncLoginBackfiller(
           routineRepository: dependencies.routineRepository,
+          localProfileRepository: dependencies.localProfileRepository,
           syncRepository: routineSyncRepository
         )
         routineSyncRuntimeCoordinator = RoutineSyncRuntimeCoordinator(

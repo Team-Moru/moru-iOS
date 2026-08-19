@@ -50,6 +50,28 @@ final class OnboardingStatusRuntimeCoordinatorTests: XCTestCase {
     )
   }
 
+  func testCommittedOnboardingMutationUpdatesCurrentResolutionWithoutRefetch()
+    async throws {
+    let fixture = makeFixture(outcomes: [.status(false)])
+    fixture.coordinator.start()
+    try fixture.establishSession(memberID: 11, completed: false)
+    try await waitUntil { fixture.coordinator.latestResolution != nil }
+    let identity = try XCTUnwrap(
+      fixture.accountSessionStore.currentAccountSessionIdentity
+    )
+
+    XCTAssertTrue(
+      try fixture.accountSessionStore.markOnboardingCompleted(for: identity)
+    )
+    try await waitUntil {
+      fixture.coordinator.latestResolution?.source == .completionMutation
+    }
+
+    XCTAssertEqual(fixture.coordinator.latestResolution?.resolvedCompleted, true)
+    let requestCount = await fixture.service.requestCount
+    XCTAssertEqual(requestCount, 1)
+  }
+
   func testStoredCredentialRestoreFetchesAfterSignedInPublication() async throws {
     let credentials = makeCredentials(memberID: 12, completed: true)
     let fixture = makeFixture(

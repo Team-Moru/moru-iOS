@@ -225,6 +225,8 @@ struct AppRouter: View {
       routineSyncRuntimeCoordinator?.setSceneActive(scenePhase == .active)
       dependencies.routineTTSWarmupCoordinator?
         .setSceneActive(scenePhase == .active)
+      dependencies.serverVoiceCommonAudioProvider?
+        .setSceneActive(scenePhase == .active)
       if coordinator.beginInitialSessionLoadIfNeeded(),
          sessionStore.phase == .loading {
         sessionStore.load()
@@ -235,6 +237,8 @@ struct AppRouter: View {
     .onChange(of: scenePhase) { _, newPhase in
       routineSyncRuntimeCoordinator?.setSceneActive(newPhase == .active)
       dependencies.routineTTSWarmupCoordinator?
+        .setSceneActive(newPhase == .active)
+      dependencies.serverVoiceCommonAudioProvider?
         .setSceneActive(newPhase == .active)
       guard newPhase == .active else {
         return
@@ -255,6 +259,7 @@ struct AppRouter: View {
       }
       routineSyncRuntimeCoordinator?.accountSessionDidChange()
       dependencies.routineTTSWarmupCoordinator?.accountSessionDidChange()
+      dependencies.serverVoiceCommonAudioProvider?.accountSessionDidChange()
     }
     .onChange(of: geminiDataConsentStore.status) { _, _ in
       routineSyncRuntimeCoordinator?.geminiDataConsentDidChange()
@@ -534,6 +539,11 @@ struct AppRouter: View {
           .serverVoiceSelectionDidChange(
             memberID: selection.memberID,
             selectionVersion: selection.selectionVersion
+          )
+        dependencies.serverVoiceCommonAudioProvider?
+          .serverVoiceSelectionDidChange(
+            memberID: selection.memberID,
+            selectedTTSID: selection.ttsID
           )
       }
     )

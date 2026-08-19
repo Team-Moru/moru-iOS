@@ -182,6 +182,33 @@ final class RoutineTTSAudioStorageTests: XCTestCase {
     XCTAssertNil(expiredHit)
   }
 
+  func testVersionedCommonCueDoesNotExpireAndSeparatesVoiceVersion() async throws {
+    let directory = try makeTemporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let clock = TestDateClock(Date(timeIntervalSince1970: 1_000))
+    let cache = try RoutineTTSAudioCache(
+      rootDirectory: directory,
+      policy: RoutineTTSAudioCachePolicy(
+        maximumFileBytes: 32,
+        maximumAccountBytes: 64,
+        maximumTotalBytes: 128,
+        freshTimeToLive: 10,
+        maximumStaleAge: 20
+      ),
+      now: { clock.now }
+    )
+    let source = directory.appendingPathComponent("done.mp3")
+    try Data("audio".utf8).write(to: source)
+    let firstVersion = makeCommonKey(version: 1)
+    let stored = try await cache.storeDownloadedFile(at: source, for: firstVersion)
+
+    clock.now = Date(timeIntervalSince1970: 1_000_000)
+    let retained = await cache.cachedFileURL(for: firstVersion)
+    let differentVersion = await cache.cachedFileURL(for: makeCommonKey(version: 2))
+    XCTAssertEqual(retained, stored)
+    XCTAssertNil(differentVersion)
+  }
+
   func testCacheCoalescesSameKeyLoader() async throws {
     let directory = try makeTemporaryDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -430,6 +457,18 @@ final class RoutineTTSAudioStorageTests: XCTestCase {
       routineID: 2,
       stepID: 3,
       remoteURL: URL(string: url)!
+    )
+  }
+
+  private func makeCommonKey(version: Int64) -> RoutineTTSAudioCacheKey {
+    RoutineTTSAudioCacheKey(
+      accountID: "account-a",
+      namespace: "server-voice-common-cues",
+      ttsID: 1,
+      voiceCode: "Aoede",
+      commonAudioVersion: version,
+      kind: .commonDone,
+      remoteURL: URL(string: "https://bucket.amazonaws.com/done.mp3?signature=secret")!
     )
   }
 

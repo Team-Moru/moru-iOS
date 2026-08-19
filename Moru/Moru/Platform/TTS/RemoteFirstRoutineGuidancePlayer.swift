@@ -73,6 +73,7 @@ final class RemoteFirstRoutineGuidancePlayer:
   private let bundledPlayer: any RoutineGuidancePlaying
   private let remotePlayer: any RoutineLocalAudioSequencePlaying
   private let localAudioProvider: any RoutineTTSLocalAudioProviding
+  private let commonAudioProvider: (any RoutineTTSCommonAudioProviding)?
   private let diagnostics = RoutineTTSDiagnostics()
   private var accountSessionGeneration: UInt = 0
   private var playbackGeneration: UInt = 0
@@ -80,11 +81,13 @@ final class RemoteFirstRoutineGuidancePlayer:
   init(
     bundledPlayer: any RoutineGuidancePlaying,
     remotePlayer: any RoutineLocalAudioSequencePlaying,
-    localAudioProvider: any RoutineTTSLocalAudioProviding
+    localAudioProvider: any RoutineTTSLocalAudioProviding,
+    commonAudioProvider: (any RoutineTTSCommonAudioProviding)? = nil
   ) {
     self.bundledPlayer = bundledPlayer
     self.remotePlayer = remotePlayer
     self.localAudioProvider = localAudioProvider
+    self.commonAudioProvider = commonAudioProvider
   }
 
   /// The legacy seam is intentionally bundle-only. Voice preview uses it and
@@ -107,6 +110,13 @@ final class RemoteFirstRoutineGuidancePlayer:
     playbackGeneration &+= 1
     let requestedPlaybackGeneration = playbackGeneration
     let requestedSessionGeneration = accountSessionGeneration
+    if request.kind == .done || request.kind == .remind {
+      return await playCommonCue(
+        request,
+        expectedPlaybackGeneration: requestedPlaybackGeneration,
+        expectedSessionGeneration: requestedSessionGeneration
+      )
+    }
     guard request.kind == .intro,
           let groupID = request.routineGroupLocalID,
           let routineID = request.routineLocalID,
@@ -212,6 +222,55 @@ final class RemoteFirstRoutineGuidancePlayer:
       voiceCode: request.voiceCode,
       kind: request.kind
     )
+  }
+
+  private func playCommonCue(
+    _ request: RoutineGuidanceCueRequest,
+    expectedPlaybackGeneration: UInt,
+    expectedSessionGeneration: UInt
+  ) async -> GuidancePlaybackResult {
+    guard let commonAudioProvider else {
+      return await playBundledFallback(
+        request,
+        expectedPlaybackGeneration: expectedPlaybackGeneration
+      )
+    }
+
+    let availability = await commonAudioProvider.localCommonAudio(for: request.kind)
+    guard !Task.isCancelled,
+          expectedPlaybackGeneration == playbackGeneration,
+          expectedSessionGeneration == accountSessionGeneration else {
+      return .cancelled
+    }
+    switch availability {
+    case .useBundledFallback:
+      return await playBundledFallback(
+        request,
+        expectedPlaybackGeneration: expectedPlaybackGeneration
+      )
+    case .unavailableForServerVoice:
+      // Fixed server cues are optional and must never block completion-screen
+      // progression or speech-input restart. Using a bundle here would play a
+      // different voice than the selected server voice.
+      return .completed
+    case .localFile(let url):
+      bundledPlayer.stop()
+      let remoteResult = await remotePlayer.playLocalAudioSequence([url])
+      guard expectedPlaybackGeneration == playbackGeneration,
+            expectedSessionGeneration == accountSessionGeneration else {
+        return .cancelled
+      }
+      switch remoteResult {
+      case .completed:
+        return .completed
+      case .cancelled:
+        return .cancelled
+      case .failedToStart:
+        // The file was already validated before it entered the cache. A late
+        // playback failure is still fail-open for a server-voice common cue.
+        return .completed
+      }
+    }
   }
 
 

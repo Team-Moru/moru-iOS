@@ -68,7 +68,7 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertFalse(state.isPlaying)
   }
 
-  func testGuidanceCoordinatorPlaysIntroHalfwayReminderAndDoneOnce() async {
+  func testGuidanceCoordinatorPlaysIntroAndDoneWithoutTimerReminder() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
     let delay = ImmediateGuidanceDelay()
@@ -89,9 +89,9 @@ final class BundledRoutineAudioTests: XCTestCase {
     coordinator.stepDidStart(step)
     await drainTasks()
 
-    XCTAssertEqual(delay.delays, [.seconds(30)])
+    XCTAssertEqual(delay.delays, [])
     XCTAssertEqual(player.cues.filter { $0.kind == .intro }.count, 1)
-    XCTAssertEqual(player.cues.filter { $0.kind == .remind }.count, 1)
+    XCTAssertEqual(player.cues.filter { $0.kind == .remind }.count, 0)
     XCTAssertTrue(
       player.cues.allSatisfy {
         $0.itemID == "ENERGY-02"
