@@ -79,6 +79,8 @@ nonisolated enum RoutineSyncOperation: String, CaseIterable, Sendable {
   case deleteRoutineGroup
   case deleteRoutine
   case saveRoutineExecution
+  /// Account-level set-to-true request, dependent on a server-bound group.
+  case completeOnboarding
 
   var deliveryPolicy: RoutineSyncDeliveryPolicy {
     switch self {
@@ -88,6 +90,8 @@ nonisolated enum RoutineSyncOperation: String, CaseIterable, Sendable {
       .requiresAbsentIsSuccessContract
     case .createRoutineGroup, .addRoutine, .saveRoutineExecution:
       .requiresIdempotencyOrReconciliation
+    case .completeOnboarding:
+      .requiresOnboardingCompletionContract
     }
   }
 
@@ -95,7 +99,7 @@ nonisolated enum RoutineSyncOperation: String, CaseIterable, Sendable {
     switch self {
     case .createRoutineGroup, .deleteRoutineGroup:
       entityKind == .routineGroup
-    case .setRoutineGroupActive:
+    case .setRoutineGroupActive, .completeOnboarding:
       // Legacy raw rows used routineGroup. New typed commands use account so
       // each signed-in account coalesces to exactly one desired selection.
       entityKind == .account || entityKind == .routineGroup
@@ -114,6 +118,8 @@ nonisolated enum RoutineSyncDeliveryPolicy: String, Sendable {
   case requiresAbsentIsSuccessContract
   /// POST cannot be replayed safely without server support or reconciliation.
   case requiresIdempotencyOrReconciliation
+  /// `POST /onboarding/complete` is a replay-safe server-side set-to-true.
+  case requiresOnboardingCompletionContract
 }
 
 /// Server features that must be verified together before any routine Outbox
@@ -134,6 +140,7 @@ nonisolated struct RoutineSyncServerCapabilities: OptionSet, Equatable, Sendable
   static let executionUpsert = Self(rawValue: 1 << 5)
   static let replaySafeDelete = Self(rawValue: 1 << 6)
   static let atomicSingleActive = Self(rawValue: 1 << 7)
+  static let onboardingCompletion = Self(rawValue: 1 << 8)
 
   static let allRequired: Self = [
     .idempotencyKey,
@@ -144,6 +151,7 @@ nonisolated struct RoutineSyncServerCapabilities: OptionSet, Equatable, Sendable
     .executionUpsert,
     .replaySafeDelete,
     .atomicSingleActive,
+    .onboardingCompletion,
   ]
 
   /// Capabilities verified on the production deployment used by P0 routine
@@ -153,6 +161,7 @@ nonisolated struct RoutineSyncServerCapabilities: OptionSet, Equatable, Sendable
     .requiredResponseIDs,
     .clientEntityID,
     .replaySafeDelete,
+    .onboardingCompletion,
   ]
 }
 
@@ -190,6 +199,8 @@ nonisolated struct RoutineSyncServerContract: Equatable, Sendable {
       required = [.idempotencyKey, .requiredResponseIDs]
     case .setRoutineGroupActive:
       required = [.idempotencyKey, .atomicSingleActive]
+    case .completeOnboarding:
+      required = [.onboardingCompletion]
     }
     return capabilities.intersection(required) == required
   }
@@ -223,6 +234,9 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
   case deleteRoutineGroup(groupLocalID: UUID)
   case deleteRoutine(groupLocalID: UUID?, routineLocalID: UUID)
   case saveRoutineExecution(RoutineSyncExecutionSnapshot)
+  /// Persists a local group ID. Its remote ID is resolved only immediately
+  /// before the first wire request, after create-group settlement.
+  case completeOnboarding(groupLocalID: UUID)
 
   var operation: RoutineSyncOperation {
     switch self {
@@ -232,6 +246,7 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
     case .deleteRoutineGroup: .deleteRoutineGroup
     case .deleteRoutine: .deleteRoutine
     case .saveRoutineExecution: .saveRoutineExecution
+    case .completeOnboarding: .completeOnboarding
     }
   }
 
@@ -241,6 +256,7 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
     case .addRoutine, .deleteRoutine: .routine
     case .selectActiveRoutineGroup: .account
     case .saveRoutineExecution: .routineExecution
+    case .completeOnboarding: .account
     }
   }
 
@@ -253,10 +269,14 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
     case .deleteRoutineGroup(let groupLocalID): groupLocalID
     case .deleteRoutine(_, let routineLocalID): routineLocalID
     case .saveRoutineExecution(let execution): execution.localID
+    case .completeOnboarding: RoutineSyncCommand.accountOnboardingCompletionID
     }
   }
 
   static let accountSelectionID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+  static let accountOnboardingCompletionID = UUID(
+    uuidString: "00000000-0000-0000-0000-000000000002"
+  )!
 }
 
 nonisolated struct RoutineSyncGroupSnapshot: Codable, Equatable, Sendable {

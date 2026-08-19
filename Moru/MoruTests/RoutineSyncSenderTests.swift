@@ -530,6 +530,46 @@ final class RoutineSyncSenderTests: XCTestCase {
   }
 
   @MainActor
+  func testOnboardingCompletionSettlesAndUpdatesOnlyCapturedSession() async throws {
+    let fixture = try makeFixture(actions: [.committed(.onboardingCompleted)])
+    let groupID = UUID()
+    _ = try fixture.repository.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: groupID,
+      at: .distantPast
+    )
+    let mutation = try fixture.repository.enqueue(
+      command: .completeOnboarding(groupLocalID: groupID),
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 1)
+    )
+    let identity = AccountSessionIdentity(memberID: 7, sessionID: UUID())
+    let provider = MutableSessionIdentityProvider(identity: identity)
+    var committedIdentities: [AccountSessionIdentity] = []
+    let sender = RoutineSyncSender(
+      repository: fixture.repository,
+      requestPreparer: fixture.preparer,
+      transport: fixture.transport,
+      contract: .productionP0,
+      sessionIdentityProvider: provider,
+      geminiDataConsent: GeminiDataConsentStub(),
+      onOnboardingCompletionCommitted: { committedIdentities.append($0) }
+    )
+
+    let result = try await sender.sendNext(
+      memberID: 7,
+      at: Date(timeIntervalSince1970: 2)
+    )
+
+    XCTAssertEqual(result, .completed(mutationID: mutation.id))
+    XCTAssertEqual(committedIdentities, [identity])
+    XCTAssertTrue(try fixture.repository.mutations(memberID: 7).isEmpty)
+  }
+
+  @MainActor
   private func makeFixture(
     body: Data = Data(#"{"clientEntityId":"fixture"}"#.utf8),
     actions: [RoutineSyncTransportOutcome]

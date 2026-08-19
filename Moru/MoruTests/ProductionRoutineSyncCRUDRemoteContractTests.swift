@@ -227,6 +227,58 @@ final class ProductionRoutineSyncCRUDRemoteContractTests: XCTestCase {
     XCTAssertTrue(deleteRoutine.body.isEmpty)
   }
 
+  func testOnboardingCompletionUsesBoundGroupAndRequiresTrueResponse()
+    throws {
+    let fixture = try makeFixture()
+    let groupID = UUID()
+    _ = try fixture.repository.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: groupID,
+      at: .distantPast
+    )
+    let command = RoutineSyncCommand.completeOnboarding(groupLocalID: groupID)
+
+    let wire = try prepare(command, fixture: fixture)
+    XCTAssertEqual(wire.method, .post)
+    XCTAssertEqual(wire.path, "/onboarding/complete")
+    XCTAssertEqual(wire.body, Data(#"{"routineGroupId":41}"#.utf8))
+
+    let request = try transportRequest(command, fixture: fixture)
+    let decoder = ProductionRoutineSyncResponseDecoder()
+    XCTAssertEqual(
+      try decoder.decodeCommit(
+        for: request,
+        from: successEnvelope(
+          code: "COMMON200",
+          result: #"{"onboardingCompleted":true}"#
+        )
+      ),
+      .onboardingCompleted
+    )
+    for result in [#"{"onboardingCompleted":false}"#, #"{}"#] {
+      assertDecodeError(.invalidResponse) {
+        try decoder.decodeCommit(
+          for: request,
+          from: self.successEnvelope(code: "COMMON200", result: result)
+        )
+      }
+    }
+  }
+
+  func testOnboardingCompletionPreparationRequiresABoundGroup() throws {
+    let fixture = try makeFixture()
+
+    assertPrepareError(.missingServerBinding) {
+      try self.prepare(
+        .completeOnboarding(groupLocalID: UUID()),
+        fixture: fixture
+      )
+    }
+  }
+
   func testCreateResponseProducesCompleteUniqueParentedAssignments()
     throws {
     let fixture = try makeFixture()

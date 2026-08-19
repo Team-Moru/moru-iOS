@@ -678,7 +678,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
           return
         }
       case .setRoutineGroupActive, .deleteRoutineGroup, .deleteRoutine,
-           .saveRoutineExecution:
+           .saveRoutineExecution, .completeOnboarding:
         break
       }
       try clearAttempt(persisted)
@@ -1197,6 +1197,10 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
           }
         case .saveRoutineExecution(let execution) where execution.groupLocalID == groupLocalID:
           return false
+        case .completeOnboarding(let candidateGroupID) where candidateGroupID == groupLocalID:
+          // The completion request needs this group's remote binding, so it
+          // must settle before a queued deletion can remove the group.
+          return false
         case .selectActiveRoutineGroup:
           // An unsupported account-selection intent must not permanently
           // deadlock production CRUD. If a future verified contract supports
@@ -1240,6 +1244,17 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       ) else { return false }
       return routineBinding.parentEntityKind == .routineGroup
         && routineBinding.parentLocalEntityID == execution.groupLocalID
+
+    case .completeOnboarding(let groupLocalID):
+      guard !hasCreate(groupLocalID),
+            try binding(
+              memberID: memberID,
+              entityKind: .routineGroup,
+              localEntityID: groupLocalID
+            ) != nil else {
+        return false
+      }
+      return true
     }
   }
 
@@ -1275,6 +1290,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         related = candidateGroupID == groupLocalID
       case .saveRoutineExecution(let execution):
         related = execution.groupLocalID == groupLocalID
+      case .completeOnboarding(let candidateGroupID):
+        related = candidateGroupID == groupLocalID
       }
       guard related else { continue }
       let state = try makeMutation(mutation).state
@@ -1301,7 +1318,10 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         related = candidateRoutineID == routineLocalID
       case .saveRoutineExecution(let execution):
         related = execution.routineLocalID == routineLocalID
-      case .createRoutineGroup, .selectActiveRoutineGroup, .deleteRoutineGroup:
+      case .createRoutineGroup,
+           .selectActiveRoutineGroup,
+           .deleteRoutineGroup,
+           .completeOnboarding:
         related = false
       }
       guard related else { continue }
@@ -1818,7 +1838,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
     switch operation.deliveryPolicy {
     case .requiresActiveSelectionContract,
          .requiresAbsentIsSuccessContract,
-         .requiresIdempotencyOrReconciliation:
+         .requiresIdempotencyOrReconciliation,
+         .requiresOnboardingCompletionContract:
       .waitingForServerContract
     }
   }

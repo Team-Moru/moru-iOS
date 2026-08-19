@@ -406,6 +406,49 @@ final class AccountSessionFoundationTests: XCTestCase {
     )
   }
 
+  func testOnboardingCompletionUpdatesOnlyTheCapturedSessionHint() throws {
+    let credentials = AccountCredentials(
+      memberID: 7,
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      onboardingCompleted: false,
+      provider: .google
+    )
+    let credentialStore = MutableSessionCredentialStore(credentials: credentials)
+    let tokenProvider = MemoryAccessTokenProvider()
+    let sessionStore = AccountSessionStore(
+      credentialStore: credentialStore,
+      accessTokenProvider: tokenProvider
+    )
+    try sessionStore.establishSession(credentials: credentials)
+    let capturedIdentity = try XCTUnwrap(
+      sessionStore.currentAccountSessionIdentity
+    )
+    let originalAuthorization = try XCTUnwrap(
+      tokenProvider.authorizationContext(forMemberID: credentials.memberID)
+    )
+
+    XCTAssertTrue(try sessionStore.markOnboardingCompleted(for: capturedIdentity))
+    XCTAssertEqual(credentialStore.credentials?.onboardingCompleted, true)
+    XCTAssertEqual(sessionStore.currentAccountSessionIdentity, capturedIdentity)
+    XCTAssertEqual(
+      tokenProvider.authorizationContext(forMemberID: credentials.memberID),
+      originalAuthorization
+    )
+
+    try sessionStore.establishSession(
+      credentials: AccountCredentials(
+        memberID: 7,
+        accessToken: "replacement-access",
+        refreshToken: "replacement-refresh",
+        onboardingCompleted: false,
+        provider: .google
+      )
+    )
+    XCTAssertFalse(try sessionStore.markOnboardingCompleted(for: capturedIdentity))
+    XCTAssertEqual(credentialStore.credentials?.onboardingCompleted, false)
+  }
+
   func testMemberScopedLiveRemovalNeverDeletesReplacementAccountAndClearsCapturedInMemoryAccount() throws {
     let captured = makeCredentials()
     let replacement = AccountCredentials(

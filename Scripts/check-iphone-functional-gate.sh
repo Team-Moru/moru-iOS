@@ -61,8 +61,8 @@ if ".preferredColorScheme(.light)" not in app:
 required_readme_contracts = [
     "iOS 26+ iPhone 세로 화면, 한국어, Light UI",
     "AlarmRing",
-    "원격 TTS를 우선 재생",
-    "번들 MP3는 오프라인",
+    "공통 원격 TTS를",
+    "번들 MP3를 fallback",
     "3초 침묵",
     "iPad, 가로 화면,",
     "Dark 디자인은 후속 범위",
@@ -74,8 +74,8 @@ if missing_readme:
 required_gate_contracts = [
     "정상 AlarmKit",
     "UserNotifications fallback",
-    "원격 TTS를 우선 재생",
-    "번들 MP3는 원격 TTS가 없거나",
+    "공통 원격 TTS를",
+    "서버 공통 `done`·`remind`",
     "STT 침묵 자동 종료 기준은 3초",
     "실제 iPhone에서",
     "통과로 기록하지 않",

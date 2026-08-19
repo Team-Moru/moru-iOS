@@ -173,6 +173,45 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertTrue(remote.sequences.isEmpty)
   }
 
+  func testServerVoiceCommonCuePlaysCachedFileInsteadOfBundledVoice() async {
+    let commonFile = URL(fileURLWithPath: "/tmp/server-done.mp3")
+    let bundled = GuidancePlayerRecorder()
+    let remote = LocalSequencePlayerRecorder(result: .completed)
+    let player = RemoteFirstRoutineGuidancePlayer(
+      bundledPlayer: bundled,
+      remotePlayer: remote,
+      localAudioProvider: LocalAudioProviderStub(urls: nil),
+      commonAudioProvider: CommonAudioProviderStub(
+        availability: [.done: .localFile(commonFile)]
+      )
+    )
+
+    let result = await player.play(remoteRequest(kind: .done))
+
+    XCTAssertEqual(result, .completed)
+    XCTAssertEqual(remote.sequences, [[commonFile]])
+    XCTAssertTrue(bundled.calls.isEmpty)
+  }
+
+  func testUnavailableServerVoiceCommonCueCompletesSilently() async {
+    let bundled = GuidancePlayerRecorder()
+    let remote = LocalSequencePlayerRecorder(result: .completed)
+    let player = RemoteFirstRoutineGuidancePlayer(
+      bundledPlayer: bundled,
+      remotePlayer: remote,
+      localAudioProvider: LocalAudioProviderStub(urls: nil),
+      commonAudioProvider: CommonAudioProviderStub(
+        availability: [.remind: .unavailableForServerVoice]
+      )
+    )
+
+    let result = await player.play(remoteRequest(kind: .remind))
+
+    XCTAssertEqual(result, .completed)
+    XCTAssertTrue(remote.sequences.isEmpty)
+    XCTAssertTrue(bundled.calls.isEmpty)
+  }
+
   func testCustomServerCueCacheMissIsUnavailableWithoutBundleFallback() async {
     let bundled = GuidancePlayerRecorder()
     let player = RemoteFirstRoutineGuidancePlayer(
@@ -1473,6 +1512,21 @@ private final class LocalAudioProviderStub: RoutineTTSLocalAudioProviding {
   let urls: [URL]?
   init(urls: [URL]?) { self.urls = urls }
   func localAudioURLs(for request: RoutineTTSLocalAudioRequest) async -> [URL]? { urls }
+}
+
+@MainActor
+private final class CommonAudioProviderStub: RoutineTTSCommonAudioProviding {
+  let availability: [RoutineAudioCueKind: RoutineTTSCommonAudioAvailability]
+
+  init(availability: [RoutineAudioCueKind: RoutineTTSCommonAudioAvailability]) {
+    self.availability = availability
+  }
+
+  func localCommonAudio(
+    for kind: RoutineAudioCueKind
+  ) async -> RoutineTTSCommonAudioAvailability {
+    availability[kind] ?? .useBundledFallback
+  }
 }
 
 @MainActor

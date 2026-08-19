@@ -7,11 +7,25 @@ import CryptoKit
 import Foundation
 
 nonisolated struct RoutineTTSAudioCacheKey: Hashable, Sendable {
+  nonisolated enum AssetKind: String, Hashable, Sendable {
+    case routineIntro
+    case commonDone
+    case commonRemind
+
+    var isVersionedCommonCue: Bool {
+      self == .commonDone || self == .commonRemind
+    }
+  }
+
   let accountID: String
   let namespace: String
+  let assetKind: AssetKind
   let routineGroupID: Int64
   let routineID: Int64
   let stepID: Int64
+  let ttsID: Int64?
+  let voiceCode: String?
+  let commonAudioVersion: Int64?
   let remoteURL: URL
 
   init(
@@ -24,9 +38,35 @@ nonisolated struct RoutineTTSAudioCacheKey: Hashable, Sendable {
   ) {
     self.accountID = accountID
     self.namespace = namespace
+    self.assetKind = .routineIntro
     self.routineGroupID = routineGroupID
     self.routineID = routineID
     self.stepID = stepID
+    self.ttsID = nil
+    self.voiceCode = nil
+    self.commonAudioVersion = nil
+    self.remoteURL = remoteURL
+  }
+
+  init(
+    accountID: String,
+    namespace: String,
+    ttsID: Int64,
+    voiceCode: String,
+    commonAudioVersion: Int64?,
+    kind: AssetKind,
+    remoteURL: URL
+  ) {
+    precondition(kind.isVersionedCommonCue)
+    self.accountID = accountID
+    self.namespace = namespace
+    self.assetKind = kind
+    self.routineGroupID = 0
+    self.routineID = 0
+    self.stepID = 0
+    self.ttsID = ttsID
+    self.voiceCode = voiceCode
+    self.commonAudioVersion = commonAudioVersion
     self.remoteURL = remoteURL
   }
 }
@@ -115,13 +155,15 @@ actor RoutineTTSAudioCache {
           let entry = validatedEntry(identity: identity, at: now()) else {
       return nil
     }
-    let age = max(0, now().timeIntervalSince(entry.metadata.createdAt))
-    if age > policy.maximumStaleAge {
-      removeEntry(identity: identity)
-      return nil
-    }
-    guard allowStale || age <= policy.freshTimeToLive else {
-      return nil
+    if !key.assetKind.isVersionedCommonCue {
+      let age = max(0, now().timeIntervalSince(entry.metadata.createdAt))
+      if age > policy.maximumStaleAge {
+        removeEntry(identity: identity)
+        return nil
+      }
+      guard allowStale || age <= policy.freshTimeToLive else {
+        return nil
+      }
     }
     var touched = entry.metadata
     touched.lastAccessedAt = now()
@@ -329,23 +371,53 @@ actor RoutineTTSAudioCache {
   private func identity(for key: RoutineTTSAudioCacheKey) throws -> Identity {
     guard !key.accountID.isEmpty,
           !key.namespace.isEmpty,
-          key.routineGroupID > 0,
-          key.routineID > 0,
-          key.stepID > 0,
           let normalizedURL = Self.normalizedOriginAndPath(key.remoteURL) else {
       throw RoutineTTSAudioCacheError.invalidKey
     }
+    switch key.assetKind {
+    case .routineIntro:
+      guard key.routineGroupID > 0,
+            key.routineID > 0,
+            key.stepID > 0 else {
+        throw RoutineTTSAudioCacheError.invalidKey
+      }
+    case .commonDone, .commonRemind:
+      guard let ttsID = key.ttsID,
+            ttsID > 0,
+            let voiceCode = key.voiceCode,
+            !voiceCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            key.commonAudioVersion == nil || key.commonAudioVersion! >= 0 else {
+        throw RoutineTTSAudioCacheError.invalidKey
+      }
+    }
     let accountDigest = Self.accountDigest(accountID: key.accountID)
-    let digest = Self.digest(
-      components: [
-        key.accountID,
-        key.namespace,
-        String(key.routineGroupID),
-        String(key.routineID),
-        String(key.stepID),
-        normalizedURL,
-      ]
-    )
+    let digest: String
+    switch key.assetKind {
+    case .routineIntro:
+      digest = Self.digest(
+        components: [
+          key.accountID,
+          key.namespace,
+          key.assetKind.rawValue,
+          String(key.routineGroupID),
+          String(key.routineID),
+          String(key.stepID),
+          normalizedURL,
+        ]
+      )
+    case .commonDone, .commonRemind:
+      digest = Self.digest(
+        components: [
+          key.accountID,
+          key.namespace,
+          key.assetKind.rawValue,
+          String(key.ttsID!),
+          key.voiceCode!,
+          key.commonAudioVersion.map(String.init) ?? "legacy",
+          normalizedURL,
+        ]
+      )
+    }
     let accountRoot = rootDirectory.appendingPathComponent(
       accountDigest,
       isDirectory: true

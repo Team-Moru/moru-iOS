@@ -76,9 +76,39 @@ final class ProductionRoutineSyncRequestPreparer:
         memberID: mutation.memberID
       )
 
+    case .completeOnboarding(let groupLocalID):
+      return try makeOnboardingCompletionRequest(
+        groupLocalID: groupLocalID,
+        memberID: mutation.memberID
+      )
+
     case .selectActiveRoutineGroup:
       throw RoutineSyncRequestPreparingError.unsupportedOperation
     }
+  }
+
+  private func makeOnboardingCompletionRequest(
+    groupLocalID: UUID,
+    memberID: Int64
+  ) throws -> RoutineSyncWireRequest {
+    let groupBinding = try requiredBinding(
+      memberID: memberID,
+      entityKind: .routineGroup,
+      localEntityID: groupLocalID
+    )
+    guard groupBinding.parentEntityKind == nil,
+          groupBinding.parentLocalEntityID == nil else {
+      throw RoutineSyncRequestPreparingError.conflictingServerBinding
+    }
+    return RoutineSyncWireRequest(
+      method: .post,
+      path: "/onboarding/complete",
+      body: try encoded(
+        ProductionOnboardingCompletionRequestDTO(
+          routineGroupId: groupBinding.remoteID
+        )
+      )
+    )
   }
 
   private func makeExecutionRequest(
@@ -438,4 +468,8 @@ nonisolated private struct ProductionRoutineExecutionRequestDTO: Encodable {
   let aiResponse: String?
   let isCompleted: Bool
   let actualWakeTime: String?
+}
+
+nonisolated private struct ProductionOnboardingCompletionRequestDTO: Encodable {
+  let routineGroupId: Int64
 }

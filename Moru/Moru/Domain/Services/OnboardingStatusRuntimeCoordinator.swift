@@ -21,6 +21,7 @@ nonisolated enum OnboardingStatusFallbackReason: Equatable, Sendable {
 nonisolated enum OnboardingStatusResolutionSource: Equatable, Sendable {
   case statusEndpoint
   case loginFallback(OnboardingStatusFallbackReason)
+  case completionMutation
 }
 
 nonisolated enum OnboardingStatusMismatch: Equatable, Sendable {
@@ -238,6 +239,18 @@ final class OnboardingStatusRuntimeCoordinator {
     }
 
     guard activeIdentity != identity else {
+      // Outbox settlement updates Keychain/session state without changing the
+      // access-token session ID. Treat that exact success as newer than an
+      // earlier status read that still said false.
+      if account.onboardingCompleted,
+         latestResolution?.resolvedCompleted != true {
+        publish(
+          identity: identity,
+          resolvedCompleted: true,
+          source: .completionMutation,
+          loginCompleted: true
+        )
+      }
       return
     }
 
@@ -460,6 +473,8 @@ final class OnboardingStatusRuntimeCoordinator {
             loginCompleted: resolvedCompleted
           )
         )
+      case .completionMutation:
+        break
       }
     }
 

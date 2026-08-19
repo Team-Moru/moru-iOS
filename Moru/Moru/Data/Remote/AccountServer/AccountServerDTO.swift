@@ -42,6 +42,11 @@ nonisolated struct TTSVoiceResponseDTO:
   let description: String?
   let proOnly: Bool?
   let previewAudioUrl: String?
+  let doneAudioUrl: String?
+  let doneAudioStatus: String?
+  let remindAudioUrl: String?
+  let remindAudioStatus: String?
+  let selectionVersion: Int64?
 
   init(
     ttsId: Int64?,
@@ -49,7 +54,12 @@ nonisolated struct TTSVoiceResponseDTO:
     displayName: String?,
     description: String?,
     proOnly: Bool?,
-    previewAudioUrl: String? = nil
+    previewAudioUrl: String? = nil,
+    doneAudioUrl: String? = nil,
+    doneAudioStatus: String? = nil,
+    remindAudioUrl: String? = nil,
+    remindAudioStatus: String? = nil,
+    selectionVersion: Int64? = nil
   ) {
     self.ttsId = ttsId
     self.voiceCode = voiceCode
@@ -57,6 +67,11 @@ nonisolated struct TTSVoiceResponseDTO:
     self.description = description
     self.proOnly = proOnly
     self.previewAudioUrl = previewAudioUrl
+    self.doneAudioUrl = doneAudioUrl
+    self.doneAudioStatus = doneAudioStatus
+    self.remindAudioUrl = remindAudioUrl
+    self.remindAudioStatus = remindAudioStatus
+    self.selectionVersion = selectionVersion
   }
 }
 

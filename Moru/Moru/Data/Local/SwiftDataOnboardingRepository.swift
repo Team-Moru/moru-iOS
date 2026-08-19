@@ -80,6 +80,16 @@ nonisolated final class SwiftDataOnboardingRepository: OnboardingRepository {
             ),
             at: Date()
           )
+          // The stored local ID creates an explicit dependency on the group
+          // creation/binding. The sender only resolves its remote ID when the
+          // group has settled successfully.
+          try routineSyncRepository.stageEnqueue(
+            EnqueuedRoutineSyncMutation(
+              memberID: memberID,
+              command: .completeOnboarding(groupLocalID: routine.id)
+            ),
+            at: Date()
+          )
           if routine.isActive {
             try routineSyncRepository.stageEnqueue(
               EnqueuedRoutineSyncMutation(

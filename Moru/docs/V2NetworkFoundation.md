@@ -370,8 +370,10 @@ P0이 Swagger와 실서버에 배포되고 E2E로 검증되기 전에는 어떤 
 현재 Swagger의 계정 음성 목록 조회(`GET /tts`)와
 내 음성 타입 변경(`PATCH /members/me/tts`)은
 `Data/Remote/AccountServer`에 연결되어 있습니다.
-이 선택은 서버가 루틴 음성을 생성할 때 쓰며,
-기존 번들 MP3 안내 음성과 미리듣기에 연결하지 않습니다.
+이 선택은 서버가 루틴 음성을 생성할 때 쓰며, `GET /tts`는 미리듣기뿐 아니라
+음성별 고정 `doneAudioUrl`·`remindAudioUrl`, 각 생성 상태와
+`selectionVersion`도 반환합니다. 앱은 선택한 음성의 READY 공통 음원만 별도
+로컬 캐시에 내려받아 모든 루틴의 `done`·`remind`에 공유합니다.
 
 루틴별 생성 결과 조회(`GET /routine-tts/{routineGroupId}/tts`)는
 `Data/Remote/RoutineTTS`에 연결되어 있습니다. 로컬 routine group/step의
@@ -390,8 +392,10 @@ account-scoped server binding으로 응답 identity를 검증하고,
 ```
 
 실제 재생 시점에는 검증된 계정별 디스크 캐시만 사용하므로
-네트워크 성공 여부에 핵심 루틴을 의존시키지 않습니다. 원격 계약에 없는
-`done`과 `remind`는 계속 번들 MP3를 사용합니다.
+네트워크 성공 여부에 핵심 루틴을 의존시키지 않습니다. 로그인 계정의 공통
+`done`·`remind` 캐시가 없거나 재생이 실패하면 무음으로 진행해 선택 음성과
+다른 번들 음성이 섞이는 것을 막습니다. 로그인하지 않은 로컬 루틴은 기존
+번들 MP3를 사용합니다.
 
 ## 테스트 기준
 
