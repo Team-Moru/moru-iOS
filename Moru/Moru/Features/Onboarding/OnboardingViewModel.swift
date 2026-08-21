@@ -447,16 +447,23 @@ final class OnboardingViewModel: ObservableObject {
     case .experience where flowMode.supportsRecommendedRoutineStepEditing:
       step = draft.experience == .hasRoutine ? .freeform : .goals
     case .goals:
-      let coordinator: (any RoutineSuggestionCoordinating)?
       if flowMode == .onboarding {
-        coordinator = onboardingRecommendationCoordinator
-          ?? routineSuggestionCoordinator
-      } else {
-        coordinator = routineSuggestionCoordinator
+        if refreshPreview() {
+          configureRecommendedRoutineStepCandidates()
+          step = .suggestedRoutine
+        } else if let coordinator = onboardingRecommendationCoordinator
+          ?? routineSuggestionCoordinator {
+          startSuggestion(
+            using: coordinator,
+            advancingTo: .suggestedRoutine
+          )
+        }
+        return
       }
-      if let coordinator {
+
+      if let routineSuggestionCoordinator {
         startSuggestion(
-          using: coordinator,
+          using: routineSuggestionCoordinator,
           advancingTo: .suggestedRoutine
         )
       } else {
@@ -833,7 +840,9 @@ final class OnboardingViewModel: ObservableObject {
 
     var candidates = routine.steps.sorted { $0.order < $1.order }
 
-    if flowMode == .onboarding {
+    // Bundled candidates belong only to the first recommendation screen.
+    // Existing-routine analysis should show the steps returned by the AI as-is.
+    if flowMode == .onboarding, draft.experience == .hasRoutine {
       recommendedRoutineStepCandidates = candidates
       return
     }
@@ -853,7 +862,20 @@ final class OnboardingViewModel: ObservableObject {
       }
     }
 
-    recommendedRoutineStepCandidates = Array(candidates.prefix(6))
+    let visibleCandidates = Array(candidates.prefix(6))
+    recommendedRoutineStepCandidates = visibleCandidates
+
+    guard flowMode == .onboarding else {
+      return
+    }
+
+    var previewRoutine = routine
+    previewRoutine.steps = visibleCandidates.enumerated().map { index, step in
+      var orderedStep = step
+      orderedStep.order = index
+      return orderedStep
+    }
+    draft.previewRoutine = previewRoutine
   }
 
   private func shouldConfigureRecommendedRoutineStepCandidates(
