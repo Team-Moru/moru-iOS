@@ -648,7 +648,7 @@ final class OnboardingRecommendationTests: XCTestCase {
     XCTAssertEqual(local.callCount, 0)
   }
 
-  func testOnboardingRoutesExperienceChoicesToRecommendationAndFreeformAI()
+  func testOnboardingUsesBundledGoalRecommendationAndKeepsFreeformAI()
     async throws {
     let goalCoordinator = CountingOnboardingSuggestionCoordinator(
       routine: serverRoutine
@@ -666,24 +666,24 @@ final class OnboardingRecommendationTests: XCTestCase {
         ]
       )
     )
+    let localSuggestionService = OnboardingRecommendationLocalStub()
     let goalsViewModel = OnboardingViewModel(
       draft: OnboardingDraft(selectedGoalTags: ["health"]),
       step: .goals,
-      routineSuggestionService: OnboardingRecommendationLocalStub(),
+      routineSuggestionService: localSuggestionService,
       routineSuggestionCoordinator: aiCoordinator,
       onboardingRecommendationCoordinator: goalCoordinator
     )
 
     goalsViewModel.primaryButtonDidTap()
-    try await waitUntil {
-      goalsViewModel.step == .suggestedRoutine
-    }
 
-    XCTAssertEqual(goalCoordinator.callCount, 1)
+    XCTAssertEqual(goalsViewModel.step, .suggestedRoutine)
+    XCTAssertEqual(localSuggestionService.callCount, 1)
+    XCTAssertEqual(goalCoordinator.callCount, 0)
     XCTAssertEqual(aiCoordinator.callCount, 0)
     XCTAssertEqual(
       goalsViewModel.draft.previewRoutine?.name,
-      serverRoutine.name
+      "로컬 fallback"
     )
 
     let freeformViewModel = OnboardingViewModel(
@@ -705,7 +705,7 @@ final class OnboardingRecommendationTests: XCTestCase {
       freeformViewModel.step == .review
     }
 
-    XCTAssertEqual(goalCoordinator.callCount, 1)
+    XCTAssertEqual(goalCoordinator.callCount, 0)
     XCTAssertEqual(aiCoordinator.callCount, 1)
     XCTAssertEqual(
       freeformViewModel.draft.previewRoutine?.name,

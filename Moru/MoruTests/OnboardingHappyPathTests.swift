@@ -151,47 +151,44 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testOnboardingDisplaysEveryResponseStepWithoutAppendingLocalPresets()
+  func testOnboardingSelectsEveryPreviousBundledPresetCandidate()
     throws
   {
-    let responseSteps = (0..<7).map { index in
-      RoutineStep(
-        type: .confirm,
-        title: "API 루틴 \(index + 1)",
-        order: index
-      )
-    }
-    var draft = OnboardingDraft(
-      previewRoutine: Routine(name: "API 추천 루틴", steps: responseSteps)
-    )
+    var draft = OnboardingDraft()
     draft.selectedGoalTags = ["mind"]
     let viewModel = OnboardingViewModel(
       draft: draft,
-      step: .suggestedRoutine,
+      step: .goals,
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
 
+    viewModel.primaryButtonDidTap()
+
+    XCTAssertEqual(viewModel.step, .suggestedRoutine)
     let candidates = viewModel.recommendedRoutineStepCandidates
-    XCTAssertEqual(candidates.map(\.id), responseSteps.map(\.id))
-    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 7)
-    XCTAssertEqual(viewModel.previewRoutineStepCount, 7)
-    XCTAssertTrue(candidates.allSatisfy(viewModel.isRecommendedRoutineStepSelected))
+    XCTAssertEqual(
+      candidates.map(\.title),
+      [
+        "잠자리 정리하기",
+        "심호흡하며 명상하기",
+        "오늘의 다짐 말하기",
+        "창문 열고 환기하기",
+        "좋아하는 인센스 켜기",
+        "명상하기",
+      ]
+    )
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 6)
+    XCTAssertEqual(viewModel.previewRoutineStepCount, 6)
+    XCTAssertEqual(
+      candidates.filter(viewModel.isRecommendedRoutineStepSelected).count,
+      6
+    )
     XCTAssertEqual(
       viewModel.previewRoutineDurationMinutes,
       OnboardingDuration.totalMinutes(
         for: try XCTUnwrap(viewModel.validatedPreviewRoutine)
       )
     )
-
-    let selectedCandidate = try XCTUnwrap(candidates.last)
-    viewModel.toggleRecommendedRoutineStep(selectedCandidate)
-    XCTAssertFalse(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
-    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 6)
-
-    XCTAssertTrue(viewModel.canToggleRecommendedRoutineStep(selectedCandidate))
-    viewModel.toggleRecommendedRoutineStep(selectedCandidate)
-    XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
-    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 7)
   }
 
   @MainActor
