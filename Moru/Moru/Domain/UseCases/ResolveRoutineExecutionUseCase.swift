@@ -66,6 +66,12 @@ final class ResolveRoutineExecutionUseCase: ResolveRoutineExecutionUseCaseProtoc
       return .ineligible(.noExecutableSteps)
     }
 
+    if request.launch == .trial {
+      return .available(
+        OnboardingTrialRoutineStepLimit.limitedForExecution(routine)
+      )
+    }
+
     guard request.launch == .scheduled else {
       return .available(routine)
     }

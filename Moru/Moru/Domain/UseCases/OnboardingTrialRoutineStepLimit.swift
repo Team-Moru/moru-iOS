@@ -4,10 +4,9 @@
 //
 
 enum OnboardingTrialRoutineStepLimit {
-  static let minimum = 1
   static let maximum = 2
 
-  static func normalized(_ routine: Routine) -> Routine {
+  static func limitedForExecution(_ routine: Routine) -> Routine {
     var normalizedRoutine = routine
     normalizedRoutine.steps = routine.steps
       .sorted { $0.order < $1.order }
