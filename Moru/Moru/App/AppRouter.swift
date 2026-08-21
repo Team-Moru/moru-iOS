@@ -6,6 +6,7 @@
 //
 
 import Combine
+import OSLog
 import SwiftUI
 import UIKit
 
@@ -52,6 +53,11 @@ final class AppRouterState: ObservableObject {
 }
 
 struct AppRouter: View {
+  private static let alarmLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "Moru",
+    category: "AlarmRuntime"
+  )
+
   @Environment(\.scenePhase) private var scenePhase
   @ObservedObject private var sessionStore: SessionStore
   @ObservedObject private var accountSessionStore: AccountSessionStore
@@ -429,10 +435,6 @@ struct AppRouter: View {
         presentationToken: token,
         onEvent: handleRoutinePlayerEvent
       )
-    case .startingScheduledRoutine(let context, _):
-      return AnyView(
-        AlarmStartingView(routineName: context.routineName)
-      )
     case .alarmRing(let context, let token):
       return AnyView(
         AlarmRingView(
@@ -709,32 +711,37 @@ struct AppRouter: View {
       return
     }
 
-    let attempt = coordinator.presentScheduledRoutineStart(context: context)
+    let attempt = coordinator.presentScheduledRoutine(context: context)
+    stopAlarmWithoutBlockingRoutinePresentation(context)
+
     switch attempt {
     case .deferredBusy:
+      Self.alarmLogger.info("scheduled_player_deferred_busy")
       return
     case .alreadyPresented:
+      Self.alarmLogger.info("scheduled_player_already_presented")
       AlarmIngressOccurrenceStore.shared.complete(context.ingress)
-      return
-    case .presented(let presentationToken):
-      do {
-        guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
-          throw AlarmRuntimeError.routeNoLongerAvailable
-        }
+    case .presented:
+      Self.alarmLogger.info("scheduled_player_presented")
+      AlarmIngressOccurrenceStore.shared.complete(context.ingress)
+    }
+  }
 
-        try await alarmRuntimeHandler.startRoutine(from: context)
-        guard coordinator.completeScheduledRoutineStart(
-          routineID: context.ingress.routineID,
-          startingPresentationToken: presentationToken
-        ) else {
-          throw AlarmRuntimeError.routeNoLongerAvailable
-        }
+  @MainActor
+  private func stopAlarmWithoutBlockingRoutinePresentation(
+    _ context: AlarmRingContext
+  ) {
+    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+      return
+    }
+
+    Task { @MainActor in
+      do {
+        try await alarmRuntimeHandler.stopAlarm(for: context)
+        Self.alarmLogger.info("scheduled_player_alarm_stop_succeeded")
       } catch {
-        coordinator.failScheduledRoutineStart(
-          startingPresentationToken: presentationToken
-        )
+        Self.alarmLogger.error("scheduled_player_alarm_stop_failed")
       }
-      AlarmIngressOccurrenceStore.shared.complete(context.ingress)
     }
   }
 
@@ -747,7 +754,7 @@ struct AppRouter: View {
       throw AlarmRuntimeError.routeNoLongerAvailable
     }
 
-    try await alarmRuntimeHandler.startRoutine(from: context)
+    try await alarmRuntimeHandler.stopAlarm(for: context)
     guard coordinator.startScheduledRoutine(
       routineID: context.ingress.routineID,
       alarmPresentationToken: presentationToken
@@ -789,37 +796,6 @@ struct AppRouter: View {
       if coordinator.presentation == nil {
         retryDeferredOnboardingTrial()
       }
-    }
-  }
-}
-
-private struct AlarmStartingView: View {
-  let routineName: String
-
-  var body: some View {
-    ZStack {
-      LinearGradient(
-        colors: [
-          AppColor.babyBlue100,
-          AppColor.babyBlue150,
-          AppColor.babyBlue250,
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-      )
-      .ignoresSafeArea()
-
-      VStack(spacing: 16) {
-        ProgressView()
-          .tint(.white)
-          .controlSize(.large)
-
-        Text("\(routineName) 시작 중")
-          .font(AppFont.body1NormalBold)
-          .foregroundStyle(Color.white)
-      }
-      .accessibilityElement(children: .combine)
-      .accessibilityLabel("\(routineName) 루틴 시작 중")
     }
   }
 }

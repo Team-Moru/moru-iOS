@@ -40,7 +40,7 @@ protocol AlarmScheduling: AnyObject {
 @MainActor
 protocol AlarmRuntimeHandling: AnyObject {
   func resolve(_ envelope: AlarmIngressEnvelope) async -> AlarmIngressResolution
-  func startRoutine(from context: AlarmRingContext) async throws
+  func stopAlarm(for context: AlarmRingContext) async throws
   func snooze(
     context: AlarmRingContext,
     minutes: Int

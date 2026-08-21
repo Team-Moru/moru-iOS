@@ -220,6 +220,7 @@ public struct OpenMoruRoutineIntent: LiveActivityIntent {
     encodedIngress = ""
   }
 
+  @MainActor
   public func perform() async throws -> some IntentResult {
     guard let ingress = Self.makeIngress(
       encodedIngress: encodedIngress,
@@ -229,6 +230,7 @@ public struct OpenMoruRoutineIntent: LiveActivityIntent {
     }
 
     AlarmIngressOccurrenceStore.shared.savePendingEnvelope(ingress)
+    try? AlarmKitStopController.stopIfNeeded(id: ingress.alarmID)
     return .result()
   }
 

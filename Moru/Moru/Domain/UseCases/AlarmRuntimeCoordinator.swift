@@ -73,9 +73,9 @@ final class DefaultAlarmRuntimeCoordinator: AlarmRuntimeHandling {
     }
   }
 
-  func startRoutine(from context: AlarmRingContext) async throws {
+  func stopAlarm(for context: AlarmRingContext) async throws {
     try await withMutationLock {
-      try await startRoutineWithoutLock(from: context)
+      try await stopAlarmWithoutLock(for: context)
     }
   }
 
@@ -88,8 +88,8 @@ final class DefaultAlarmRuntimeCoordinator: AlarmRuntimeHandling {
     }
   }
 
-  private func startRoutineWithoutLock(
-    from context: AlarmRingContext
+  private func stopAlarmWithoutLock(
+    for context: AlarmRingContext
   ) async throws {
     let target = try requiredTarget(for: context.ingress)
 

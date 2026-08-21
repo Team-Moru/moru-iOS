@@ -7,7 +7,78 @@
 
 import AlarmKit
 import Foundation
+import OSLog
 import SwiftUI
+
+@MainActor
+enum AlarmKitStopController {
+  private static let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "Moru",
+    category: "AlarmRuntime"
+  )
+
+  static func stopIfNeeded(id: UUID) throws {
+    try stopIfNeeded(
+      currentState: {
+        try AlarmManager.shared.alarms
+          .first(where: { $0.id == id })?
+          .state
+      },
+      stop: {
+        try AlarmManager.shared.stop(id: id)
+      }
+    )
+  }
+
+  static func stopIfNeeded(
+    currentState: () throws -> Alarm.State?,
+    stop: () throws -> Void
+  ) throws {
+    do {
+      guard requiresStop(try currentState()) else {
+        logger.info("alarm_stop_already_inactive")
+        return
+      }
+    } catch {
+      logger.info("alarm_stop_state_unavailable")
+    }
+
+    do {
+      try stop()
+      logger.info("alarm_stop_succeeded")
+    } catch {
+      do {
+        if !requiresStop(try currentState()) {
+          logger.info("alarm_stop_became_inactive")
+          return
+        }
+      } catch {
+        logger.info("alarm_stop_recheck_unavailable")
+      }
+
+      let nsError = error as NSError
+      logger.error(
+        "alarm_stop_failed domain=\(nsError.domain, privacy: .public) code=\(nsError.code)"
+      )
+      throw error
+    }
+  }
+
+  private static func requiresStop(_ state: Alarm.State?) -> Bool {
+    guard let state else {
+      return false
+    }
+
+    switch state {
+    case .alerting, .countdown, .paused:
+      return true
+    case .scheduled:
+      return false
+    @unknown default:
+      return true
+    }
+  }
+}
 
 @MainActor
 final class AlarmKitSchedulingAdapter: AlarmScheduling {
@@ -51,7 +122,7 @@ final class AlarmKitSchedulingAdapter: AlarmScheduling {
   }
 
   func stop(id: UUID) async throws {
-    try AlarmManager.shared.stop(id: id)
+    try AlarmKitStopController.stopIfNeeded(id: id)
   }
 
   func cancel(identifiers: [String]) async throws {
@@ -91,22 +162,31 @@ final class AlarmKitSchedulingAdapter: AlarmScheduling {
     schedule: Alarm.Schedule,
     ingress: AlarmIngressEnvelope
   ) async throws {
-    let stopButton = AlarmButton(
-      text: "알람 끄기",
-      textColor: .white,
-      systemImageName: "stop.circle.fill"
-    )
     let openRoutineButton = AlarmButton(
       text: "루틴 시작",
       textColor: .white,
       systemImageName: "arrow.right.circle.fill"
     )
-    let presentation = AlarmPresentation.Alert(
-      title: "\(routineName) 시작할 시간이에요",
-      stopButton: stopButton,
-      secondaryButton: openRoutineButton,
-      secondaryButtonBehavior: .custom
-    )
+    let presentation: AlarmPresentation.Alert
+    if #available(iOS 26.1, *) {
+      presentation = AlarmPresentation.Alert(
+        title: "\(routineName) 시작할 시간이에요",
+        secondaryButton: openRoutineButton,
+        secondaryButtonBehavior: .custom
+      )
+    } else {
+      let stopButton = AlarmButton(
+        text: "알람 끄기",
+        textColor: .white,
+        systemImageName: "stop.circle.fill"
+      )
+      presentation = AlarmPresentation.Alert(
+        title: "\(routineName) 시작할 시간이에요",
+        stopButton: stopButton,
+        secondaryButton: openRoutineButton,
+        secondaryButtonBehavior: .custom
+      )
+    }
     let metadata = MoruAlarmMetadata(
       ingress: ingress,
       routineName: routineName
