@@ -5,6 +5,7 @@
 //  Created by Codex on 7/23/26.
 //
 
+import AlarmKit
 import Foundation
 import UserNotifications
 import XCTest
@@ -250,110 +251,84 @@ final class AlarmRuntimeTests: XCTestCase {
   }
 
   @MainActor
-  func testDirectScheduledLaunchTransitionsOnlyAfterStopCompletes() {
+  func testDirectScheduledLaunchImmediatelyPresentsScheduledPlayer() {
     let routineID = UUID()
     let context = makeContext(
       routineID: routineID,
       launchTarget: .scheduledRoutine
     )
-    let admission = AppNavigationReducer.admitPresentation(
-      .startingScheduledRoutine(context: context),
-      from: .idle
-    )
+    let coordinator = AppNavigationCoordinator()
 
-    guard case .presented(let token) = admission.attempt else {
-      XCTFail("The direct launch should reserve a noninteractive presentation.")
-      return
-    }
-    guard case .startingScheduledRoutine(
-      let startingContext,
-      let startingToken
-    ) = admission.state.visiblePresentation else {
-      XCTFail("The routine must not open before the alarm stop completes.")
-      return
-    }
-    XCTAssertEqual(startingContext, context)
-    XCTAssertEqual(startingToken, token)
-
-    let completion = AppNavigationReducer.reduce(
-      state: admission.state,
-      action: .completeScheduledRoutineStart(
-        routineID: routineID,
-        startingPresentationToken: token
-      )
-    )
-
-    guard case .regularRoutine(
-      let presentedRoutineID,
-      let source,
-      _
-    ) = completion.state.visiblePresentation else {
-      XCTFail("A successful stop should open the scheduled RoutinePlayer.")
-      return
-    }
-    XCTAssertEqual(presentedRoutineID, routineID)
-    XCTAssertEqual(source, .scheduled)
-  }
-
-  @MainActor
-  func testDirectScheduledLaunchFailureBecomesRetryableAlarmRing() {
-    let context = makeContext(
-      routineID: UUID(),
-      launchTarget: .scheduledRoutine
-    )
-    let admission = AppNavigationReducer.admitPresentation(
-      .startingScheduledRoutine(context: context),
-      from: .idle
-    )
-
-    guard case .presented(let token) = admission.attempt else {
+    guard case .presented(let token) = coordinator.presentScheduledRoutine(
+      context: context
+    ) else {
       XCTFail("The direct launch should be admitted.")
       return
     }
 
-    let failure = AppNavigationReducer.reduce(
-      state: admission.state,
-      action: .failScheduledRoutineStart(
-        startingPresentationToken: token
-      )
-    )
-
-    guard case .alarmRing(
-      let retryContext,
-      let retryToken
-    ) = failure.state.visiblePresentation else {
-      XCTFail("A failed stop should leave the manual AlarmRing retry path.")
+    guard case .regularRoutine(
+      let presentedRoutineID,
+      let source,
+      let presentationToken
+    ) = coordinator.presentation else {
+      XCTFail("AlarmKit ingress should immediately open RoutinePlayer.")
       return
     }
-    XCTAssertEqual(retryToken, token)
-    XCTAssertEqual(retryContext.ingress.launchTarget, .alarmRing)
-    XCTAssertEqual(retryContext.ingress.alarmID, context.ingress.alarmID)
+    XCTAssertEqual(presentedRoutineID, routineID)
+    XCTAssertEqual(source, .scheduled)
+    XCTAssertEqual(presentationToken, token)
   }
 
   @MainActor
-  func testDirectScheduledLaunchRejectsStaleCompletionToken() {
-    let context = makeContext(
-      routineID: UUID(),
-      launchTarget: .scheduledRoutine
-    )
-    let admission = AppNavigationReducer.admitPresentation(
-      .startingScheduledRoutine(context: context),
-      from: .idle
-    )
+  func testDirectScheduledPlayerRemainsPresentedWhenAlarmStopFails() async throws {
+    let fixture = makeFixture()
+    fixture.primary.stopError = AlarmRuntimeTestError.stop
+    let context = try await resolvedContext(fixture)
+    let coordinator = AppNavigationCoordinator()
 
-    let staleCompletion = AppNavigationReducer.reduce(
-      state: admission.state,
-      action: .completeScheduledRoutineStart(
-        routineID: context.ingress.routineID,
-        startingPresentationToken: UUID()
-      )
-    )
+    guard case .presented = coordinator.presentScheduledRoutine(context: context) else {
+      XCTFail("The direct launch should be admitted.")
+      return
+    }
 
-    XCTAssertEqual(staleCompletion.state, admission.state)
+    do {
+      try await fixture.runtime.stopAlarm(for: context)
+      XCTFail("The fake stop should fail.")
+    } catch {
+      XCTAssertEqual(error as? AlarmRuntimeError, .stopFailed)
+    }
+
+    guard case .regularRoutine(let routineID, let source, _) = coordinator.presentation else {
+      XCTFail("A stop failure must not replace RoutinePlayer.")
+      return
+    }
+    XCTAssertEqual(routineID, fixture.routine.id)
+    XCTAssertEqual(source, .scheduled)
   }
 
   @MainActor
-  func testRecurringIngressResolvesExactRoutineAndStopsBeforeStarting() async throws {
+  func testAlarmKitStopIsIdempotentForInactiveAndConcurrentStop() throws {
+    var stopCallCount = 0
+
+    try AlarmKitStopController.stopIfNeeded(
+      currentState: { nil },
+      stop: { stopCallCount += 1 }
+    )
+    XCTAssertEqual(stopCallCount, 0)
+
+    var states: [Alarm.State?] = [.alerting, nil]
+    try AlarmKitStopController.stopIfNeeded(
+      currentState: { states.removeFirst() },
+      stop: {
+        stopCallCount += 1
+        throw AlarmRuntimeTestError.stop
+      }
+    )
+    XCTAssertEqual(stopCallCount, 1)
+  }
+
+  @MainActor
+  func testRecurringIngressResolvesExactRoutineAndStopsAlarm() async throws {
     let fixture = makeFixture()
     let resolution = await fixture.runtime.resolve(fixture.envelope)
 
@@ -366,7 +341,7 @@ final class AlarmRuntimeTests: XCTestCase {
     XCTAssertEqual(context.routineName, fixture.routine.name)
     XCTAssertEqual(context.routineMinutes, 3)
 
-    try await fixture.runtime.startRoutine(from: context)
+    try await fixture.runtime.stopAlarm(for: context)
 
     XCTAssertEqual(fixture.primary.stopIDs, [fixture.scheduleID])
     XCTAssertTrue(fixture.stateRepository.snoozedAlarms.isEmpty)

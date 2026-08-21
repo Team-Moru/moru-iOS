@@ -15,14 +15,12 @@ enum AppPresentation: Identifiable, Equatable {
     source: RegularRoutineExecutionRequest.Source,
     token: UUID
   )
-  case startingScheduledRoutine(context: AlarmRingContext, token: UUID)
   case alarmRing(context: AlarmRingContext, token: UUID)
 
   var id: UUID {
     switch self {
     case .onboardingTrial(_, let token),
          .regularRoutine(_, _, let token),
-         .startingScheduledRoutine(_, let token),
          .alarmRing(_, let token):
       token
     }
@@ -36,7 +34,6 @@ enum AppPresentationRequest: Equatable {
     routineID: UUID,
     source: RegularRoutineExecutionRequest.Source
   )
-  case startingScheduledRoutine(context: AlarmRingContext)
   case alarmRing(context: AlarmRingContext)
 
   func matches(_ presentation: AppPresentation) -> Bool {
@@ -48,11 +45,6 @@ enum AppPresentationRequest: Equatable {
       .regularRoutine(activeRoutineID, _, _)
     ):
       return requestedRoutineID == activeRoutineID
-    case let (
-      .startingScheduledRoutine(requestedContext),
-      .startingScheduledRoutine(activeContext, _)
-    ):
-      return requestedContext.ingress.alarmID == activeContext.ingress.alarmID
     case let (.alarmRing(requestedContext), .alarmRing(activeContext, _)):
       return requestedContext.ingress.alarmID == activeContext.ingress.alarmID
     default:
@@ -70,8 +62,6 @@ enum AppPresentationRequest: Equatable {
         source: source,
         token: token
       )
-    case .startingScheduledRoutine(let context):
-      return .startingScheduledRoutine(context: context, token: token)
     case .alarmRing(let context):
       return .alarmRing(context: context, token: token)
     }
@@ -139,11 +129,6 @@ enum AppNavigationAction: Equatable {
     routineID: UUID,
     alarmPresentationToken: UUID
   )
-  case completeScheduledRoutineStart(
-    routineID: UUID,
-    startingPresentationToken: UUID
-  )
-  case failScheduledRoutineStart(startingPresentationToken: UUID)
   case clearPresentationForDismissal(token: UUID)
   case presentationDidDismiss(token: UUID)
 }
@@ -172,20 +157,6 @@ enum AppNavigationReducer {
       return startScheduledRoutine(
         routineID: routineID,
         alarmPresentationToken: alarmPresentationToken,
-        from: state
-      )
-    case .completeScheduledRoutineStart(
-      let routineID,
-      let startingPresentationToken
-    ):
-      return completeScheduledRoutineStart(
-        routineID: routineID,
-        startingPresentationToken: startingPresentationToken,
-        from: state
-      )
-    case .failScheduledRoutineStart(let startingPresentationToken):
-      return failScheduledRoutineStart(
-        startingPresentationToken: startingPresentationToken,
         from: state
       )
     case .clearPresentationForDismissal(let token):
@@ -242,7 +213,7 @@ enum AppNavigationReducer {
       afterDismiss = .showRunDetail(runID)
     case (.regularRoutine, _):
       afterDismiss = .none
-    case (.startingScheduledRoutine, _), (.alarmRing, _):
+    case (.alarmRing, _):
       return AppNavigationTransition(state: state, effect: .none)
     }
 
@@ -293,50 +264,6 @@ enum AppNavigationReducer {
           routineID: routineID,
           source: .scheduled,
           token: UUID()
-        )
-      ),
-      effect: .none
-    )
-  }
-
-  private static func completeScheduledRoutineStart(
-    routineID: UUID,
-    startingPresentationToken: UUID,
-    from state: AppNavigationState
-  ) -> AppNavigationTransition {
-    guard case .presented(let presentation) = state,
-          case .startingScheduledRoutine = presentation,
-          presentation.id == startingPresentationToken else {
-      return AppNavigationTransition(state: state, effect: .none)
-    }
-
-    return AppNavigationTransition(
-      state: .presented(
-        .regularRoutine(
-          routineID: routineID,
-          source: .scheduled,
-          token: UUID()
-        )
-      ),
-      effect: .none
-    )
-  }
-
-  private static func failScheduledRoutineStart(
-    startingPresentationToken: UUID,
-    from state: AppNavigationState
-  ) -> AppNavigationTransition {
-    guard case .presented(let presentation) = state,
-          case .startingScheduledRoutine(let context, _) = presentation,
-          presentation.id == startingPresentationToken else {
-      return AppNavigationTransition(state: state, effect: .none)
-    }
-
-    return AppNavigationTransition(
-      state: .presented(
-        .alarmRing(
-          context: context.routing(to: .alarmRing),
-          token: startingPresentationToken
         )
       ),
       effect: .none
@@ -418,11 +345,14 @@ final class AppNavigationCoordinator: ObservableObject {
     admitAlarmPresentation(.alarmRing(context: context), context: context)
   }
 
-  func presentScheduledRoutineStart(
+  func presentScheduledRoutine(
     context: AlarmRingContext
   ) -> PresentationAttempt {
     admitAlarmPresentation(
-      .startingScheduledRoutine(context: context),
+      .regularRoutine(
+        routineID: context.ingress.routineID,
+        source: .scheduled
+      ),
       context: context
     )
   }
@@ -473,28 +403,6 @@ final class AppNavigationCoordinator: ObservableObject {
       )
     )
     return navigationState != previousState
-  }
-
-  func completeScheduledRoutineStart(
-    routineID: UUID,
-    startingPresentationToken: UUID
-  ) -> Bool {
-    let previousState = navigationState
-    _ = apply(
-      .completeScheduledRoutineStart(
-        routineID: routineID,
-        startingPresentationToken: startingPresentationToken
-      )
-    )
-    return navigationState != previousState
-  }
-
-  func failScheduledRoutineStart(startingPresentationToken: UUID) {
-    _ = apply(
-      .failScheduledRoutineStart(
-        startingPresentationToken: startingPresentationToken
-      )
-    )
   }
 
   func handle(
