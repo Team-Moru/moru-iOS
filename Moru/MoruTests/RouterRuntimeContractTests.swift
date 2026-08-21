@@ -61,6 +61,68 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
+  func testResolverLimitsOnlyTrialExecutionToTwoSteps() {
+    let routineID = UUID()
+    let steps = (0..<4).map { index in
+      RoutineStep(
+        type: .confirm,
+        title: "루틴 \(index + 1)",
+        order: index
+      )
+    }
+    let routine = makeExecutableRoutine(id: routineID, steps: steps)
+    let repository = ResolvingRoutineRepository()
+    repository.routine = routine
+    let useCase = ResolveRoutineExecutionUseCase(routineRepository: repository)
+
+    let trialResolution = useCase.execute(
+      ResolveRoutineExecutionRequest(routineID: routineID, launch: .trial)
+    )
+    let trialRoutine: Routine
+    if case .available(let resolvedRoutine) = trialResolution {
+      trialRoutine = resolvedRoutine
+    } else {
+      XCTFail("The trial routine should be available.")
+      return
+    }
+
+    XCTAssertEqual(
+      trialRoutine.steps.map(\.id),
+      Array(steps.prefix(OnboardingTrialRoutineStepLimit.maximum)).map(\.id)
+    )
+    XCTAssertEqual(trialRoutine.steps.map(\.order), [0, 1])
+    XCTAssertEqual(
+      useCase.execute(
+        ResolveRoutineExecutionRequest(routineID: routineID, launch: .manual)
+      ),
+      .available(routine)
+    )
+    XCTAssertEqual(
+      useCase.execute(
+        ResolveRoutineExecutionRequest(routineID: routineID, launch: .scheduled)
+      ),
+      .available(routine)
+    )
+    XCTAssertEqual(repository.routine, routine)
+  }
+
+  @MainActor
+  func testResolverKeepsSingleStepTrialAvailable() {
+    let routineID = UUID()
+    let routine = makeExecutableRoutine(id: routineID)
+    let repository = ResolvingRoutineRepository()
+    repository.routine = routine
+    let useCase = ResolveRoutineExecutionUseCase(routineRepository: repository)
+
+    XCTAssertEqual(
+      useCase.execute(
+        ResolveRoutineExecutionRequest(routineID: routineID, launch: .trial)
+      ),
+      .available(routine)
+    )
+  }
+
+  @MainActor
   func testCoordinatorDistinguishesPresentedAlreadyPresentedAndDeferredBusy() {
     let coordinator = AppNavigationCoordinator()
     let routineID = UUID()

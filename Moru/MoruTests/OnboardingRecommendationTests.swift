@@ -417,22 +417,14 @@ final class OnboardingRecommendationTests: XCTestCase {
     )
     XCTAssertTrue(freeformViewModel.showsRecommendedRoutineStepEditor)
     XCTAssertEqual(
-      freeformViewModel.recommendedRoutineStepCandidates.count,
-      6
+      freeformViewModel.recommendedRoutineStepCandidates.map(\.title),
+      ["AI 단계"]
     )
     XCTAssertTrue(
-      freeformViewModel.recommendedRoutineStepCandidates.contains {
-        $0.title == "AI 단계"
-      }
+      freeformViewModel.recommendedRoutineStepCandidates.allSatisfy(
+        freeformViewModel.isRecommendedRoutineStepSelected
+      )
     )
-
-    let additionalCandidate = try XCTUnwrap(
-      freeformViewModel.recommendedRoutineStepCandidates.first {
-        !freeformViewModel.isRecommendedRoutineStepSelected($0)
-      }
-    )
-    freeformViewModel.toggleRecommendedRoutineStep(additionalCandidate)
-    XCTAssertEqual(freeformViewModel.validatedPreviewRoutine?.steps.count, 2)
   }
 
   func testRecommendedAdditionKeepsExistingAICoordinator()

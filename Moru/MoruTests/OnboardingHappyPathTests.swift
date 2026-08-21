@@ -20,18 +20,21 @@ final class OnboardingHappyPathTests: XCTestCase {
       onboardingRepository: dependencies.onboardingRepository,
       routineSuggestionService: dependencies.routineSuggestionService
     )
+    let suggestionInput = RoutineSuggestionInput(
+      experience: .wantsRecommendation,
+      goalTags: ["health"],
+      selectedKeywords: ["물 마시기", "스트레칭"],
+      freeformText: "아침에 물을 마시고 가볍게 몸을 풀고 싶어요",
+      wakeUpHour: 6,
+      wakeUpMinute: 30,
+      weekdays: [.monday, .wednesday]
+    )
+    let expectedStepCount = try dependencies.routineSuggestionService
+      .makeRoutine(from: suggestionInput).steps.count
 
     let result = try await useCase.execute(
       CompleteOnboardingRequest(
-        suggestionInput: RoutineSuggestionInput(
-          experience: .wantsRecommendation,
-          goalTags: ["health"],
-          selectedKeywords: ["물 마시기", "스트레칭"],
-          freeformText: "아침에 물을 마시고 가볍게 몸을 풀고 싶어요",
-          wakeUpHour: 6,
-          wakeUpMinute: 30,
-          weekdays: [.monday, .wednesday]
-        ),
+        suggestionInput: suggestionInput,
         selectedVoice: .aoede,
         includeWeather: false,
         includeFortune: true
@@ -53,11 +56,11 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertEqual(savedRoutine.alarmSchedule?.isEnabled, true)
     XCTAssertEqual(savedRoutine.alarmSchedule?.includeWeather, false)
     XCTAssertEqual(savedRoutine.alarmSchedule?.includeFortune, true)
+    XCTAssertEqual(savedRoutine.steps.count, expectedStepCount)
     XCTAssertEqual(
-      savedRoutine.steps.count,
-      OnboardingTrialRoutineStepLimit.maximum
+      savedRoutine.steps.map(\.order),
+      Array(savedRoutine.steps.indices)
     )
-    XCTAssertEqual(savedRoutine.steps.map(\.order), [0, 1])
     XCTAssertEqual(savedRoutine.sync?.status, .localOnly)
     XCTAssertNil(savedRoutine.sync?.remoteID)
     XCTAssertNil(savedRoutine.sync?.lastSyncedAt)
@@ -148,40 +151,31 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testOnboardingLimitsRecommendedRoutineSelectionToTwoSteps()
+  func testOnboardingDisplaysEveryResponseStepWithoutAppendingLocalPresets()
     throws
   {
+    let responseSteps = (0..<7).map { index in
+      RoutineStep(
+        type: .confirm,
+        title: "API 루틴 \(index + 1)",
+        order: index
+      )
+    }
+    var draft = OnboardingDraft(
+      previewRoutine: Routine(name: "API 추천 루틴", steps: responseSteps)
+    )
+    draft.selectedGoalTags = ["mind"]
     let viewModel = OnboardingViewModel(
+      draft: draft,
+      step: .suggestedRoutine,
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
 
-    viewModel.selectExperience(.wantsRecommendation)
-    viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .goals)
-    XCTAssertFalse(viewModel.canAdvance)
-
-    viewModel.toggleGoal(tag: "energy")
-    viewModel.toggleGoal(tag: "mind")
-    XCTAssertEqual(viewModel.draft.selectedGoalTags, ["mind"])
-    XCTAssertTrue(viewModel.canAdvance)
-
-    viewModel.primaryButtonDidTap()
-    XCTAssertEqual(viewModel.step, .suggestedRoutine)
-
     let candidates = viewModel.recommendedRoutineStepCandidates
-    XCTAssertEqual(candidates.count, 6)
-    XCTAssertTrue(
-      candidates.allSatisfy { $0.presetItemID?.hasPrefix("CALM-") == true }
-    )
-    XCTAssertEqual(
-      viewModel.validatedPreviewRoutine?.steps.count,
-      OnboardingTrialRoutineStepLimit.maximum
-    )
-    XCTAssertEqual(
-      viewModel.previewRoutineStepCount,
-      OnboardingTrialRoutineStepLimit.maximum
-    )
-    XCTAssertEqual(viewModel.recommendedRoutineSelectionLimitText, "선택한 루틴 2/2")
+    XCTAssertEqual(candidates.map(\.id), responseSteps.map(\.id))
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 7)
+    XCTAssertEqual(viewModel.previewRoutineStepCount, 7)
+    XCTAssertTrue(candidates.allSatisfy(viewModel.isRecommendedRoutineStepSelected))
     XCTAssertEqual(
       viewModel.previewRoutineDurationMinutes,
       OnboardingDuration.totalMinutes(
@@ -189,64 +183,27 @@ final class OnboardingHappyPathTests: XCTestCase {
       )
     )
 
-    let selectedCandidate = try XCTUnwrap(candidates.first)
-    let additionalCandidate = try XCTUnwrap(
-      candidates.first { !viewModel.isRecommendedRoutineStepSelected($0) }
-    )
-
-    XCTAssertFalse(viewModel.canToggleRecommendedRoutineStep(additionalCandidate))
-    viewModel.toggleRecommendedRoutineStep(additionalCandidate)
-    XCTAssertFalse(viewModel.isRecommendedRoutineStepSelected(additionalCandidate))
-    XCTAssertEqual(
-      viewModel.validatedPreviewRoutine?.steps.count,
-      OnboardingTrialRoutineStepLimit.maximum
-    )
-
+    let selectedCandidate = try XCTUnwrap(candidates.last)
     viewModel.toggleRecommendedRoutineStep(selectedCandidate)
     XCTAssertFalse(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
-    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 1)
-    XCTAssertEqual(viewModel.previewRoutineStepCount, 1)
-    XCTAssertEqual(viewModel.recommendedRoutineSelectionLimitText, "선택한 루틴 1/2")
-    XCTAssertEqual(
-      viewModel.previewRoutineDurationMinutes,
-      OnboardingDuration.totalMinutes(
-        for: try XCTUnwrap(viewModel.validatedPreviewRoutine)
-      )
-    )
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 6)
 
-    viewModel.toggleRecommendedRoutineStep(additionalCandidate)
-    XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(additionalCandidate))
-    XCTAssertEqual(
-      viewModel.validatedPreviewRoutine?.steps.count,
-      OnboardingTrialRoutineStepLimit.maximum
-    )
-
-    let selectedAfterEditing = candidates.filter {
-      viewModel.isRecommendedRoutineStepSelected($0)
-    }
-    for candidate in selectedAfterEditing.dropFirst() {
-      viewModel.toggleRecommendedRoutineStep(candidate)
-    }
-
-    let finalSelectedCandidate = try XCTUnwrap(
-      candidates.first { viewModel.isRecommendedRoutineStepSelected($0) }
-    )
-    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 1)
-    XCTAssertFalse(viewModel.canToggleRecommendedRoutineStep(finalSelectedCandidate))
-
-    viewModel.toggleRecommendedRoutineStep(finalSelectedCandidate)
-    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 1)
+    XCTAssertTrue(viewModel.canToggleRecommendedRoutineStep(selectedCandidate))
+    viewModel.toggleRecommendedRoutineStep(selectedCandidate)
+    XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
+    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 7)
   }
 
   @MainActor
-  func testOnboardingUsesTheSelectedTwoStepsForSavingAndTrial() async throws {
+  func testOnboardingPassesEveryPreviewStepToCompletionSaving() async throws {
     let useCase = SpyCompleteOnboardingUseCase()
     var completedRoutineIDs: [UUID] = []
+    let previewRoutine = try LocalTemplateSuggestionService.shared.makeRoutine(
+      from: RoutineSuggestionInput(goalTags: ["health"])
+    )
     let viewModel = OnboardingViewModel(
       draft: OnboardingDraft(
-        previewRoutine: try LocalTemplateSuggestionService.shared.makeRoutine(
-          from: RoutineSuggestionInput(goalTags: ["health"])
-        )
+        previewRoutine: previewRoutine
       ),
       step: .completion,
       routineSuggestionService: LocalTemplateSuggestionService.shared,
@@ -257,7 +214,10 @@ final class OnboardingHappyPathTests: XCTestCase {
     )
 
     let selectedSteps = try XCTUnwrap(viewModel.validatedPreviewRoutine?.steps)
-    XCTAssertEqual(selectedSteps.count, OnboardingTrialRoutineStepLimit.maximum)
+    XCTAssertGreaterThan(
+      selectedSteps.count,
+      OnboardingTrialRoutineStepLimit.maximum
+    )
 
     await viewModel.completeButtonDidTap()
 
@@ -267,7 +227,7 @@ final class OnboardingHappyPathTests: XCTestCase {
   }
 
   @MainActor
-  func testRecommendedAdditionDoesNotApplyOnboardingStepLimit() throws {
+  func testRecommendedAdditionStillAllowsAddingLocalPresetCandidates() throws {
     let viewModel = OnboardingViewModel(
       flowMode: .recommendedAddition,
       routineSuggestionService: LocalTemplateSuggestionService.shared
@@ -442,31 +402,34 @@ final class OnboardingHappyPathTests: XCTestCase {
     XCTAssertTrue(viewModel.showsRecommendedRoutineStepEditor)
 
     let candidates = viewModel.recommendedRoutineStepCandidates
-    XCTAssertEqual(candidates.count, 6)
+    XCTAssertEqual(
+      candidates.count,
+      viewModel.validatedPreviewRoutine?.steps.count
+    )
     XCTAssertTrue(
       candidates.allSatisfy { $0.presetItemID?.hasPrefix("HEALTH-") == true }
     )
     XCTAssertEqual(
       candidates.filter(viewModel.isRecommendedRoutineStepSelected).count,
-      OnboardingTrialRoutineStepLimit.maximum
+      candidates.count
     )
 
     let selectedCandidate = try XCTUnwrap(
       candidates.first(where: viewModel.isRecommendedRoutineStepSelected)
     )
-    let additionalCandidate = try XCTUnwrap(
-      candidates.first { !viewModel.isRecommendedRoutineStepSelected($0) }
-    )
 
     viewModel.toggleRecommendedRoutineStep(selectedCandidate)
     XCTAssertFalse(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
-    XCTAssertEqual(viewModel.validatedPreviewRoutine?.steps.count, 1)
-
-    viewModel.toggleRecommendedRoutineStep(additionalCandidate)
-    XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(additionalCandidate))
     XCTAssertEqual(
       viewModel.validatedPreviewRoutine?.steps.count,
-      OnboardingTrialRoutineStepLimit.maximum
+      candidates.count - 1
+    )
+
+    viewModel.toggleRecommendedRoutineStep(selectedCandidate)
+    XCTAssertTrue(viewModel.isRecommendedRoutineStepSelected(selectedCandidate))
+    XCTAssertEqual(
+      viewModel.validatedPreviewRoutine?.steps.count,
+      candidates.count
     )
 
     viewModel.previewName = "사용자가 고친 건강 루틴"
@@ -713,7 +676,7 @@ final class OnboardingHappyPathTests: XCTestCase {
       XCTAssertEqual(activeRoutine.id, routineID)
       XCTAssertTrue(activeRoutine.isActive)
       XCTAssertEqual(activeRoutine.alarmSchedule?.isEnabled, true)
-      XCTAssertEqual(
+      XCTAssertGreaterThan(
         activeRoutine.steps.count,
         OnboardingTrialRoutineStepLimit.maximum
       )

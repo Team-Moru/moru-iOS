@@ -25,6 +25,7 @@ enum RoutineOrganizingPresentationTiming {
 @MainActor
 final class OnboardingViewModel: ObservableObject {
   static let freeformTextCharacterLimit = 200
+  private static let minimumRecommendedRoutineStepCount = 1
 
   let objectWillChange = ObservableObjectPublisher()
   let flowMode: RoutineCreationFlowMode
@@ -128,11 +129,6 @@ final class OnboardingViewModel: ObservableObject {
     normalizedDraft.freeformText = String(
       normalizedDraft.freeformText.prefix(Self.freeformTextCharacterLimit)
     )
-    if flowMode == .onboarding,
-       let previewRoutine = normalizedDraft.previewRoutine {
-      normalizedDraft.previewRoutine = OnboardingTrialRoutineStepLimit
-        .normalized(previewRoutine)
-    }
 
     self.flowMode = flowMode
     self.draft = normalizedDraft
@@ -245,16 +241,6 @@ final class OnboardingViewModel: ObservableObject {
       && !recommendedRoutineStepCandidates.isEmpty
   }
 
-  var recommendedRoutineSelectionLimitText: String? {
-    guard flowMode == .onboarding,
-          hasRecommendedRoutineStepCandidates else {
-      return nil
-    }
-
-    return "선택한 루틴 \(previewRoutineStepCount)/"
-      + "\(OnboardingTrialRoutineStepLimit.maximum)"
-  }
-
   var showsRecommendedRoutineStepEditor: Bool {
     guard hasRecommendedRoutineStepCandidates else {
       return false
@@ -327,11 +313,10 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     if isRecommendedRoutineStepSelected(candidate) {
-      return routine.steps.count > OnboardingTrialRoutineStepLimit.minimum
+      return routine.steps.count > Self.minimumRecommendedRoutineStepCount
     }
 
-    return flowMode != .onboarding
-      || routine.steps.count < OnboardingTrialRoutineStepLimit.maximum
+    return true
   }
 
   func toggleRecommendedRoutineStep(_ candidate: RoutineStep) {
@@ -347,15 +332,11 @@ final class OnboardingViewModel: ObservableObject {
     if let index = routine.steps.firstIndex(where: {
       representsSameRecommendedRoutineStep($0, as: candidate)
     }) {
-      guard routine.steps.count > OnboardingTrialRoutineStepLimit.minimum else {
+      guard routine.steps.count > Self.minimumRecommendedRoutineStepCount else {
         return
       }
       routine.steps.remove(at: index)
     } else {
-      guard flowMode != .onboarding
-        || routine.steps.count < OnboardingTrialRoutineStepLimit.maximum else {
-        return
-      }
       routine.steps.append(candidate)
     }
 
@@ -578,10 +559,8 @@ final class OnboardingViewModel: ObservableObject {
     draft.suggestionSource = nil
 
     do {
-      draft.previewRoutine = normalizedPreviewRoutine(
-        routinePreparedForUserDescription(
-          try routineSuggestionService.makeRoutine(from: draft.suggestionInput)
-        )
+      draft.previewRoutine = routinePreparedForUserDescription(
+        try routineSuggestionService.makeRoutine(from: draft.suggestionInput)
       )
       draft.suggestionSource = .localFallback(.signedOut)
 
@@ -649,9 +628,7 @@ final class OnboardingViewModel: ObservableObject {
         return false
       }
 
-      draft.previewRoutine = normalizedPreviewRoutine(
-        routinePreparedForUserDescription(result.routine)
-      )
+      draft.previewRoutine = routinePreparedForUserDescription(result.routine)
       draft.suggestionSource = result.source
 
       guard hasValidatedPreviewRoutine else {
@@ -856,6 +833,11 @@ final class OnboardingViewModel: ObservableObject {
 
     var candidates = routine.steps.sorted { $0.order < $1.order }
 
+    if flowMode == .onboarding {
+      recommendedRoutineStepCandidates = candidates
+      return
+    }
+
     if let itemProvider = routineSuggestionService as? any RoutineSuggestionItemProviding,
        let presetItems = try? itemProvider.recommendationItems(
          from: draft.suggestionInput
@@ -889,14 +871,6 @@ final class OnboardingViewModel: ObservableObject {
     var editableRoutine = routine
     editableRoutine.summary = ""
     return editableRoutine
-  }
-
-  private func normalizedPreviewRoutine(_ routine: Routine) -> Routine {
-    guard flowMode == .onboarding else {
-      return routine
-    }
-
-    return OnboardingTrialRoutineStepLimit.normalized(routine)
   }
 
   private func representsSameRecommendedRoutineStep(

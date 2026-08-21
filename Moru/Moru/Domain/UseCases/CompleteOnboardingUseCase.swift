@@ -86,15 +86,14 @@ nonisolated final class CompleteOnboardingUseCase: CompleteOnboardingUseCaseProt
     profile.selectedVoice = request.selectedVoice
     profile.updatedAt = Date()
 
-    let preparedRoutine: Routine
+    var routine: Routine
     if let previewRoutine = request.previewRoutine {
-      preparedRoutine = previewRoutine
+      routine = previewRoutine
     } else {
-      preparedRoutine = try routineSuggestionService.makeRoutine(
+      routine = try routineSuggestionService.makeRoutine(
         from: request.suggestionInput
       )
     }
-    var routine = OnboardingTrialRoutineStepLimit.normalized(preparedRoutine)
     routine.isActive = true
     routine.alarmSchedule = makeEnabledAlarm(
       from: request.suggestionInput,
