@@ -71,8 +71,9 @@ final class RoutineTTSAudioStorageTests: XCTestCase {
     #if !targetEnvironment(simulator)
     let protection = attributes[.protectionKey]
     XCTAssertTrue(
-      protection as? FileProtectionType == .completeUnlessOpen
-        || protection as? String == FileProtectionType.completeUnlessOpen.rawValue
+      protection as? FileProtectionType == .completeUntilFirstUserAuthentication
+        || protection as? String
+          == FileProtectionType.completeUntilFirstUserAuthentication.rawValue
     )
     #else
     // The simulator ignores NSFileProtection attributes; successful creation

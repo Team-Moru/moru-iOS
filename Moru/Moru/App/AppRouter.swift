@@ -221,6 +221,18 @@ struct AppRouter: View {
       GeminiDataConsentView(consentStore: geminiDataConsentStore)
     }
     .task {
+      if let transferManager =
+          dependencies.routineTTSBackgroundTransferManager {
+        RoutineTTSBackgroundLifecycleBridge.shared.configure(
+          transferManager: transferManager,
+          resumeHandler: {
+            await dependencies.routineTTSWarmupCoordinator?
+              .resumeBackgroundPrefetchOpportunity()
+            await dependencies.serverVoiceCommonAudioProvider?
+              .resumeBackgroundPrefetchOpportunity()
+          }
+        )
+      }
       onboardingStatusRuntimeCoordinator?.start()
       routineSyncRuntimeCoordinator?.setSceneActive(scenePhase == .active)
       dependencies.routineTTSWarmupCoordinator?
@@ -260,6 +272,12 @@ struct AppRouter: View {
       routineSyncRuntimeCoordinator?.accountSessionDidChange()
       dependencies.routineTTSWarmupCoordinator?.accountSessionDidChange()
       dependencies.serverVoiceCommonAudioProvider?.accountSessionDidChange()
+      if case .restoring = newState {
+        return
+      }
+      Task {
+        await consumePendingAlarmIngress()
+      }
     }
     .onChange(of: geminiDataConsentStore.status) { _, _ in
       routineSyncRuntimeCoordinator?.geminiDataConsentDidChange()
@@ -373,6 +391,10 @@ struct AppRouter: View {
 
   @MainActor
   private func resetToNewUserFlow() {
+    Task {
+      await dependencies.routineTTSBackgroundTransferManager?
+        .discardAllTransfers()
+    }
     deferredOnboardingTrialRoutineID = nil
     didStartOnboarding = false
     didCompleteOnboardingTrial = false
@@ -515,6 +537,8 @@ struct AppRouter: View {
       accountRoutineGroupRemoteService:
         dependencies.accountRoutineGroupRemoteService,
       serverVoicePreviewPlayer: dependencies.serverVoicePreviewPlayer,
+      routineTTSPreparationStatusCenter:
+        dependencies.routineTTSPreparationStatusCenter,
       accountSessionStore: accountSessionStore,
       socialLoginCoordinator: socialLoginCoordinator,
       googleAuthorizationSession: googleAuthorizationSession,
@@ -538,12 +562,14 @@ struct AppRouter: View {
         dependencies.routineTTSWarmupCoordinator?
           .serverVoiceSelectionDidChange(
             memberID: selection.memberID,
-            selectionVersion: selection.selectionVersion
+            selectionVersion: selection.selectionVersion,
+            selectedTTSID: selection.ttsID
           )
         dependencies.serverVoiceCommonAudioProvider?
           .serverVoiceSelectionDidChange(
             memberID: selection.memberID,
-            selectedTTSID: selection.ttsID
+            selectedTTSID: selection.ttsID,
+            selectionVersion: selection.selectionVersion
           )
       }
     )
@@ -636,6 +662,14 @@ struct AppRouter: View {
 
   @MainActor
   private func consumePendingAlarmIngress() async {
+    if case .restoring = accountSessionStore.state {
+      return
+    }
+    await consumePendingAlarmIngressAfterAccountRestoration()
+  }
+
+  @MainActor
+  private func consumePendingAlarmIngressAfterAccountRestoration() async {
     guard sessionStore.phase == .ready,
           dependencies.alarmRuntimeHandler != nil,
           let envelope = AlarmIngressOccurrenceStore.shared

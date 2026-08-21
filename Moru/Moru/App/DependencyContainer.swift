@@ -34,6 +34,10 @@ struct DependencyContainer {
   let routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator?
   let serverVoiceCommonAudioProvider: ServerVoiceCommonAudioProvider?
   let routineTTSAudioCache: RoutineTTSAudioCache?
+  let routineTTSBackgroundTransferManager:
+    RoutineTTSBackgroundTransferManager?
+  let routineTTSPreparationStatusCenter:
+    RoutineTTSPreparationStatusCenter?
   let serverVoicePreviewPlayer: ServerVoicePreviewPlayer
 
   init(
@@ -65,6 +69,10 @@ struct DependencyContainer {
     routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator? = nil,
     serverVoiceCommonAudioProvider: ServerVoiceCommonAudioProvider? = nil,
     routineTTSAudioCache: RoutineTTSAudioCache? = nil,
+    routineTTSBackgroundTransferManager:
+      RoutineTTSBackgroundTransferManager? = nil,
+    routineTTSPreparationStatusCenter:
+      RoutineTTSPreparationStatusCenter? = nil,
     serverVoicePreviewPlayer: ServerVoicePreviewPlayer? = nil
   ) {
     self.routineRepository = routineRepository
@@ -102,6 +110,10 @@ struct DependencyContainer {
     self.routineTTSWarmupCoordinator = routineTTSWarmupCoordinator
     self.serverVoiceCommonAudioProvider = serverVoiceCommonAudioProvider
     self.routineTTSAudioCache = routineTTSAudioCache
+    self.routineTTSBackgroundTransferManager =
+      routineTTSBackgroundTransferManager
+    self.routineTTSPreparationStatusCenter =
+      routineTTSPreparationStatusCenter
     self.serverVoicePreviewPlayer = serverVoicePreviewPlayer
       ?? ServerVoicePreviewPlayer(audioCache: routineTTSAudioCache)
   }
@@ -154,10 +166,45 @@ struct DependencyContainer {
     let routineTTSAudioCache = try? RoutineTTSAudioCache()
     let routineTTSWarmupCoordinator: RoutineTTSWarmupCoordinator?
     let serverVoiceCommonAudioProvider: ServerVoiceCommonAudioProvider?
+    let routineTTSBackgroundTransferManager:
+      RoutineTTSBackgroundTransferManager?
+    let routineTTSPreparationStatusCenter:
+      RoutineTTSPreparationStatusCenter?
     let guidancePlayer: any RoutineGuidancePlaying
     if let routineTTSRemoteService,
        let accountServerRemoteService,
        let sessionIdentityProvider {
+      let voiceSelectionStore =
+        UserDefaultsRoutineTTSVoiceSelectionVersionStore()
+      let statusCenter = RoutineTTSPreparationStatusCenter()
+      let prefetchJobStore = try? FileRoutineTTSPrefetchJobStore()
+      let backgroundTransferManager: RoutineTTSBackgroundTransferManager?
+      if let prefetchJobStore, let routineTTSAudioCache {
+        backgroundTransferManager = try? RoutineTTSBackgroundTransferManager(
+          jobStore: prefetchJobStore,
+          audioCache: routineTTSAudioCache,
+          statusCenter: statusCenter,
+          currentContext: {
+            guard let identity =
+                    sessionIdentityProvider.currentAccountSessionIdentity else {
+              return nil
+            }
+            return (
+              identity.memberID,
+              voiceSelectionStore.selectionVersion(
+                forMemberID: identity.memberID
+              ),
+              voiceSelectionStore.selectedTTSID(
+                forMemberID: identity.memberID
+              )
+            )
+          }
+        )
+      } else {
+        backgroundTransferManager = nil
+      }
+      routineTTSBackgroundTransferManager = backgroundTransferManager
+      routineTTSPreparationStatusCenter = statusCenter
       let warmupCoordinator = RoutineTTSWarmupCoordinator(
         remoteService: routineTTSRemoteService,
         bindingRepository: routineSyncRepository,
@@ -165,14 +212,28 @@ struct DependencyContainer {
         audioCache: routineTTSAudioCache,
         downloader: RoutineTTSAudioDownloader(),
         sessionIdentityProvider: sessionIdentityProvider,
-        voiceSelectionVersionStore: UserDefaultsRoutineTTSVoiceSelectionVersionStore()
+        voiceSelectionVersionStore: voiceSelectionStore,
+        prefetchJobStore: prefetchJobStore,
+        backgroundTransferManager: backgroundTransferManager,
+        preparationStatusCenter: statusCenter
       )
       routineTTSWarmupCoordinator = warmupCoordinator
       let commonAudioProvider = ServerVoiceCommonAudioProvider(
         remoteService: accountServerRemoteService,
         audioCache: routineTTSAudioCache,
         downloader: RoutineTTSAudioDownloader(),
-        sessionIdentityProvider: sessionIdentityProvider
+        sessionIdentityProvider: sessionIdentityProvider,
+        prefetchJobStore: prefetchJobStore,
+        backgroundTransferManager: backgroundTransferManager,
+        voiceSelectionVersionStore: voiceSelectionStore,
+        preparationStatusCenter: statusCenter,
+        onSelectedVoiceResolved: { memberID, selectedTTSID, selectionVersion in
+          warmupCoordinator.serverVoiceSelectionDidChange(
+            memberID: memberID,
+            selectionVersion: selectionVersion,
+            selectedTTSID: selectedTTSID
+          )
+        }
       )
       serverVoiceCommonAudioProvider = commonAudioProvider
       let remoteFirstGuidancePlayer = RemoteFirstRoutineGuidancePlayer(
@@ -188,6 +249,8 @@ struct DependencyContainer {
     } else {
       routineTTSWarmupCoordinator = nil
       serverVoiceCommonAudioProvider = nil
+      routineTTSBackgroundTransferManager = nil
+      routineTTSPreparationStatusCenter = nil
       guidancePlayer = bundledGuidancePlayer
     }
     let audioSessionCoordinator = RoutineAudioSessionCoordinator(
@@ -276,6 +339,10 @@ struct DependencyContainer {
       routineTTSWarmupCoordinator: routineTTSWarmupCoordinator,
       serverVoiceCommonAudioProvider: serverVoiceCommonAudioProvider,
       routineTTSAudioCache: routineTTSAudioCache,
+      routineTTSBackgroundTransferManager:
+        routineTTSBackgroundTransferManager,
+      routineTTSPreparationStatusCenter:
+        routineTTSPreparationStatusCenter,
       serverVoicePreviewPlayer: ServerVoicePreviewPlayer(
         audioCache: routineTTSAudioCache
       )

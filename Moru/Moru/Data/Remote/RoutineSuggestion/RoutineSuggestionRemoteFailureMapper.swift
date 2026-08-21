@@ -42,7 +42,7 @@ nonisolated enum RoutineSuggestionRemoteFailureMapper {
     case .server(let statusCode, _, _) where statusCode == 408:
       return .timeout
     case .server(let statusCode, _, _)
-      where (500..<600).contains(statusCode):
+      where statusCode == 429 || (500..<600).contains(statusCode):
       return .serverUnavailable
     case .decoding, .missingResult:
       return .invalidResponse

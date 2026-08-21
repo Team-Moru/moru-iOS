@@ -209,13 +209,25 @@ struct AccountServerVoiceSelectionView: View {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
           Text(
             "서버에 동기화된 루틴의 첫 안내 음성을 만들 때 "
-              + "쓰는 선택입니다. 기기 내 안내 음성은 완료·알림 등에 "
-              + "계속 별도로 사용되며, "
+              + "쓰는 선택입니다. 선택한 서버 음성의 루틴 시작·완료·알림 "
+              + "음원을 미리 준비하며, "
               + "준비된 음성은 공통 샘플로 미리 들을 수 있습니다."
           )
           .moruPilotTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
+
+          if viewModel.voicePreparationState != .idle {
+            Label(
+              preparationStatusText,
+              systemImage: preparationStatusImage
+            )
+            .moruPilotTextStyle(.c1)
+            .foregroundStyle(MoruPilotColor.textSecondary)
+            .accessibilityIdentifier(
+              "profile.account.server-voice.preparation-status"
+            )
+          }
 
           voiceContent
 
@@ -253,6 +265,30 @@ struct AccountServerVoiceSelectionView: View {
     .accessibilityIdentifier("profile.account.server-voice.sheet")
     .onDisappear {
       previewPlayer.stopPreview()
+    }
+  }
+
+  private var preparationStatusText: String {
+    switch viewModel.voicePreparationState {
+    case .idle:
+      ""
+    case .preparing:
+      "선택은 완료됐어요. 서버 음성을 준비하고 있어요."
+    case .ready:
+      "서버 음성 준비가 완료됐어요."
+    case .retryScheduled:
+      "다음 연결 시 서버 음성 준비를 다시 시도해요."
+    }
+  }
+
+  private var preparationStatusImage: String {
+    switch viewModel.voicePreparationState {
+    case .idle, .preparing:
+      "arrow.down.circle"
+    case .ready:
+      "checkmark.circle.fill"
+    case .retryScheduled:
+      "clock.arrow.circlepath"
     }
   }
 

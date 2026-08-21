@@ -128,7 +128,7 @@ nonisolated final class RoutineTTSAudioDownloader:
     }
     do {
       try fileManager.setAttributes(
-        [.protectionKey: FileProtectionType.completeUnlessOpen],
+        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
         ofItemAtPath: partialURL.path
       )
     } catch {

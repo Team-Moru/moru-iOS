@@ -126,7 +126,7 @@ final class OnboardingRecommendationTests: XCTestCase {
     XCTAssertTrue(routine.steps.allSatisfy { $0.presetItemID == nil })
   }
 
-  func testEmptyAndAllInvalidResponsesSurfaceForRetryWithoutLocalFallback()
+  func testEmptyAndAllInvalidResponsesUseLocalFallbackWithoutRetry()
     async throws {
     for responses in [
       [ServerRoutineSuggestionResponse](),
@@ -145,14 +145,11 @@ final class OnboardingRecommendationTests: XCTestCase {
         geminiDataConsent: GeminiDataConsentStub()
       )
 
-      do {
-        _ = try await coordinator.suggest(from: suggestionInput)
-        XCTFail("Expected an invalid server recommendation to be surfaced.")
-      } catch {
-        // The onboarding UI keeps the input and offers an explicit retry.
-      }
+      let result = try await coordinator.suggest(from: suggestionInput)
 
-      XCTAssertEqual(local.callCount, 0)
+      XCTAssertEqual(result.source, .localFallback(.serverUnavailable))
+      XCTAssertEqual(result.routine.name, "로컬 fallback")
+      XCTAssertEqual(local.callCount, 1)
     }
   }
 
@@ -252,45 +249,344 @@ final class OnboardingRecommendationTests: XCTestCase {
     XCTAssertEqual(consent.geminiDataConsentStatus, .undecided)
   }
 
-  func testFailureAndCancellationDoNotCreateLocalFallback() async throws {
+  func testTransientFailureRetriesOnceThenSucceedsWithoutOverlap()
+    async throws {
+    let clock = ManualOnboardingRecommendationClock()
+    let diagnostics = OnboardingRecommendationDiagnosticsSpy()
     let local = OnboardingRecommendationLocalStub()
     let account = MutableOnboardingRecommendationAccount(memberID: 98)
-    let fallbackCoordinator = OnboardingRecommendationCoordinator(
-      serverService: OnboardingRecommendationServerStub(
-        result: .failure(RoutineSuggestionRemoteFailure.offline)
-      ),
+    let server = SequencedOnboardingRecommendationServerStub(
+      results: [
+        .failure(RoutineSuggestionRemoteFailure.timeout),
+        .success(serverRoutine),
+      ]
+    )
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
       localService: local,
       signedInMemberProvider: account,
-      geminiDataConsent: GeminiDataConsentStub()
+      geminiDataConsent: GeminiDataConsentStub(),
+      clock: clock,
+      diagnostics: diagnostics
     )
 
-    do {
-      _ = try await fallbackCoordinator.suggest(from: suggestionInput)
-      XCTFail("Expected the offline failure to be surfaced for retry.")
-    } catch let error as RoutineSuggestionRemoteFailure {
-      XCTAssertEqual(error, .offline)
-    } catch {
-      XCTFail("Expected RoutineSuggestionRemoteFailure, got \(error)")
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
     }
+    try await waitUntil {
+      server.callCount == 1
+        && clock.pendingDeadlines.contains(.milliseconds(500))
+    }
+
+    XCTAssertEqual(server.callCount, 1)
+    clock.advance(by: .milliseconds(500))
+    let result = try await task.value
+
+    XCTAssertEqual(result.source, .server)
+    XCTAssertEqual(result.routine.name, serverRoutine.name)
+    XCTAssertEqual(server.callCount, 2)
+    XCTAssertEqual(server.maximumConcurrentCallCount, 1)
+    XCTAssertEqual(local.callCount, 0)
+    XCTAssertEqual(clock.now(), .milliseconds(500))
+    XCTAssertTrue(diagnostics.events.contains(.retryScheduled))
+    XCTAssertTrue(diagnostics.events.contains(.retryStarted))
+    XCTAssertTrue(diagnostics.events.contains(.serverSucceeded))
+  }
+
+  func testSecondTransientFailureFallsBackAfterSingleRetry()
+    async throws {
+    let clock = ManualOnboardingRecommendationClock()
+    let local = OnboardingRecommendationLocalStub()
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let server = SequencedOnboardingRecommendationServerStub(
+      results: [
+        .failure(RoutineSuggestionRemoteFailure.offline),
+        .failure(RoutineSuggestionRemoteFailure.serverUnavailable),
+      ]
+    )
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub(),
+      clock: clock
+    )
+
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+    try await waitUntil {
+      server.callCount == 1
+        && clock.pendingDeadlines.contains(.milliseconds(500))
+    }
+    clock.advance(by: .milliseconds(500))
+
+    let result = try await task.value
+
+    XCTAssertEqual(result.source, .localFallback(.serverUnavailable))
+    XCTAssertEqual(result.routine.name, "로컬 fallback")
+    XCTAssertEqual(server.callCount, 2)
+    XCTAssertEqual(server.maximumConcurrentCallCount, 1)
+    XCTAssertEqual(local.callCount, 1)
+  }
+
+  func testAccountChangeDuringRetryDelayPreventsStaleRetry()
+    async throws {
+    let clock = ManualOnboardingRecommendationClock()
+    let local = OnboardingRecommendationLocalStub()
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let server = SequencedOnboardingRecommendationServerStub(
+      results: [
+        .failure(RoutineSuggestionRemoteFailure.offline),
+        .success(serverRoutine),
+      ]
+    )
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub(),
+      clock: clock
+    )
+
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+    try await waitUntil {
+      server.callCount == 1
+        && clock.pendingDeadlines.contains(.milliseconds(500))
+    }
+    account.memberID = 99
+    clock.advance(by: .milliseconds(500))
+
+    do {
+      _ = try await task.value
+      XCTFail("Expected the changed account to prevent the retry.")
+    } catch let error as RoutineSuggestionRequestError {
+      XCTAssertEqual(error, .accountChanged)
+    } catch {
+      XCTFail("Expected RoutineSuggestionRequestError, got \(error)")
+    }
+
+    XCTAssertEqual(server.callCount, 1)
+    XCTAssertEqual(local.callCount, 0)
+  }
+
+  func testEightSecondDeadlineFallsBackWithoutWaitingInRealTime()
+    async throws {
+    let clock = ManualOnboardingRecommendationClock()
+    let diagnostics = OnboardingRecommendationDiagnosticsSpy()
+    let local = OnboardingRecommendationLocalStub()
+    let server = HangingOnboardingRecommendationServerStub()
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub(),
+      clock: clock,
+      diagnostics: diagnostics
+    )
+
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+    try await waitUntil {
+      server.callCount == 1
+        && clock.pendingDeadlines.contains(.seconds(8))
+    }
+
+    clock.advance(by: .seconds(7) + .milliseconds(999))
+    XCTAssertEqual(local.callCount, 0)
+    XCTAssertEqual(server.callCount, 1)
+
+    clock.advance(by: .milliseconds(1))
+    let result = try await task.value
+
+    XCTAssertEqual(clock.now(), .seconds(8))
+    XCTAssertEqual(result.source, .localFallback(.serverUnavailable))
+    XCTAssertEqual(local.callCount, 1)
+    XCTAssertTrue(diagnostics.events.contains(.deadlineExceeded))
+    XCTAssertTrue(diagnostics.events.contains(.localFallback))
+  }
+
+  func testDeadlineWinsAgainstCancellationIgnoringServerAndLateResultIsIgnored()
+    async throws {
+    let clock = ManualOnboardingRecommendationClock()
+    let diagnostics = OnboardingRecommendationDiagnosticsSpy()
+    let local = OnboardingRecommendationLocalStub()
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let gate = OnboardingRecommendationServerGate()
+    let server = GatedOnboardingRecommendationServer(gate: gate)
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub(),
+      clock: clock,
+      diagnostics: diagnostics
+    )
+
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+    await gate.waitUntilRequested()
+    try await waitUntil {
+      clock.pendingDeadlines.contains(.seconds(8))
+    }
+
+    clock.advance(by: .seconds(7) + .milliseconds(999))
     XCTAssertEqual(local.callCount, 0)
 
-    let cancelledCoordinator = OnboardingRecommendationCoordinator(
-      serverService: OnboardingRecommendationServerStub(
-        result: .failure(RoutineSuggestionRemoteFailure.cancelled)
-      ),
-      localService: local,
-      signedInMemberProvider: account,
-      geminiDataConsent: GeminiDataConsentStub()
+    clock.advance(by: .milliseconds(1))
+    let result = try await task.value
+
+    XCTAssertEqual(clock.now(), .seconds(8))
+    XCTAssertEqual(result.source, .localFallback(.serverUnavailable))
+    XCTAssertEqual(local.callCount, 1)
+    XCTAssertEqual(server.callCount, 1)
+    XCTAssertEqual(server.completionCount, 0)
+    XCTAssertTrue(diagnostics.events.contains(.deadlineExceeded))
+    XCTAssertFalse(diagnostics.events.contains(.serverSucceeded))
+
+    var repeatedResult: RoutineSuggestionResult?
+    let repeatedTask = _Concurrency.Task {
+      repeatedResult = try? await coordinator.suggest(from: suggestionInput)
+    }
+    try await waitUntil {
+      repeatedResult != nil || server.callCount > 1
+    }
+
+    XCTAssertEqual(server.callCount, 1)
+    XCTAssertEqual(
+      repeatedResult?.source,
+      .localFallback(.serverUnavailable)
     )
 
+    await gate.finish(with: serverRoutine)
+    try await waitUntil {
+      server.completionCount >= 1
+    }
+    repeatedTask.cancel()
+    _ = await repeatedTask.result
+
+    XCTAssertEqual(local.callCount, 1)
+    XCTAssertEqual(server.completionCount, 1)
+    XCTAssertFalse(diagnostics.events.contains(.serverSucceeded))
+  }
+
+  func testNonTransientFailureFallsBackWithoutRetry() async throws {
+    for failure in [
+      RoutineSuggestionRemoteFailure.invalidResponse,
+      RoutineSuggestionRemoteFailure.unavailable,
+    ] {
+      let clock = ManualOnboardingRecommendationClock()
+      let local = OnboardingRecommendationLocalStub()
+      let server = SequencedOnboardingRecommendationServerStub(
+        results: [.failure(failure)]
+      )
+      let account = MutableOnboardingRecommendationAccount(memberID: 98)
+      let coordinator = OnboardingRecommendationCoordinator(
+        serverService: server,
+        localService: local,
+        signedInMemberProvider: account,
+        geminiDataConsent: GeminiDataConsentStub(),
+        clock: clock
+      )
+
+      let result = try await coordinator.suggest(from: suggestionInput)
+
+      XCTAssertEqual(result.source, .localFallback(.serverUnavailable))
+      XCTAssertEqual(server.callCount, 1)
+      XCTAssertEqual(local.callCount, 1)
+      XCTAssertEqual(clock.now(), .zero)
+    }
+  }
+
+  func testCancellingOnlyWaiterCancelsRequestWithoutLocalFallback()
+    async throws {
+    let clock = ManualOnboardingRecommendationClock()
+    let local = OnboardingRecommendationLocalStub()
+    let server = HangingOnboardingRecommendationServerStub()
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub(),
+      clock: clock
+    )
+    let task = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+    try await waitUntil {
+      server.callCount == 1
+    }
+
+    task.cancel()
+
     do {
-      _ = try await cancelledCoordinator.suggest(from: suggestionInput)
+      _ = try await task.value
       XCTFail("Expected cancellation.")
     } catch is CancellationError {
       XCTAssertEqual(local.callCount, 0)
     } catch {
       XCTFail("Expected CancellationError, got \(error)")
     }
+  }
+
+  func testIdenticalConcurrentRequestsShareOneFlightAndOneWaiterCancellation()
+    async throws {
+    let account = MutableOnboardingRecommendationAccount(memberID: 98)
+    let local = OnboardingRecommendationLocalStub()
+    let gate = OnboardingRecommendationServerGate()
+    let server = GatedOnboardingRecommendationServer(gate: gate)
+    let diagnostics = OnboardingRecommendationDiagnosticsSpy()
+    let coordinator = OnboardingRecommendationCoordinator(
+      serverService: server,
+      localService: local,
+      signedInMemberProvider: account,
+      geminiDataConsent: GeminiDataConsentStub(),
+      diagnostics: diagnostics
+    )
+
+    let cancelledWaiter = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+    await gate.waitUntilRequested()
+    let survivingWaiter = _Concurrency.Task {
+      try await coordinator.suggest(from: suggestionInput)
+    }
+    try await waitUntil {
+      diagnostics.events.contains(.joinedInFlight)
+    }
+
+    XCTAssertEqual(server.callCount, 1)
+    cancelledWaiter.cancel()
+    await gate.finish(with: serverRoutine)
+
+    let result = try await survivingWaiter.value
+    XCTAssertEqual(result.source, .server)
+    XCTAssertEqual(server.callCount, 1)
+    XCTAssertEqual(local.callCount, 0)
+
+    do {
+      _ = try await cancelledWaiter.value
+      XCTFail("Expected only the cancelled waiter to be cancelled.")
+    } catch is CancellationError {
+      // The shared server request remained alive for the surviving waiter.
+    } catch {
+      XCTFail("Expected CancellationError, got \(error)")
+    }
+  }
+
+  func testHTTP429MapsToRetryableServerUnavailableFailure() {
+    XCTAssertEqual(
+      RoutineSuggestionRemoteFailureMapper.map(
+        APIError.server(statusCode: 429, code: nil, message: "busy")
+      ),
+      .serverUnavailable
+    )
   }
 
   func testUnknownPrimaryGoalDoesNotSkipToSecondaryGoal()
@@ -673,6 +969,56 @@ private final class OnboardingRecommendationServerStub:
 }
 
 @MainActor
+private final class SequencedOnboardingRecommendationServerStub:
+  ServerOnboardingRecommendationServing {
+  private var results: [Result<Routine, Error>]
+  private(set) var callCount = 0
+  private(set) var maximumConcurrentCallCount = 0
+  private var concurrentCallCount = 0
+
+  init(results: [Result<Routine, Error>]) {
+    self.results = results
+  }
+
+  func makeRoutine(
+    from input: RoutineSuggestionInput,
+    goal: OnboardingRecommendationGoal,
+    memberID: Int64
+  ) async throws -> Routine {
+    callCount += 1
+    concurrentCallCount += 1
+    maximumConcurrentCallCount = max(
+      maximumConcurrentCallCount,
+      concurrentCallCount
+    )
+    defer {
+      concurrentCallCount -= 1
+    }
+
+    guard !results.isEmpty else {
+      throw RoutineSuggestionRemoteFailure.unavailable
+    }
+    return try results.removeFirst().get()
+  }
+}
+
+@MainActor
+private final class HangingOnboardingRecommendationServerStub:
+  ServerOnboardingRecommendationServing {
+  private(set) var callCount = 0
+
+  func makeRoutine(
+    from input: RoutineSuggestionInput,
+    goal: OnboardingRecommendationGoal,
+    memberID: Int64
+  ) async throws -> Routine {
+    callCount += 1
+    try await _Concurrency.Task<Never, Never>.sleep(for: .seconds(3_600))
+    throw RoutineSuggestionRemoteFailure.unavailable
+  }
+}
+
+@MainActor
 private final class OnboardingRecommendationLocalStub:
   RoutineSuggestionService {
   private(set) var callCount = 0
@@ -737,7 +1083,7 @@ private actor OnboardingRecommendationServerGate {
   private var requested = false
   private var requestWaiters: [CheckedContinuation<Void, Never>] = []
   private var routine: Routine?
-  private var resultWaiter: CheckedContinuation<Routine, Never>?
+  private var resultWaiters: [CheckedContinuation<Routine, Never>] = []
 
   func waitForResult() async -> Routine {
     requested = true
@@ -749,7 +1095,7 @@ private actor OnboardingRecommendationServerGate {
     }
 
     return await withCheckedContinuation { continuation in
-      resultWaiter = continuation
+      resultWaiters.append(continuation)
     }
   }
 
@@ -764,9 +1110,10 @@ private actor OnboardingRecommendationServerGate {
   }
 
   func finish(with routine: Routine) {
-    if let resultWaiter {
-      self.resultWaiter = nil
-      resultWaiter.resume(returning: routine)
+    if !resultWaiters.isEmpty {
+      let waiters = resultWaiters
+      resultWaiters.removeAll()
+      waiters.forEach { $0.resume(returning: routine) }
     } else {
       self.routine = routine
     }
@@ -777,6 +1124,8 @@ private actor OnboardingRecommendationServerGate {
 private final class GatedOnboardingRecommendationServer:
   ServerOnboardingRecommendationServing {
   private let gate: OnboardingRecommendationServerGate
+  private(set) var callCount = 0
+  private(set) var completionCount = 0
 
   init(gate: OnboardingRecommendationServerGate) {
     self.gate = gate
@@ -787,7 +1136,151 @@ private final class GatedOnboardingRecommendationServer:
     goal: OnboardingRecommendationGoal,
     memberID: Int64
   ) async throws -> Routine {
-    await gate.waitForResult()
+    callCount += 1
+    let routine = await gate.waitForResult()
+    completionCount += 1
+    return routine
+  }
+}
+
+nonisolated private final class OnboardingRecommendationDiagnosticsSpy:
+  OnboardingRecommendationDiagnosticReporting,
+  @unchecked Sendable {
+  private let lock = NSLock()
+  private var recordedEvents: [OnboardingRecommendationDiagnosticEvent] = []
+
+  var events: [OnboardingRecommendationDiagnosticEvent] {
+    lock.withLock {
+      recordedEvents
+    }
+  }
+
+  func record(_ event: OnboardingRecommendationDiagnosticEvent) {
+    lock.withLock {
+      recordedEvents.append(event)
+    }
+  }
+}
+
+nonisolated private final class ManualOnboardingRecommendationClock:
+  OnboardingRecommendationClock,
+  @unchecked Sendable {
+  private struct ScheduledSleep {
+    let deadline: Duration
+    let waiter: ManualOnboardingRecommendationSleepWaiter
+  }
+
+  private let lock = NSLock()
+  private var currentTime: Duration = .zero
+  private var sleeps: [UUID: ScheduledSleep] = [:]
+
+  func now() -> Duration {
+    lock.withLock {
+      currentTime
+    }
+  }
+
+  var pendingDeadlines: [Duration] {
+    lock.withLock {
+      sleeps.values.compactMap { sleep in
+        sleep.waiter.isPending ? sleep.deadline : nil
+      }
+    }
+  }
+
+  func sleep(until deadline: Duration) async throws {
+    let id = UUID()
+    let waiter = ManualOnboardingRecommendationSleepWaiter()
+    let shouldCompleteImmediately = lock.withLock {
+      guard deadline > currentTime else {
+        return true
+      }
+      sleeps[id] = ScheduledSleep(deadline: deadline, waiter: waiter)
+      return false
+    }
+
+    if shouldCompleteImmediately {
+      waiter.succeed()
+    }
+
+    try await waiter.wait()
+  }
+
+  func advance(by duration: Duration) {
+    let dueWaiters: [ManualOnboardingRecommendationSleepWaiter] = lock.withLock {
+      currentTime += duration
+      let dueIDs = sleeps.compactMap { id, sleep in
+        sleep.deadline <= currentTime ? id : nil
+      }
+      let waiters = dueIDs.compactMap { sleeps.removeValue(forKey: $0)?.waiter }
+      return waiters
+    }
+
+    dueWaiters.forEach { $0.succeed() }
+  }
+}
+
+nonisolated private final class ManualOnboardingRecommendationSleepWaiter:
+  @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: CheckedContinuation<Void, Error>?
+  private var completion: Result<Void, Error>?
+
+  var isPending: Bool {
+    lock.withLock {
+      completion == nil
+    }
+  }
+
+  func wait() async throws {
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        let completion = lock.withLock { () -> Result<Void, Error>? in
+          if let completion = self.completion {
+            return completion
+          }
+          self.continuation = continuation
+          return nil
+        }
+        if let completion {
+          Self.resume(continuation, with: completion)
+        }
+      }
+    } onCancel: {
+      finish(with: .failure(CancellationError()))
+    }
+  }
+
+  func succeed() {
+    finish(with: .success(()))
+  }
+
+  private func finish(with result: Result<Void, Error>) {
+    let continuation = lock.withLock { () -> CheckedContinuation<Void, Error>? in
+      guard completion == nil else {
+        return nil
+      }
+      completion = result
+      let continuation = self.continuation
+      self.continuation = nil
+      return continuation
+    }
+
+    if let continuation {
+      Self.resume(continuation, with: result)
+    }
+  }
+
+  private static func resume(
+    _ continuation: CheckedContinuation<Void, Error>,
+    with result: Result<Void, Error>
+  ) {
+    switch result {
+    case .success:
+      continuation.resume()
+    case .failure(let error):
+      continuation.resume(throwing: error)
+    }
   }
 }
 
