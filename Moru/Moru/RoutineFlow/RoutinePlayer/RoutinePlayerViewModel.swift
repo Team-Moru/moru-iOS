@@ -5,6 +5,28 @@
 
 import Foundation
 import Observation
+import OSLog
+
+nonisolated private enum RoutinePlayerDiagnosticEvent: String, Sendable {
+    case stepStarted
+    case serverVoiceUnavailableContinuedSilently
+    case guidanceInterrupted
+}
+
+/// Records only coarse state transitions so TestFlight diagnostics never
+/// include account identifiers, routine identifiers, or routine content.
+nonisolated private struct RoutinePlayerDiagnostics: Sendable {
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+        category: "RoutinePlayer"
+    )
+
+    func record(_ event: RoutinePlayerDiagnosticEvent) {
+        logger.notice(
+            "Routine player: \(event.rawValue, privacy: .public)"
+        )
+    }
+}
 
 @MainActor
 @Observable
@@ -13,8 +35,6 @@ final class RoutinePlayerViewModel {
         case resolving
         case resolutionRetry(RoutineResolutionRetryReason)
         case terminalFailure(RoutineTerminalReason)
-        case serverVoicePreparing(RoutineStep)
-        case serverVoiceRetry(RoutineStep)
         case running(RoutineStep)
         case stepCompleted(RoutineStep)
         case summary(RoutineCompletionSummary)
@@ -59,16 +79,15 @@ final class RoutinePlayerViewModel {
     private let presentationToken: UUID
     private let onEvent: RoutinePlayerEventHandler
     private let startedAt: Date
+    private let diagnostics = RoutinePlayerDiagnostics()
     
     /// 현재 실행 중인 루틴 항목이 시작된 시각
     private var currentStepStartedAt: Date?
     
     private var routine: Routine?
     private var steps: [RoutineStep] = []
-    private var currentStepRequiresServerVoice = false
     private var pendingStepCompletion: PendingStepCompletion?
     private var pendingSave: PendingSave?
-    private var guidancePreparationTask: Task<Void, Never>?
     private var guidancePlaybackMonitorTask: Task<Void, Never>?
     private var didEmitRunnableContent = false
     private var didRequestExit = false
@@ -80,12 +99,6 @@ final class RoutinePlayerViewModel {
     private(set) var dialogState: DialogState?
     private(set) var isSavingRun = false
     private(set) var errorMessage: String?
-
-    #if DEBUG
-    func applyServerVoiceRetryPreviewState() {
-        screenState = .serverVoiceRetry(Routine.mockMorningRoutine.steps[0])
-    }
-    #endif
 
     var isStepInteractionDisabled: Bool {
         !isPresentationActive
@@ -147,7 +160,7 @@ final class RoutinePlayerViewModel {
     
     var currentStepNumberText: String {
         switch screenState {
-        case .serverVoicePreparing, .serverVoiceRetry, .running, .stepCompleted:
+        case .running, .stepCompleted:
             return "\(currentStepIndex + 1)/\(steps.count)"
         case .resolving, .resolutionRetry, .terminalFailure, .summary:
             return "0/0"
@@ -156,7 +169,7 @@ final class RoutinePlayerViewModel {
     
     var progressValue: Double {
         switch screenState {
-        case .serverVoicePreparing, .serverVoiceRetry, .running, .stepCompleted:
+        case .running, .stepCompleted:
             return Double(currentStepIndex + 1) / Double(steps.count)
         case .resolving, .resolutionRetry, .terminalFailure, .summary:
             return 0
@@ -220,28 +233,6 @@ final class RoutinePlayerViewModel {
         resolveRoutine()
     }
 
-    func retryServerVoiceGuidance() {
-        guard case .serverVoiceRetry(let step) = screenState else {
-            return
-        }
-
-        beginStep(step)
-    }
-
-    func continueWithoutServerVoice() {
-        guard case .serverVoiceRetry(let step) = screenState else {
-            return
-        }
-
-        guidancePreparationTask?.cancel()
-        guidancePreparationTask = nil
-        guidancePlaybackMonitorTask?.cancel()
-        guidancePlaybackMonitorTask = nil
-        guidanceCoordinator.stop()
-        currentStepStartedAt = Date()
-        screenState = .running(step)
-    }
-    
     func continueAfterTerminalFailure() {
         guard case .terminalFailure = screenState else {
             return
@@ -448,15 +439,7 @@ final class RoutinePlayerViewModel {
         }
 
         let result = await guidanceCoordinator.waitUntilCurrentCueFinishes()
-        if result == .unavailable,
-           currentStepRequiresServerVoice,
-           case .running(let currentStep) = screenState,
-           currentStep.id == stepID {
-            currentStepStartedAt = nil
-            screenState = .serverVoiceRetry(step)
-            return false
-        }
-        guard result == .completed,
+        guard result == .completed || result == .unavailable,
               case .running(let currentStep) = screenState,
               currentStep.id == stepID else {
             return false
@@ -531,29 +514,21 @@ final class RoutinePlayerViewModel {
 
     func viewDidDisappear() {
         isPresentationActive = false
-        guidancePreparationTask?.cancel()
-        guidancePreparationTask = nil
         guidancePlaybackMonitorTask?.cancel()
         guidancePlaybackMonitorTask = nil
         guidanceCoordinator.stop()
     }
 
     func runtimeDidInterrupt() {
-        guidancePreparationTask?.cancel()
-        guidancePreparationTask = nil
         guidancePlaybackMonitorTask?.cancel()
         guidancePlaybackMonitorTask = nil
         guidanceCoordinator.stop()
-
-        if case .serverVoicePreparing(let step) = screenState {
-            currentStepStartedAt = nil
-            screenState = .serverVoiceRetry(step)
-        }
+        diagnostics.record(.guidanceInterrupted)
     }
 
     private var isExitEligible: Bool {
         switch screenState {
-        case .serverVoicePreparing, .serverVoiceRetry, .running:
+        case .running:
             true
         case .resolving, .resolutionRetry, .terminalFailure, .stepCompleted, .summary:
             false
@@ -598,8 +573,6 @@ final class RoutinePlayerViewModel {
             return
         }
 
-        guidancePreparationTask?.cancel()
-        guidancePreparationTask = nil
         guidancePlaybackMonitorTask?.cancel()
         guidancePlaybackMonitorTask = nil
         guidanceCoordinator.stop()
@@ -619,61 +592,16 @@ final class RoutinePlayerViewModel {
     }
 
     private func beginStep(_ step: RoutineStep) {
-        guidancePreparationTask?.cancel()
-        guidancePreparationTask = nil
         guidancePlaybackMonitorTask?.cancel()
         guidancePlaybackMonitorTask = nil
-        currentStepStartedAt = nil
-
-        let requiresServerVoice = guidanceCoordinator
-            .requiresServerVoiceReadiness(for: step)
-        currentStepRequiresServerVoice = requiresServerVoice
-
-        guard requiresServerVoice else {
-            currentStepStartedAt = Date()
-            screenState = .running(step)
-            guidanceCoordinator.stepDidStart(step)
-            return
-        }
-
-        screenState = .serverVoicePreparing(step)
-        let expectedStepID = step.id
-        guidancePreparationTask = Task { [weak self] in
-            guard let self else {
-                return
-            }
-
-            let status = await guidanceCoordinator.prepareServerVoiceIntro(
-                for: step,
-                serverVoiceRequired: requiresServerVoice
-            )
-            guard !Task.isCancelled,
-                  isPresentationActive,
-                  case .serverVoicePreparing(let currentStep) = screenState,
-                  currentStep.id == expectedStepID else {
-                return
-            }
-
-            switch status {
-            case .prepared:
-                currentStepStartedAt = Date()
-                screenState = .running(step)
-                guidanceCoordinator.stepDidStart(
-                    step,
-                    serverVoiceIsPrepared: true
-                )
-                monitorServerVoicePlayback(for: step)
-
-            case .retryablePending, .unavailable:
-                screenState = .serverVoiceRetry(step)
-
-            case .cancelled:
-                break
-            }
-        }
+        currentStepStartedAt = Date()
+        screenState = .running(step)
+        diagnostics.record(.stepStarted)
+        guidanceCoordinator.stepDidStart(step)
+        monitorGuidancePlayback(for: step)
     }
 
-    private func monitorServerVoicePlayback(for step: RoutineStep) {
+    private func monitorGuidancePlayback(for step: RoutineStep) {
         guidancePlaybackMonitorTask?.cancel()
         let expectedStepID = step.id
         guidancePlaybackMonitorTask = Task { [weak self] in
@@ -689,9 +617,7 @@ final class RoutinePlayerViewModel {
                   currentStep.id == expectedStepID else {
                 return
             }
-
-            currentStepStartedAt = nil
-            screenState = .serverVoiceRetry(step)
+            diagnostics.record(.serverVoiceUnavailableContinuedSilently)
         }
     }
     

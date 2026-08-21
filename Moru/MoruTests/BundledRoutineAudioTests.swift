@@ -841,16 +841,13 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(runningStep.id, step.id)
   }
 
-  func testServerVoicePreparationFailureRequiresExplicitRetryOrContinue() async {
-    let state = RoutineGuidancePlaybackState()
-    let player = RoutineGuidancePlayerSpy(playbackState: state)
+  func testPendingServerVoiceStartsImmediatelyWithoutForegroundWait() async {
     let warmup = ServerVoiceWarmupStub(
       status: .retryablePending,
       expectsServerGeneratedIntro: true
     )
     let coordinator = RoutineGuidanceCoordinator(
-      player: player,
-      playbackState: state,
+      player: NoopRoutineGuidancePlayer(),
       routineGroupLocalID: UUID(),
       warmupCoordinator: warmup
     )
@@ -870,26 +867,27 @@ final class BundledRoutineAudioTests: XCTestCase {
     )
 
     viewModel.resolveRoutine()
-    await drainTasks()
-
-    guard case .serverVoiceRetry(let retryStep) = viewModel.screenState else {
-      XCTFail("A non-ready server cue must show explicit retry state.")
-      return
-    }
-    XCTAssertEqual(retryStep.id, step.id)
-    XCTAssertEqual(warmup.prepareAndWaitCallCount, 1)
-    XCTAssertTrue(player.cues.isEmpty)
-
-    viewModel.continueWithoutServerVoice()
 
     guard case .running(let runningStep) = viewModel.screenState else {
-      XCTFail("The user must be able to explicitly continue without audio.")
+      XCTFail("A pending server cue must not block the routine step.")
       return
     }
     XCTAssertEqual(runningStep.id, step.id)
+    XCTAssertEqual(warmup.prepareCallCount, 1)
+    XCTAssertEqual(warmup.prepareAndWaitCallCount, 0)
+
+    await drainTasks()
+    guard case .running(let stillRunningStep) = viewModel.screenState else {
+      XCTFail("A missing cached cue must remain fail-open.")
+      return
+    }
+    XCTAssertEqual(stillRunningStep.id, step.id)
+
+    viewModel.completeCurrentStep()
+    XCTAssertNotNil(viewModel.stepResults.first?.durationSeconds)
   }
 
-  func testServerBoundPresetPreparationFailureAvoidsBundledVoiceFallback() async {
+  func testServerBoundPresetStartsImmediatelyWithoutBundledVoiceFallback() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
     let warmup = ServerVoiceWarmupStub(
@@ -921,12 +919,13 @@ final class BundledRoutineAudioTests: XCTestCase {
     viewModel.resolveRoutine()
     await drainTasks()
 
-    guard case .serverVoiceRetry(let retryStep) = viewModel.screenState else {
-      XCTFail("A synced preset must not fall back before its server voice is ready.")
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("A synced preset must start silently while its voice is pending.")
       return
     }
-    XCTAssertEqual(retryStep.id, step.id)
-    XCTAssertEqual(warmup.prepareAndWaitCallCount, 1)
+    XCTAssertEqual(runningStep.id, step.id)
+    XCTAssertEqual(warmup.prepareCallCount, 1)
+    XCTAssertEqual(warmup.prepareAndWaitCallCount, 0)
     XCTAssertTrue(player.cues.isEmpty)
   }
 
@@ -971,13 +970,14 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(player.cues.count, 1)
   }
 
-  func testInterruptDuringServerVoicePreparationShowsRetryInsteadOfStalling() async {
-    let state = RoutineGuidancePlaybackState()
-    let player = RoutineGuidancePlayerSpy(playbackState: state)
-    let warmup = SuspendingServerVoiceWarmupStub()
+  func testLateServerVoiceFailureKeepsRoutineRunningSilently() async {
+    let player = DeferredUnavailableGuidancePlayer()
+    let warmup = ServerVoiceWarmupStub(
+      status: .retryablePending,
+      expectsServerGeneratedIntro: true
+    )
     let coordinator = RoutineGuidanceCoordinator(
       player: player,
-      playbackState: state,
       routineGroupLocalID: UUID(),
       warmupCoordinator: warmup
     )
@@ -997,25 +997,35 @@ final class BundledRoutineAudioTests: XCTestCase {
     )
 
     viewModel.resolveRoutine()
-    await warmup.waitUntilPreparing()
-    viewModel.runtimeDidInterrupt()
-    await drainTasks()
-
-    guard case .serverVoiceRetry(let retryStep) = viewModel.screenState else {
-      XCTFail("An interrupted server-voice preparation must become retryable.")
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("The player must present runnable content before voice playback resolves.")
       return
     }
-    XCTAssertEqual(retryStep.id, step.id)
-    XCTAssertTrue(player.cues.isEmpty)
+    XCTAssertEqual(runningStep.id, step.id)
+
+    await player.waitUntilPlaybackStarts()
+    let barrierTask = Task { @MainActor in
+      await viewModel.waitUntilIntroFinishes(for: step.id)
+    }
+    player.finishUnavailable()
+    let didFinish = await barrierTask.value
+    await drainTasks()
+
+    XCTAssertTrue(didFinish)
+    guard case .running(let stillRunningStep) = viewModel.screenState else {
+      XCTFail("A late voice failure must never roll the UI back to an error state.")
+      return
+    }
+    XCTAssertEqual(stillRunningStep.id, step.id)
   }
 
-  func testServerVoicePreparationAllowsRoutineExit() async {
-    let state = RoutineGuidancePlaybackState()
-    let player = RoutineGuidancePlayerSpy(playbackState: state)
-    let warmup = SuspendingServerVoiceWarmupStub()
+  func testPendingServerVoiceDoesNotBlockRoutineExit() async {
+    let warmup = ServerVoiceWarmupStub(
+      status: .retryablePending,
+      expectsServerGeneratedIntro: true
+    )
     let coordinator = RoutineGuidanceCoordinator(
-      player: player,
-      playbackState: state,
+      player: NoopRoutineGuidancePlayer(),
       routineGroupLocalID: UUID(),
       warmupCoordinator: warmup
     )
@@ -1036,7 +1046,6 @@ final class BundledRoutineAudioTests: XCTestCase {
     )
 
     viewModel.resolveRoutine()
-    await warmup.waitUntilPreparing()
     viewModel.requestEndRoutine()
     XCTAssertEqual(viewModel.dialogState, .exit(.endedEarly))
 
@@ -1218,6 +1227,7 @@ private struct SleepingGuidanceDelay: RoutineGuidanceDelaying {
 private final class ServerVoiceWarmupStub: RoutineTTSWarming {
   private let status: RoutineTTSForegroundPreparationStatus
   private let shouldExpectServerGeneratedIntro: Bool
+  private(set) var prepareCallCount = 0
   private(set) var prepareAndWaitCallCount = 0
 
   init(
@@ -1228,7 +1238,9 @@ private final class ServerVoiceWarmupStub: RoutineTTSWarming {
     self.shouldExpectServerGeneratedIntro = expectsServerGeneratedIntro
   }
 
-  func prepare(routineGroupLocalID: UUID, routineLocalIDs: [UUID]) {}
+  func prepare(routineGroupLocalID: UUID, routineLocalIDs: [UUID]) {
+    prepareCallCount += 1
+  }
 
   func expectsServerGeneratedIntro(
     routineGroupLocalID: UUID,
@@ -1247,37 +1259,59 @@ private final class ServerVoiceWarmupStub: RoutineTTSWarming {
 }
 
 @MainActor
-private final class SuspendingServerVoiceWarmupStub: RoutineTTSWarming {
-  private var hasStartedPreparing = false
+private final class DeferredUnavailableGuidancePlayer: RoutineGuidancePlaying {
+  private var hasStartedPlayback = false
+  private var continuation: CheckedContinuation<GuidancePlaybackResult, Never>?
 
-  func prepare(routineGroupLocalID: UUID, routineLocalIDs: [UUID]) {}
-
-  func expectsServerGeneratedIntro(
-    routineGroupLocalID: UUID,
-    routineLocalID: UUID
-  ) -> Bool {
-    true
+  func play(
+    itemID: String,
+    voiceCode: String,
+    kind: RoutineAudioCueKind
+  ) async -> GuidancePlaybackResult {
+    await waitForResult()
   }
 
-  func prepareAndWait(
-    routineGroupLocalID: UUID,
-    routineLocalIDs: [UUID]
-  ) async -> RoutineTTSForegroundPreparationStatus {
-    hasStartedPreparing = true
-    do {
-      try await Task.sleep(for: .seconds(60))
-      return .prepared
-    } catch is CancellationError {
-      return .cancelled
-    } catch {
-      return .unavailable
-    }
+  func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult {
+    await waitForResult()
   }
 
-  func waitUntilPreparing() async {
-    while !hasStartedPreparing {
+  func stop() {
+    finish(with: .cancelled)
+  }
+
+  func stopAndWaitUntilIdle() async {
+    stop()
+  }
+
+  func resumeAfterSpeechInput() {}
+
+  func waitUntilPlaybackStarts() async {
+    while !hasStartedPlayback {
       await Task.yield()
     }
+  }
+
+  func finishUnavailable() {
+    finish(with: .unavailable)
+  }
+
+  private func waitForResult() async -> GuidancePlaybackResult {
+    hasStartedPlayback = true
+    return await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        self.continuation = continuation
+      }
+    } onCancel: {
+      Task { @MainActor [weak self] in
+        self?.finish(with: .cancelled)
+      }
+    }
+  }
+
+  private func finish(with result: GuidancePlaybackResult) {
+    let pendingContinuation = continuation
+    continuation = nil
+    pendingContinuation?.resume(returning: result)
   }
 }
 

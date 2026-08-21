@@ -15,6 +15,27 @@ final class MoruApplicationDelegate: NSObject, UIApplicationDelegate {
     alarmNotificationDelegate = AlarmNotificationDelegate()
     super.init()
   }
+
+  func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions:
+      [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    RoutineTTSBackgroundLifecycleBridge.shared.register()
+    return true
+  }
+
+  func application(
+    _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+  ) {
+    RoutineTTSBackgroundLifecycleBridge.shared
+      .handleEventsForBackgroundURLSession(
+        identifier: identifier,
+        completionHandler: completionHandler
+      )
+  }
 }
 
 @main

@@ -33,6 +33,7 @@ final class AccountServerSettingsViewModel {
   private let remoteService: (any AccountServerRemoteServing)?
   private let onServerVoiceSelectionDidSucceed:
     @MainActor (ServerTTSSelection) -> Void
+  private let preparationStatusCenter: RoutineTTSPreparationStatusCenter?
   private var loadGeneration = 0
   private var currentMemberID: Int64?
 
@@ -50,10 +51,12 @@ final class AccountServerSettingsViewModel {
 
   init(
     remoteService: (any AccountServerRemoteServing)? = nil,
+    preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil,
     onServerVoiceSelectionDidSucceed:
       @escaping @MainActor (ServerTTSSelection) -> Void = { _ in }
   ) {
     self.remoteService = remoteService
+    self.preparationStatusCenter = preparationStatusCenter
     self.onServerVoiceSelectionDidSucceed = onServerVoiceSelectionDidSucceed
   }
 
@@ -217,6 +220,10 @@ final class AccountServerSettingsViewModel {
 
   var selectedVoiceHasPreview: Bool {
     selectedVoice?.previewAudioURL != nil
+  }
+
+  var voicePreparationState: RoutineTTSPreparationDisplayState {
+    preparationStatusCenter?.state ?? .idle
   }
 
   private func applySignedOutState() {

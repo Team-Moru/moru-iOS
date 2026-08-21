@@ -6,8 +6,8 @@
 import CryptoKit
 import Foundation
 
-nonisolated struct RoutineTTSAudioCacheKey: Hashable, Sendable {
-  nonisolated enum AssetKind: String, Hashable, Sendable {
+nonisolated struct RoutineTTSAudioCacheKey: Codable, Hashable, Sendable {
+  nonisolated enum AssetKind: String, Codable, Hashable, Sendable {
     case routineIntro
     case commonDone
     case commonRemind
@@ -217,7 +217,7 @@ actor RoutineTTSAudioCache {
       defer { try? fileManager.removeItem(at: partialAudioURL) }
       try data.write(
         to: partialAudioURL,
-        options: [.atomic, .completeFileProtectionUnlessOpen]
+        options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
       )
 
       let timestamp = now()
@@ -275,7 +275,7 @@ actor RoutineTTSAudioCache {
         withIntermediateDirectories: true
       )
       try Self.excludeFromBackup(stagingDirectory)
-      try Self.applyCompleteProtectionUnlessOpen(
+      try Self.applyUntilFirstAuthenticationProtection(
         to: stagingDirectory,
         fileManager: fileManager
       )
@@ -488,7 +488,10 @@ actor RoutineTTSAudioCache {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .millisecondsSince1970
     let data = try encoder.encode(metadata)
-    try data.write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
+    try data.write(
+      to: url,
+      options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
+    )
   }
 
   private func enforceQuotas(protecting protectedDigest: String) {
@@ -633,12 +636,12 @@ actor RoutineTTSAudioCache {
     try mutableURL.setResourceValues(values)
   }
 
-  private static func applyCompleteProtectionUnlessOpen(
+  private static func applyUntilFirstAuthenticationProtection(
     to url: URL,
     fileManager: FileManager
   ) throws {
     try fileManager.setAttributes(
-      [.protectionKey: FileProtectionType.completeUnlessOpen],
+      [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
       ofItemAtPath: url.path
     )
   }

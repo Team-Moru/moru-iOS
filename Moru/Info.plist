@@ -39,6 +39,10 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.teammoru.Moru.routine-tts-refresh</string>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -95,6 +99,10 @@
 		<string>SUIT-Light.ttf</string>
 		<string>SUIT-ExtraLight.ttf</string>
 		<string>SUIT-Thin.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

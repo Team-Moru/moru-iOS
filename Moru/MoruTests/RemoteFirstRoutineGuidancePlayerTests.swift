@@ -400,7 +400,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertTrue(bundled.calls.isEmpty)
   }
 
-  func testServerBoundCustomStepWaitsForRemoteIntroWithoutBundleItem() async {
+  func testServerBoundCustomStepStartsPlaybackWithoutWaitingForRemoteIntro() async {
     let order = GuidanceOrderRecorder()
     let player = ContextGuidanceRecorder(
       onRequest: { order.events.append("play") }
@@ -423,7 +423,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertEqual(player.requests.first?.routineLocalID, custom.id)
     XCTAssertNil(player.requests.first?.fallbackItemID)
     XCTAssertEqual(player.requests.first?.requiresServerGeneratedIntro, true)
-    XCTAssertEqual(order.events, ["prepareAndWait", "play"])
+    XCTAssertEqual(order.events, ["prepare", "play"])
   }
 
   func testLocalCustomStepDoesNotWaitForServerAudio() async {
@@ -431,10 +431,11 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     let player = ContextGuidanceRecorder(
       onRequest: { order.events.append("play") }
     )
+    let warmup = GuidanceWarmupRecorder(order: order)
     let coordinator = RoutineGuidanceCoordinator(
       player: player,
       routineGroupLocalID: UUID(),
-      warmupCoordinator: GuidanceWarmupRecorder(order: order)
+      warmupCoordinator: warmup
     )
     let custom = RoutineStep(type: .confirm, title: "로컬 커스텀", order: 0)
 
@@ -443,10 +444,10 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
 
     XCTAssertEqual(player.requests.count, 1)
     XCTAssertEqual(player.requests.first?.requiresServerGeneratedIntro, false)
-    XCTAssertEqual(order.events, ["play"])
+    XCTAssertEqual(order.events, ["prepare", "play"])
   }
 
-  func testServerBoundPresetProhibitsBundledFallbackAfterPreparation() async {
+  func testServerBoundPresetProhibitsBundledFallbackWithoutForegroundWait() async {
     let order = GuidanceOrderRecorder()
     let player = ContextGuidanceRecorder(
       onRequest: { order.events.append("play") }
@@ -472,7 +473,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
 
     XCTAssertEqual(player.requests.count, 1)
     XCTAssertEqual(player.requests.first?.requiresServerGeneratedIntro, true)
-    XCTAssertEqual(order.events, ["prepareAndWait", "play"])
+    XCTAssertEqual(order.events, ["prepare", "play"])
   }
 
   func testPreparedServerPresetKeepsNoFallbackRequirementWhenIntentReadChanges() async {

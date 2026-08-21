@@ -23,6 +23,29 @@ nonisolated struct RoutineTTSForegroundPollingPolicy: Equatable, Sendable {
   }
 }
 
+nonisolated struct RoutineTTSPrefetchPollingPolicy: Sendable {
+  let maximumAttempts: Int
+  let retryDelays: [Duration]
+  let now: @Sendable () -> Date
+  let sleep: @Sendable (Duration) async throws -> Void
+
+  init(
+    maximumAttempts: Int = 4,
+    retryDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)],
+    now: @escaping @Sendable () -> Date = Date.init,
+    sleep: @escaping @Sendable (Duration) async throws -> Void = {
+      try await Task.sleep(for: $0)
+    }
+  ) {
+    precondition(maximumAttempts > 0)
+    precondition(retryDelays.count >= max(0, maximumAttempts - 1))
+    self.maximumAttempts = maximumAttempts
+    self.retryDelays = retryDelays
+    self.now = now
+    self.sleep = sleep
+  }
+}
+
 /// The result of the bounded foreground wait that precedes a server-only
 /// routine cue. Keeping the result explicit prevents callers from treating a
 /// missing or still-generating cue as a successfully completed silent cue.
@@ -86,6 +109,15 @@ protocol RoutineTTSVoiceSelectionVersionStoring: AnyObject {
   func selectionVersion(forMemberID memberID: Int64) -> Int64?
   func setSelectionVersion(_ version: Int64, forMemberID memberID: Int64)
   func removeSelectionVersion(forMemberID memberID: Int64)
+  func selectedTTSID(forMemberID memberID: Int64) -> Int64?
+  func setSelectedTTSID(_ ttsID: Int64, forMemberID memberID: Int64)
+  func removeSelectedTTSID(forMemberID memberID: Int64)
+}
+
+extension RoutineTTSVoiceSelectionVersionStoring {
+  func selectedTTSID(forMemberID memberID: Int64) -> Int64? { nil }
+  func setSelectedTTSID(_ ttsID: Int64, forMemberID memberID: Int64) {}
+  func removeSelectedTTSID(forMemberID memberID: Int64) {}
 }
 
 extension RoutineTTSWarming {
@@ -118,11 +150,6 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let routineGroupRemoteID: Int64
     let routineRemoteID: Int64
     let keys: [RoutineTTSAudioCacheKey]
-  }
-
-  private struct CurrentVoiceSelection {
-    let identity: AccountSessionIdentity
-    let version: Int64
   }
 
   private struct RoutineTTSLocalFingerprint: Equatable {
@@ -173,23 +200,27 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private let serverNamespace: RoutineSyncServerNamespace
   private let resolver: RoutineTTSCuePlanResolver
   private let foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy
+  private let prefetchPollingPolicy: RoutineTTSPrefetchPollingPolicy
   private let diagnostics: RoutineTTSDiagnostics
   private let voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring
+  private let prefetchJobStore: (any RoutineTTSPrefetchJobStoring)?
+  private weak var backgroundTransferManager:
+    (any RoutineTTSBackgroundTransferManaging)?
+  private let preparationStatusCenter: RoutineTTSPreparationStatusCenter?
   private weak var playbackSessionInvalidator:
     (any RoutineTTSPlaybackSessionInvalidating)?
 
   private var preparedPlans: [LocalPlanKey: PreparedPlan] = [:]
   private var operationTask: Task<Void, Never>?
+  private var operationGeneration: UInt = 0
   private var sessionTransitionTask: Task<Void, Never>?
   private var isSceneActive = false
   private var observedIdentity: AccountSessionIdentity?
-  /// Restored only from a version previously received from this member's
-  /// successful PATCH response on this device.
-  private var currentVoiceSelection: CurrentVoiceSelection?
   /// If a purge fails, normalized cache keys can still resolve old bytes.
   /// Keep the affected account muted until a later purge succeeds instead of
   /// risking the newly selected voice playing stale audio.
   private var cacheUnavailableMemberIDs = Set<Int64>()
+  private var encounteredPendingGeneration = false
 
   init(
     remoteService: any RoutineTTSRemoteServing,
@@ -202,8 +233,14 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     resolver: RoutineTTSCuePlanResolver = RoutineTTSCuePlanResolver(),
     foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy =
       RoutineTTSForegroundPollingPolicy(),
+    prefetchPollingPolicy: RoutineTTSPrefetchPollingPolicy =
+      RoutineTTSPrefetchPollingPolicy(),
     diagnostics: RoutineTTSDiagnostics = RoutineTTSDiagnostics(),
-    voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring
+    voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring,
+    prefetchJobStore: (any RoutineTTSPrefetchJobStoring)? = nil,
+    backgroundTransferManager:
+      (any RoutineTTSBackgroundTransferManaging)? = nil,
+    preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil
   ) {
     self.remoteService = remoteService
     self.bindingRepository = bindingRepository
@@ -214,20 +251,26 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     self.serverNamespace = serverNamespace
     self.resolver = resolver
     self.foregroundPollingPolicy = foregroundPollingPolicy
+    self.prefetchPollingPolicy = prefetchPollingPolicy
     self.diagnostics = diagnostics
     self.voiceSelectionVersionStore = voiceSelectionVersionStore
+    self.prefetchJobStore = prefetchJobStore
+    self.backgroundTransferManager = backgroundTransferManager
+    self.preparationStatusCenter = preparationStatusCenter
     let identity = sessionIdentityProvider.currentAccountSessionIdentity
     observedIdentity = identity
-    currentVoiceSelection = restoredVoiceSelection(for: identity)
   }
 
   func setSceneActive(_ isActive: Bool) {
     isSceneActive = isActive
     guard isActive else {
+      operationGeneration &+= 1
       operationTask?.cancel()
       operationTask = nil
+      RoutineTTSBackgroundLifecycleBridge.shared.scheduleRefresh()
       return
     }
+    resumePersistedTransfers()
     prepareActiveRoutines()
   }
 
@@ -242,8 +285,17 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let previousIdentity = observedIdentity
     let currentIdentity = sessionIdentityProvider?.currentAccountSessionIdentity
     observedIdentity = currentIdentity
-    currentVoiceSelection = restoredVoiceSelection(for: currentIdentity)
     preparedPlans.removeAll()
+    if currentIdentity == nil {
+      preparationStatusCenter?.reset()
+      Task { [weak self] in
+        await self?.backgroundTransferManager?.discardAllTransfers()
+      }
+    } else if let currentIdentity {
+      Task { [weak self] in
+        await self?.resumePersistedTransfersNow(identity: currentIdentity)
+      }
+    }
     var memberIDsToPurge = Set<Int64>()
     if let previousIdentity {
       cacheUnavailableMemberIDs.insert(previousIdentity.memberID)
@@ -297,7 +349,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   /// bytes. Rewarming is deferred until the purge completes.
   func serverVoiceSelectionDidChange(
     memberID: Int64,
-    selectionVersion: Int64? = nil
+    selectionVersion: Int64? = nil,
+    selectedTTSID: Int64? = nil
   ) {
     guard let identity = sessionIdentityProvider?.currentAccountSessionIdentity,
           identity.memberID == memberID else {
@@ -309,22 +362,34 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         selectionVersion,
         forMemberID: memberID
       )
-      currentVoiceSelection = CurrentVoiceSelection(
-        identity: identity,
-        version: selectionVersion
-      )
     } else {
       voiceSelectionVersionStore.removeSelectionVersion(forMemberID: memberID)
-      currentVoiceSelection = nil
+    }
+    if let selectedTTSID, selectedTTSID > 0 {
+      voiceSelectionVersionStore.setSelectedTTSID(
+        selectedTTSID,
+        forMemberID: memberID
+      )
+    } else {
+      voiceSelectionVersionStore.removeSelectedTTSID(forMemberID: memberID)
     }
     preparedPlans.removeAll()
+    preparationStatusCenter?.begin(
+      memberID: memberID,
+      selectionVersion: selectionVersion,
+      selectedTTSID: selectedTTSID
+    )
     cacheUnavailableMemberIDs.insert(memberID)
+    let staleTransferReconciliation = Task { [weak self] in
+      await self?.resumePersistedTransfersNow(identity: identity)
+    }
     guard let audioCache else {
       return
     }
     let previousTransition = sessionTransitionTask
     sessionTransitionTask = Task { [weak self, audioCache, diagnostics, serverNamespace] in
       _ = await previousTransition?.value
+      _ = await staleTransferReconciliation.value
       do {
         try await audioCache.purge(
           accountID: String(memberID),
@@ -352,6 +417,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         identity: identity,
         routineRepository: routineRepository
       )
+      await resumePersistedTransfersNow(identity: identity)
     }
   }
 
@@ -363,6 +429,34 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
           let identity = sessionIdentityProvider?.currentAccountSessionIdentity,
           isAudioCacheUsable(for: identity) else { return }
     prepareActiveRoutines()
+  }
+
+  /// Called from BGAppRefresh and background-session completion. This performs
+  /// only read-only status GETs and transfer reconciliation.
+  func resumeBackgroundPrefetchOpportunity() async {
+    guard let identity = sessionIdentityProvider?.currentAccountSessionIdentity,
+          isAudioCacheUsable(for: identity),
+          let routineRepository else {
+      return
+    }
+    await resumePersistedTransfersNow(identity: identity)
+    if let operationTask {
+      _ = await operationTask.value
+      return
+    }
+    let transition = sessionTransitionTask
+    replaceOperation { [weak self] in
+      _ = await transition?.value
+      guard self?.sessionIdentityProvider?.currentAccountSessionIdentity == identity,
+            self?.isAudioCacheUsable(for: identity) == true else {
+        return
+      }
+      await self?.prepareActiveRoutinesNow(
+        identity: identity,
+        routineRepository: routineRepository
+      )
+    }
+    _ = await operationTask?.value
   }
 
   func prepare(routineGroupLocalID: UUID, routineLocalIDs: [UUID]) {
@@ -461,6 +555,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
 
     // A first cue has higher priority than an opportunistic active-routine
     // sweep. The cancelled sweep checks cancellation before changing a plan.
+    operationGeneration &+= 1
     operationTask?.cancel()
     operationTask = nil
 
@@ -532,8 +627,20 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     )
     guard let audioCache,
           let identity = sessionIdentityProvider?.currentAccountSessionIdentity,
-          isAudioCacheUsable(for: identity),
-          let plan = preparedPlans[planKey],
+          isAudioCacheUsable(for: identity) else {
+      diagnostics.record(.cachePlanMissing)
+      return nil
+    }
+    if preparedPlans[planKey] == nil {
+      _ = await restorePreparedPlanFromPersistence(
+        identity: identity,
+        routineGroupLocalID: request.routineGroupLocalID,
+        routineLocalID: request.routineLocalID,
+        routineTitle: request.routineTitle,
+        routineType: request.routineType
+      )
+    }
+    guard let plan = preparedPlans[planKey],
           plan.identity == identity,
           plan.fingerprint == RoutineTTSLocalFingerprint(
             title: request.routineTitle,
@@ -609,17 +716,42 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       return
     }
 
-    for routine in routines {
-      guard !Task.isCancelled,
-            sessionIdentityProvider?.currentAccountSessionIdentity == identity,
-            isAudioCacheUsable(for: identity) else {
+    guard !routines.isEmpty else {
+      preparationStatusCenter?.report(
+        .ready,
+        component: .routineIntro,
+        memberID: identity.memberID,
+        selectionVersion: currentSelectionVersion(for: identity),
+        selectedTTSID: currentSelectedTTSID(for: identity)
+      )
+      return
+    }
+
+    for attempt in 0..<prefetchPollingPolicy.maximumAttempts {
+      encounteredPendingGeneration = false
+      for routine in routines {
+        guard !Task.isCancelled,
+              sessionIdentityProvider?.currentAccountSessionIdentity == identity,
+              isAudioCacheUsable(for: identity) else {
+          return
+        }
+        await prepareNow(
+          routineGroupLocalID: routine.id,
+          routineLocalIDs: routine.steps.map(\.id),
+          identity: identity
+        )
+      }
+      guard encounteredPendingGeneration,
+            attempt + 1 < prefetchPollingPolicy.maximumAttempts else {
+        break
+      }
+      do {
+        try await prefetchPollingPolicy.sleep(
+          prefetchPollingPolicy.retryDelays[attempt]
+        )
+      } catch {
         return
       }
-      await prepareNow(
-        routineGroupLocalID: routine.id,
-        routineLocalIDs: routine.steps.map(\.id),
-        identity: identity
-      )
     }
   }
 
@@ -628,10 +760,15 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   ) {
     let previous = operationTask
     previous?.cancel()
-    operationTask = Task {
+    operationGeneration &+= 1
+    let requestedGeneration = operationGeneration
+    operationTask = Task { [weak self] in
       _ = await previous?.value
       guard !Task.isCancelled else { return }
       await operation()
+      guard let self,
+            requestedGeneration == operationGeneration else { return }
+      operationTask = nil
     }
   }
 
@@ -690,12 +827,28 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     }
 
     let response: [ServerRoutineTTSRoutine]
+    if await shouldDeferRemoteRequest(
+      identity: identity,
+      routineGroupLocalID: routineGroupLocalID
+    ) {
+      encounteredPendingGeneration = true
+      return
+    }
     do {
       response = try await remoteService.fetchRoutineTTS(
         routineGroupID: groupBinding.remoteID,
         identity: identity
       )
     } catch {
+      diagnostics.record(.remoteFetchFailed)
+      preparationStatusCenter?.report(
+        .retryScheduled,
+        component: .routineIntro,
+        memberID: identity.memberID,
+        selectionVersion: currentSelectionVersion(for: identity),
+        selectedTTSID: currentSelectedTTSID(for: identity)
+      )
+      RoutineTTSBackgroundLifecycleBridge.shared.scheduleRefresh()
       return
     }
 
@@ -756,12 +909,34 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       case .playable(let resolvedAssets):
         assets = resolvedAssets
       case .pending:
+        encounteredPendingGeneration = true
+        await persistPendingIntroJob(
+          identity: identity,
+          localStep: localStep,
+          routineGroupLocalID: routineGroupLocalID,
+          routineLocalID: routineLocalID,
+          groupBinding: groupBinding,
+          routineBinding: routineBinding
+        )
         // Preserve a complete prior plan while a replacement generation is
         // still pending. A complete response replaces it atomically below.
         continue
       case .unavailable:
         preparedPlans[localKey] = nil
         diagnostics.record(.responseUnavailable)
+        continue
+      }
+
+
+      if await persistPlayableIntroJobIfSupported(
+        identity: identity,
+        localStep: localStep,
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalID: routineLocalID,
+        groupBinding: groupBinding,
+        routineBinding: routineBinding,
+        assets: assets
+      ) {
         continue
       }
 
@@ -1094,6 +1269,270 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     return keys
   }
 
+  private func persistPendingIntroJob(
+    identity: AccountSessionIdentity,
+    localStep: RoutineStep,
+    routineGroupLocalID: UUID,
+    routineLocalID: UUID,
+    groupBinding: RoutineServerBinding,
+    routineBinding: RoutineServerBinding
+  ) async {
+    guard let prefetchJobStore else { return }
+    let previous = try? await prefetchJobStore.allJobs().first(where: {
+      $0.memberID == identity.memberID
+        && $0.selectionVersion == currentSelectionVersion(for: identity)
+        && $0.selectedTTSID == currentSelectedTTSID(for: identity)
+        && $0.assetKind == .routineIntro
+        && $0.routineGroupLocalID == routineGroupLocalID
+        && $0.routineLocalID == routineLocalID
+    })
+    let attempt = min(
+      (previous?.remoteAttemptCount ?? 0) + 1,
+      prefetchPollingPolicy.maximumAttempts
+    )
+    let retryDelay: TimeInterval
+    if prefetchPollingPolicy.retryDelays.isEmpty {
+      retryDelay = 15 * 60
+    } else {
+      let delayIndex = min(
+        max(0, attempt - 1),
+        prefetchPollingPolicy.retryDelays.count - 1
+      )
+      retryDelay = Self.timeInterval(
+        for: prefetchPollingPolicy.retryDelays[delayIndex]
+      )
+    }
+    let job = RoutineTTSPrefetchJob(
+      id: previous?.id ?? UUID(),
+      memberID: identity.memberID,
+      selectionVersion: currentSelectionVersion(for: identity),
+      selectedTTSID: currentSelectedTTSID(for: identity),
+      assetKind: .routineIntro,
+      routineGroupLocalID: routineGroupLocalID,
+      routineLocalID: routineLocalID,
+      routineFingerprint: RoutineTTSPrefetchJob.fingerprint(
+        title: localStep.title,
+        type: localStep.type
+      ),
+      routineGroupRemoteID: groupBinding.remoteID,
+      routineRemoteID: routineBinding.remoteID,
+      state: attempt >= prefetchPollingPolicy.maximumAttempts
+        ? .retryScheduled
+        : .pendingRemote,
+      assets: previous?.assets ?? [],
+      remoteAttemptCount: attempt,
+      nextRemoteAttemptAt: prefetchPollingPolicy.now().addingTimeInterval(retryDelay)
+    )
+    _ = try? await prefetchJobStore.upsert(job)
+    preparationStatusCenter?.report(
+      attempt >= prefetchPollingPolicy.maximumAttempts
+        ? .retryScheduled
+        : .preparing,
+      component: .routineIntro,
+      memberID: identity.memberID,
+      selectionVersion: currentSelectionVersion(for: identity),
+      selectedTTSID: currentSelectedTTSID(for: identity)
+    )
+    if attempt >= prefetchPollingPolicy.maximumAttempts {
+      RoutineTTSBackgroundLifecycleBridge.shared.scheduleRefresh()
+    }
+  }
+
+  private func shouldDeferRemoteRequest(
+    identity: AccountSessionIdentity,
+    routineGroupLocalID: UUID
+  ) async -> Bool {
+    guard let prefetchJobStore,
+          let jobs = try? await prefetchJobStore.allJobs() else {
+      return false
+    }
+    let matching = jobs.filter {
+      $0.memberID == identity.memberID
+        && $0.selectionVersion == currentSelectionVersion(for: identity)
+        && $0.selectedTTSID == currentSelectedTTSID(for: identity)
+        && $0.assetKind == .routineIntro
+        && $0.routineGroupLocalID == routineGroupLocalID
+        && ($0.state == .pendingRemote || $0.state == .retryScheduled)
+    }
+    guard !matching.isEmpty,
+          matching.allSatisfy({
+            guard let next = $0.nextRemoteAttemptAt else { return false }
+            return next > prefetchPollingPolicy.now()
+          }) else {
+      return false
+    }
+    RoutineTTSBackgroundLifecycleBridge.shared.scheduleRefresh()
+    return true
+  }
+
+  private static func timeInterval(for duration: Duration) -> TimeInterval {
+    let components = duration.components
+    return TimeInterval(components.seconds)
+      + TimeInterval(components.attoseconds) / 1_000_000_000_000_000_000
+  }
+
+  private func persistPlayableIntroJobIfSupported(
+    identity: AccountSessionIdentity,
+    localStep: RoutineStep,
+    routineGroupLocalID: UUID,
+    routineLocalID: UUID,
+    groupBinding: RoutineServerBinding,
+    routineBinding: RoutineServerBinding,
+    assets: [RoutineTTSResolvedAsset]
+  ) async -> Bool {
+    guard let prefetchJobStore,
+          let backgroundTransferManager else {
+      return false
+    }
+    let keys = assets.map {
+      RoutineTTSAudioCacheKey(
+        accountID: String(identity.memberID),
+        namespace: serverNamespace.rawValue,
+        routineGroupID: groupBinding.remoteID,
+        routineID: $0.remoteRoutineID,
+        stepID: $0.remoteStepID,
+        remoteURL: $0.remoteURL
+      )
+    }
+    let existing = try? await prefetchJobStore.allJobs().first(where: {
+      $0.memberID == identity.memberID
+        && $0.selectionVersion == currentSelectionVersion(for: identity)
+        && $0.selectedTTSID == currentSelectedTTSID(for: identity)
+        && $0.assetKind == .routineIntro
+        && $0.routineGroupLocalID == routineGroupLocalID
+        && $0.routineLocalID == routineLocalID
+    })
+    let existingStateByKey = Dictionary(
+      uniqueKeysWithValues: (existing?.assets ?? []).map {
+        ($0.cacheKey, ($0.id, $0.state))
+      }
+    )
+    let persistedAssets = keys.map { key in
+      let existingAsset = existingStateByKey[key]
+      return RoutineTTSPrefetchAsset(
+        id: existingAsset?.0 ?? UUID(),
+        cacheKey: key,
+        state: existingAsset?.1 ?? .queued
+      )
+    }
+    let job = RoutineTTSPrefetchJob(
+      id: existing?.id ?? UUID(),
+      memberID: identity.memberID,
+      selectionVersion: currentSelectionVersion(for: identity),
+      selectedTTSID: currentSelectedTTSID(for: identity),
+      assetKind: .routineIntro,
+      routineGroupLocalID: routineGroupLocalID,
+      routineLocalID: routineLocalID,
+      routineFingerprint: RoutineTTSPrefetchJob.fingerprint(
+        title: localStep.title,
+        type: localStep.type
+      ),
+      routineGroupRemoteID: groupBinding.remoteID,
+      routineRemoteID: routineBinding.remoteID,
+      state: .downloading,
+      assets: persistedAssets
+    )
+    do {
+      let storedJob = try await prefetchJobStore.upsert(job)
+      preparationStatusCenter?.report(
+        .preparing,
+        component: .routineIntro,
+        memberID: identity.memberID,
+        selectionVersion: currentSelectionVersion(for: identity),
+        selectedTTSID: currentSelectedTTSID(for: identity)
+      )
+      await backgroundTransferManager.enqueue(jobID: storedJob.id)
+      _ = await restorePreparedPlanFromPersistence(
+        identity: identity,
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalID: routineLocalID,
+        routineTitle: localStep.title,
+        routineType: localStep.type
+      )
+    } catch {
+      preparationStatusCenter?.report(
+        .retryScheduled,
+        component: .routineIntro,
+        memberID: identity.memberID,
+        selectionVersion: currentSelectionVersion(for: identity),
+        selectedTTSID: currentSelectedTTSID(for: identity)
+      )
+    }
+    return true
+  }
+
+  private func resumePersistedTransfers() {
+    guard let identity = sessionIdentityProvider?.currentAccountSessionIdentity else {
+      return
+    }
+    Task { [weak self] in
+      await self?.resumePersistedTransfersNow(identity: identity)
+    }
+  }
+
+  private func resumePersistedTransfersNow(
+    identity: AccountSessionIdentity
+  ) async {
+    guard let backgroundTransferManager,
+          sessionIdentityProvider?.currentAccountSessionIdentity == identity else {
+      return
+    }
+    await backgroundTransferManager.resumePendingTransfers(
+      memberID: identity.memberID,
+      selectionVersion: currentSelectionVersion(for: identity),
+      selectedTTSID: currentSelectedTTSID(for: identity)
+    )
+  }
+
+  private func restorePreparedPlanFromPersistence(
+    identity: AccountSessionIdentity,
+    routineGroupLocalID: UUID,
+    routineLocalID: UUID,
+    routineTitle: String,
+    routineType: RoutineStepType
+  ) async -> Bool {
+    guard let prefetchJobStore,
+          let audioCache,
+          let job = try? await prefetchJobStore.allJobs().first(where: {
+            $0.memberID == identity.memberID
+              && $0.selectionVersion == currentSelectionVersion(for: identity)
+              && $0.selectedTTSID == currentSelectedTTSID(for: identity)
+              && $0.assetKind == .routineIntro
+              && $0.routineGroupLocalID == routineGroupLocalID
+              && $0.routineLocalID == routineLocalID
+              && $0.state == .completed
+          }),
+          job.routineFingerprint == RoutineTTSPrefetchJob.fingerprint(
+            title: routineTitle,
+            type: routineType
+          ),
+          let groupRemoteID = job.routineGroupRemoteID,
+          let routineRemoteID = job.routineRemoteID,
+          !job.assets.isEmpty else {
+      return false
+    }
+    let keys = job.assets.map(\.cacheKey)
+    for key in keys {
+      guard await audioCache.cachedFileURL(for: key, allowStale: true) != nil else {
+        return false
+      }
+    }
+    preparedPlans[LocalPlanKey(
+      routineGroupLocalID: routineGroupLocalID,
+      routineLocalID: routineLocalID
+    )] = PreparedPlan(
+      identity: identity,
+      fingerprint: RoutineTTSLocalFingerprint(
+        title: routineTitle,
+        type: routineType
+      ),
+      routineGroupRemoteID: groupRemoteID,
+      routineRemoteID: routineRemoteID,
+      keys: keys
+    )
+    return true
+  }
+
   private func publishPreparedPlan(
     candidate: ForegroundCandidate,
     keys: [RoutineTTSAudioCacheKey],
@@ -1249,20 +1688,17 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private func currentSelectionVersion(
     for identity: AccountSessionIdentity
   ) -> Int64? {
-    guard currentVoiceSelection?.identity == identity else { return nil }
-    return currentVoiceSelection?.version
+    voiceSelectionVersionStore.selectionVersion(
+      forMemberID: identity.memberID
+    )
   }
 
-  private func restoredVoiceSelection(
-    for identity: AccountSessionIdentity?
-  ) -> CurrentVoiceSelection? {
-    guard let identity,
-          let version = voiceSelectionVersionStore.selectionVersion(
-            forMemberID: identity.memberID
-          ) else {
-      return nil
-    }
-    return CurrentVoiceSelection(identity: identity, version: version)
+  private func currentSelectedTTSID(
+    for identity: AccountSessionIdentity
+  ) -> Int64? {
+    voiceSelectionVersionStore.selectedTTSID(
+      forMemberID: identity.memberID
+    )
   }
 
   private func validateCurrentBinding(
