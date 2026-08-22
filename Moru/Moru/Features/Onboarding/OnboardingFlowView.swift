@@ -871,128 +871,17 @@ private struct OnboardingAlarmSettingView: View {
           WeekdayCircleSelector(viewModel: viewModel)
             .frame(maxWidth: .infinity)
 
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-            Text("알람")
-              .onboardingTextStyle(.b4.weight(.semiBold))
-              .foregroundStyle(MoruPilotColor.textSecondary)
-
-            OnboardingAlarmOptionsCard(viewModel: viewModel)
-
-            Text(OnboardingCopy.alarmSoundGuidance)
-              .onboardingTextStyle(.c1)
-              .foregroundStyle(MoruPilotColor.textTertiary)
-              .multilineTextAlignment(.center)
-              .fixedSize(horizontal: false, vertical: true)
-              .frame(maxWidth: .infinity)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(
-            .top,
-            dynamicTypeSize.isAccessibilitySize
-              ? -MoruPilotSpacing.twelve
-              : -MoruPilotSpacing.twenty
-          )
+          Text(OnboardingCopy.alarmSoundGuidance)
+            .onboardingTextStyle(.c1)
+            .foregroundStyle(MoruPilotColor.textTertiary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity)
         }
       } else {
         PreviewUnavailableState(errorMessage: viewModel.errorMessage)
       }
     }
-  }
-}
-
-private struct OnboardingAlarmOptionsCard: View {
-  @ObservedObject var viewModel: OnboardingViewModel
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: cardSpacing) {
-      settingRow(
-        title: "날씨 알려주기",
-        isOn: Binding(
-          get: { viewModel.draft.includeWeather },
-          set: { isOn in
-            viewModel.setIncludeWeather(isOn)
-          }
-        )
-      )
-      settingRow(
-        title: "오늘의 운세 알려주기",
-        isOn: Binding(
-          get: { viewModel.draft.includeFortune },
-          set: { isOn in
-            viewModel.setIncludeFortune(isOn)
-          }
-        )
-      )
-    }
-    .padding(.horizontal, horizontalCardPadding)
-    .padding(.vertical, verticalCardPadding)
-    .background(OnboardingSurface.card)
-    .overlay(
-      RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
-        .stroke(MoruPilotColor.border, lineWidth: 1)
-    )
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-    .shadow(
-      color: MoruPilotColor.shadow.opacity(0.45),
-      radius: 8,
-      x: 0,
-      y: 4
-    )
-    .padding(.horizontal, dynamicTypeSize.isAccessibilitySize ? 0 : 5)
-  }
-
-  private var cardSpacing: CGFloat {
-    dynamicTypeSize.isAccessibilitySize
-      ? MoruPilotSpacing.sixteen
-      : MoruPilotSpacing.four
-  }
-
-  private var horizontalCardPadding: CGFloat {
-    dynamicTypeSize.isAccessibilitySize ? MoruPilotSpacing.twenty : AppSpacing.xl
-  }
-
-  private var verticalCardPadding: CGFloat {
-    dynamicTypeSize.isAccessibilitySize ? MoruPilotSpacing.twenty : MoruPilotSpacing.twelve
-  }
-
-  private func settingRow(
-    title: String,
-    isOn: Binding<Bool>
-  ) -> some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
-      Text(title)
-        .onboardingTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-
-      Spacer(minLength: MoruPilotSpacing.eight)
-
-      Button {
-        isOn.wrappedValue.toggle()
-      } label: {
-        ZStack(alignment: isOn.wrappedValue ? .trailing : .leading) {
-          Capsule()
-            .fill(
-              isOn.wrappedValue
-                ? MoruPilotColor.accent
-                : MoruPilotColor.border
-            )
-
-          Circle()
-            .fill(Color.white)
-            .frame(width: 20, height: 20)
-            .padding(.horizontal, 2)
-        }
-        .frame(width: 42, height: 24)
-      }
-      .buttonStyle(.plain)
-      .frame(minWidth: 44, minHeight: 31)
-    }
-    .frame(maxWidth: .infinity, minHeight: 31)
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel(title)
-    .accessibilityValue(isOn.wrappedValue ? "켬" : "끔")
   }
 }
 

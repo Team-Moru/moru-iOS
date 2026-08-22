@@ -196,7 +196,7 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     try assertStateRendersDeterministically(.alarm)
   }
 
-  func testAlarmNarrationOptionsUpdateThePreviewSchedule() throws {
+  func testUnsupportedAlarmNarrationOptionsDefaultToDisabled() throws {
     var draft = OnboardingDraft()
     draft.previewRoutine = try LocalTemplateSuggestionService.shared.makeRoutine(
       from: draft.suggestionInput
@@ -207,14 +207,16 @@ final class OnboardingFigmaVisualTests: XCTestCase {
       routineSuggestionService: LocalTemplateSuggestionService.shared
     )
 
-    XCTAssertTrue(viewModel.draft.includeWeather)
-    XCTAssertTrue(viewModel.draft.includeFortune)
-
-    viewModel.setIncludeWeather(false)
-    viewModel.setIncludeFortune(false)
-
     XCTAssertFalse(viewModel.draft.includeWeather)
     XCTAssertFalse(viewModel.draft.includeFortune)
+
+    let completionRequest = CompleteOnboardingRequest(
+      suggestionInput: viewModel.draft.suggestionInput,
+      selectedVoice: viewModel.draft.selectedVoice
+    )
+    XCTAssertFalse(completionRequest.includeWeather)
+    XCTAssertFalse(completionRequest.includeFortune)
+
     XCTAssertFalse(
       viewModel.draft.previewRoutine?.alarmSchedule?.includeWeather ?? true
     )

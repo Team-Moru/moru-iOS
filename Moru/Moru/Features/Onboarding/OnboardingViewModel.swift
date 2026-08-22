@@ -379,16 +379,6 @@ final class OnboardingViewModel: ObservableObject {
     updatePreviewAlarm()
   }
 
-  func setIncludeWeather(_ isIncluded: Bool) {
-    draft.includeWeather = isIncluded
-    updatePreviewAlarm()
-  }
-
-  func setIncludeFortune(_ isIncluded: Bool) {
-    draft.includeFortune = isIncluded
-    updatePreviewAlarm()
-  }
-
   func updatePreviewName(_ name: String) {
     guard var routine = draft.previewRoutine else {
       return

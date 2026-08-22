@@ -18,8 +18,8 @@ struct CompleteOnboardingRequest: Hashable {
     suggestionInput: RoutineSuggestionInput,
     selectedVoice: VoiceProfile,
     previewRoutine: Routine? = nil,
-    includeWeather: Bool = true,
-    includeFortune: Bool = true
+    includeWeather: Bool = false,
+    includeFortune: Bool = false
   ) {
     self.suggestionInput = suggestionInput
     self.selectedVoice = selectedVoice
