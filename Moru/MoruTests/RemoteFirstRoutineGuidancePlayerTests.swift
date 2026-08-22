@@ -697,6 +697,47 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertNil(urls)
   }
 
+  func testForegroundPollingPolicyDefaultsToThirtySecondWindow() {
+    let policy = RoutineTTSForegroundPollingPolicy()
+
+    XCTAssertEqual(policy.maximumAttempts, 31)
+    XCTAssertEqual(policy.retryDelay, .seconds(1))
+    XCTAssertEqual(policy.maximumWait, .seconds(30))
+  }
+
+  func testForegroundWarmupJoinsExistingBackgroundPreparation() async throws {
+    let completed = [remoteRoutine(id: 51, stepIDs: [71])]
+    let fixture = try await makeWarmupFixture(response: completed)
+    try await fixture.seedCachedFiles(stepIDs: [71])
+    await fixture.remote.suspendNextResponse()
+
+    fixture.coordinator.prepare(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+    for _ in 0..<100 {
+      if await fixture.remote.callCount == 1 { break }
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+
+    let preparationTask = Task { @MainActor in
+      await fixture.coordinator.prepareAndWait(
+        routineGroupLocalID: fixture.groupID,
+        routineLocalIDs: [fixture.routineID]
+      )
+    }
+    try await Task.sleep(for: .milliseconds(20))
+    let callsWhileBackgroundRequestIsSuspended = await fixture.remote.callCount
+
+    XCTAssertEqual(callsWhileBackgroundRequestIsSuspended, 1)
+
+    await fixture.remote.resumeResponse()
+    let preparation = await preparationTask.value
+    let finalRemoteCallCount = await fixture.remote.callCount
+    XCTAssertEqual(preparation, .prepared)
+    XCTAssertEqual(finalRemoteCallCount, 2)
+  }
+
   func testForegroundWarmupPollsPendingUntilCompleteBeforePublishing() async throws {
     let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
     let completed = [remoteRoutine(id: 51, stepIDs: [71])]
@@ -745,6 +786,60 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertNil(urls)
     XCTAssertEqual(remoteCallCount, 2)
     XCTAssertEqual(preparation, .retryablePending)
+  }
+
+  func testForegroundWarmupStopsAtMaximumWaitBeforeAttemptCap() async throws {
+    let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
+    let fixture = try await makeWarmupFixture(
+      response: pending,
+      foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy(
+        maximumAttempts: 31,
+        retryDelay: .seconds(1),
+        maximumWait: .milliseconds(20)
+      )
+    )
+    let clock = ContinuousClock()
+    let startedAt = clock.now
+
+    let preparation = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    let remoteCallCount = await fixture.remote.callCount
+    XCTAssertEqual(preparation, .retryablePending)
+    XCTAssertLessThan(startedAt.duration(to: clock.now), .milliseconds(250))
+    XCTAssertEqual(remoteCallCount, 1)
+  }
+
+  func testForegroundRetryCapPersistsRetryScheduledJobAndDisplayState() async throws {
+    let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
+    let root = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let jobStore = try FileRoutineTTSPrefetchJobStore(
+      fileURL: root.appendingPathComponent("jobs.json")
+    )
+    let statusCenter = RoutineTTSPreparationStatusCenter()
+    let fixture = try await makeWarmupFixture(
+      response: pending,
+      foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy(
+        maximumAttempts: 2,
+        retryDelay: .zero
+      ),
+      prefetchJobStore: jobStore,
+      preparationStatusCenter: statusCenter
+    )
+
+    let preparation = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    let jobs = try await jobStore.allJobs()
+    XCTAssertEqual(preparation, .retryablePending)
+    XCTAssertEqual(jobs.count, 1)
+    XCTAssertEqual(jobs.first?.state, .retryScheduled)
+    XCTAssertEqual(statusCenter.state, .retryScheduled)
   }
 
   func testForegroundPendingKeepsPreviouslyPreparedPlanUsable() async throws {
@@ -1242,7 +1337,9 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy =
       RoutineTTSForegroundPollingPolicy(),
     voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring =
-      InMemoryVoiceSelectionVersionStore()
+      InMemoryVoiceSelectionVersionStore(),
+    prefetchJobStore: (any RoutineTTSPrefetchJobStoring)? = nil,
+    preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil
   ) async throws -> WarmupFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let bindings = SwiftDataRoutineSyncRepository(modelContainer: container)
@@ -1292,7 +1389,9 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       downloader: downloader,
       sessionIdentityProvider: identity,
       foregroundPollingPolicy: foregroundPollingPolicy,
-      voiceSelectionVersionStore: voiceSelectionVersionStore
+      voiceSelectionVersionStore: voiceSelectionVersionStore,
+      prefetchJobStore: prefetchJobStore,
+      preparationStatusCenter: preparationStatusCenter
     )
     return WarmupFixture(
       groupID: groupID,
