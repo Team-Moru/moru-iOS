@@ -17,13 +17,10 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
   private let voicePreviewPlayer: any VoicePreviewPlaying
   private let alarmService: any ProfileAlarmServicing
-  private let accountServerRemoteService:
-    (any AccountServerRemoteServing)?
+  private let accountServerViewModel: AccountServerSettingsViewModel
   private let accountRoutineGroupRemoteService:
     (any AccountRoutineGroupRemoteServing)?
   private let serverVoicePreviewPlayer: ServerVoicePreviewPlayer
-  private let routineTTSPreparationStatusCenter:
-    RoutineTTSPreparationStatusCenter?
   private let accountSessionStore: AccountSessionStore
   private let socialLoginCoordinator: any SocialLoginCoordinating
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
@@ -35,20 +32,15 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
   private let resetAvailability: @MainActor () -> Bool
   private let onOpenSettings: @MainActor () -> Void
   private let onResetSucceeded: @MainActor () -> Void
-  private let onServerVoiceSelectionDidSucceed:
-    @MainActor (ServerTTSSelection) -> Void
 
   init(
     profileSettingsUseCase: any ProfileSettingsUseCaseProtocol,
     voicePreviewPlayer: any VoicePreviewPlaying,
     alarmService: any ProfileAlarmServicing,
-    accountServerRemoteService:
-      (any AccountServerRemoteServing)? = nil,
+    accountServerViewModel: AccountServerSettingsViewModel,
     accountRoutineGroupRemoteService:
       (any AccountRoutineGroupRemoteServing)? = nil,
     serverVoicePreviewPlayer: ServerVoicePreviewPlayer = ServerVoicePreviewPlayer(),
-    routineTTSPreparationStatusCenter:
-      RoutineTTSPreparationStatusCenter? = nil,
     accountSessionStore: AccountSessionStore,
     socialLoginCoordinator: any SocialLoginCoordinating,
     googleAuthorizationSession: any GoogleAuthorizationStarting,
@@ -59,19 +51,15 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     resetUseCase: (any ResetLocalDataUseCaseProtocol)?,
     resetAvailability: @escaping @MainActor () -> Bool,
     onOpenSettings: @escaping @MainActor () -> Void,
-    onResetSucceeded: @escaping @MainActor () -> Void,
-    onServerVoiceSelectionDidSucceed:
-      @escaping @MainActor (ServerTTSSelection) -> Void = { _ in }
+    onResetSucceeded: @escaping @MainActor () -> Void
   ) {
     self.profileSettingsUseCase = profileSettingsUseCase
     self.voicePreviewPlayer = voicePreviewPlayer
     self.alarmService = alarmService
-    self.accountServerRemoteService = accountServerRemoteService
+    self.accountServerViewModel = accountServerViewModel
     self.accountRoutineGroupRemoteService =
       accountRoutineGroupRemoteService
     self.serverVoicePreviewPlayer = serverVoicePreviewPlayer
-    self.routineTTSPreparationStatusCenter =
-      routineTTSPreparationStatusCenter
     self.accountSessionStore = accountSessionStore
     self.socialLoginCoordinator = socialLoginCoordinator
     self.googleAuthorizationSession = googleAuthorizationSession
@@ -83,7 +71,6 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
     self.resetAvailability = resetAvailability
     self.onOpenSettings = onOpenSettings
     self.onResetSucceeded = onResetSucceeded
-    self.onServerVoiceSelectionDidSucceed = onServerVoiceSelectionDidSucceed
   }
 
   func make() -> AnyView {
@@ -100,12 +87,7 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
           onOpenSettings: onOpenSettings,
           onResetSucceeded: onResetSucceeded
         ),
-        accountServerViewModel: AccountServerSettingsViewModel(
-          remoteService: accountServerRemoteService,
-          preparationStatusCenter: routineTTSPreparationStatusCenter,
-          onServerVoiceSelectionDidSucceed:
-            onServerVoiceSelectionDidSucceed
-        ),
+        accountServerViewModel: accountServerViewModel,
         serverVoicePreviewPlayer: serverVoicePreviewPlayer,
         accountRoutineGroupRemoteService:
           accountRoutineGroupRemoteService,
