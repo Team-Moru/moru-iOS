@@ -71,6 +71,9 @@ struct RoutinePlayerView: View {
         case .terminalFailure(let reason):
             terminalFailureView(reason: reason)
 
+        case .preparingServerVoice(let step):
+            serverVoicePreparationView(step: step)
+
         case .running(let step):
             runningView(step: step)
 
@@ -152,6 +155,57 @@ struct RoutinePlayerView: View {
     }
 
     // MARK: - Running
+
+    private func serverVoicePreparationView(
+        step: RoutineStep
+    ) -> some View {
+        GeometryReader { geometry in
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    if !viewModel.isTrialExecution {
+                        topBar
+                    }
+
+                    progressSection
+                        .padding(
+                            .top,
+                            viewModel.isTrialExecution ? 28 : 32
+                        )
+
+                    Spacer(minLength: 48)
+
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(AppColor.orange250)
+
+                        Text("서버 음성을 준비하고 있어요.")
+                            .font(AppFont.title2Bold)
+                            .foregroundStyle(AppColor.gray600)
+                            .multilineTextAlignment(.center)
+
+                        Text("최대 30초만 기다린 뒤 루틴을 시작할게요.")
+                            .font(AppFont.body1NormalMedium)
+                            .foregroundStyle(AppColor.gray500)
+                            .multilineTextAlignment(.center)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(
+                        "\(step.title) 서버 음성을 준비하고 있어요."
+                    )
+                    .padding(.horizontal, 32)
+
+                    Spacer(minLength: 48)
+                }
+                .frame(
+                    minHeight: geometry.size.height,
+                    alignment: .top
+                )
+            }
+            .scrollIndicators(.hidden)
+        }
+        .disabled(viewModel.isStepInteractionDisabled)
+    }
 
     private func runningView(
         step: RoutineStep

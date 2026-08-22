@@ -868,11 +868,11 @@ final class BundledRoutineAudioTests: XCTestCase {
 
     viewModel.resolveRoutine()
 
-    guard case .running(let runningStep) = viewModel.screenState else {
-      XCTFail("A pending server cue must not block the routine step.")
+    guard case .preparingServerVoice(let preparingStep) = viewModel.screenState else {
+      XCTFail("A pending server cue must show its bounded preparation state.")
       return
     }
-    XCTAssertEqual(runningStep.id, step.id)
+    XCTAssertEqual(preparingStep.id, step.id)
 
     await drainTasks()
     XCTAssertEqual(warmup.prepareCallCount, 0)
@@ -885,6 +885,85 @@ final class BundledRoutineAudioTests: XCTestCase {
 
     viewModel.completeCurrentStep()
     XCTAssertNotNil(viewModel.stepResults.first?.durationSeconds)
+  }
+
+  func testServerVoicePreparationHidesStepControlsUntilAudioIsReady() async {
+    let player = RoutineGuidanceRequestRecorder()
+    let warmup = DeferredServerVoiceWarmupStub()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      routineGroupLocalID: UUID(),
+      warmupCoordinator: warmup
+    )
+    let step = RoutineStep(type: .timer, title: "서버 음성 타이머", order: 0)
+    let routine = Routine(name: "서버 음성 루틴", steps: [step])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+
+    guard case .preparingServerVoice(let preparingStep) = viewModel.screenState else {
+      XCTFail("Server audio must finish preparing before controls are visible.")
+      return
+    }
+    XCTAssertEqual(preparingStep.id, step.id)
+    XCTAssertTrue(player.requests.isEmpty)
+
+    warmup.finish(with: .prepared)
+    await drainTasks()
+
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("Prepared server audio must reveal the routine step.")
+      return
+    }
+    XCTAssertEqual(runningStep.id, step.id)
+    XCTAssertEqual(player.requests.count, 1)
+    viewModel.runtimeDidInterrupt()
+  }
+
+  func testBackgroundingDuringServerVoicePreparationFailsOpenWithoutGettingStuck() async {
+    let player = RoutineGuidanceRequestRecorder()
+    let warmup = DeferredServerVoiceWarmupStub()
+    let coordinator = RoutineGuidanceCoordinator(
+      player: player,
+      routineGroupLocalID: UUID(),
+      warmupCoordinator: warmup
+    )
+    let step = RoutineStep(type: .confirm, title: "백그라운드 전환", order: 0)
+    let routine = Routine(name: "서버 음성 루틴", steps: [step])
+    let viewModel = RoutinePlayerViewModel(
+      request: TrialRoutineExecutionRequest(routineID: routine.id),
+      resolver: GuidanceRoutineResolver(routine: routine),
+      finalizer: GuidanceTrialFinalizer(),
+      guidanceCoordinator: coordinator,
+      presentationToken: UUID(),
+      onEvent: { _, _ in }
+    )
+
+    viewModel.resolveRoutine()
+    await drainTasks()
+    guard case .preparingServerVoice = viewModel.screenState else {
+      XCTFail("The routine must still be waiting for server voice.")
+      return
+    }
+
+    viewModel.runtimeDidInterrupt()
+    warmup.finish(with: .prepared)
+    await drainTasks()
+
+    guard case .running(let runningStep) = viewModel.screenState else {
+      XCTFail("Returning from the background must not leave preparation stuck.")
+      return
+    }
+    XCTAssertEqual(runningStep.id, step.id)
+    XCTAssertTrue(player.requests.isEmpty)
   }
 
   func testPendingServerBoundPresetWaitsWithoutBundledVoiceFallback() async {
@@ -997,13 +1076,18 @@ final class BundledRoutineAudioTests: XCTestCase {
     )
 
     viewModel.resolveRoutine()
+    guard case .preparingServerVoice(let preparingStep) = viewModel.screenState else {
+      XCTFail("The player must wait until server voice preparation resolves.")
+      return
+    }
+    XCTAssertEqual(preparingStep.id, step.id)
+
+    await player.waitUntilPlaybackStarts()
     guard case .running(let runningStep) = viewModel.screenState else {
-      XCTFail("The player must present runnable content before voice playback resolves.")
+      XCTFail("Prepared voice must reveal runnable content before playback finishes.")
       return
     }
     XCTAssertEqual(runningStep.id, step.id)
-
-    await player.waitUntilPlaybackStarts()
     let barrierTask = Task { @MainActor in
       await viewModel.waitUntilIntroFinishes(for: step.id)
     }
@@ -1095,6 +1179,28 @@ private struct GuidanceCueCall: Equatable {
   let itemID: String
   let voiceCode: String
   let kind: RoutineAudioCueKind
+}
+
+@MainActor
+private final class RoutineGuidanceRequestRecorder: RoutineGuidancePlaying {
+  private(set) var requests: [RoutineGuidanceCueRequest] = []
+
+  func play(
+    itemID: String,
+    voiceCode: String,
+    kind: RoutineAudioCueKind
+  ) async -> GuidancePlaybackResult {
+    .completed
+  }
+
+  func play(_ request: RoutineGuidanceCueRequest) async -> GuidancePlaybackResult {
+    requests.append(request)
+    return .completed
+  }
+
+  func stop() {}
+  func stopAndWaitUntilIdle() async {}
+  func resumeAfterSpeechInput() {}
 }
 
 @MainActor
@@ -1255,6 +1361,40 @@ private final class ServerVoiceWarmupStub: RoutineTTSWarming {
   ) async -> RoutineTTSForegroundPreparationStatus {
     prepareAndWaitCallCount += 1
     return status
+  }
+}
+
+@MainActor
+private final class DeferredServerVoiceWarmupStub: RoutineTTSWarming {
+  private var result: RoutineTTSForegroundPreparationStatus?
+  private var continuation:
+    CheckedContinuation<RoutineTTSForegroundPreparationStatus, Never>?
+
+  func prepare(routineGroupLocalID: UUID, routineLocalIDs: [UUID]) {}
+
+  func expectsServerGeneratedIntro(
+    routineGroupLocalID: UUID,
+    routineLocalID: UUID
+  ) -> Bool {
+    true
+  }
+
+  func prepareAndWait(
+    routineGroupLocalID: UUID,
+    routineLocalIDs: [UUID]
+  ) async -> RoutineTTSForegroundPreparationStatus {
+    if let result {
+      return result
+    }
+    return await withCheckedContinuation { continuation in
+      self.continuation = continuation
+    }
+  }
+
+  func finish(with result: RoutineTTSForegroundPreparationStatus) {
+    self.result = result
+    continuation?.resume(returning: result)
+    continuation = nil
   }
 }
 

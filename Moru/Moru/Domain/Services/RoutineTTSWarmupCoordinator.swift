@@ -12,14 +12,40 @@ import OSLog
 nonisolated struct RoutineTTSForegroundPollingPolicy: Equatable, Sendable {
   let maximumAttempts: Int
   let retryDelay: Duration
+  let maximumWait: Duration
 
   init(
-    maximumAttempts: Int = 6,
-    retryDelay: Duration = .seconds(1)
+    maximumAttempts: Int = 31,
+    retryDelay: Duration = .seconds(1),
+    maximumWait: Duration = .seconds(30)
   ) {
     precondition(maximumAttempts > 0)
+    precondition(maximumWait > .zero)
     self.maximumAttempts = maximumAttempts
     self.retryDelay = retryDelay
+    self.maximumWait = maximumWait
+  }
+}
+
+private actor RoutineTTSForegroundWaitGate {
+  private var result: RoutineTTSForegroundPreparationStatus?
+  private var continuation:
+    CheckedContinuation<RoutineTTSForegroundPreparationStatus, Never>?
+
+  func value() async -> RoutineTTSForegroundPreparationStatus {
+    if let result {
+      return result
+    }
+    return await withCheckedContinuation { continuation in
+      self.continuation = continuation
+    }
+  }
+
+  func resolve(_ result: RoutineTTSForegroundPreparationStatus) {
+    guard self.result == nil else { return }
+    self.result = result
+    continuation?.resume(returning: result)
+    continuation = nil
   }
 }
 
@@ -173,6 +199,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     case prepared
     case pendingBinding
     case pendingGeneration
+    case retryableDownload
+    case retryableRemoteRequest
     case unavailable
   }
 
@@ -553,20 +581,43 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
           isAudioCacheUsable(for: identity),
           !routineLocalIDs.isEmpty else { return .unavailable }
 
-    // A first cue has higher priority than an opportunistic active-routine
-    // sweep. The cancelled sweep checks cancellation before changing a plan.
-    operationGeneration &+= 1
-    operationTask?.cancel()
-    operationTask = nil
-
+    // Keep an already-running active-routine warm-up alive. It may have
+    // fetched the final manifest or started the same cache download already.
+    // The cache coalesces matching foreground loads after this join.
     let transition = sessionTransitionTask
-    _ = await transition?.value
-    guard !Task.isCancelled,
-          sessionIdentityProvider?.currentAccountSessionIdentity == identity,
-          isAudioCacheUsable(for: identity) else {
-      return Task.isCancelled ? .cancelled : .unavailable
+    let existingPreparation = operationTask
+    let preparationTask = Task { [weak self] in
+      guard let self else { return RoutineTTSForegroundPreparationStatus.unavailable }
+      _ = await transition?.value
+      guard !Task.isCancelled,
+            sessionIdentityProvider?.currentAccountSessionIdentity == identity,
+            isAudioCacheUsable(for: identity) else {
+        return Task.isCancelled ? .cancelled : .unavailable
+      }
+      _ = await existingPreparation?.value
+      return await pollForegroundPreparation(
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalIDs: routineLocalIDs,
+        identity: identity
+      )
     }
+    let status = await waitForForegroundPreparation(preparationTask)
+    if status == .retryablePending {
+      diagnostics.record(.foregroundRetryExhausted)
+      await scheduleForegroundRetry(
+        identity: identity,
+        routineGroupLocalID: routineGroupLocalID,
+        routineLocalIDs: routineLocalIDs
+      )
+    }
+    return status
+  }
 
+  private func pollForegroundPreparation(
+    routineGroupLocalID: UUID,
+    routineLocalIDs: [UUID],
+    identity: AccountSessionIdentity
+  ) async -> RoutineTTSForegroundPreparationStatus {
     for attempt in 0..<foregroundPollingPolicy.maximumAttempts {
       guard !Task.isCancelled,
             sessionIdentityProvider?.currentAccountSessionIdentity == identity,
@@ -589,7 +640,6 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
 
       case .pendingBinding:
         guard attempt + 1 < foregroundPollingPolicy.maximumAttempts else {
-          diagnostics.record(.foregroundRetryExhausted)
           return .retryablePending
         }
         diagnostics.record(.waitingForBinding)
@@ -603,10 +653,21 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
 
       case .pendingGeneration:
         guard attempt + 1 < foregroundPollingPolicy.maximumAttempts else {
-          diagnostics.record(.foregroundRetryExhausted)
           return .retryablePending
         }
         diagnostics.record(.waitingForGeneration)
+        do {
+          try await Task.sleep(for: foregroundPollingPolicy.retryDelay)
+        } catch is CancellationError {
+          return .cancelled
+        } catch {
+          return .unavailable
+        }
+
+      case .retryableDownload, .retryableRemoteRequest:
+        guard attempt + 1 < foregroundPollingPolicy.maximumAttempts else {
+          return .retryablePending
+        }
         do {
           try await Task.sleep(for: foregroundPollingPolicy.retryDelay)
         } catch is CancellationError {
@@ -618,6 +679,72 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     }
 
     return .retryablePending
+  }
+
+  private func waitForForegroundPreparation(
+    _ preparationTask: Task<RoutineTTSForegroundPreparationStatus, Never>
+  ) async -> RoutineTTSForegroundPreparationStatus {
+    let gate = RoutineTTSForegroundWaitGate()
+    let completionObserver = Task {
+      await gate.resolve(await preparationTask.value)
+    }
+    let timeoutObserver = Task { [maximumWait = foregroundPollingPolicy.maximumWait] in
+      do {
+        try await Task.sleep(for: maximumWait)
+      } catch {
+        return
+      }
+      await gate.resolve(.retryablePending)
+    }
+
+    let result = await withTaskCancellationHandler {
+      await gate.value()
+    } onCancel: {
+      Task {
+        await gate.resolve(.cancelled)
+      }
+    }
+
+    timeoutObserver.cancel()
+    completionObserver.cancel()
+    if result == .retryablePending || result == .cancelled {
+      // Cancelling this waiter stops further status polling. A cache actor's
+      // already-created in-flight download and the independent background
+      // transfer remain alive and can still finish for the next playback.
+      preparationTask.cancel()
+    }
+    return result
+  }
+
+  private func scheduleForegroundRetry(
+    identity: AccountSessionIdentity,
+    routineGroupLocalID: UUID,
+    routineLocalIDs: [UUID]
+  ) async {
+    if let prefetchJobStore,
+       let jobs = try? await prefetchJobStore.allJobs() {
+      let requestedRoutineIDs = Set(routineLocalIDs)
+      for var job in jobs where
+        job.memberID == identity.memberID
+          && job.selectionVersion == currentSelectionVersion(for: identity)
+          && job.selectedTTSID == currentSelectedTTSID(for: identity)
+          && job.assetKind == .routineIntro
+          && job.routineGroupLocalID == routineGroupLocalID
+          && job.routineLocalID.map(requestedRoutineIDs.contains) == true
+          && job.state == .pendingRemote {
+        job.state = .retryScheduled
+        job.updatedAt = prefetchPollingPolicy.now()
+        try? await prefetchJobStore.replace(job)
+      }
+    }
+    preparationStatusCenter?.report(
+      .retryScheduled,
+      component: .routineIntro,
+      memberID: identity.memberID,
+      selectionVersion: currentSelectionVersion(for: identity),
+      selectedTTSID: currentSelectedTTSID(for: identity)
+    )
+    RoutineTTSBackgroundLifecycleBridge.shared.scheduleRefresh()
   }
 
   func localAudioURLs(for request: RoutineTTSLocalAudioRequest) async -> [URL]? {
@@ -1089,7 +1216,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       return .unavailable
     } catch {
       diagnostics.record(.remoteFetchFailed)
-      return .unavailable
+      return .retryableRemoteRequest
     }
 
     guard !Task.isCancelled,
@@ -1161,6 +1288,14 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         currentSelectionVersion: currentSelectionVersion(for: identity)
       ) {
       case .pending:
+        await persistPendingIntroJob(
+          identity: identity,
+          localStep: localStep,
+          routineGroupLocalID: routineGroupLocalID,
+          routineLocalID: routineLocalID,
+          groupBinding: groupBinding,
+          routineBinding: routineBinding
+        )
         return .pendingGeneration
 
       case .unavailable:
@@ -1205,7 +1340,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       return .unavailable
     } catch {
       diagnostics.record(.audioDownloadFailed)
-      return .unavailable
+      return .retryableDownload
     }
 
     guard !Task.isCancelled,

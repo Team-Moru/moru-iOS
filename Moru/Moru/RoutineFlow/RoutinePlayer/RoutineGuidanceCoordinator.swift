@@ -67,11 +67,18 @@ final class RoutineGuidanceCoordinator {
     ) ?? false
   }
 
-  func stepDidStart(_ step: RoutineStep) {
+  /// Returns whether the step is waiting for a server-only intro. The
+  /// completion callback runs immediately before playback (or silent
+  /// fail-open), so the routine UI does not start its controls too early.
+  @discardableResult
+  func stepDidStart(
+    _ step: RoutineStep,
+    onPreparationFinished: @escaping @MainActor () -> Void = {}
+  ) -> Bool {
     stopCurrentCue()
 
     guard step.presetItemID != nil || routineGroupLocalID != nil else {
-      return
+      return false
     }
 
     let requiresRemoteReadiness = requiresServerVoiceReadiness(for: step)
@@ -91,16 +98,19 @@ final class RoutineGuidanceCoordinator {
       }
 
       if requiresRemoteReadiness, let routineGroupLocalID {
-        guard let warmupCoordinator else {
-          return .unavailable
+        let preparation: RoutineTTSForegroundPreparationStatus
+        if let warmupCoordinator {
+          preparation = await warmupCoordinator.prepareAndWait(
+            routineGroupLocalID: routineGroupLocalID,
+            routineLocalIDs: [step.id]
+          )
+        } else {
+          preparation = .unavailable
         }
-        let preparation = await warmupCoordinator.prepareAndWait(
-          routineGroupLocalID: routineGroupLocalID,
-          routineLocalIDs: [step.id]
-        )
         guard !Task.isCancelled, activeGeneration == generation else {
           return .cancelled
         }
+        onPreparationFinished()
         guard preparation == .prepared else {
           return preparation == .cancelled ? .cancelled : .unavailable
         }
@@ -118,6 +128,7 @@ final class RoutineGuidanceCoordinator {
       ))
     }
 
+    return requiresRemoteReadiness
   }
 
   func stepDidComplete(_ step: RoutineStep) {

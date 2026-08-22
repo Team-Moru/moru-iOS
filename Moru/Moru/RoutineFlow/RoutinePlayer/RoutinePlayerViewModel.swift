@@ -35,6 +35,7 @@ final class RoutinePlayerViewModel {
         case resolving
         case resolutionRetry(RoutineResolutionRetryReason)
         case terminalFailure(RoutineTerminalReason)
+        case preparingServerVoice(RoutineStep)
         case running(RoutineStep)
         case stepCompleted(RoutineStep)
         case summary(RoutineCompletionSummary)
@@ -160,7 +161,7 @@ final class RoutinePlayerViewModel {
     
     var currentStepNumberText: String {
         switch screenState {
-        case .running, .stepCompleted:
+        case .preparingServerVoice, .running, .stepCompleted:
             return "\(currentStepIndex + 1)/\(steps.count)"
         case .resolving, .resolutionRetry, .terminalFailure, .summary:
             return "0/0"
@@ -169,7 +170,7 @@ final class RoutinePlayerViewModel {
     
     var progressValue: Double {
         switch screenState {
-        case .running, .stepCompleted:
+        case .preparingServerVoice, .running, .stepCompleted:
             return Double(currentStepIndex + 1) / Double(steps.count)
         case .resolving, .resolutionRetry, .terminalFailure, .summary:
             return 0
@@ -522,13 +523,14 @@ final class RoutinePlayerViewModel {
     func runtimeDidInterrupt() {
         guidancePlaybackMonitorTask?.cancel()
         guidancePlaybackMonitorTask = nil
+        continueAfterInterruptedServerVoicePreparation()
         guidanceCoordinator.stop()
         diagnostics.record(.guidanceInterrupted)
     }
 
     private var isExitEligible: Bool {
         switch screenState {
-        case .running:
+        case .preparingServerVoice, .running:
             true
         case .resolving, .resolutionRetry, .terminalFailure, .stepCompleted, .summary:
             false
@@ -596,9 +598,42 @@ final class RoutinePlayerViewModel {
         guidancePlaybackMonitorTask = nil
         currentStepStartedAt = Date()
         screenState = .running(step)
-        diagnostics.record(.stepStarted)
-        guidanceCoordinator.stepDidStart(step)
+        let isWaitingForServerVoice = guidanceCoordinator.stepDidStart(
+            step,
+            onPreparationFinished: { [weak self] in
+                self?.serverVoicePreparationDidFinish(for: step)
+            }
+        )
+        if isWaitingForServerVoice {
+            currentStepStartedAt = nil
+            screenState = .preparingServerVoice(step)
+        } else {
+            diagnostics.record(.stepStarted)
+        }
         monitorGuidancePlayback(for: step)
+    }
+
+    private func serverVoicePreparationDidFinish(for step: RoutineStep) {
+        guard isPresentationActive,
+              !didRequestExit,
+              case .preparingServerVoice(let currentStep) = screenState,
+              currentStep.id == step.id else {
+            return
+        }
+
+        currentStepStartedAt = Date()
+        screenState = .running(step)
+        diagnostics.record(.stepStarted)
+    }
+
+    private func continueAfterInterruptedServerVoicePreparation() {
+        guard case .preparingServerVoice(let step) = screenState else {
+            return
+        }
+        currentStepStartedAt = Date()
+        screenState = .running(step)
+        diagnostics.record(.stepStarted)
+        diagnostics.record(.serverVoiceUnavailableContinuedSilently)
     }
 
     private func monitorGuidancePlayback(for step: RoutineStep) {
