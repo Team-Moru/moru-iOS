@@ -75,9 +75,9 @@ final class RoutineGuidanceCoordinator {
     }
 
     let requiresRemoteReadiness = requiresServerVoiceReadiness(for: step)
-    if let routineGroupLocalID {
-      // Warming remains opportunistic and non-blocking. The player reads only
-      // an already-validated cache entry for this execution.
+    if let routineGroupLocalID, !requiresRemoteReadiness {
+      // Local-only steps keep background warming opportunistic. A server-only
+      // intro instead joins the bounded foreground preparation below.
       warmupCoordinator?.prepare(
         routineGroupLocalID: routineGroupLocalID,
         routineLocalIDs: [step.id]
@@ -88,6 +88,22 @@ final class RoutineGuidanceCoordinator {
     playTask = Task { [weak self] in
       guard let self, activeGeneration == generation else {
         return .cancelled
+      }
+
+      if requiresRemoteReadiness, let routineGroupLocalID {
+        guard let warmupCoordinator else {
+          return .unavailable
+        }
+        let preparation = await warmupCoordinator.prepareAndWait(
+          routineGroupLocalID: routineGroupLocalID,
+          routineLocalIDs: [step.id]
+        )
+        guard !Task.isCancelled, activeGeneration == generation else {
+          return .cancelled
+        }
+        guard preparation == .prepared else {
+          return preparation == .cancelled ? .cancelled : .unavailable
+        }
       }
 
       return await player.play(RoutineGuidanceCueRequest(

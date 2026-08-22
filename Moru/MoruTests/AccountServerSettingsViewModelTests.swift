@@ -191,6 +191,84 @@ final class AccountServerSettingsViewModelTests: XCTestCase {
     XCTAssertEqual(viewModel.voiceState, .failed(previous: nil))
     XCTAssertNil(viewModel.selectedTTSID)
   }
+
+  @MainActor
+  func testRecreatedViewModelRestoresSuccessfulSelectionWhenProfileReloadFails()
+    async {
+    let voice = accountSettingsVoice(ttsID: 2)
+    let store = AccountServerSettingsVoiceSelectionStoreSpy()
+    let selectionService = AccountServerSettingsRemoteStub(
+      profile: .success(accountSettingsProfile()),
+      streak: .success(accountSettingsStreak()),
+      voices: .success([voice])
+    )
+    let firstViewModel = AccountServerSettingsViewModel(
+      remoteService: selectionService,
+      voiceSelectionStore: store
+    )
+    await firstViewModel.load(memberID: 98)
+    await firstViewModel.selectVoice(voice, memberID: 98)
+
+    let reloadService = AccountServerSettingsRemoteStub(
+      profile: .failure(.unavailable),
+      streak: .success(accountSettingsStreak()),
+      voices: .success([voice])
+    )
+    let recreatedViewModel = AccountServerSettingsViewModel(
+      remoteService: reloadService,
+      voiceSelectionStore: store
+    )
+    await recreatedViewModel.load(memberID: 98)
+
+    XCTAssertEqual(store.selectedTTSID(forMemberID: 98), 2)
+    XCTAssertEqual(recreatedViewModel.selectedTTSID, 2)
+    XCTAssertEqual(recreatedViewModel.selectedVoiceDisplayName, voice.displayName)
+  }
+
+  @MainActor
+  func testPersistedSuccessfulSelectionWinsOverStaleProfileReload() async {
+    let store = AccountServerSettingsVoiceSelectionStoreSpy()
+    store.setSelectedTTSID(2, forMemberID: 98)
+    let service = AccountServerSettingsRemoteStub(
+      profile: .success(accountSettingsProfile()),
+      streak: .success(accountSettingsStreak()),
+      voices: .success([
+        accountSettingsVoice(ttsID: 1),
+        accountSettingsVoice(ttsID: 2),
+      ])
+    )
+    let viewModel = AccountServerSettingsViewModel(
+      remoteService: service,
+      voiceSelectionStore: store
+    )
+
+    await viewModel.load(memberID: 98)
+
+    XCTAssertEqual(viewModel.selectedTTSID, 2)
+    XCTAssertEqual(store.selectedTTSID(forMemberID: 98), 2)
+  }
+}
+
+@MainActor
+private final class AccountServerSettingsVoiceSelectionStoreSpy:
+  RoutineTTSVoiceSelectionVersionStoring {
+  private var selectedTTSIDs: [Int64: Int64] = [:]
+
+  func selectionVersion(forMemberID memberID: Int64) -> Int64? { nil }
+  func setSelectionVersion(_ version: Int64, forMemberID memberID: Int64) {}
+  func removeSelectionVersion(forMemberID memberID: Int64) {}
+
+  func selectedTTSID(forMemberID memberID: Int64) -> Int64? {
+    selectedTTSIDs[memberID]
+  }
+
+  func setSelectedTTSID(_ ttsID: Int64, forMemberID memberID: Int64) {
+    selectedTTSIDs[memberID] = ttsID
+  }
+
+  func removeSelectedTTSID(forMemberID memberID: Int64) {
+    selectedTTSIDs[memberID] = nil
+  }
 }
 
 private enum AccountServerSettingsCall: Equatable, Sendable {

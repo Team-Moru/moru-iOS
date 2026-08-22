@@ -68,6 +68,7 @@ struct AppRouter: View {
   @State private var didStartOnboarding = false
   @State private var didCompleteOnboardingTrial = false
   @State private var didCompleteAccountEntry = false
+  @State private var accountServerViewModel: AccountServerSettingsViewModel
   @StateObject private var state: AppRouterState
 
   private let dependencies: DependencyContainer
@@ -123,6 +124,29 @@ struct AppRouter: View {
     self.onboardingStatusRuntimeCoordinator =
       onboardingStatusRuntimeCoordinator
     self.routineSyncRuntimeCoordinator = routineSyncRuntimeCoordinator
+    _accountServerViewModel = State(
+      initialValue: AccountServerSettingsViewModel(
+        remoteService: dependencies.accountServerRemoteService,
+        preparationStatusCenter:
+          dependencies.routineTTSPreparationStatusCenter,
+        voiceSelectionStore:
+          UserDefaultsRoutineTTSVoiceSelectionVersionStore(),
+        onServerVoiceSelectionDidSucceed: { selection in
+          dependencies.routineTTSWarmupCoordinator?
+            .serverVoiceSelectionDidChange(
+              memberID: selection.memberID,
+              selectionVersion: selection.selectionVersion,
+              selectedTTSID: selection.ttsID
+            )
+          dependencies.serverVoiceCommonAudioProvider?
+            .serverVoiceSelectionDidChange(
+              memberID: selection.memberID,
+              selectedTTSID: selection.ttsID,
+              selectionVersion: selection.selectionVersion
+            )
+        }
+      )
+    )
     _state = StateObject(wrappedValue: state ?? AppRouterState())
     if let homeBuilder {
       self.homeBuilder = homeBuilder
@@ -535,12 +559,10 @@ struct AppRouter: View {
       profileSettingsUseCase: profileSettingsUseCase,
       voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
       alarmService: profileAlarmService,
-      accountServerRemoteService: dependencies.accountServerRemoteService,
+      accountServerViewModel: accountServerViewModel,
       accountRoutineGroupRemoteService:
         dependencies.accountRoutineGroupRemoteService,
       serverVoicePreviewPlayer: dependencies.serverVoicePreviewPlayer,
-      routineTTSPreparationStatusCenter:
-        dependencies.routineTTSPreparationStatusCenter,
       accountSessionStore: accountSessionStore,
       socialLoginCoordinator: socialLoginCoordinator,
       googleAuthorizationSession: googleAuthorizationSession,
@@ -559,21 +581,7 @@ struct AppRouter: View {
 
         UIApplication.shared.open(url)
       },
-      onResetSucceeded: resetToNewUserFlow,
-      onServerVoiceSelectionDidSucceed: { selection in
-        dependencies.routineTTSWarmupCoordinator?
-          .serverVoiceSelectionDidChange(
-            memberID: selection.memberID,
-            selectionVersion: selection.selectionVersion,
-            selectedTTSID: selection.ttsID
-          )
-        dependencies.serverVoiceCommonAudioProvider?
-          .serverVoiceSelectionDidChange(
-            memberID: selection.memberID,
-            selectedTTSID: selection.ttsID,
-            selectionVersion: selection.selectionVersion
-          )
-      }
+      onResetSucceeded: resetToNewUserFlow
     )
     let mainTabState = state.mainTabState
 

@@ -841,7 +841,7 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertEqual(runningStep.id, step.id)
   }
 
-  func testPendingServerVoiceStartsImmediatelyWithoutForegroundWait() async {
+  func testPendingServerVoiceUsesForegroundWaitThenFailsOpen() async {
     let warmup = ServerVoiceWarmupStub(
       status: .retryablePending,
       expectsServerGeneratedIntro: true
@@ -873,10 +873,10 @@ final class BundledRoutineAudioTests: XCTestCase {
       return
     }
     XCTAssertEqual(runningStep.id, step.id)
-    XCTAssertEqual(warmup.prepareCallCount, 1)
-    XCTAssertEqual(warmup.prepareAndWaitCallCount, 0)
 
     await drainTasks()
+    XCTAssertEqual(warmup.prepareCallCount, 0)
+    XCTAssertEqual(warmup.prepareAndWaitCallCount, 1)
     guard case .running(let stillRunningStep) = viewModel.screenState else {
       XCTFail("A missing cached cue must remain fail-open.")
       return
@@ -887,7 +887,7 @@ final class BundledRoutineAudioTests: XCTestCase {
     XCTAssertNotNil(viewModel.stepResults.first?.durationSeconds)
   }
 
-  func testServerBoundPresetStartsImmediatelyWithoutBundledVoiceFallback() async {
+  func testPendingServerBoundPresetWaitsWithoutBundledVoiceFallback() async {
     let state = RoutineGuidancePlaybackState()
     let player = RoutineGuidancePlayerSpy(playbackState: state)
     let warmup = ServerVoiceWarmupStub(
@@ -924,8 +924,8 @@ final class BundledRoutineAudioTests: XCTestCase {
       return
     }
     XCTAssertEqual(runningStep.id, step.id)
-    XCTAssertEqual(warmup.prepareCallCount, 1)
-    XCTAssertEqual(warmup.prepareAndWaitCallCount, 0)
+    XCTAssertEqual(warmup.prepareCallCount, 0)
+    XCTAssertEqual(warmup.prepareAndWaitCallCount, 1)
     XCTAssertTrue(player.cues.isEmpty)
   }
 
@@ -973,7 +973,7 @@ final class BundledRoutineAudioTests: XCTestCase {
   func testLateServerVoiceFailureKeepsRoutineRunningSilently() async {
     let player = DeferredUnavailableGuidancePlayer()
     let warmup = ServerVoiceWarmupStub(
-      status: .retryablePending,
+      status: .prepared,
       expectsServerGeneratedIntro: true
     )
     let coordinator = RoutineGuidanceCoordinator(

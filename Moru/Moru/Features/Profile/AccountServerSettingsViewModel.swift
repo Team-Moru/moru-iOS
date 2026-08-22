@@ -34,6 +34,8 @@ final class AccountServerSettingsViewModel {
   private let onServerVoiceSelectionDidSucceed:
     @MainActor (ServerTTSSelection) -> Void
   private let preparationStatusCenter: RoutineTTSPreparationStatusCenter?
+  private let voiceSelectionStore:
+    (any RoutineTTSVoiceSelectionVersionStoring)?
   private var loadGeneration = 0
   private var currentMemberID: Int64?
 
@@ -52,11 +54,14 @@ final class AccountServerSettingsViewModel {
   init(
     remoteService: (any AccountServerRemoteServing)? = nil,
     preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil,
+    voiceSelectionStore:
+      (any RoutineTTSVoiceSelectionVersionStoring)? = nil,
     onServerVoiceSelectionDidSucceed:
       @escaping @MainActor (ServerTTSSelection) -> Void = { _ in }
   ) {
     self.remoteService = remoteService
     self.preparationStatusCenter = preparationStatusCenter
+    self.voiceSelectionStore = voiceSelectionStore
     self.onServerVoiceSelectionDidSucceed = onServerVoiceSelectionDidSucceed
   }
 
@@ -72,7 +77,6 @@ final class AccountServerSettingsViewModel {
     isUpdatingVoice = false
     updatingTTSID = nil
     voiceUpdateErrorMessage = nil
-    latestSelection = nil
 
     guard let memberID, memberID > 0 else {
       applySignedOutState()
@@ -83,6 +87,9 @@ final class AccountServerSettingsViewModel {
       return
     }
 
+    let persistedTTSID = voiceSelectionStore?.selectedTTSID(
+      forMemberID: memberID
+    )
     let preservesPreviousValues = previousMemberID == memberID
     let previousProfile = preservesPreviousValues
       ? profileState.value
@@ -94,7 +101,8 @@ final class AccountServerSettingsViewModel {
       ? voiceState.value
       : nil
     if !preservesPreviousValues {
-      selectedTTSID = nil
+      latestSelection = nil
+      selectedTTSID = persistedTTSID
     }
     profileState = .loading(previous: previousProfile)
     streakState = .loading(previous: previousStreak)
@@ -136,10 +144,16 @@ final class AccountServerSettingsViewModel {
       treatsEmptyCollectionAsEmpty: true
     )
 
-    if case .content(let profile) = profileState {
+    if let persistedTTSID {
+      selectedTTSID = persistedTTSID
+    } else if case .content(let profile) = profileState {
       selectedTTSID = profile.selectedTTSID
+      voiceSelectionStore?.setSelectedTTSID(
+        profile.selectedTTSID,
+        forMemberID: memberID
+      )
     } else if previousProfile == nil {
-      selectedTTSID = nil
+      selectedTTSID = persistedTTSID
     }
   }
 
@@ -182,6 +196,10 @@ final class AccountServerSettingsViewModel {
 
       latestSelection = selection
       selectedTTSID = selection.ttsID
+      voiceSelectionStore?.setSelectedTTSID(
+        selection.ttsID,
+        forMemberID: memberID
+      )
       if previousTTSID != selection.ttsID {
         onServerVoiceSelectionDidSucceed(selection)
       }
@@ -231,6 +249,7 @@ final class AccountServerSettingsViewModel {
     streakState = .signedOut
     voiceState = .signedOut
     selectedTTSID = nil
+    latestSelection = nil
   }
 
   private func applyUnavailableState() {
@@ -238,6 +257,7 @@ final class AccountServerSettingsViewModel {
     streakState = .unavailable
     voiceState = .unavailable
     selectedTTSID = nil
+    latestSelection = nil
   }
 
   private func resourceState<Value: Equatable & Sendable>(
