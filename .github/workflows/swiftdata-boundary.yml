@@ -28,3 +28,6 @@ jobs:
 
       - name: Check SwiftData boundary
         run: bash Scripts/check-swiftdata-boundary.sh
+
+      - name: Check folder convention
+        run: bash Scripts/check-folder-convention.sh

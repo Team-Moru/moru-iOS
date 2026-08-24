@@ -351,24 +351,27 @@ var messages: Array<String>?  // ❌ 나쁜 예
 Moru
 ├─ App
 │  ├─ MoruApp.swift
-│  ├─ AppRouter.swift            // 기본 flow: local session (auth 아님)
+│  ├─ AppRouter.swift, AppNavigationCoordinator.swift
 │  ├─ DependencyContainer.swift  // .local(modelContext:) 기본, .mock()은 #if DEBUG
-│  └─ SessionStore.swift         // LocalProfile + onboarding 상태
+│  ├─ SessionStore.swift         // LocalProfile + onboarding 상태
+│  └─ AccountSessionStore.swift, AuthCallbackRouter.swift 등  // 소셜 로그인 세션
 ├─ DesignSystem
-│  ├─ MoruDesignTokens.swift     // 색/간격/radius — Figma variables와 매핑
-│  ├─ Fonts.swift                // Pretendard 스타일 (D10)
+│  ├─ Tokens/                    // AppColor/AppFont/AppLayout/AppIcon/AppImage 등
+│  ├─ Icons/
 │  └─ Components/                // Figma '컴포넌트' 섹션(1445:1113) 기준
 ├─ Domain
-│  ├─ Models/                    // Routine, RoutineStep, AlarmSchedule, RoutineRun, RoutineStepResult, LocalProfile, SyncMetadata
-│  ├─ UseCases/
-│  ├─ Repositories/              // RoutineRepository, RoutineRunRepository, LocalProfileRepository
-│  └─ Services/                  // RoutineSuggestionService (D5)
+│  ├─ Models/<Domain>/
+│  ├─ Repositories/<Domain>/
+│  ├─ Services/<Domain>/
+│  └─ UseCases/<Domain>/
+│     // <Domain> = Alarm · Auth · Core · History · Home · Onboarding · Routine · Settings · Sync · Voice
+│     // 도메인 하위폴더 규칙은 아래 "도메인 폴더 규칙" 참고
 ├─ Data
 │  ├─ Persistence/               // MoruSchemaV1~V3, SchemaMigrationPlan
-│  ├─ Local/                     // SwiftData repositories + Mappers
-│  ├─ Remote/                    // v2 예정: 기능별 Target/DTO/Remote
-│  ├─ Security/                  // v2 예정: Keychain token store
-│  ├─ Sync/                      // v2 예정: Outbox + Sync Coordinator
+│  ├─ Local/<Domain>/            // SwiftData repositories (도메인 하위폴더는 Domain/와 동일 규칙)
+│  │  └─ SwiftDataMappers.swift  // 예외: SwiftData↔도메인 모델 변환은 도메인별로 쪼개지 않고 루트 유지
+│  ├─ Remote/<Feature>/          // 기능별 DTO + Target + Service 세트 (AccountServer/Auth/History/...)
+│  ├─ Secure/                    // Keychain credential store
 │  └─ Mock/                      // Preview/Snapshot/QA/Test 전용
 ├─ Network
 │  ├─ Core/                      // APIClient actor, Configuration, Moya 조립
@@ -377,21 +380,40 @@ Moru
 │  ├─ Fonts/                     // 앱 번들 폰트
 │  └─ RoutinePresets/            // 추천 항목 CSV + 로컬 음성 리소스
 ├─ Platform
-│  ├─ Alarm/                     // AlarmKit + LocalNotification fallback
+│  ├─ Alarm/                     // AlarmKit 서비스/인텐트/스케줄링 어댑터 + 디버그 뷰
 │  ├─ Audio/                     // 음성 재생/인식 audio session 조정
 │  ├─ TTS/                       // 원격 TTS 캐시 재생 + 번들 MP3 fallback
 │  └─ Speech/                    // 3초 침묵 종료 STT
-├─ Debug/                        // DeviceQA 패널/레코더 (ContentView에서 분리, #if DEBUG)
+├─ RoutineFlow                   // 탭 내비게이션이 아니라 알람이 직접 진입시키는 풀스크린 플로우
+│  ├─ RoutinePlayer/             // 스텝 실행 (확인/타이머/입력)
+│  └─ Alarm/                     // AlarmRingView, SnoozeSheetView 등 알람 진입 UI
 └─ Features
    ├─ Onboarding
    ├─ Home            // 홈 대시보드
-   ├─ RoutineList     // 루틴 목록/수정/삭제
-   ├─ RoutineCreate   // 직접 만들기 + 제안 받기
-   ├─ AlarmSetting
-   ├─ RoutinePlayer   // 스텝 실행 (확인/타이머/입력)
+   ├─ RoutineSetting  // 루틴 목록/생성/수정/알람설정 (직접 만들기 + 제안 받기)
    ├─ History         // 이력/주간 리포트/일별 기록
-   └─ Profile         // 설정
+   ├─ Profile         // 설정
+   ├─ AccountEntry    // 소셜 로그인 진입
+   └─ Privacy         // 약관/정책
 ```
+
+### 도메인 폴더 규칙 (`Domain/*`, `Data/Local/*`)
+
+`Domain/{Models,Repositories,Services,UseCases}`와 `Data/Local`은 다음 9개 도메인
+이름으로 하위폴더를 나눕니다: `Alarm · Auth · Core · History · Home · Onboarding ·
+Routine · Settings · Sync · Voice`.
+
+- 새 타입은 레이어 루트가 아니라 해당 도메인 폴더 아래에 추가합니다.
+- 파일명이 아니라 실제 타입/프로토콜이 다루는 도메인 기준으로 배치합니다. `Account*`,
+  `Server*`, `Profile*` 같은 접두사는 도메인이 아니라 수식어일 수 있습니다.
+- 한 인터페이스(프로토콜)가 여러 도메인 메서드를 같이 노출하고 소비처들이 실제로 그
+  경계를 넘나들며 호출한다면, 그건 실수로 섞인 게 아니라 의도된 결합일 수 있습니다 —
+  기계적으로 쪼개지 말고 먼저 소비처를 추적해 판단합니다.
+- 여러 도메인 타입을 참조하지만 "SwiftData 변환"처럼 그 자체가 하나의 응집된 책임인
+  파일(`Data/Local/SwiftDataMappers.swift`)은 도메인별로 쪼개지 않고 레이어 루트에
+  둘 수 있습니다.
+- README에 없는 top-level 디렉토리가 추가되면 `bash Scripts/check-folder-convention.sh`가
+  CI에서 실패합니다. 새 top-level 디렉토리가 정말 필요하면 이 문서도 함께 갱신하세요.
 
 ### Foundation / SwiftData v1 기준
 - v1 저장 정책은 **localOnly + hard delete**입니다.
