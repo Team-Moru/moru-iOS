@@ -1,25 +1,9 @@
 //
-//  RoutineRepositories.swift
+//  RoutineRepository.swift
 //  Moru
-//
-//  Created by Codex on 7/6/26.
 //
 
 import Foundation
-
-enum RepositoryContractError: Error, Equatable, LocalizedError {
-  case routineRunSnapshotRequired
-  case overlappingActiveRoutineWeekdays
-
-  var errorDescription: String? {
-    switch self {
-    case .routineRunSnapshotRequired:
-      return "RoutineRun must include planned step snapshots before it is saved."
-    case .overlappingActiveRoutineWeekdays:
-      return "Active routines cannot share scheduled weekdays."
-    }
-  }
-}
 
 protocol RoutineRepository: AnyObject {
   @MainActor
@@ -61,27 +45,4 @@ protocol RoutineRunRepository: AnyObject {
   func saveRun(_ run: RoutineRun) throws
   @MainActor
   func deleteAllRuns() throws
-}
-
-protocol LocalProfileRepository: AnyObject {
-  @MainActor
-  func fetchProfile() throws -> LocalProfile?
-  @MainActor
-  func loadOrCreateDefaultProfile() throws -> LocalProfile
-  @MainActor
-  func saveProfile(_ profile: LocalProfile) throws
-  @MainActor
-  func deleteProfile() throws
-}
-
-protocol LocalDataResetRepository: AnyObject {
-  @MainActor
-  func resetToFreshInstallState() throws
-}
-
-protocol OnboardingRepository: AnyObject {
-  @MainActor
-  func fetchProfile() throws -> LocalProfile?
-  @MainActor
-  func saveCompletion(profile: LocalProfile, routine: Routine) throws
 }
