@@ -175,33 +175,6 @@ enum SwiftDataMapper {
     )
   }
 
-  static func makePersistedProfile(from profile: LocalProfile) -> PersistedLocalProfile {
-    PersistedLocalProfile(
-      id: profile.id,
-      displayName: profile.displayName,
-      selectedVoiceID: profile.selectedVoice.id,
-      createdAt: profile.createdAt,
-      updatedAt: profile.updatedAt
-    )
-  }
-
-  static func update(_ persisted: PersistedLocalProfile, with profile: LocalProfile) {
-    persisted.displayName = profile.displayName
-    persisted.selectedVoiceID = profile.selectedVoice.id
-    persisted.createdAt = profile.createdAt
-    persisted.updatedAt = profile.updatedAt
-  }
-
-  static func makeDomainProfile(from persisted: PersistedLocalProfile) -> LocalProfile {
-    LocalProfile(
-      id: persisted.id,
-      displayName: persisted.displayName,
-      selectedVoice: VoiceProfile.fallback(id: persisted.selectedVoiceID),
-      createdAt: persisted.createdAt,
-      updatedAt: persisted.updatedAt
-    )
-  }
-
   private static func makePersistedRoutineStep(
     from step: RoutineStep
   ) -> PersistedRoutineStep {
