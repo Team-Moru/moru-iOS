@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OSLog
 
 nonisolated enum RoutineSyncResponseDecodingError:
   Error,
@@ -28,6 +29,12 @@ nonisolated final class ProductionRoutineSyncTransport:
   Sendable {
   private let apiClient: any AccountBoundAPIClient
   private let responseDecoder: any RoutineSyncTransportResponseDecoding
+  /// The server's own error code/message for an unrecognized 409 carries no
+  /// account or routine content, so it is safe to log verbatim.
+  private static let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "RoutineSyncTransport"
+  )
 
   init(
     apiClient: any AccountBoundAPIClient,
@@ -89,7 +96,7 @@ nonisolated final class ProductionRoutineSyncTransport:
 
   private static func outcome(for error: APIError) -> RoutineSyncTransportOutcome {
     switch error {
-    case .server(let statusCode, let code, _):
+    case .server(let statusCode, let code, let message):
       if statusCode == 409, code == "COMMON409" {
         return .processingConflict
       }
@@ -97,12 +104,18 @@ nonisolated final class ProductionRoutineSyncTransport:
         return .blocked(.idempotencyPayloadConflict)
       }
       if statusCode == 409 {
+        logger.notice(
+          "Routine sync 409 unknownConflict: code=\(code ?? "nil", privacy: .public), message=\(message, privacy: .public)"
+        )
         return .blocked(.unknownConflict)
       }
       if statusCode == 408 || statusCode == 429
         || (500..<600).contains(statusCode) {
         return .ambiguous
       }
+      logger.notice(
+        "Routine sync definitiveServerRejection: statusCode=\(statusCode), code=\(code ?? "nil", privacy: .public), message=\(message, privacy: .public)"
+      )
       return .blocked(.definitiveServerRejection)
 
     case .transport, .cancelled, .decoding, .missingResult:
