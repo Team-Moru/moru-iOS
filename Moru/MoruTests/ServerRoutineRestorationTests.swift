@@ -1396,7 +1396,9 @@ private actor RestorationRoutineGroupRemoteStub:
       .detail(routineGroupID: routineGroupID, memberID: memberID)
     )
     guard let detail = detailsByGroupID[routineGroupID] else {
-      throw AccountRoutineGroupRemoteError.invalidResponse
+      throw AccountRoutineGroupRemoteError.invalidResponse(
+        reason: "test stub: no detail fixture for routineGroupID \(routineGroupID)"
+      )
     }
     guard suspendedDetailIDs.contains(routineGroupID) else {
       return detail
@@ -1410,7 +1412,9 @@ private actor RestorationRoutineGroupRemoteStub:
     suspendedDetailIDs.remove(routineGroupID)
     guard let detail = detailsByGroupID[routineGroupID] else {
       continuations.removeValue(forKey: routineGroupID)?.resume(
-        throwing: AccountRoutineGroupRemoteError.invalidResponse
+        throwing: AccountRoutineGroupRemoteError.invalidResponse(
+          reason: "test stub: resumeDetail called with no fixture for routineGroupID \(routineGroupID)"
+        )
       )
       return
     }

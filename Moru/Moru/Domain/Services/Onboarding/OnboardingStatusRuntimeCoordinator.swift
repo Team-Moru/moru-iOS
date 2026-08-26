@@ -114,6 +114,10 @@ final class OnboardingStatusRuntimeCoordinator {
   private let onRestorationFinished: @MainActor () -> Void
   private let onRestorationFailed: @MainActor () -> Void
   private let reporter: any OnboardingStatusReporting
+  private let restorationLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "ServerRoutineRestoration"
+  )
 
   private var stateObservation: AnyCancellable?
   private var requestTask: Task<Void, Never>?
@@ -342,6 +346,9 @@ final class OnboardingStatusRuntimeCoordinator {
           )
         } catch {
           guard !Task.isCancelled, isCurrent(identity) else { return }
+          restorationLogger.error(
+            "finalizeLocalDataForBackfill failed: \(String(describing: error), privacy: .public)"
+          )
           failRestoration(for: identity)
           return
         }
@@ -384,6 +391,9 @@ final class OnboardingStatusRuntimeCoordinator {
         guard !Task.isCancelled, isCurrent(identity) else {
           return
         }
+        restorationLogger.error(
+          "routineRestorer.restore failed: \(String(describing: error), privacy: .public)"
+        )
         failRestoration(for: identity)
       }
     } catch {

@@ -29,6 +29,8 @@ nonisolated enum AccountRoutineGroupRemoteError:
   Equatable,
   Sendable {
   case invalidRequest
-  case invalidResponse
+  /// `reason` names the field/guard that rejected the response, to make a
+  /// legacy or unexpectedly-shaped server payload diagnosable in logs.
+  case invalidResponse(reason: String)
   case accountAuthorizationChanged
 }
