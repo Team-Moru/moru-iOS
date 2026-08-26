@@ -443,6 +443,9 @@ enum ServerRoutineRestorationMapper {
     return values.sortedByDisplayOrder()
   }
 
+  /// Accepts both `HH:MM` and `HH:MM:SS`. Local `AlarmSchedule` has no
+  /// seconds field, so a present seconds component is validated for shape
+  /// only and then discarded.
   private static func alarmTime(
     _ rawValue: String
   ) throws -> (hour: Int, minute: Int) {
@@ -450,7 +453,7 @@ enum ServerRoutineRestorationMapper {
       separator: ":",
       omittingEmptySubsequences: false
     )
-    guard components.count == 2,
+    guard components.count == 2 || components.count == 3,
           components[0].count == 2,
           components[1].count == 2,
           let hour = Int(components[0]),
@@ -460,6 +463,15 @@ enum ServerRoutineRestorationMapper {
       throw ServerRoutineRestorationError.invalidResponse(
         reason: "alarmTime: malformed time string '\(rawValue)'"
       )
+    }
+    if components.count == 3 {
+      guard components[2].count == 2,
+            let second = Int(components[2]),
+            (0...59).contains(second) else {
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "alarmTime: malformed seconds component in '\(rawValue)'"
+        )
+      }
     }
     return (hour, minute)
   }

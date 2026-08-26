@@ -331,6 +331,64 @@ final class ServerRoutineRestorationTests: XCTestCase {
     XCTAssertTrue(snapshot.routines.allSatisfy { !$0.isActive })
   }
 
+  func testMakeSnapshotAcceptsAlarmTimeWithSecondsComponent() throws {
+    let detail = ServerRoutineGroupDetail(
+      routineGroupID: 501,
+      title: "서버 아침 루틴",
+      description: nil,
+      alarmDaysRaw: "MON",
+      alarmTimeRaw: "07:00:00",
+      weatherNotificationEnabled: false,
+      routines: []
+    )
+
+    let snapshot = try ServerRoutineRestorationMapper.makeSnapshot(
+      summaries: [
+        ServerRoutineGroupSummary(
+          routineGroupID: 501,
+          title: "서버 목록 제목",
+          isActive: true,
+          routineCount: 0,
+          totalDurationSeconds: 0
+        ),
+      ],
+      details: [detail],
+      at: Date(timeIntervalSince1970: 0)
+    )
+
+    let alarm = try XCTUnwrap(snapshot.routines.first?.alarmSchedule)
+    XCTAssertEqual(alarm.hour, 7)
+    XCTAssertEqual(alarm.minute, 0)
+  }
+
+  func testMakeSnapshotStillRejectsGenuinelyMalformedAlarmTime() {
+    let detail = ServerRoutineGroupDetail(
+      routineGroupID: 501,
+      title: "서버 아침 루틴",
+      description: nil,
+      alarmDaysRaw: "MON",
+      alarmTimeRaw: "07시",
+      weatherNotificationEnabled: false,
+      routines: []
+    )
+
+    XCTAssertThrowsError(
+      try ServerRoutineRestorationMapper.makeSnapshot(
+        summaries: [
+          ServerRoutineGroupSummary(
+            routineGroupID: 501,
+            title: "서버 목록 제목",
+            isActive: true,
+            routineCount: 0,
+            totalDurationSeconds: 0
+          ),
+        ],
+        details: [detail],
+        at: Date(timeIntervalSince1970: 0)
+      )
+    )
+  }
+
   func testMultipleActiveGroupsResolveViaFetchActiveRoutineGroupEndpoint()
     async throws {
     let memberID: Int64 = 103
