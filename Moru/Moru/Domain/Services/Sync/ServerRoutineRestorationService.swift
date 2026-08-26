@@ -120,10 +120,28 @@ final class DefaultServerRoutineRestorationService:
       details.append(detail)
     }
 
+    // Legacy or anomalous server data can carry more than one routine group
+    // marked active, even though local storage (and the server's own
+    // /routine-groups/active endpoint) model a single active group. Rather
+    // than rejecting the whole restore, defer to that endpoint's authoritative
+    // pick so an account is never permanently locked out by this mismatch.
+    let activeGroupResolution: ServerRoutineRestorationMapper.ActiveGroupResolution
+    if summaries.filter({ $0.isActive == true }).count > 1 {
+      let authoritative = try? await remoteService.fetchActiveRoutineGroup(
+        identity: identity
+      )
+      try Task.checkCancellation()
+      try requireCurrent(identity)
+      activeGroupResolution = .override(authoritative?.routineGroupID)
+    } else {
+      activeGroupResolution = .fromSummaries
+    }
+
     let restorationDate = now()
     let snapshot = try ServerRoutineRestorationMapper.makeSnapshot(
       summaries: summaries,
       details: details,
+      activeGroupResolution: activeGroupResolution,
       at: restorationDate
     )
     try Task.checkCancellation()
@@ -177,9 +195,20 @@ final class DefaultServerRoutineRestorationService:
 
 @MainActor
 enum ServerRoutineRestorationMapper {
+  /// How to resolve which single routine group (if any) is active, since
+  /// local storage allows at most one. `.override` is used when the server's
+  /// summaries disagree with themselves (more than one marked active); the
+  /// override should come from the server's own authoritative single-active
+  /// lookup rather than a guess.
+  nonisolated enum ActiveGroupResolution: Equatable, Sendable {
+    case fromSummaries
+    case override(Int64?)
+  }
+
   static func makeSnapshot(
     summaries: [ServerRoutineGroupSummary],
     details: [ServerRoutineGroupDetail],
+    activeGroupResolution: ActiveGroupResolution = .fromSummaries,
     at date: Date
   ) throws -> ServerRoutineRestorationSnapshot {
     guard summaries.count == details.count else {
@@ -212,10 +241,17 @@ enum ServerRoutineRestorationMapper {
           reason: "makeSnapshot: no detail fetched for routineGroupID \(summary.routineGroupID)"
         )
       }
-      guard let isActive = summary.isActive else {
-        throw ServerRoutineRestorationError.invalidResponse(
-          reason: "makeSnapshot: routineGroupID \(summary.routineGroupID) has nil isActive"
-        )
+      let isActive: Bool
+      switch activeGroupResolution {
+      case .fromSummaries:
+        guard let summaryIsActive = summary.isActive else {
+          throw ServerRoutineRestorationError.invalidResponse(
+            reason: "makeSnapshot: routineGroupID \(summary.routineGroupID) has nil isActive"
+          )
+        }
+        isActive = summaryIsActive
+      case .override(let authoritativeActiveGroupID):
+        isActive = summary.routineGroupID == authoritativeActiveGroupID
       }
       guard let serverRoutineItems = detail.routines else {
         throw ServerRoutineRestorationError.invalidResponse(
@@ -228,11 +264,13 @@ enum ServerRoutineRestorationMapper {
         )
       }
 
-      activeGroupCount += isActive ? 1 : 0
-      guard activeGroupCount <= 1 else {
-        throw ServerRoutineRestorationError.invalidResponse(
-          reason: "makeSnapshot: more than one active routine group (routineGroupID \(summary.routineGroupID) is active-group #\(activeGroupCount))"
-        )
+      if case .fromSummaries = activeGroupResolution {
+        activeGroupCount += isActive ? 1 : 0
+        guard activeGroupCount <= 1 else {
+          throw ServerRoutineRestorationError.invalidResponse(
+            reason: "makeSnapshot: more than one active routine group (routineGroupID \(summary.routineGroupID) is active-group #\(activeGroupCount))"
+          )
+        }
       }
 
       let localGroupID = UUID()

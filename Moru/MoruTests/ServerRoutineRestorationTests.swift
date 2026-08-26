@@ -262,6 +262,135 @@ final class ServerRoutineRestorationTests: XCTestCase {
     XCTAssertEqual(homeViewModel.state.todayRoutine?.title, routine.name)
   }
 
+  func testMakeSnapshotOverridesConflictingActiveFlagsUsingAuthoritativeID()
+    throws {
+    let summaries = [
+      ServerRoutineGroupSummary(
+        routineGroupID: 501,
+        title: "루틴 A",
+        isActive: true,
+        routineCount: 3,
+        totalDurationSeconds: 90
+      ),
+      ServerRoutineGroupSummary(
+        routineGroupID: 502,
+        title: "루틴 B",
+        isActive: true,
+        routineCount: 3,
+        totalDurationSeconds: 90
+      ),
+    ]
+    let details = [
+      serverGroupDetail(),
+      secondServerGroupDetail(),
+    ]
+
+    let snapshot = try ServerRoutineRestorationMapper.makeSnapshot(
+      summaries: summaries,
+      details: details,
+      activeGroupResolution: .override(502),
+      at: Date(timeIntervalSince1970: 0)
+    )
+
+    let activeRoutines = snapshot.routines.filter(\.isActive)
+    XCTAssertEqual(activeRoutines.count, 1)
+    XCTAssertEqual(activeRoutines.first?.name, "서버 저녁 루틴")
+  }
+
+  func testMakeSnapshotDeactivatesAllGroupsWhenNoAuthoritativeActiveGroupExists()
+    throws {
+    let summaries = [
+      ServerRoutineGroupSummary(
+        routineGroupID: 501,
+        title: "루틴 A",
+        isActive: true,
+        routineCount: 3,
+        totalDurationSeconds: 90
+      ),
+      ServerRoutineGroupSummary(
+        routineGroupID: 502,
+        title: "루틴 B",
+        isActive: true,
+        routineCount: 3,
+        totalDurationSeconds: 90
+      ),
+    ]
+    let details = [
+      serverGroupDetail(),
+      secondServerGroupDetail(),
+    ]
+
+    let snapshot = try ServerRoutineRestorationMapper.makeSnapshot(
+      summaries: summaries,
+      details: details,
+      activeGroupResolution: .override(nil),
+      at: Date(timeIntervalSince1970: 0)
+    )
+
+    XCTAssertEqual(snapshot.routines.count, 2)
+    XCTAssertTrue(snapshot.routines.allSatisfy { !$0.isActive })
+  }
+
+  func testMultipleActiveGroupsResolveViaFetchActiveRoutineGroupEndpoint()
+    async throws {
+    let memberID: Int64 = 103
+    let remote = RestorationRoutineGroupRemoteStub(
+      summariesByMemberID: [
+        memberID: [
+          ServerRoutineGroupSummary(
+            routineGroupID: 501,
+            title: "루틴 A",
+            isActive: true,
+            routineCount: 3,
+            totalDurationSeconds: 90
+          ),
+          ServerRoutineGroupSummary(
+            routineGroupID: 502,
+            title: "루틴 B",
+            isActive: true,
+            routineCount: 3,
+            totalDurationSeconds: 90
+          ),
+        ],
+      ],
+      detailsByGroupID: [
+        501: serverGroupDetail(),
+        502: secondServerGroupDetail(),
+      ],
+      activeRoutineGroupByMemberID: [
+        memberID: ServerActiveRoutineGroup(
+          routineGroupID: 502,
+          title: "루틴 B",
+          totalDurationSeconds: 90,
+          completionRate: 0,
+          routines: []
+        ),
+      ]
+    )
+    let fixture = try makeFixture(
+      statusOutcomes: [memberID: .completed(true)],
+      remote: remote,
+      storedCredentials: credentials(memberID: memberID, completed: true)
+    )
+    fixture.coordinator.start()
+    fixture.accountSessionStore.restore()
+
+    try await waitUntil {
+      if case .restored(_, routineCount: 2) =
+        fixture.coordinator.restorationState {
+        return true
+      }
+      return false
+    }
+
+    let routines = try fixture.routineRepository.fetchRoutines()
+    XCTAssertEqual(routines.count, 2)
+    XCTAssertEqual(
+      routines.filter(\.isActive).map(\.name),
+      ["서버 저녁 루틴"]
+    )
+  }
+
   func testIncompleteServerOnboardingKeepsExistingOnboardingFlow()
     async throws {
     let memberID: Int64 = 102
@@ -1358,6 +1487,7 @@ private actor RestorationRoutineGroupRemoteStub:
 
   private let summariesByMemberID: [Int64: [ServerRoutineGroupSummary]]
   private let detailsByGroupID: [Int64: ServerRoutineGroupDetail]
+  private let activeRoutineGroupByMemberID: [Int64: ServerActiveRoutineGroup]
   private var suspendedDetailIDs: Set<Int64>
   private var continuations: [
     Int64: CheckedContinuation<ServerRoutineGroupDetail, Error>
@@ -1374,11 +1504,13 @@ private actor RestorationRoutineGroupRemoteStub:
   init(
     summariesByMemberID: [Int64: [ServerRoutineGroupSummary]],
     detailsByGroupID: [Int64: ServerRoutineGroupDetail],
-    suspendedDetailIDs: Set<Int64> = []
+    suspendedDetailIDs: Set<Int64> = [],
+    activeRoutineGroupByMemberID: [Int64: ServerActiveRoutineGroup] = [:]
   ) {
     self.summariesByMemberID = summariesByMemberID
     self.detailsByGroupID = detailsByGroupID
     self.suspendedDetailIDs = suspendedDetailIDs
+    self.activeRoutineGroupByMemberID = activeRoutineGroupByMemberID
   }
 
   func fetchRoutineGroups(
@@ -1426,7 +1558,7 @@ private actor RestorationRoutineGroupRemoteStub:
   func fetchActiveRoutineGroup(
     identity: AccountSessionIdentity
   ) async throws -> ServerActiveRoutineGroup? {
-    nil
+    activeRoutineGroupByMemberID[identity.memberID]
   }
 
   func fetchTodayRoutineGroupSummary(
@@ -1500,6 +1632,27 @@ nonisolated private func serverGroupSummary()
     isActive: true,
     routineCount: 3,
     totalDurationSeconds: 90
+  )
+}
+
+nonisolated private func secondServerGroupDetail()
+  -> ServerRoutineGroupDetail {
+  ServerRoutineGroupDetail(
+    routineGroupID: 502,
+    title: "서버 저녁 루틴",
+    description: "서버에서 만든 두 번째 루틴",
+    alarmDaysRaw: "SAT,SUN",
+    alarmTimeRaw: "21:00",
+    weatherNotificationEnabled: false,
+    routines: [
+      ServerRoutineItem(
+        routineID: 611,
+        title: "독서하기",
+        type: .check,
+        durationSeconds: 0,
+        steps: []
+      ),
+    ]
   )
 }
 
