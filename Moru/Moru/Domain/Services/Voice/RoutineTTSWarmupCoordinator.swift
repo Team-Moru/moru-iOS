@@ -240,6 +240,12 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private let foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy
   private let prefetchPollingPolicy: RoutineTTSPrefetchPollingPolicy
   private let diagnostics: RoutineTTSDiagnostics
+  /// `RoutineSyncBlockReason` carries no account or routine content, so it is
+  /// safe to log verbatim, unlike the identifier-free `RoutineTTSDiagnostics`.
+  private let blockReasonLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "RoutineTTSWarmup"
+  )
   private let voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring
   private let prefetchJobStore: (any RoutineTTSPrefetchJobStoring)?
   private weak var backgroundTransferManager:
@@ -1200,6 +1206,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
           entityKind: .routineGroup,
           localEntityID: routineGroupLocalID
         )
+        if let mutation {
+          blockReasonLogger.notice(
+            "createRoutineGroup mutation state: \(mutation.state.rawValue, privacy: .public), blockReason: \(mutation.blockReason?.rawValue ?? "nil", privacy: .public)"
+          )
+        }
         diagnostics.record(
           mutation == nil
             ? .missingGroupBindingNoMutationRecord
