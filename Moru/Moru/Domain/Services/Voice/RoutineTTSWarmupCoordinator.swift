@@ -87,6 +87,16 @@ nonisolated enum RoutineTTSForegroundPreparationStatus: Equatable, Sendable {
 nonisolated enum RoutineTTSDiagnosticEvent: String, Sendable {
   case cachePlanMissing
   case missingGroupBinding
+  /// No binding AND no createRoutineGroup mutation record exists at all for
+  /// this local group. Distinguishes "sync never even recorded intent" from
+  /// the other missingGroupBinding causes below.
+  case missingGroupBindingNoMutationRecord
+  /// A createRoutineGroup mutation exists but is in the terminal `.blocked`
+  /// state, which never resolves automatically.
+  case missingGroupBindingMutationBlocked
+  /// A binding record exists but failed identity/shape validation
+  /// (wrong member, namespace, or remoteID) rather than being absent.
+  case missingGroupBindingInvalidExistingBinding
   case missingRoutineBinding
   case remoteFetchFailed
   case responseUnavailable
@@ -1184,7 +1194,17 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         ) {
           return .pendingBinding
         }
-        diagnostics.record(.missingGroupBinding)
+        let mutation = try? bindingRepository.mutation(
+          memberID: identity.memberID,
+          operation: .createRoutineGroup,
+          entityKind: .routineGroup,
+          localEntityID: routineGroupLocalID
+        )
+        diagnostics.record(
+          mutation == nil
+            ? .missingGroupBindingNoMutationRecord
+            : .missingGroupBindingMutationBlocked
+        )
         return .unavailable
       }
       guard isValidGroupBinding(
@@ -1196,7 +1216,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
           routineGroupLocalID: routineGroupLocalID,
           routineLocalIDs: requestedRoutineIDs
         )
-        diagnostics.record(.missingGroupBinding)
+        diagnostics.record(.missingGroupBindingInvalidExistingBinding)
         return .unavailable
       }
       groupBinding = binding
