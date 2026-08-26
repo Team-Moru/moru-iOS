@@ -1785,11 +1785,16 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   ) -> Bool {
     switch state {
     // Newly saved groups start waiting for runtime contract admission, then
-    // become queued. Both states can gain a server binding during the same
-    // bounded first-cue window, so neither should fall through silently.
-    case .waitingForServerContract, .queued, .attempting:
+    // become queued. All three states can still gain a server binding during
+    // the same bounded first-cue window, so none should fall through
+    // silently. `needsReconciliation` means the request may already have
+    // reached the server; `RoutineSyncSender` retries it automatically
+    // (see its `pendingReplay` branch), so it is not a dead end either.
+    case .waitingForServerContract, .queued, .attempting, .needsReconciliation:
       true
-    case .needsReconciliation, .blocked:
+    // `blocked` is the only state that requires explicit intervention and
+    // will never resolve on its own.
+    case .blocked:
       false
     }
   }
