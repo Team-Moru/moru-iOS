@@ -148,10 +148,12 @@ final class AccountServerSettingsViewModel {
       selectedTTSID = persistedTTSID
     } else if case .content(let profile) = profileState {
       selectedTTSID = profile.selectedTTSID
-      voiceSelectionStore?.setSelectedTTSID(
-        profile.selectedTTSID,
-        forMemberID: memberID
-      )
+      if let profileSelectedTTSID = profile.selectedTTSID {
+        voiceSelectionStore?.setSelectedTTSID(
+          profileSelectedTTSID,
+          forMemberID: memberID
+        )
+      }
     } else if previousProfile == nil {
       selectedTTSID = persistedTTSID
     }

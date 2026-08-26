@@ -198,8 +198,31 @@ final class ServerVoiceCommonAudioProvider:
         let selectionVersion = voiceSelectionVersionStore?.selectionVersion(
           forMemberID: identity.memberID
         )
-        let targetTTSID = preferredSelectedTTSID
-          ?? resolvedProfile.selectedTTSID
+        let targetTTSID: Int64
+        if let preferredSelectedTTSID {
+          targetTTSID = preferredSelectedTTSID
+        } else if let profileSelectedTTSID = resolvedProfile.selectedTTSID {
+          targetTTSID = profileSelectedTTSID
+        } else {
+          // A signed-in member with no server voice selection yet has no
+          // local fallback: on-device voices cannot cover a newly created
+          // routine's server-generated cues. Default to the catalogue's
+          // first voice and persist the choice server-side.
+          let availableVoices = try await remoteService.fetchVoices(
+            memberID: identity.memberID
+          )
+          guard !Task.isCancelled,
+                requestedGeneration == generation,
+                sessionIdentityProvider?.currentAccountSessionIdentity == identity,
+                let firstVoice = availableVoices.first else {
+            return
+          }
+          let selection = try await remoteService.updateTTS(
+            ttsID: firstVoice.ttsID,
+            memberID: identity.memberID
+          )
+          targetTTSID = selection.ttsID
+        }
         let persistedTTSID = voiceSelectionVersionStore?.selectedTTSID(
           forMemberID: identity.memberID
         )

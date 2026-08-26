@@ -283,7 +283,7 @@ final class AccountServerRemoteContractTests: XCTestCase {
     XCTAssertEqual(client.callCount, 0)
   }
 
-  func testProfileRequiresMatchingMemberPositiveTTSIDAndText()
+  func testProfileRequiresMatchingMemberAndText()
     async throws {
     let invalidProfiles = [
       accountProfileDTO(memberId: 99),
@@ -291,7 +291,6 @@ final class AccountServerRemoteContractTests: XCTestCase {
       accountProfileDTO(nickname: "  "),
       accountProfileDTO(loginType: "\n"),
       accountProfileDTO(profileImageKey: " "),
-      accountProfileDTO(ttsId: 0),
     ]
 
     for profile in invalidProfiles {
@@ -301,6 +300,19 @@ final class AccountServerRemoteContractTests: XCTestCase {
       await assertRemoteError(.invalidResponse) {
         _ = try await service.fetchProfile(memberID: 98)
       }
+    }
+  }
+
+  func testProfileReportsNilSelectedTTSIDWhenMemberHasNoVoiceYet()
+    async throws {
+    for unselectedTTSID: Int64? in [0, nil] {
+      let service = DefaultAccountServerRemoteService(
+        apiClient: AccountServerPayloadAPIClient(
+          profile: accountProfileDTO(ttsId: unselectedTTSID)
+        )
+      )
+      let profile = try await service.fetchProfile(memberID: 98)
+      XCTAssertNil(profile.selectedTTSID)
     }
 
     let service = DefaultAccountServerRemoteService(
