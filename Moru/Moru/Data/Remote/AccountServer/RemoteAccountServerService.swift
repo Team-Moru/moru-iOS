@@ -114,18 +114,18 @@ nonisolated private extension AccountProfileResponseDTO {
           memberId > 0,
           memberId == expectedMemberID,
           let nickname = try normalizedRequiredText(nickname),
-          let loginType = try normalizedRequiredText(loginType),
-          let ttsId,
-          ttsId > 0 else {
+          let loginType = try normalizedRequiredText(loginType) else {
       throw AccountServerRemoteError.invalidResponse
     }
 
+    // A member who has never chosen a server voice reports ttsId as null/0.
+    // That is a legitimate "no selection yet" state, not a malformed response.
     return ServerAccountProfile(
       memberID: memberId,
       nickname: nickname,
       loginType: ServerAccountLoginType(serverValue: loginType),
       profileImageKey: try normalizedOptionalText(profileImageKey),
-      selectedTTSID: ttsId
+      selectedTTSID: (ttsId ?? 0) > 0 ? ttsId : nil
     )
   }
 }

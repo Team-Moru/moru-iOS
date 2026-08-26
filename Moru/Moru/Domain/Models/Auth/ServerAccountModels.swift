@@ -10,7 +10,8 @@ nonisolated struct ServerAccountProfile: Equatable, Sendable {
   let nickname: String
   let loginType: ServerAccountLoginType
   let profileImageKey: String?
-  let selectedTTSID: Int64
+  /// `nil` when this member has never selected a server voice yet.
+  let selectedTTSID: Int64?
 }
 
 nonisolated enum ServerAccountLoginType: Equatable, Sendable {
