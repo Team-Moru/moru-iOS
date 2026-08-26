@@ -1,5 +1,5 @@
 //
-//  ProfileServices.swift
+//  ProfileAlarmServicing.swift
 //  Moru
 //
 //  Created by Codex on 7/22/26.
@@ -14,16 +14,6 @@ enum ProfileAlarmStatus: Equatable {
   case permissionOff
   case repairRequired
   case unavailable
-}
-
-protocol VoiceAvailabilityProbing {
-  func isAvailable(_ voice: VoiceProfile) -> Bool
-}
-
-struct UnavailableVoiceAvailabilityProbe: VoiceAvailabilityProbing {
-  func isAvailable(_ voice: VoiceProfile) -> Bool {
-    false
-  }
 }
 
 @MainActor
