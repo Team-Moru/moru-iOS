@@ -191,15 +191,22 @@ nonisolated private extension ActiveRoutineGroupResponseDTO {
   func makeDomainModel() throws -> ServerActiveRoutineGroup {
     guard let routineGroupID = routineGroupId,
           routineGroupID > 0,
-          let title = try normalizedRequiredRoutineGroupText(title),
+          let title = try normalizedRequiredRoutineGroupText(
+            title,
+            field: "activeRoutineGroup.title"
+          ),
           let totalDurationSec = try validatedRequiredInt32Value(
-            totalDurationSec
+            totalDurationSec,
+            field: "activeRoutineGroup.totalDurationSec"
           ),
           let completionRate = try normalizedCompletionRate(
-            completionRate
+            completionRate,
+            field: "activeRoutineGroup.completionRate"
           ),
           let routines else {
-      throw AccountRoutineGroupRemoteError.invalidResponse
+      throw AccountRoutineGroupRemoteError.invalidResponse(
+        reason: "activeRoutineGroup: missing/invalid routineGroupId, title, totalDurationSec, completionRate, or routines"
+      )
     }
 
     return ServerActiveRoutineGroup(
@@ -222,10 +229,13 @@ nonisolated private extension Array where Element == ActiveRoutineResponseDTO {
             routineID > 0,
             seenRoutineIDs.insert(routineID).inserted,
             let title = try normalizedRequiredRoutineGroupText(
-              routine.title
+              routine.title,
+              field: "activeRoutine.title"
             ),
             let isCompleted = routine.isCompleted else {
-        throw AccountRoutineGroupRemoteError.invalidResponse
+        throw AccountRoutineGroupRemoteError.invalidResponse(
+          reason: "activeRoutine: missing/duplicate routineId, missing title, or missing isCompleted"
+        )
       }
 
       return ServerActiveRoutine(
@@ -233,7 +243,8 @@ nonisolated private extension Array where Element == ActiveRoutineResponseDTO {
         title: title,
         isCompleted: isCompleted,
         completedTimeSeconds: try validatedOptionalInt32Value(
-          routine.completedTimeSec
+          routine.completedTimeSec,
+          field: "activeRoutine.completedTimeSec"
         )
       )
     }
@@ -243,14 +254,21 @@ nonisolated private extension Array where Element == ActiveRoutineResponseDTO {
 nonisolated private extension TodayRoutineGroupSummaryResponseDTO {
   func makeDomainModel() throws -> ServerTodayRoutineGroupSummary {
     guard let completedCount = try validatedRequiredInt32Value(
-            completedCount
+            completedCount,
+            field: "todayRoutineGroupSummary.completedCount"
           ),
-          let totalCount = try validatedRequiredInt32Value(totalCount),
+          let totalCount = try validatedRequiredInt32Value(
+            totalCount,
+            field: "todayRoutineGroupSummary.totalCount"
+          ),
           completedCount <= totalCount,
           let completionRate = try normalizedCompletionRate(
-            completionRate
+            completionRate,
+            field: "todayRoutineGroupSummary.completionRate"
           ) else {
-      throw AccountRoutineGroupRemoteError.invalidResponse
+      throw AccountRoutineGroupRemoteError.invalidResponse(
+        reason: "todayRoutineGroupSummary: invalid completedCount, totalCount, or completionRate"
+      )
     }
 
     return ServerTodayRoutineGroupSummary(
@@ -271,18 +289,25 @@ where Element == RoutineGroupSummaryResponseDTO {
       guard let routineGroupID = summary.routineGroupId,
             routineGroupID > 0,
             seenRoutineGroupIDs.insert(routineGroupID).inserted else {
-        throw AccountRoutineGroupRemoteError.invalidResponse
+        throw AccountRoutineGroupRemoteError.invalidResponse(
+          reason: "routineGroupSummary: missing, invalid, or duplicate routineGroupId"
+        )
       }
 
       return ServerRoutineGroupSummary(
         routineGroupID: routineGroupID,
-        title: try normalizedRoutineGroupText(summary.title),
+        title: try normalizedRoutineGroupText(
+          summary.title,
+          field: "routineGroupSummary.title"
+        ),
         isActive: summary.isActive,
         routineCount: try validatedOptionalInt32Value(
-          summary.routineCount
+          summary.routineCount,
+          field: "routineGroupSummary.routineCount"
         ),
         totalDurationSeconds: try validatedOptionalInt32Value(
-          summary.totalDurationSecond
+          summary.totalDurationSecond,
+          field: "routineGroupSummary.totalDurationSecond"
         )
       )
     }
@@ -296,15 +321,29 @@ nonisolated private extension RoutineGroupDetailResponseDTO {
     guard let routineGroupID = routineGroupId,
           routineGroupID > 0,
           routineGroupID == expectedRoutineGroupID else {
-      throw AccountRoutineGroupRemoteError.invalidResponse
+      throw AccountRoutineGroupRemoteError.invalidResponse(
+        reason: "routineGroupDetail: routineGroupId missing or mismatched with requested id"
+      )
     }
 
     return ServerRoutineGroupDetail(
       routineGroupID: routineGroupID,
-      title: try normalizedRoutineGroupText(title),
-      description: try normalizedRoutineGroupText(description),
-      alarmDaysRaw: try normalizedRoutineGroupText(alarmDays),
-      alarmTimeRaw: try normalizedRoutineGroupText(alarmTime),
+      title: try normalizedRoutineGroupText(
+        title,
+        field: "routineGroupDetail.title"
+      ),
+      description: try normalizedRoutineGroupText(
+        description,
+        field: "routineGroupDetail.description"
+      ),
+      alarmDaysRaw: try normalizedRoutineGroupText(
+        alarmDays,
+        field: "routineGroupDetail.alarmDays"
+      ),
+      alarmTimeRaw: try normalizedRoutineGroupText(
+        alarmTime,
+        field: "routineGroupDetail.alarmTime"
+      ),
       weatherNotificationEnabled: weatherNotificationEnabled,
       routines: try routines?.makeDomainModels()
     )
@@ -321,15 +360,21 @@ where Element == RoutineGroupRoutineResponseDTO {
       guard let routineID = routine.routineId,
             routineID > 0,
             seenRoutineIDs.insert(routineID).inserted else {
-        throw AccountRoutineGroupRemoteError.invalidResponse
+        throw AccountRoutineGroupRemoteError.invalidResponse(
+          reason: "routineGroupRoutine: missing, invalid, or duplicate routineId"
+        )
       }
 
       return ServerRoutineItem(
         routineID: routineID,
-        title: try normalizedRoutineGroupText(routine.title),
+        title: try normalizedRoutineGroupText(
+          routine.title,
+          field: "routineGroupRoutine.title"
+        ),
         type: try ServerRoutineItemType(serverValue: routine.type),
         durationSeconds: try validatedOptionalInt32Value(
-          routine.durationSecond
+          routine.durationSecond,
+          field: "routineGroupRoutine.durationSecond"
         ),
         steps: try routine.steps?.makeDomainModels()
       )
@@ -347,13 +392,21 @@ where Element == RoutineGroupStepResponseDTO {
       guard let stepID = step.stepId,
             stepID > 0,
             seenStepIDs.insert(stepID).inserted else {
-        throw AccountRoutineGroupRemoteError.invalidResponse
+        throw AccountRoutineGroupRemoteError.invalidResponse(
+          reason: "routineGroupStep: missing, invalid, or duplicate stepId"
+        )
       }
 
       return ServerRoutineNestedStep(
         stepID: stepID,
-        content: try normalizedRoutineGroupText(step.content),
-        orderIndex: try validatedOptionalInt32Value(step.orderIndex)
+        content: try normalizedRoutineGroupText(
+          step.content,
+          field: "routineGroupStep.content"
+        ),
+        orderIndex: try validatedOptionalInt32Value(
+          step.orderIndex,
+          field: "routineGroupStep.orderIndex"
+        )
       )
     }
   }
@@ -365,8 +418,13 @@ nonisolated private extension ServerRoutineItemType {
       return nil
     }
 
-    guard let normalized = try normalizedRoutineGroupText(serverValue) else {
-      throw AccountRoutineGroupRemoteError.invalidResponse
+    guard let normalized = try normalizedRoutineGroupText(
+      serverValue,
+      field: "routineItem.type"
+    ) else {
+      throw AccountRoutineGroupRemoteError.invalidResponse(
+        reason: "routineItem.type: blank type string"
+      )
     }
 
     switch normalized {
@@ -383,7 +441,8 @@ nonisolated private extension ServerRoutineItemType {
 }
 
 nonisolated private func normalizedRoutineGroupText(
-  _ value: String?
+  _ value: String?,
+  field: String
 ) throws -> String? {
   guard let value else {
     return nil
@@ -393,52 +452,64 @@ nonisolated private func normalizedRoutineGroupText(
     in: .whitespacesAndNewlines
   )
   guard !normalized.isEmpty else {
-    throw AccountRoutineGroupRemoteError.invalidResponse
+    throw AccountRoutineGroupRemoteError.invalidResponse(
+      reason: "\(field): blank after trimming"
+    )
   }
   return normalized
 }
 
 nonisolated private func normalizedRequiredRoutineGroupText(
-  _ value: String?
+  _ value: String?,
+  field: String
 ) throws -> String? {
-  guard let normalized = try normalizedRoutineGroupText(value) else {
+  guard let normalized = try normalizedRoutineGroupText(value, field: field) else {
     return nil
   }
   return normalized
 }
 
 nonisolated private func validatedOptionalInt32Value(
-  _ value: Int?
+  _ value: Int?,
+  field: String
 ) throws -> Int? {
   guard let value else {
     return nil
   }
   guard (0...Int(Int32.max)).contains(value) else {
-    throw AccountRoutineGroupRemoteError.invalidResponse
+    throw AccountRoutineGroupRemoteError.invalidResponse(
+      reason: "\(field): \(value) out of Int32 range"
+    )
   }
   return value
 }
 
 nonisolated private func validatedRequiredInt32Value(
-  _ value: Int?
+  _ value: Int?,
+  field: String
 ) throws -> Int? {
   guard let value else {
     return nil
   }
   guard (0...Int(Int32.max)).contains(value) else {
-    throw AccountRoutineGroupRemoteError.invalidResponse
+    throw AccountRoutineGroupRemoteError.invalidResponse(
+      reason: "\(field): \(value) out of Int32 range"
+    )
   }
   return value
 }
 
 nonisolated private func normalizedCompletionRate(
-  _ value: Int?
+  _ value: Int?,
+  field: String
 ) throws -> Double? {
   guard let value else {
     return nil
   }
   guard (0...100).contains(value) else {
-    throw AccountRoutineGroupRemoteError.invalidResponse
+    throw AccountRoutineGroupRemoteError.invalidResponse(
+      reason: "\(field): \(value) out of 0...100 range"
+    )
   }
   return Double(value) / 100
 }

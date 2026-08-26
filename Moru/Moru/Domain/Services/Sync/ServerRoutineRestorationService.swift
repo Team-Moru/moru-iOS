@@ -48,7 +48,9 @@ nonisolated enum ServerRoutineRestorationError:
   Error,
   Equatable,
   Sendable {
-  case invalidResponse
+  /// `reason` names the field/guard that rejected the response, to make a
+  /// legacy or unexpectedly-shaped server payload diagnosable in logs.
+  case invalidResponse(reason: String)
   case localDataChanged
   case staleSession
 }
@@ -118,10 +120,28 @@ final class DefaultServerRoutineRestorationService:
       details.append(detail)
     }
 
+    // Legacy or anomalous server data can carry more than one routine group
+    // marked active, even though local storage (and the server's own
+    // /routine-groups/active endpoint) model a single active group. Rather
+    // than rejecting the whole restore, defer to that endpoint's authoritative
+    // pick so an account is never permanently locked out by this mismatch.
+    let activeGroupResolution: ServerRoutineRestorationMapper.ActiveGroupResolution
+    if summaries.filter({ $0.isActive == true }).count > 1 {
+      let authoritative = try? await remoteService.fetchActiveRoutineGroup(
+        identity: identity
+      )
+      try Task.checkCancellation()
+      try requireCurrent(identity)
+      activeGroupResolution = .override(authoritative?.routineGroupID)
+    } else {
+      activeGroupResolution = .fromSummaries
+    }
+
     let restorationDate = now()
     let snapshot = try ServerRoutineRestorationMapper.makeSnapshot(
       summaries: summaries,
       details: details,
+      activeGroupResolution: activeGroupResolution,
       at: restorationDate
     )
     try Task.checkCancellation()
@@ -175,13 +195,26 @@ final class DefaultServerRoutineRestorationService:
 
 @MainActor
 enum ServerRoutineRestorationMapper {
+  /// How to resolve which single routine group (if any) is active, since
+  /// local storage allows at most one. `.override` is used when the server's
+  /// summaries disagree with themselves (more than one marked active); the
+  /// override should come from the server's own authoritative single-active
+  /// lookup rather than a guess.
+  nonisolated enum ActiveGroupResolution: Equatable, Sendable {
+    case fromSummaries
+    case override(Int64?)
+  }
+
   static func makeSnapshot(
     summaries: [ServerRoutineGroupSummary],
     details: [ServerRoutineGroupDetail],
+    activeGroupResolution: ActiveGroupResolution = .fromSummaries,
     at date: Date
   ) throws -> ServerRoutineRestorationSnapshot {
     guard summaries.count == details.count else {
-      throw ServerRoutineRestorationError.invalidResponse
+      throw ServerRoutineRestorationError.invalidResponse(
+        reason: "makeSnapshot: summaries.count (\(summaries.count)) != details.count (\(details.count))"
+      )
     }
 
     var detailsByGroupID: [Int64: ServerRoutineGroupDetail] = [:]
@@ -190,7 +223,9 @@ enum ServerRoutineRestorationMapper {
         detail,
         forKey: detail.routineGroupID
       ) == nil else {
-        throw ServerRoutineRestorationError.invalidResponse
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "makeSnapshot: duplicate routineGroupID \(detail.routineGroupID) in details"
+        )
       }
     }
 
@@ -200,17 +235,42 @@ enum ServerRoutineRestorationMapper {
 
     for summary in summaries {
       guard let detail = detailsByGroupID.removeValue(
-              forKey: summary.routineGroupID
-            ),
-            let isActive = summary.isActive,
-            let serverRoutineItems = detail.routines,
-            let name = detail.title ?? summary.title else {
-        throw ServerRoutineRestorationError.invalidResponse
+        forKey: summary.routineGroupID
+      ) else {
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "makeSnapshot: no detail fetched for routineGroupID \(summary.routineGroupID)"
+        )
+      }
+      let isActive: Bool
+      switch activeGroupResolution {
+      case .fromSummaries:
+        guard let summaryIsActive = summary.isActive else {
+          throw ServerRoutineRestorationError.invalidResponse(
+            reason: "makeSnapshot: routineGroupID \(summary.routineGroupID) has nil isActive"
+          )
+        }
+        isActive = summaryIsActive
+      case .override(let authoritativeActiveGroupID):
+        isActive = summary.routineGroupID == authoritativeActiveGroupID
+      }
+      guard let serverRoutineItems = detail.routines else {
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "makeSnapshot: routineGroupID \(summary.routineGroupID) has nil routines"
+        )
+      }
+      guard let name = detail.title ?? summary.title else {
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "makeSnapshot: routineGroupID \(summary.routineGroupID) has no title in detail or summary"
+        )
       }
 
-      activeGroupCount += isActive ? 1 : 0
-      guard activeGroupCount <= 1 else {
-        throw ServerRoutineRestorationError.invalidResponse
+      if case .fromSummaries = activeGroupResolution {
+        activeGroupCount += isActive ? 1 : 0
+        guard activeGroupCount <= 1 else {
+          throw ServerRoutineRestorationError.invalidResponse(
+            reason: "makeSnapshot: more than one active routine group (routineGroupID \(summary.routineGroupID) is active-group #\(activeGroupCount))"
+          )
+        }
       }
 
       let localGroupID = UUID()
@@ -259,7 +319,9 @@ enum ServerRoutineRestorationMapper {
     }
 
     guard detailsByGroupID.isEmpty else {
-      throw ServerRoutineRestorationError.invalidResponse
+      throw ServerRoutineRestorationError.invalidResponse(
+        reason: "makeSnapshot: details contain routineGroupIDs not present in summaries: \(Array(detailsByGroupID.keys))"
+      )
     }
 
     return ServerRoutineRestorationSnapshot(
@@ -275,7 +337,9 @@ enum ServerRoutineRestorationMapper {
   ) throws -> RoutineStep {
     guard let title = item.title,
           let serverType = item.type else {
-      throw ServerRoutineRestorationError.invalidResponse
+      throw ServerRoutineRestorationError.invalidResponse(
+        reason: "makeStep: routineID \(item.routineID) has nil title or type"
+      )
     }
 
     let type: RoutineStepType
@@ -286,15 +350,19 @@ enum ServerRoutineRestorationMapper {
       type = .timer
     case .input:
       type = .input
-    case .unknown:
-      throw ServerRoutineRestorationError.invalidResponse
+    case .unknown(let rawType):
+      throw ServerRoutineRestorationError.invalidResponse(
+        reason: "makeStep: routineID \(item.routineID) has unrecognized step type '\(rawType)'"
+      )
     }
 
     let estimatedSeconds: Int?
     if type == .timer {
       guard let durationSeconds = item.durationSeconds,
             durationSeconds > 0 else {
-        throw ServerRoutineRestorationError.invalidResponse
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "makeStep: routineID \(item.routineID) is TIMER but durationSeconds is \(item.durationSeconds.map(String.init) ?? "nil")"
+        )
       }
       estimatedSeconds = durationSeconds
     } else if let durationSeconds = item.durationSeconds,
@@ -337,7 +405,9 @@ enum ServerRoutineRestorationMapper {
         includeFortune: false
       )
     case (.some, nil), (nil, .some):
-      throw ServerRoutineRestorationError.invalidResponse
+      throw ServerRoutineRestorationError.invalidResponse(
+        reason: "makeAlarmSchedule: routineGroupID \(detail.routineGroupID) has only one of alarmDays/alarmTime set (days=\(detail.alarmDaysRaw ?? "nil"), time=\(detail.alarmTimeRaw ?? "nil"))"
+      )
     }
   }
 
@@ -357,18 +427,25 @@ enum ServerRoutineRestorationMapper {
     guard !components.isEmpty,
           components.allSatisfy({ !$0.isEmpty }),
           Set(components).count == components.count else {
-      throw ServerRoutineRestorationError.invalidResponse
+      throw ServerRoutineRestorationError.invalidResponse(
+        reason: "weekdays: malformed or duplicate day list '\(rawValue)'"
+      )
     }
 
     let values = try components.map { component in
       guard let weekday = names[component] else {
-        throw ServerRoutineRestorationError.invalidResponse
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "weekdays: unrecognized day code '\(component)' in '\(rawValue)'"
+        )
       }
       return weekday
     }
     return values.sortedByDisplayOrder()
   }
 
+  /// Accepts both `HH:MM` and `HH:MM:SS`. Local `AlarmSchedule` has no
+  /// seconds field, so a present seconds component is validated for shape
+  /// only and then discarded.
   private static func alarmTime(
     _ rawValue: String
   ) throws -> (hour: Int, minute: Int) {
@@ -376,14 +453,25 @@ enum ServerRoutineRestorationMapper {
       separator: ":",
       omittingEmptySubsequences: false
     )
-    guard components.count == 2,
+    guard components.count == 2 || components.count == 3,
           components[0].count == 2,
           components[1].count == 2,
           let hour = Int(components[0]),
           let minute = Int(components[1]),
           (0...23).contains(hour),
           (0...59).contains(minute) else {
-      throw ServerRoutineRestorationError.invalidResponse
+      throw ServerRoutineRestorationError.invalidResponse(
+        reason: "alarmTime: malformed time string '\(rawValue)'"
+      )
+    }
+    if components.count == 3 {
+      guard components[2].count == 2,
+            let second = Int(components[2]),
+            (0...59).contains(second) else {
+        throw ServerRoutineRestorationError.invalidResponse(
+          reason: "alarmTime: malformed seconds component in '\(rawValue)'"
+        )
+      }
     }
     return (hour, minute)
   }

@@ -324,7 +324,7 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       let service = DefaultAccountRoutineGroupRemoteService(
         apiClient: RoutineGroupPayloadAPIClient(summaries: summaries)
       )
-      await assertRemoteError(.invalidResponse) {
+      await assertRemoteError(.invalidResponse(reason: "")) {
         _ = try await service.fetchRoutineGroups(memberID: 98)
       }
     }
@@ -528,7 +528,7 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       let service = DefaultAccountRoutineGroupRemoteService(
         apiClient: RoutineGroupPayloadAPIClient(detail: detail)
       )
-      await assertRemoteError(.invalidResponse) {
+      await assertRemoteError(.invalidResponse(reason: "")) {
         _ = try await service.fetchRoutineGroupDetail(
           routineGroupID: 12,
           memberID: 98
@@ -583,7 +583,7 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       let service = DefaultAccountRoutineGroupRemoteService(
         apiClient: RoutineGroupPayloadAPIClient(detail: detail)
       )
-      await assertRemoteError(.invalidResponse) {
+      await assertRemoteError(.invalidResponse(reason: "")) {
         _ = try await service.fetchRoutineGroupDetail(
           routineGroupID: 12,
           memberID: 98
@@ -690,7 +690,7 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       let service = DefaultAccountRoutineGroupRemoteService(
         apiClient: RoutineGroupPayloadAPIClient(active: payload)
       )
-      await assertRemoteError(.invalidResponse) {
+      await assertRemoteError(.invalidResponse(reason: "")) {
         _ = try await service.fetchActiveRoutineGroup(identity: routineGroupIdentity)
       }
     }
@@ -738,7 +738,7 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       let service = DefaultAccountRoutineGroupRemoteService(
         apiClient: RoutineGroupPayloadAPIClient(today: payload)
       )
-      await assertRemoteError(.invalidResponse) {
+      await assertRemoteError(.invalidResponse(reason: "")) {
         _ = try await service.fetchTodayRoutineGroupSummary(identity: routineGroupIdentity)
       }
     }
@@ -1165,9 +1165,26 @@ final class RoutineGroupRemoteContractTests: XCTestCase {
       try await operation()
       XCTFail("Expected \(expected).")
     } catch let error as AccountRoutineGroupRemoteError {
-      XCTAssertEqual(error, expected)
+      XCTAssertTrue(
+        Self.isSameCase(error, expected),
+        "Expected \(expected), got \(error)"
+      )
     } catch {
       XCTFail("Expected AccountRoutineGroupRemoteError, got \(error)")
+    }
+  }
+
+  private static func isSameCase(
+    _ lhs: AccountRoutineGroupRemoteError,
+    _ rhs: AccountRoutineGroupRemoteError
+  ) -> Bool {
+    switch (lhs, rhs) {
+    case (.invalidRequest, .invalidRequest),
+      (.invalidResponse, .invalidResponse),
+      (.accountAuthorizationChanged, .accountAuthorizationChanged):
+      true
+    default:
+      false
     }
   }
 
