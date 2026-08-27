@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OSLog
 
 /// Validates only identity facts returned by the production write response.
 /// Local titles, schedules, and execution state remain owned by SwiftData.
@@ -11,6 +12,14 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
   RoutineSyncTransportResponseDecoding,
   Sendable {
   private let decoder = JSONDecoder()
+  /// `PATCH .../active`'s success code was never observed against the live
+  /// server (every attempt this session failed earlier at group creation),
+  /// so this logs the actual code on mismatch instead of failing silently
+  /// indistinguishable from any other invalidResponse cause.
+  private static let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "RoutineSyncResponseDecoder"
+  )
 
   func decodeCommit(
     for request: RoutineSyncTransportRequest,
@@ -152,8 +161,13 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
               in: request.wireRequest.path,
               prefix: "/routine-groups/",
               suffix: "/active"
-            ),
-            metadata.code == "COMMON200" else {
+            ) else {
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      guard metadata.code == "COMMON200" else {
+        Self.logger.notice(
+          "PATCH .../active succeeded with unexpected code: \(metadata.code, privacy: .public)"
+        )
         throw RoutineSyncResponseDecodingError.invalidResponse
       }
       try validateActiveSelection(

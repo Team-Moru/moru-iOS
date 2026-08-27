@@ -278,9 +278,10 @@ final class ProductionRoutineSyncRequestPreparer:
 
   /// Deactivating with no replacement (`selectedGroupLocalID == nil`) has no
   /// local record of which remote group was previously active, so it cannot
-  /// yet be turned into a `PATCH .../active` call. It remains unsupported
-  /// until that local tracking exists; the queued mutation stays blocked
-  /// rather than silently no-op-ing.
+  /// yet be turned into a `PATCH .../active` call. `RoutineSyncSender`
+  /// intercepts this exact command before calling this method and leaves the
+  /// mutation queued rather than attempting (and permanently blocking) it, so
+  /// this `throw` only guards against that interception being bypassed.
   private func makeSelectActiveRoutineGroupRequest(
     selectedGroupLocalID: UUID?,
     memberID: Int64
