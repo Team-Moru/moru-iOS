@@ -82,8 +82,11 @@ final class ProductionRoutineSyncRequestPreparer:
         memberID: mutation.memberID
       )
 
-    case .selectActiveRoutineGroup:
-      throw RoutineSyncRequestPreparingError.unsupportedOperation
+    case .selectActiveRoutineGroup(let selectedGroupLocalID):
+      return try makeSelectActiveRoutineGroupRequest(
+        selectedGroupLocalID: selectedGroupLocalID,
+        memberID: mutation.memberID
+      )
     }
   }
 
@@ -270,6 +273,34 @@ final class ProductionRoutineSyncRequestPreparer:
       method: .delete,
       path: "/routine-groups/\(binding.remoteID)",
       body: Data()
+    )
+  }
+
+  /// Deactivating with no replacement (`selectedGroupLocalID == nil`) has no
+  /// local record of which remote group was previously active, so it cannot
+  /// yet be turned into a `PATCH .../active` call. It remains unsupported
+  /// until that local tracking exists; the queued mutation stays blocked
+  /// rather than silently no-op-ing.
+  private func makeSelectActiveRoutineGroupRequest(
+    selectedGroupLocalID: UUID?,
+    memberID: Int64
+  ) throws -> RoutineSyncWireRequest {
+    guard let selectedGroupLocalID else {
+      throw RoutineSyncRequestPreparingError.unsupportedOperation
+    }
+    let binding = try requiredBinding(
+      memberID: memberID,
+      entityKind: .routineGroup,
+      localEntityID: selectedGroupLocalID
+    )
+    guard binding.parentEntityKind == nil,
+          binding.parentLocalEntityID == nil else {
+      throw RoutineSyncRequestPreparingError.conflictingServerBinding
+    }
+    return RoutineSyncWireRequest(
+      method: .patch,
+      path: "/routine-groups/\(binding.remoteID)/active",
+      body: try encoded(ProductionRoutineGroupActiveRequestDTO(isActive: true))
     )
   }
 
@@ -468,6 +499,10 @@ nonisolated private struct ProductionRoutineExecutionRequestDTO: Encodable {
   let aiResponse: String?
   let isCompleted: Bool
   let actualWakeTime: String?
+}
+
+nonisolated private struct ProductionRoutineGroupActiveRequestDTO: Encodable {
+  let isActive: Bool
 }
 
 nonisolated private struct ProductionOnboardingCompletionRequestDTO: Encodable {

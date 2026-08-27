@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OSLog
 
 nonisolated struct RoutineSyncTransportRequest: Equatable, Sendable {
   let serverNamespace: RoutineSyncServerNamespace
@@ -113,6 +114,10 @@ final class RoutineSyncSender {
   private let retryPolicy: RoutineSyncProcessingRetryPolicy
   private let onOnboardingCompletionCommitted:
     @MainActor (AccountSessionIdentity) -> Void
+  private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "RoutineSyncSender"
+  )
 
   init(
     repository: any RoutineSyncRepository,
@@ -399,6 +404,15 @@ final class RoutineSyncSender {
         assignments: assignments,
         at: date
       )
+
+    case let (.setRoutineGroupActive, .mutation(assignments)):
+      try repository.completeMutation(
+        id: mutation.id,
+        expectedGenerationID: attempt.generationID,
+        assignments: assignments,
+        at: date
+      )
+      logger.notice("setRoutineGroupActive committed")
 
     case (.deleteRoutineGroup, .deleted), (.deleteRoutine, .deleted):
       try repository.completeDelete(

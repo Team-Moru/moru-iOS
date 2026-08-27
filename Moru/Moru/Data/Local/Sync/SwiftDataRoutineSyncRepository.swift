@@ -779,7 +779,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
   ) throws {
     guard let persisted = try persistedMutation(id: id),
           let operation = RoutineSyncOperation(rawValue: persisted.operationRawValue),
-          operation == .addRoutine || operation == .saveRoutineExecution,
+          operation == .addRoutine
+            || operation == .saveRoutineExecution
+            || operation == .setRoutineGroupActive,
           matchesAttemptOrCurrent(persisted, expectedGenerationID: expectedGenerationID)
     else { return }
     do {
@@ -1036,6 +1038,12 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
             bindings[0].parentEntityKind == .routine,
             bindings[0].parentLocalEntityID == execution.routineLocalID else {
         throw RoutineSyncRepositoryError.invalidParentBinding
+      }
+    case (.setRoutineGroupActive, .selectActiveRoutineGroup(let selectedGroupLocalID)):
+      // Activation creates no new local/server binding; the group is already
+      // bound from its own createRoutineGroup settlement.
+      guard bindings.isEmpty, selectedGroupLocalID != nil else {
+        throw RoutineSyncRepositoryError.invalidPayload
       }
     default:
       throw RoutineSyncRepositoryError.invalidPayload
@@ -1753,7 +1761,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       throw RoutineSyncRepositoryError.invalidPayload
     }
     switch wireRequest.method {
-    case .post:
+    case .post, .patch:
       guard !wireRequest.body.isEmpty,
             (try? JSONSerialization.jsonObject(with: wireRequest.body)) != nil else {
         throw RoutineSyncRepositoryError.invalidPayload

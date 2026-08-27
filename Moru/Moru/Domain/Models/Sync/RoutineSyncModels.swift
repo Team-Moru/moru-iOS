@@ -155,13 +155,18 @@ nonisolated struct RoutineSyncServerCapabilities: OptionSet, Equatable, Sendable
   ]
 
   /// Capabilities verified on the production deployment used by P0 routine
-  /// writes. Lookup/upsert/single-active are deliberately absent.
+  /// writes. Lookup/upsert are deliberately still absent. `atomicSingleActive`
+  /// covers only the `selectedGroupLocalID != nil` (activate-one) path of
+  /// `setRoutineGroupActive` — the deactivate-with-no-replacement path still
+  /// throws `unsupportedOperation` and blocks, since there is no local record
+  /// of which remote group to deactivate in that case.
   static let productionP0: Self = [
     .idempotencyKey,
     .requiredResponseIDs,
     .clientEntityID,
     .replaySafeDelete,
     .onboardingCompletion,
+    .atomicSingleActive,
   ]
 }
 
@@ -419,6 +424,7 @@ nonisolated struct RoutineSyncAttempt: Equatable, Sendable {
 nonisolated enum RoutineSyncHTTPMethod: String, Codable, Equatable, Sendable {
   case post = "POST"
   case delete = "DELETE"
+  case patch = "PATCH"
 }
 
 /// Exact HTTP mutation artifact. Authentication is intentionally excluded;
