@@ -779,16 +779,14 @@ struct HistoryMonthlyHeatmapView: View {
 
     private func fillColor(for bucket: HistoryHeatmapBucket) -> Color {
         switch bucket {
-        case .noData:
-            return MoruPilotColor.accentSurface
-        case .zero:
-            return MoruPilotColor.accentTint
+        case .noData, .zero:
+            return AppColor.orange100
         case .low:
-            return Color(red: 1, green: 211 / 255, blue: 189 / 255)
+            return AppColor.orange200
         case .high:
-            return MoruPilotColor.accentSoft
+            return AppColor.orange300
         case .complete:
-            return MoruPilotColor.accent
+            return AppColor.orange400
         }
     }
 }
