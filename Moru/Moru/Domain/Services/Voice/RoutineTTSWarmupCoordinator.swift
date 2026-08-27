@@ -109,6 +109,12 @@ nonisolated enum RoutineTTSDiagnosticEvent: String, Sendable {
   case cachePurgeFailed
   case customCueUnavailable
   case serverCueUnavailable
+  /// The done/remind server-voice common cue's plan was not yet prepared
+  /// when playback needed it. Fails open (silently completes) by design.
+  case commonCueUnavailableForServerVoice
+  /// A common cue's local file was already cache-validated but failed to
+  /// start playback at cue time. Also fails open by design.
+  case commonCueLateFailure
 }
 
 nonisolated struct RoutineTTSDiagnostics: Sendable {
