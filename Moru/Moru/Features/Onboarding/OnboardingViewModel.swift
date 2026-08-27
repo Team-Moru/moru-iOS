@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import OSLog
 
 // Client-side presentation phases. They pace onboarding UI and are not server telemetry.
 enum RoutineOrganizingPresentationPhase: Int, CaseIterable, Equatable {
@@ -26,6 +27,10 @@ enum RoutineOrganizingPresentationTiming {
 final class OnboardingViewModel: ObservableObject {
   static let freeformTextCharacterLimit = 200
   private static let minimumRecommendedRoutineStepCount = 1
+  private static let saveErrorLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "OnboardingSave"
+  )
 
   let objectWillChange = ObservableObjectPublisher()
   let flowMode: RoutineCreationFlowMode
@@ -928,6 +933,9 @@ final class OnboardingViewModel: ObservableObject {
           return
         }
       } catch {
+        Self.saveErrorLogger.error(
+          "activeRoutineConflict(for:) threw: \(String(describing: error), privacy: .public)"
+        )
         errorMessage = error.localizedDescription
         return
       }
@@ -947,6 +955,9 @@ final class OnboardingViewModel: ObservableObject {
       onRecommendedRoutineSaved(result)
     } catch {
       isSaving = false
+      Self.saveErrorLogger.error(
+        "saveRecommendedRoutine execute() threw: \(String(describing: error), privacy: .public), replacingActiveRoutine=\(replacingActiveRoutine, privacy: .public)"
+      )
       errorMessage = error.localizedDescription
     }
   }
