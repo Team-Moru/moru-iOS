@@ -1207,8 +1207,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
           localEntityID: routineGroupLocalID
         )
         if let mutation {
+          let attemptAgeSeconds = mutation.attempt.map {
+            Int(Date().timeIntervalSince($0.attemptedAt))
+          }
           blockReasonLogger.notice(
-            "createRoutineGroup mutation state: \(mutation.state.rawValue, privacy: .public), blockReason: \(mutation.blockReason?.rawValue ?? "nil", privacy: .public)"
+            "createRoutineGroup mutation state: \(mutation.state.rawValue, privacy: .public), blockReason: \(mutation.blockReason?.rawValue ?? "nil", privacy: .public), generation: \(mutation.generation, privacy: .public), lastAttemptAgeSeconds: \(attemptAgeSeconds.map(String.init) ?? "nil", privacy: .public)"
           )
         }
         diagnostics.record(
