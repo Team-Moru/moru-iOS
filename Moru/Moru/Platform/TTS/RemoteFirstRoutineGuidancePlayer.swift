@@ -252,6 +252,7 @@ final class RemoteFirstRoutineGuidancePlayer:
       // Fixed server cues are optional and must never block completion-screen
       // progression or speech-input restart. Using a bundle here would play a
       // different voice than the selected server voice.
+      diagnostics.record(.commonCueUnavailableForServerVoice)
       return .completed
     case .localFile(let url):
       bundledPlayer.stop()
@@ -268,6 +269,7 @@ final class RemoteFirstRoutineGuidancePlayer:
       case .failedToStart:
         // The file was already validated before it entered the cache. A late
         // playback failure is still fail-open for a server-voice common cue.
+        diagnostics.record(.commonCueLateFailure)
         return .completed
       }
     }
