@@ -113,13 +113,21 @@ nonisolated private extension AccountProfileResponseDTO {
     guard let memberId,
           memberId > 0,
           memberId == expectedMemberID,
-          let nickname = try normalizedRequiredText(nickname),
           let loginType = try normalizedRequiredText(loginType) else {
       throw AccountServerRemoteError.invalidResponse
     }
 
-    // A member who has never chosen a server voice reports ttsId as null/0.
-    // That is a legitimate "no selection yet" state, not a malformed response.
+    // A member who has never chosen a server voice reports ttsId as null/0,
+    // and one who hasn't set a nickname yet (e.g. a fresh Kakao sign-in with
+    // no nickname scope granted) reports nickname as null. Both are
+    // legitimate "not set yet" states, not malformed responses — treating a
+    // missing nickname as a hard failure was blocking every other
+    // profile-dependent flow (including automatic TTS voice selection on
+    // login) for these accounts. Callers already fall back to the local
+    // display name when nickname is empty (see ProfileView.displayName).
+    let nickname = (nickname ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+
     return ServerAccountProfile(
       memberID: memberId,
       nickname: nickname,
