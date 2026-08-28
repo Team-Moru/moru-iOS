@@ -299,6 +299,13 @@ struct AppRouter: View {
          case .signedIn = newState {
         didCompleteAccountEntry = true
       }
+      if case .signedIn = newState {
+        // Ask right after login instead of waiting for the user to opt into
+        // AI routine creation later. A no-op once the user has already
+        // decided (`requestGeminiDataConsentIfNeeded` only acts on
+        // `.undecided`), so this never re-prompts someone who already chose.
+        geminiDataConsentStore.requestGeminiDataConsentIfNeeded()
+      }
       routineSyncRuntimeCoordinator?.accountSessionDidChange()
       dependencies.routineTTSWarmupCoordinator?.accountSessionDidChange()
       dependencies.serverVoiceCommonAudioProvider?.accountSessionDidChange()
