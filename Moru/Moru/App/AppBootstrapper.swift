@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import OSLog
 import SwiftData
 
 struct BootstrappedApp {
@@ -101,6 +102,10 @@ struct DefaultAppBootstrapPreflight: AppBootstrapPreflightPreparing {
 @MainActor
 final class AppBootstrapper: ObservableObject {
   static let installationMarkerKey = "app-installation-marker-v1"
+  private static let bootstrapLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "AppBootstrapper"
+  )
 
   @Published private(set) var state: AppBootstrapState = .idle
 
@@ -455,6 +460,9 @@ final class AppBootstrapper: ObservableObject {
         shouldSkipAccountRestoration: shouldSkipAccountRestoration
       )
     } catch {
+      Self.bootstrapLogger.error(
+        "constructReadyGraph failed: \(String(describing: error), privacy: .public)"
+      )
       state = .failed(
         AppBootstrapFailure(
           message: "저장소를 초기화할 수 없어요. 다시 시도해 주세요."
