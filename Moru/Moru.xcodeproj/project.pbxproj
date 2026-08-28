@@ -439,7 +439,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.4.5;
+				MARKETING_VERSION = 2.4.6;
 				MORU_APPLE_SIGN_IN_ENABLED = YES;
 				MORU_GOOGLE_IOS_CLIENT_ID = "800384412803-r62hbcns8s3jdkjaq5failk863bl19nv.apps.googleusercontent.com";
 				MORU_GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.800384412803-r62hbcns8s3jdkjaq5failk863bl19nv";
@@ -482,7 +482,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.4.5;
+				MARKETING_VERSION = 2.4.6;
 				MORU_APPLE_SIGN_IN_ENABLED = YES;
 				MORU_GOOGLE_IOS_CLIENT_ID = "800384412803-r62hbcns8s3jdkjaq5failk863bl19nv.apps.googleusercontent.com";
 				MORU_GOOGLE_REVERSED_CLIENT_ID = "com.googleusercontent.apps.800384412803-r62hbcns8s3jdkjaq5failk863bl19nv";
@@ -519,7 +519,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.4.5;
+				MARKETING_VERSION = 2.4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -544,7 +544,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.4.5;
+				MARKETING_VERSION = 2.4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -563,7 +563,7 @@
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.4.5;
+				MARKETING_VERSION = 2.4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -581,7 +581,7 @@
 				DEVELOPMENT_TEAM = Z7FSDLFCMK;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 2.4.5;
+				MARKETING_VERSION = 2.4.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.teammoru.MoruUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
