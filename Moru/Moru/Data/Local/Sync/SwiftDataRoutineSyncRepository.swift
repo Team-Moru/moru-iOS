@@ -4,10 +4,15 @@
 //
 
 import Foundation
+import OSLog
 import SwiftData
 
 @MainActor
 final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
+  private static let reconciliationLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "RoutineSyncRepository"
+  )
   private let modelContext: ModelContext
   private let retainedModelContainer: ModelContainer?
   private let serverNamespace: RoutineSyncServerNamespace
@@ -260,6 +265,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       if (persisted.stateRawValue == RoutineSyncMutationState.needsReconciliation.rawValue
             || persisted.stateRawValue == RoutineSyncMutationState.blocked.rawValue),
          try makeAttempt(persisted) == nil {
+        Self.reconciliationLogger.error(
+          "stageEnqueue reconciliationRequired: operation=\(mutation.operation.rawValue, privacy: .public), entityKind=\(mutation.entityKind.rawValue, privacy: .public), localEntityID=\(mutation.localEntityID.uuidString, privacy: .public), state=\(persisted.stateRawValue, privacy: .public)"
+        )
         throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: persisted.id)
       }
 
@@ -351,6 +359,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       try stageDeleteMutation(persisted)
       return true
     case .queued, .attempting, .needsReconciliation, .blocked:
+      Self.reconciliationLogger.error(
+        "stageCancel reconciliationRequired: operation=\(operation.rawValue, privacy: .public), entityKind=\(entityKind.rawValue, privacy: .public), localEntityID=\(localEntityID.uuidString, privacy: .public), state=\(mutation.state.rawValue, privacy: .public), hasAttempt=\(mutation.attempt != nil, privacy: .public)"
+      )
       throw RoutineSyncRepositoryError.reconciliationRequired(
         existingMutationID: persisted.id
       )
@@ -385,6 +396,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       try stageDeleteMutation(persisted)
       return true
     case .queued, .attempting, .needsReconciliation, .blocked:
+      Self.reconciliationLogger.error(
+        "stageCancelActiveSelection reconciliationRequired: selectedGroupLocalID=\(selectedGroupLocalID.uuidString, privacy: .public), state=\(mutation.state.rawValue, privacy: .public), hasAttempt=\(mutation.attempt != nil, privacy: .public)"
+      )
       throw RoutineSyncRepositoryError.reconciliationRequired(
         existingMutationID: persisted.id
       )
@@ -1306,6 +1320,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       let isCreatePredecessor = mutation.operationRawValue
         == RoutineSyncOperation.createRoutineGroup.rawValue
       guard isCreatePredecessor || state == .waitingForServerContract || state == .queued else {
+        Self.reconciliationLogger.error(
+          "stageDiscardNeverCommittedGroup reconciliationRequired: groupLocalID=\(groupLocalID.uuidString, privacy: .public), operation=\(mutation.operationRawValue, privacy: .public), state=\(state.rawValue, privacy: .public)"
+        )
         throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: mutation.id)
       }
       try stageDeleteMutation(mutation)
@@ -1336,6 +1353,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       let state = try makeMutation(mutation).state
       let isAddPredecessor = mutation.operationRawValue == RoutineSyncOperation.addRoutine.rawValue
       guard isAddPredecessor || state == .waitingForServerContract || state == .queued else {
+        Self.reconciliationLogger.error(
+          "stageDiscardNeverCommittedRoutine reconciliationRequired: routineLocalID=\(routineLocalID.uuidString, privacy: .public), operation=\(mutation.operationRawValue, privacy: .public), state=\(state.rawValue, privacy: .public)"
+        )
         throw RoutineSyncRepositoryError.reconciliationRequired(existingMutationID: mutation.id)
       }
       try stageDeleteMutation(mutation)
@@ -1354,6 +1374,9 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         !desiredRoutineLocalIDs.contains(execution.routineLocalID) else { continue }
       let state = try makeMutation(mutation).state
       guard state == .waitingForServerContract || state == .queued else {
+        Self.reconciliationLogger.error(
+          "stageDiscardUnprojectableExecutions reconciliationRequired: groupLocalID=\(groupLocalID.uuidString, privacy: .public), routineLocalID=\(execution.routineLocalID.uuidString, privacy: .public), state=\(state.rawValue, privacy: .public)"
+        )
         throw RoutineSyncRepositoryError.reconciliationRequired(
           existingMutationID: mutation.id
         )

@@ -422,22 +422,18 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
     }
 
     if let localSelection {
-      try routineSyncRepository.stageEnqueue(
-        EnqueuedRoutineSyncMutation(
-          memberID: memberID,
-          command: .selectActiveRoutineGroup(selectedGroupLocalID: localSelection.id)
-        ),
+      try stageEnqueueActiveSelection(
+        memberID: memberID,
+        selectedGroupLocalID: localSelection.id,
         at: date
       )
       return
     }
 
     if allowRemoteClear {
-      try routineSyncRepository.stageEnqueue(
-        EnqueuedRoutineSyncMutation(
-          memberID: memberID,
-          command: .selectActiveRoutineGroup(selectedGroupLocalID: nil)
-        ),
+      try stageEnqueueActiveSelection(
+        memberID: memberID,
+        selectedGroupLocalID: nil,
         at: date
       )
     } else {
@@ -445,6 +441,37 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       // not-yet-sent creation supplied the old account intent, discard that
       // intent rather than turning it into a server-side `nil` selection.
       try cancelUnboundActiveSelectionIfNeeded(memberID: memberID)
+    }
+  }
+
+  /// The account-selection mutation is coalesced onto one outbox row per
+  /// account. If an earlier, unrelated selection is stuck `.blocked` with no
+  /// attempt ever sent to the server (a definite local failure, not server
+  /// ambiguity), staging a new selection cannot succeed until that stale row
+  /// is discarded. `stageCancel` only deletes rows it can prove are safe to
+  /// drop; a genuinely in-flight or ambiguous row still rethrows, which this
+  /// intentionally surfaces to the caller.
+  @MainActor
+  private func stageEnqueueActiveSelection(
+    memberID: Int64,
+    selectedGroupLocalID: UUID?,
+    at date: Date
+  ) throws {
+    guard let routineSyncRepository else { return }
+    let command = try EnqueuedRoutineSyncMutation(
+      memberID: memberID,
+      command: .selectActiveRoutineGroup(selectedGroupLocalID: selectedGroupLocalID)
+    )
+    do {
+      try routineSyncRepository.stageEnqueue(command, at: date)
+    } catch RoutineSyncRepositoryError.reconciliationRequired {
+      _ = try routineSyncRepository.stageCancel(
+        memberID: memberID,
+        operation: .setRoutineGroupActive,
+        entityKind: .account,
+        localEntityID: RoutineSyncCommand.accountSelectionID
+      )
+      try routineSyncRepository.stageEnqueue(command, at: date)
     }
   }
 
