@@ -87,6 +87,16 @@ nonisolated enum RoutineTTSForegroundPreparationStatus: Equatable, Sendable {
 nonisolated enum RoutineTTSDiagnosticEvent: String, Sendable {
   case cachePlanMissing
   case missingGroupBinding
+  /// No binding AND no createRoutineGroup mutation record exists at all for
+  /// this local group. Distinguishes "sync never even recorded intent" from
+  /// the other missingGroupBinding causes below.
+  case missingGroupBindingNoMutationRecord
+  /// A createRoutineGroup mutation exists but is in the terminal `.blocked`
+  /// state, which never resolves automatically.
+  case missingGroupBindingMutationBlocked
+  /// A binding record exists but failed identity/shape validation
+  /// (wrong member, namespace, or remoteID) rather than being absent.
+  case missingGroupBindingInvalidExistingBinding
   case missingRoutineBinding
   case remoteFetchFailed
   case responseUnavailable
@@ -99,6 +109,12 @@ nonisolated enum RoutineTTSDiagnosticEvent: String, Sendable {
   case cachePurgeFailed
   case customCueUnavailable
   case serverCueUnavailable
+  /// The done/remind server-voice common cue's plan was not yet prepared
+  /// when playback needed it. Fails open (silently completes) by design.
+  case commonCueUnavailableForServerVoice
+  /// A common cue's local file was already cache-validated but failed to
+  /// start playback at cue time. Also fails open by design.
+  case commonCueLateFailure
 }
 
 nonisolated struct RoutineTTSDiagnostics: Sendable {
@@ -230,6 +246,12 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   private let foregroundPollingPolicy: RoutineTTSForegroundPollingPolicy
   private let prefetchPollingPolicy: RoutineTTSPrefetchPollingPolicy
   private let diagnostics: RoutineTTSDiagnostics
+  /// `RoutineSyncBlockReason` carries no account or routine content, so it is
+  /// safe to log verbatim, unlike the identifier-free `RoutineTTSDiagnostics`.
+  private let blockReasonLogger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "RoutineTTSWarmup"
+  )
   private let voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring
   private let prefetchJobStore: (any RoutineTTSPrefetchJobStoring)?
   private weak var backgroundTransferManager:
@@ -1184,7 +1206,25 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         ) {
           return .pendingBinding
         }
-        diagnostics.record(.missingGroupBinding)
+        let mutation = try? bindingRepository.mutation(
+          memberID: identity.memberID,
+          operation: .createRoutineGroup,
+          entityKind: .routineGroup,
+          localEntityID: routineGroupLocalID
+        )
+        if let mutation {
+          let attemptAgeSeconds = mutation.attempt.map {
+            Int(Date().timeIntervalSince($0.attemptedAt))
+          }
+          blockReasonLogger.notice(
+            "createRoutineGroup mutation state: \(mutation.state.rawValue, privacy: .public), blockReason: \(mutation.blockReason?.rawValue ?? "nil", privacy: .public), generation: \(mutation.generation, privacy: .public), lastAttemptAgeSeconds: \(attemptAgeSeconds.map(String.init) ?? "nil", privacy: .public)"
+          )
+        }
+        diagnostics.record(
+          mutation == nil
+            ? .missingGroupBindingNoMutationRecord
+            : .missingGroupBindingMutationBlocked
+        )
         return .unavailable
       }
       guard isValidGroupBinding(
@@ -1196,7 +1236,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
           routineGroupLocalID: routineGroupLocalID,
           routineLocalIDs: requestedRoutineIDs
         )
-        diagnostics.record(.missingGroupBinding)
+        diagnostics.record(.missingGroupBindingInvalidExistingBinding)
         return .unavailable
       }
       groupBinding = binding
@@ -1785,11 +1825,16 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   ) -> Bool {
     switch state {
     // Newly saved groups start waiting for runtime contract admission, then
-    // become queued. Both states can gain a server binding during the same
-    // bounded first-cue window, so neither should fall through silently.
-    case .waitingForServerContract, .queued, .attempting:
+    // become queued. All three states can still gain a server binding during
+    // the same bounded first-cue window, so none should fall through
+    // silently. `needsReconciliation` means the request may already have
+    // reached the server; `RoutineSyncSender` retries it automatically
+    // (see its `pendingReplay` branch), so it is not a dead end either.
+    case .waitingForServerContract, .queued, .attempting, .needsReconciliation:
       true
-    case .needsReconciliation, .blocked:
+    // `blocked` is the only state that requires explicit intervention and
+    // will never resolve on its own.
+    case .blocked:
       false
     }
   }
