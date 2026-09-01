@@ -19,12 +19,13 @@ nonisolated struct RoutineSyncWireTarget: MoruTargetType {
     switch wireRequest.method {
     case .post: .post
     case .delete: .delete
+    case .patch: .patch
     }
   }
 
   var task: Moya.Task {
     switch wireRequest.method {
-    case .post:
+    case .post, .patch:
       .requestData(wireRequest.body)
     case .delete:
       .requestPlain
@@ -36,7 +37,7 @@ nonisolated struct RoutineSyncWireTarget: MoruTargetType {
       "Accept": "application/json",
       "Idempotency-Key": idempotencyKey.uuidString,
     ]
-    if wireRequest.method == .post {
+    if wireRequest.method == .post || wireRequest.method == .patch {
       headers["Content-Type"] = "application/json"
     }
     return headers

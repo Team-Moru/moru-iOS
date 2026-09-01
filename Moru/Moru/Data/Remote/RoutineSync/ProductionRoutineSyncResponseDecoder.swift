@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OSLog
 
 /// Validates only identity facts returned by the production write response.
 /// Local titles, schedules, and execution state remain owned by SwiftData.
@@ -11,6 +12,14 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
   RoutineSyncTransportResponseDecoding,
   Sendable {
   private let decoder = JSONDecoder()
+  /// `PATCH .../active`'s success code was never observed against the live
+  /// server (every attempt this session failed earlier at group creation),
+  /// so this logs the actual code on mismatch instead of failing silently
+  /// indistinguishable from any other invalidResponse cause.
+  private static let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "RoutineSyncResponseDecoder"
+  )
 
   func decodeCommit(
     for request: RoutineSyncTransportRequest,
@@ -144,7 +153,43 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
       }
       return .onboardingCompleted
 
-    case .selectActiveRoutineGroup:
+    case .selectActiveRoutineGroup(let selectedGroupLocalID):
+      guard request.operation == .setRoutineGroupActive,
+            request.wireRequest.method == .patch,
+            let selectedGroupLocalID,
+            let expectedRemoteID = remoteID(
+              in: request.wireRequest.path,
+              prefix: "/routine-groups/",
+              suffix: "/active"
+            ) else {
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      guard metadata.code == "COMMON200" else {
+        Self.logger.notice(
+          "PATCH .../active succeeded with unexpected code: \(metadata.code, privacy: .public)"
+        )
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      try validateActiveSelection(
+        expectedRemoteID: expectedRemoteID,
+        responseData: responseData
+      )
+      // No new local/server ID pair is created by activation; the group's
+      // binding already exists from its own createRoutineGroup settlement.
+      return .mutation(assignments: [])
+    }
+  }
+
+  private func validateActiveSelection(
+    expectedRemoteID: Int64,
+    responseData: Data
+  ) throws {
+    let envelope: ProductionRoutineSyncEnvelope<
+      ProductionRoutineGroupActiveResponseDTO
+    > = try decodeEnvelope(from: responseData)
+    guard let response = envelope.result,
+          response.routineGroupId == expectedRemoteID,
+          response.isActive == true else {
       throw RoutineSyncResponseDecodingError.invalidResponse
     }
   }
@@ -400,6 +445,13 @@ nonisolated private struct ProductionRoutineDeleteResponseDTO:
   Sendable {
   let routineGroupId: Int64?
   let routineId: Int64?
+}
+
+nonisolated private struct ProductionRoutineGroupActiveResponseDTO:
+  Decodable,
+  Sendable {
+  let routineGroupId: Int64?
+  let isActive: Bool?
 }
 
 nonisolated private struct ProductionRoutineExecutionRequestIdentityDTO:
