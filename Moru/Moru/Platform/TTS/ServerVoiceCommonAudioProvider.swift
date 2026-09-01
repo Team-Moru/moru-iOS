@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import OSLog
 
 /// The player must distinguish a local-only user from a signed-in user whose
 /// selected server cue is not ready yet. Only the latter fails open silently;
@@ -34,12 +35,20 @@ protocol RoutineTTSCommonAudioWarming: AnyObject {
 }
 
 /// Downloads and owns the selected voice's fixed DONE/REMIND assets. The
-/// result is always a local file; routine playback never streams an S3 URL or
-/// waits for a network request at cue time.
+/// result is always a local file; routine playback never streams an S3 URL.
+/// If nothing is cached yet, `localCommonAudio(for:)` waits up to
+/// `cueReadinessTimeout` for an in-flight prepare cycle before failing open —
+/// long enough to catch a warmup started moments earlier (app launch, voice
+/// switch), short enough to never stall step completion or the reminder cue.
 @MainActor
 final class ServerVoiceCommonAudioProvider:
   RoutineTTSCommonAudioProviding,
   RoutineTTSCommonAudioWarming {
+  private static let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
+    category: "ServerVoiceCommonAudioProvider"
+  )
+
   private struct PreparedPlan {
     let identity: AccountSessionIdentity
     let ttsID: Int64
@@ -149,6 +158,12 @@ final class ServerVoiceCommonAudioProvider:
     _ = await operationTask?.value
   }
 
+  /// Bounded wait applied only when a common-cue prepare cycle is already (or
+  /// about to be) in flight. Keeps DONE/REMIND playback snappy while giving a
+  /// just-started warmup — e.g. right after app launch or a voice switch — a
+  /// real chance to finish before this cue silently fails open.
+  private static let cueReadinessTimeout: Duration = .seconds(2)
+
   func localCommonAudio(
     for kind: RoutineAudioCueKind
   ) async -> RoutineTTSCommonAudioAvailability {
@@ -161,14 +176,126 @@ final class ServerVoiceCommonAudioProvider:
     if preparedPlan == nil {
       await restorePreparedPlan(identity: identity)
     }
-    guard let preparedPlan,
-          preparedPlan.identity == identity,
-          let url = preparedPlan.urls[kind] else {
+    if resolvedURL(for: kind, identity: identity) == nil {
+      // Nothing cached yet. `prepareSelectedVoice()` keeps the durable
+      // background-transfer job running for resilience, but that path uses a
+      // background URLSession, which can take far longer than
+      // `cueReadinessTimeout` to even start its first transfer. A plain
+      // foreground download is the only realistic way to catch a cold-start
+      // or just-switched-voice cue in time, so try that first.
+      prepareSelectedVoice()
+      Self.logger.notice(
+        "common cue not cached, attempting direct fetch: kind=\(String(describing: kind), privacy: .public)"
+      )
+      if let resolved = await attemptImmediateDownload(kind: kind, identity: identity) {
+        var urls = preparedPlan?.identity == identity ? (preparedPlan?.urls ?? [:]) : [:]
+        urls[kind] = resolved.url
+        preparedPlan = PreparedPlan(
+          identity: identity,
+          ttsID: resolved.voice.ttsID,
+          voiceCode: resolved.voice.voiceCode,
+          commonAudioVersion: resolved.voice.commonAudioVersion,
+          urls: urls
+        )
+      } else {
+        await waitForPreparationOpportunity()
+        if preparedPlan == nil {
+          await restorePreparedPlan(identity: identity)
+        }
+      }
+    }
+    guard let url = resolvedURL(for: kind, identity: identity) else {
       // Signed-in playback must never fall through to a bundled voice.
+      Self.logger.notice(
+        "common cue still unavailable after wait: kind=\(String(describing: kind), privacy: .public)"
+      )
       prepareSelectedVoice()
       return .unavailableForServerVoice
     }
     return .localFile(url)
+  }
+
+  private func resolvedURL(
+    for kind: RoutineAudioCueKind,
+    identity: AccountSessionIdentity
+  ) -> URL? {
+    guard let preparedPlan, preparedPlan.identity == identity else {
+      return nil
+    }
+    return preparedPlan.urls[kind]
+  }
+
+  private func waitForPreparationOpportunity() async {
+    guard let operationTask else { return }
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { await operationTask.value }
+      group.addTask { [pollingPolicy] in
+        try? await pollingPolicy.sleep(Self.cueReadinessTimeout)
+      }
+      await group.next()
+      group.cancelAll()
+    }
+  }
+
+  /// Downloads a single common cue with the same ephemeral, foreground
+  /// `RoutineTTSAudioDownloading` used elsewhere, bypassing the durable
+  /// background-transfer queue entirely. Bounded by `cueReadinessTimeout`;
+  /// whichever of this or the persisted background job lands the file first
+  /// wins, since both write to the same cache key.
+  private func attemptImmediateDownload(
+    kind: RoutineAudioCueKind,
+    identity: AccountSessionIdentity
+  ) async -> (voice: ServerTTSVoice, url: URL)? {
+    guard let audioCache,
+          let targetTTSID = preferredSelectedTTSID
+            ?? voiceSelectionVersionStore?.selectedTTSID(forMemberID: identity.memberID) else {
+      return nil
+    }
+    let assetKind = cacheKind(for: kind)
+    let remoteService = remoteService
+    let downloader = downloader
+    let pollingPolicy = pollingPolicy
+    let cacheNamespace = Self.cacheNamespace
+    let readinessTimeout = Self.cueReadinessTimeout
+
+    return await withTaskGroup(of: (voice: ServerTTSVoice, url: URL)?.self) { group in
+      group.addTask {
+        guard !Task.isCancelled,
+              let voices = try? await remoteService.fetchVoices(
+                memberID: identity.memberID
+              ),
+              let voice = voices.first(where: { $0.ttsID == targetTTSID }) else {
+          return nil
+        }
+        let cue = kind == .done ? voice.doneAudio : voice.remindAudio
+        guard cue.isPlayable, let remoteURL = cue.audioURL else { return nil }
+        let key = RoutineTTSAudioCacheKey(
+          accountID: String(identity.memberID),
+          namespace: cacheNamespace,
+          ttsID: voice.ttsID,
+          voiceCode: voice.voiceCode,
+          commonAudioVersion: voice.commonAudioVersion,
+          kind: assetKind,
+          remoteURL: remoteURL
+        )
+        guard let url = try? await audioCache.fileURL(for: key, loader: { stagingDirectory in
+          try await downloader.download(
+            RoutineTTSAudioDownloadRequest(remoteURL: remoteURL),
+            stagingDirectory: stagingDirectory
+          )
+        }) else {
+          return nil
+        }
+        return (voice, url)
+      }
+      group.addTask {
+        try? await pollingPolicy.sleep(readinessTimeout)
+        return nil
+      }
+      let result = await group.next() ?? nil
+      group.cancelAll()
+      return result
+    }
   }
 
   private func prepareSelectedVoice(allowsInactive: Bool = false) {
