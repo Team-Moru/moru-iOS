@@ -799,6 +799,87 @@ final class RoutineSyncCRUDIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testDeactivatingSoleBoundActiveRoutineStagesDeactivateCommand() throws {
+    let fixture = try makeFixture(memberID: nil)
+    var routine = makeRoutine(name: "유일한 활성 루틴", steps: [makeStep()], isActive: false)
+    try fixture.routines.saveRoutine(routine)
+    fixture.member.signedInMemberID = 7
+    _ = try fixture.sync.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: routine.id,
+      at: Date(timeIntervalSince1970: 10)
+    )
+
+    routine.isActive = true
+    routine.updatedAt = Date(timeIntervalSince1970: 20)
+    try fixture.routines.saveRoutine(routine)
+
+    routine.isActive = false
+    routine.updatedAt = Date(timeIntervalSince1970: 30)
+    try fixture.routines.saveRoutine(routine)
+
+    let selection = try XCTUnwrap(
+      try fixture.sync.mutation(
+        memberID: 7,
+        operation: .setRoutineGroupActive,
+        entityKind: .account,
+        localEntityID: RoutineSyncCommand.accountSelectionID
+      )
+    )
+    XCTAssertEqual(
+      try decodedCommand(selection),
+      .deactivateRoutineGroup(groupLocalID: routine.id)
+    )
+  }
+
+  @MainActor
+  func testDeletingSoleBoundActiveGroupDoesNotStageANewDeactivateCommand() throws {
+    let fixture = try makeFixture(memberID: nil)
+    var routine = makeRoutine(name: "삭제될 활성 루틴", steps: [makeStep()], isActive: false)
+    try fixture.routines.saveRoutine(routine)
+    fixture.member.signedInMemberID = 7
+    _ = try fixture.sync.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: routine.id,
+      at: Date(timeIntervalSince1970: 10)
+    )
+
+    routine.isActive = true
+    routine.updatedAt = Date(timeIntervalSince1970: 20)
+    try fixture.routines.saveRoutine(routine)
+
+    try fixture.routines.deleteRoutine(id: routine.id)
+
+    XCTAssertNil(try fixture.routines.routine(id: routine.id))
+    let deleteMutation = try XCTUnwrap(
+      try fixture.sync.mutations(memberID: 7).first { $0.operation == .deleteRoutineGroup }
+    )
+    XCTAssertEqual(
+      try decodedCommand(deleteMutation),
+      .deleteRoutineGroup(groupLocalID: routine.id)
+    )
+    // Deletion supersedes deactivation for the same group; the delete flow
+    // must never stage a redundant `.deactivateRoutineGroup` for it.
+    if let selection = try fixture.sync.mutation(
+      memberID: 7,
+      operation: .setRoutineGroupActive,
+      entityKind: .account,
+      localEntityID: RoutineSyncCommand.accountSelectionID
+    ) {
+      XCTAssertNotEqual(
+        try decodedCommand(selection),
+        .deactivateRoutineGroup(groupLocalID: routine.id)
+      )
+    }
+  }
+
+  @MainActor
   func testActiveSelectionKeepsNewestServerProjectableRoutine() throws {
     let fixture = try makeFixture(memberID: nil)
     var boundRoutine = makeRoutine(

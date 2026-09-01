@@ -87,6 +87,12 @@ final class ProductionRoutineSyncRequestPreparer:
         selectedGroupLocalID: selectedGroupLocalID,
         memberID: mutation.memberID
       )
+
+    case .deactivateRoutineGroup(let groupLocalID):
+      return try makeDeactivateRoutineGroupRequest(
+        groupLocalID: groupLocalID,
+        memberID: mutation.memberID
+      )
     }
   }
 
@@ -276,12 +282,13 @@ final class ProductionRoutineSyncRequestPreparer:
     )
   }
 
-  /// Deactivating with no replacement (`selectedGroupLocalID == nil`) has no
-  /// local record of which remote group was previously active, so it cannot
-  /// yet be turned into a `PATCH .../active` call. `RoutineSyncSender`
-  /// intercepts this exact command before calling this method and leaves the
-  /// mutation queued rather than attempting (and permanently blocking) it, so
-  /// this `throw` only guards against that interception being bypassed.
+  /// A bare `nil` selection (no local record of which remote group to PATCH)
+  /// is only ever produced by decoding a legacy pre-`deactivateRoutineGroup`
+  /// outbox row. `RoutineSyncSender` intercepts that exact command before
+  /// calling this method and leaves the mutation queued rather than
+  /// attempting (and permanently blocking) it, so this `throw` only guards
+  /// against that interception being bypassed. New "no replacement" intents
+  /// are `.deactivateRoutineGroup`, handled below.
   private func makeSelectActiveRoutineGroupRequest(
     selectedGroupLocalID: UUID?,
     memberID: Int64
@@ -302,6 +309,26 @@ final class ProductionRoutineSyncRequestPreparer:
       method: .patch,
       path: "/routine-groups/\(binding.remoteID)/active",
       body: try encoded(ProductionRoutineGroupActiveRequestDTO(isActive: true))
+    )
+  }
+
+  private func makeDeactivateRoutineGroupRequest(
+    groupLocalID: UUID,
+    memberID: Int64
+  ) throws -> RoutineSyncWireRequest {
+    let binding = try requiredBinding(
+      memberID: memberID,
+      entityKind: .routineGroup,
+      localEntityID: groupLocalID
+    )
+    guard binding.parentEntityKind == nil,
+          binding.parentLocalEntityID == nil else {
+      throw RoutineSyncRequestPreparingError.conflictingServerBinding
+    }
+    return RoutineSyncWireRequest(
+      method: .patch,
+      path: "/routine-groups/\(binding.remoteID)/active",
+      body: try encoded(ProductionRoutineGroupActiveRequestDTO(isActive: false))
     )
   }
 

@@ -1059,6 +1059,12 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
       guard bindings.isEmpty, selectedGroupLocalID != nil else {
         throw RoutineSyncRepositoryError.invalidPayload
       }
+    case (.setRoutineGroupActive, .deactivateRoutineGroup):
+      // Deactivation creates no new local/server binding either; it PATCHes
+      // the same already-bound group to isActive: false.
+      guard bindings.isEmpty else {
+        throw RoutineSyncRepositoryError.invalidPayload
+      }
     default:
       throw RoutineSyncRepositoryError.invalidPayload
     }
@@ -1191,6 +1197,14 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         localEntityID: selectedGroupLocalID
       ) != nil
 
+    case .deactivateRoutineGroup(let groupLocalID):
+      guard !hasCreate(groupLocalID) else { return false }
+      return try binding(
+        memberID: memberID,
+        entityKind: .routineGroup,
+        localEntityID: groupLocalID
+      ) != nil
+
     case .deleteRoutineGroup(let groupLocalID):
       guard !hasCreate(groupLocalID), try binding(
         memberID: memberID,
@@ -1223,7 +1237,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
           // The completion request needs this group's remote binding, so it
           // must settle before a queued deletion can remove the group.
           return false
-        case .selectActiveRoutineGroup:
+        case .selectActiveRoutineGroup, .deactivateRoutineGroup:
           // An unsupported account-selection intent must not permanently
           // deadlock production CRUD. If a future verified contract supports
           // it, preserve the original ordering and settle selection first.
@@ -1306,6 +1320,8 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         related = candidateGroupID == groupLocalID
       case .selectActiveRoutineGroup(let selectedGroupID):
         related = selectedGroupID == groupLocalID
+      case .deactivateRoutineGroup(let candidateGroupID):
+        related = candidateGroupID == groupLocalID
       case .deleteRoutineGroup(let candidateGroupID):
         related = candidateGroupID == groupLocalID
       case .deleteRoutine(let candidateGroupID, _):
@@ -1345,6 +1361,7 @@ final class SwiftDataRoutineSyncRepository: RoutineSyncRepository {
         related = execution.routineLocalID == routineLocalID
       case .createRoutineGroup,
            .selectActiveRoutineGroup,
+           .deactivateRoutineGroup,
            .deleteRoutineGroup,
            .completeOnboarding:
         related = false

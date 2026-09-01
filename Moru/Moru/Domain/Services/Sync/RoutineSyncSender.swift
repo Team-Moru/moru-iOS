@@ -211,11 +211,11 @@ final class RoutineSyncSender {
       )
     } else {
       let command = try decodedCommand(from: mutation.payload)
-      // A deactivate-with-no-replacement selection has no local record of
-      // which remote group to PATCH, so it can never produce a wire request.
-      // Leave it queued (as it was before `.atomicSingleActive` existed)
-      // instead of permanently blocking a mutation that a normal "turn off
-      // my only routine" action creates.
+      // A bare-nil selection has no local record of which remote group to
+      // PATCH, so it can never produce a wire request. New "no replacement"
+      // intents are `.deactivateRoutineGroup`, which does carry that record;
+      // this case now only guards a legacy row persisted before that command
+      // existed. Leave it queued rather than permanently blocking it.
       if case .selectActiveRoutineGroup(nil) = command {
         return .idle
       }

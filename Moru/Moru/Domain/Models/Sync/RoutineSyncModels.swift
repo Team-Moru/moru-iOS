@@ -156,10 +156,10 @@ nonisolated struct RoutineSyncServerCapabilities: OptionSet, Equatable, Sendable
 
   /// Capabilities verified on the production deployment used by P0 routine
   /// writes. Lookup/upsert are deliberately still absent. `atomicSingleActive`
-  /// covers only the `selectedGroupLocalID != nil` (activate-one) path of
-  /// `setRoutineGroupActive` — the deactivate-with-no-replacement path still
-  /// throws `unsupportedOperation` and blocks, since there is no local record
-  /// of which remote group to deactivate in that case.
+  /// covers the `selectActiveRoutineGroup` (activate-one, server
+  /// auto-deactivates the rest) path; the deactivate-with-no-replacement path
+  /// is a separate `deactivateRoutineGroup` command against the same
+  /// `PATCH .../active` contract.
   static let productionP0: Self = [
     .idempotencyKey,
     .requiredResponseIDs,
@@ -236,6 +236,14 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
   case createRoutineGroup(RoutineSyncGroupSnapshot)
   case addRoutine(groupLocalID: UUID, routine: RoutineSyncRoutineSnapshot)
   case selectActiveRoutineGroup(selectedGroupLocalID: UUID?)
+  /// The account's last locally-active group was turned off with no
+  /// replacement selected, so there is nothing for `selectActiveRoutineGroup`
+  /// to activate. Carries the specific local group whose server binding must
+  /// be PATCHed to `isActive: false`, which a bare `nil` selection cannot
+  /// express. Coalesces onto the same one-row-per-account outbox slot as
+  /// `selectActiveRoutineGroup` (same operation/entityKind/localEntityID), so
+  /// only the latest active/inactive intent for the account is ever pending.
+  case deactivateRoutineGroup(groupLocalID: UUID)
   case deleteRoutineGroup(groupLocalID: UUID)
   case deleteRoutine(groupLocalID: UUID?, routineLocalID: UUID)
   case saveRoutineExecution(RoutineSyncExecutionSnapshot)
@@ -247,7 +255,7 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
     switch self {
     case .createRoutineGroup: .createRoutineGroup
     case .addRoutine: .addRoutine
-    case .selectActiveRoutineGroup: .setRoutineGroupActive
+    case .selectActiveRoutineGroup, .deactivateRoutineGroup: .setRoutineGroupActive
     case .deleteRoutineGroup: .deleteRoutineGroup
     case .deleteRoutine: .deleteRoutine
     case .saveRoutineExecution: .saveRoutineExecution
@@ -259,7 +267,7 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
     switch self {
     case .createRoutineGroup, .deleteRoutineGroup: .routineGroup
     case .addRoutine, .deleteRoutine: .routine
-    case .selectActiveRoutineGroup: .account
+    case .selectActiveRoutineGroup, .deactivateRoutineGroup: .account
     case .saveRoutineExecution: .routineExecution
     case .completeOnboarding: .account
     }
@@ -270,7 +278,8 @@ nonisolated enum RoutineSyncCommand: Codable, Equatable, Sendable {
     switch self {
     case .createRoutineGroup(let group): group.localID
     case .addRoutine(_, let routine): routine.localID
-    case .selectActiveRoutineGroup: RoutineSyncCommand.accountSelectionID
+    case .selectActiveRoutineGroup, .deactivateRoutineGroup:
+      RoutineSyncCommand.accountSelectionID
     case .deleteRoutineGroup(let groupLocalID): groupLocalID
     case .deleteRoutine(_, let routineLocalID): routineLocalID
     case .saveRoutineExecution(let execution): execution.localID
