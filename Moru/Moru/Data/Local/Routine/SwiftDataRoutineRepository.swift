@@ -68,7 +68,10 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       let memberID = signedInMemberProvider?.signedInMemberID
       let now = Date()
       var activeProjectionChanged = false
-      var removedBoundActiveRoutine = false
+      // At most one routine group is active per account, so at most one
+      // deactivation-with-no-replacement can be meaningful per batch; the
+      // last one observed wins, matching the single account-level outbox row.
+      var deactivatedBoundGroupLocalID: UUID?
       for routine in routines {
         if let persisted = try persistedRoutine(id: routine.id) {
           let previous = try SwiftDataMapper.makeDomainRoutine(from: persisted)
@@ -103,8 +106,9 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
           if previous.isActive != routine.isActive, hadGroupBinding || hadPendingCreate {
             activeProjectionChanged = true
           }
-          removedBoundActiveRoutine = removedBoundActiveRoutine
-            || (previous.isActive && !routine.isActive && hadGroupBinding)
+          if previous.isActive, !routine.isActive, hadGroupBinding {
+            deactivatedBoundGroupLocalID = routine.id
+          }
         } else {
           modelContext.insert(SwiftDataMapper.makePersistedRoutine(from: routine))
           if let memberID {
@@ -128,7 +132,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       if let memberID, activeProjectionChanged {
         try stageActiveSelection(
           memberID: memberID,
-          allowRemoteClear: removedBoundActiveRoutine,
+          deactivatedGroupLocalID: deactivatedBoundGroupLocalID,
           at: now
         )
       }
@@ -213,9 +217,13 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
         }
         if routine.isActive,
            binding != nil || pendingCreateMayExistRemotely {
+          // The group itself is being deleted (already staged above), which
+          // makes it inactive regardless — no separate deactivate request for
+          // this same group is needed. Only a genuine replacement selection
+          // among the remaining routines is relevant here.
           try stageActiveSelection(
             memberID: memberID,
-            allowRemoteClear: true,
+            deactivatedGroupLocalID: nil,
             at: Date()
           )
         } else if binding == nil {
@@ -402,7 +410,7 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
   @MainActor
   private func stageActiveSelection(
     memberID: Int64,
-    allowRemoteClear: Bool,
+    deactivatedGroupLocalID: UUID?,
     at date: Date
   ) throws {
     guard let routineSyncRepository else { return }
@@ -422,6 +430,9 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
     }
 
     if let localSelection {
+      // The server auto-deactivates the previous active group as part of
+      // admitting this one (`.atomicSingleActive`), so no separate
+      // deactivate request is needed even if `deactivatedGroupLocalID` is set.
       try stageEnqueueActiveSelection(
         memberID: memberID,
         selectedGroupLocalID: localSelection.id,
@@ -430,10 +441,10 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
       return
     }
 
-    if allowRemoteClear {
-      try stageEnqueueActiveSelection(
+    if let deactivatedGroupLocalID {
+      try stageEnqueueDeactivation(
         memberID: memberID,
-        selectedGroupLocalID: nil,
+        groupLocalID: deactivatedGroupLocalID,
         at: date
       )
     } else {
@@ -461,6 +472,32 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
     let command = try EnqueuedRoutineSyncMutation(
       memberID: memberID,
       command: .selectActiveRoutineGroup(selectedGroupLocalID: selectedGroupLocalID)
+    )
+    do {
+      try routineSyncRepository.stageEnqueue(command, at: date)
+    } catch RoutineSyncRepositoryError.reconciliationRequired {
+      _ = try routineSyncRepository.stageCancel(
+        memberID: memberID,
+        operation: .setRoutineGroupActive,
+        entityKind: .account,
+        localEntityID: RoutineSyncCommand.accountSelectionID
+      )
+      try routineSyncRepository.stageEnqueue(command, at: date)
+    }
+  }
+
+  /// Same one-row-per-account coalescing and stale-`.blocked`-row recovery as
+  /// `stageEnqueueActiveSelection`, for the no-replacement deactivation case.
+  @MainActor
+  private func stageEnqueueDeactivation(
+    memberID: Int64,
+    groupLocalID: UUID,
+    at date: Date
+  ) throws {
+    guard let routineSyncRepository else { return }
+    let command = try EnqueuedRoutineSyncMutation(
+      memberID: memberID,
+      command: .deactivateRoutineGroup(groupLocalID: groupLocalID)
     )
     do {
       try routineSyncRepository.stageEnqueue(command, at: date)

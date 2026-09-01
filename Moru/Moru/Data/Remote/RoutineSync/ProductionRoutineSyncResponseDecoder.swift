@@ -172,9 +172,35 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
       }
       try validateActiveSelection(
         expectedRemoteID: expectedRemoteID,
+        expectedIsActive: true,
         responseData: responseData
       )
       // No new local/server ID pair is created by activation; the group's
+      // binding already exists from its own createRoutineGroup settlement.
+      return .mutation(assignments: [])
+
+    case .deactivateRoutineGroup:
+      guard request.operation == .setRoutineGroupActive,
+            request.wireRequest.method == .patch,
+            let expectedRemoteID = remoteID(
+              in: request.wireRequest.path,
+              prefix: "/routine-groups/",
+              suffix: "/active"
+            ) else {
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      guard metadata.code == "COMMON200" else {
+        Self.logger.notice(
+          "PATCH .../active (deactivate) succeeded with unexpected code: \(metadata.code, privacy: .public)"
+        )
+        throw RoutineSyncResponseDecodingError.invalidResponse
+      }
+      try validateActiveSelection(
+        expectedRemoteID: expectedRemoteID,
+        expectedIsActive: false,
+        responseData: responseData
+      )
+      // No local/server ID pair changes from deactivation; the group's
       // binding already exists from its own createRoutineGroup settlement.
       return .mutation(assignments: [])
     }
@@ -182,6 +208,7 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
 
   private func validateActiveSelection(
     expectedRemoteID: Int64,
+    expectedIsActive: Bool,
     responseData: Data
   ) throws {
     let envelope: ProductionRoutineSyncEnvelope<
@@ -189,7 +216,7 @@ nonisolated struct ProductionRoutineSyncResponseDecoder:
     > = try decodeEnvelope(from: responseData)
     guard let response = envelope.result,
           response.routineGroupId == expectedRemoteID,
-          response.isActive == true else {
+          response.isActive == expectedIsActive else {
       throw RoutineSyncResponseDecodingError.invalidResponse
     }
   }

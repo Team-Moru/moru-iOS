@@ -227,6 +227,129 @@ final class ProductionRoutineSyncCRUDRemoteContractTests: XCTestCase {
     XCTAssertTrue(deleteRoutine.body.isEmpty)
   }
 
+  func testActiveSelectionRequestsPatchIsActiveMatchingActivateVersusDeactivateIntent()
+    throws {
+    let fixture = try makeFixture()
+    let groupID = UUID()
+    _ = try fixture.repository.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: groupID,
+      at: .distantPast
+    )
+
+    let activate = try prepare(
+      .selectActiveRoutineGroup(selectedGroupLocalID: groupID),
+      fixture: fixture
+    )
+    XCTAssertEqual(activate.method, .patch)
+    XCTAssertEqual(activate.path, "/routine-groups/41/active")
+    XCTAssertEqual(activate.body, Data(#"{"isActive":true}"#.utf8))
+
+    let deactivate = try prepare(
+      .deactivateRoutineGroup(groupLocalID: groupID),
+      fixture: fixture
+    )
+    XCTAssertEqual(deactivate.method, .patch)
+    XCTAssertEqual(deactivate.path, "/routine-groups/41/active")
+    XCTAssertEqual(deactivate.body, Data(#"{"isActive":false}"#.utf8))
+  }
+
+  func testActiveSelectionRequestsRequireBinding() throws {
+    let fixture = try makeFixture()
+    let groupID = UUID()
+
+    assertPrepareError(.missingServerBinding) {
+      try self.prepare(
+        .selectActiveRoutineGroup(selectedGroupLocalID: groupID),
+        fixture: fixture
+      )
+    }
+    assertPrepareError(.missingServerBinding) {
+      try self.prepare(
+        .deactivateRoutineGroup(groupLocalID: groupID),
+        fixture: fixture
+      )
+    }
+  }
+
+  func testActiveSelectionResponsesRequireExactIDAndIsActiveMatchingIntent() throws {
+    let fixture = try makeFixture()
+    let groupID = UUID()
+    _ = try fixture.repository.recordRemoteID(
+      41,
+      revision: nil,
+      memberID: 7,
+      entityKind: .routineGroup,
+      localEntityID: groupID,
+      at: .distantPast
+    )
+    let decoder = ProductionRoutineSyncResponseDecoder()
+
+    let activateRequest = try transportRequest(
+      .selectActiveRoutineGroup(selectedGroupLocalID: groupID),
+      fixture: fixture
+    )
+    XCTAssertEqual(
+      try decoder.decodeCommit(
+        for: activateRequest,
+        from: successEnvelope(
+          code: "COMMON200",
+          result: #"{"routineGroupId":41,"isActive":true}"#
+        )
+      ),
+      .mutation(assignments: [])
+    )
+    // The activation PATCH always intends isActive:true; a server response
+    // claiming the group ended up inactive must not settle as success.
+    assertDecodeError(.invalidResponse) {
+      try decoder.decodeCommit(
+        for: activateRequest,
+        from: self.successEnvelope(
+          code: "COMMON200",
+          result: #"{"routineGroupId":41,"isActive":false}"#
+        )
+      )
+    }
+
+    let deactivateRequest = try transportRequest(
+      .deactivateRoutineGroup(groupLocalID: groupID),
+      fixture: fixture
+    )
+    XCTAssertEqual(
+      try decoder.decodeCommit(
+        for: deactivateRequest,
+        from: successEnvelope(
+          code: "COMMON200",
+          result: #"{"routineGroupId":41,"isActive":false}"#
+        )
+      ),
+      .mutation(assignments: [])
+    )
+    // The inverse: a deactivation PATCH must not settle as success if the
+    // server reports the group is still active.
+    assertDecodeError(.invalidResponse) {
+      try decoder.decodeCommit(
+        for: deactivateRequest,
+        from: self.successEnvelope(
+          code: "COMMON200",
+          result: #"{"routineGroupId":41,"isActive":true}"#
+        )
+      )
+    }
+    assertDecodeError(.invalidResponse) {
+      try decoder.decodeCommit(
+        for: deactivateRequest,
+        from: self.successEnvelope(
+          code: "COMMON200",
+          result: #"{"routineGroupId":99,"isActive":false}"#
+        )
+      )
+    }
+  }
+
   func testOnboardingCompletionUsesBoundGroupAndRequiresTrueResponse()
     throws {
     let fixture = try makeFixture()
