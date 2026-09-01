@@ -810,14 +810,12 @@ private struct RoutineReviewView: View {
             && !viewModel.showsRecommendedRoutineStepEditor {
             EditableRoutineReviewForm(
               viewModel: viewModel,
-              routine: routine,
-              alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
+              routine: routine
             )
           } else {
             RoutineReviewForm(
               viewModel: viewModel,
-              routine: routine,
-              alarmSummary: "\(weekdaySummary) · \(viewModel.draft.formattedKoreanAlarmTime)"
+              routine: routine
             )
           }
         }
@@ -825,12 +823,6 @@ private struct RoutineReviewView: View {
         PreviewUnavailableState(errorMessage: viewModel.errorMessage)
       }
     }
-  }
-
-  private var weekdaySummary: String {
-    viewModel.draft.orderedWeekdays
-      .map(\.shortKoreanTitle)
-      .joined(separator: " ")
   }
 }
 
@@ -1175,20 +1167,10 @@ private struct RoutineStepPreviewRow: View {
 private struct RoutineReviewForm: View {
   @ObservedObject var viewModel: OnboardingViewModel
   let routine: Routine
-  let alarmSummary: String
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.twentyEight) {
       EditableRoutineIdentityFields(viewModel: viewModel)
-
-      VStack(alignment: .leading, spacing: AppSpacing.sm) {
-        Text("루틴 알림")
-          .onboardingTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textSecondary)
-
-        RoundedInfoField(text: alarmSummary)
-      }
-
       RoutineCountSummary(routine: routine)
       if viewModel.showsRecommendedRoutineStepEditor {
         RecommendedRoutineStepCandidateList(
@@ -1199,24 +1181,6 @@ private struct RoutineReviewForm: View {
         RoutineStepListCard(routine: routine)
       }
     }
-  }
-}
-
-private struct RoundedInfoField: View {
-  let text: String
-
-  var body: some View {
-    Text(text)
-      .onboardingTextStyle(.b4.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textPrimary)
-      .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-      .padding(.horizontal, AppSpacing.md)
-      .background(OnboardingSurface.input)
-      .overlay(
-        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-          .stroke(MoruPilotColor.border, lineWidth: 1)
-      )
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
   }
 }
 
@@ -1317,7 +1281,7 @@ private struct OnboardingChecklistRow: View {
 private struct TimeWheelControl: View {
   @ObservedObject var viewModel: OnboardingViewModel
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @State private var isEditing = false
+  @State private var isEditing = true
 
   var body: some View {
     VStack(spacing: MoruPilotSpacing.sixteen) {

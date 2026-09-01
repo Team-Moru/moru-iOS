@@ -8,29 +8,12 @@ import SwiftUI
 struct EditableRoutineReviewForm: View {
   @ObservedObject var viewModel: OnboardingViewModel
   let routine: Routine
-  let alarmSummary: String
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.twentyEight) {
       EditableRoutineIdentityFields(viewModel: viewModel)
-      alarmSection
       routineCountSummary
       routineStepList
-    }
-  }
-
-  private var alarmSection: some View {
-    VStack(alignment: .leading, spacing: AppSpacing.sm) {
-      sectionTitle("루틴 알림")
-
-      Text(alarmSummary)
-        .font(AppFont.body1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
-        .padding(.horizontal, AppSpacing.md)
-        .background(AppColor.grayWhite.opacity(0.74))
-        .overlay(fieldBorder)
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
     }
   }
 
