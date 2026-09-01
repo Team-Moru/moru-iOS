@@ -2019,7 +2019,12 @@ final class RoutineSyncFoundationTests: XCTestCase {
   }
 
   @MainActor
-  func testProductionDeleteIgnoresUnsupportedActiveIntentDependency() throws {
+  func testProductionDeleteWaitsForPendingActiveSelectionUnderAtomicSingleActive() throws {
+    // productionP0 now includes .atomicSingleActive (see PR #207), so
+    // setRoutineGroupActive is supported in production and a pending
+    // active-selection mutation for a group must settle before that group's
+    // delete is admitted, per dependenciesAreSatisfied's .deleteRoutineGroup
+    // handling of .selectActiveRoutineGroup dependents.
     let repository = try makeRepository()
     let groupID = UUID()
     _ = try repository.recordRemoteID(
@@ -2047,9 +2052,9 @@ final class RoutineSyncFoundationTests: XCTestCase {
       at: Date(timeIntervalSince1970: 4)
     )
 
-    XCTAssertEqual(admitted.map(\.id), [delete.id])
+    XCTAssertEqual(admitted.map(\.id), [active.id])
     XCTAssertEqual(
-      try repository.mutations(memberID: 7).first { $0.id == active.id }?.state,
+      try repository.mutations(memberID: 7).first { $0.id == delete.id }?.state,
       .waitingForServerContract
     )
   }
