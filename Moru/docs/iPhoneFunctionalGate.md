@@ -51,7 +51,7 @@
 PR에서 다음 검증을 모두 수행한다.
 
 1. `bash Scripts/check-iphone-functional-gate.sh`
-2. 관련 테스트와 전체 XCTest
+2. `bash Scripts/run-tests.sh smoke` (관련 테스트), 머지 전 `bash Scripts/run-tests.sh full` (전체 XCTest)
 3. iPhone Simulator Debug build
 4. generic iPhone Debug/Release build
 5. `bash Scripts/check-swiftdata-boundary.sh`

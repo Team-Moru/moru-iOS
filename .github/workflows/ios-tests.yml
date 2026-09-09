@@ -1,0 +1,77 @@
+name: iOS Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  MORU_XCODEBUILD_QUIET: "1"
+
+jobs:
+  smoke:
+    name: Smoke tests (pull request)
+    # self-hosted 러너에서 fork PR의 임의 코드를 실행하지 않는다.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Static gates
+        run: |
+          bash Scripts/check-iphone-functional-gate.sh
+          bash Scripts/check-swiftdata-boundary.sh
+          bash Scripts/check-folder-convention.sh
+
+      - name: Run smoke test plan
+        run: bash Scripts/run-tests.sh smoke
+
+      - name: Upload result bundle
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: build/TestResults
+          if-no-files-found: ignore
+
+  full:
+    name: Full tests (main)
+    if: github.event_name == 'push'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run full test plan
+        run: bash Scripts/run-tests.sh full
+
+      - name: Upload results and captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-test-results
+          path: |
+            build/TestResults
+            build/captures
+          if-no-files-found: ignore
