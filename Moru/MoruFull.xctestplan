@@ -1,0 +1,41 @@
+{
+  "configurations": [
+    {
+      "id": "F22416F4-01FC-5E99-8E5D-953B58400FBD",
+      "name": "Full",
+      "options": {}
+    }
+  ],
+  "defaultOptions": {
+    "codeCoverage": false,
+    "environmentVariableEntries": [
+      {
+        "key": "MORU_CAPTURE_OUTPUT_DIR",
+        "value": "$(SRCROOT)/../build/captures/full"
+      }
+    ],
+    "targetForVariableExpansion": {
+      "containerPath": "container:Moru.xcodeproj",
+      "identifier": "E0D6C3B62FF1232200DA2A54",
+      "name": "Moru"
+    }
+  },
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:Moru.xcodeproj",
+        "identifier": "E0D6C3D32FF12A0000DA2A54",
+        "name": "MoruTests"
+      }
+    },
+    {
+      "parallelizable": false,
+      "target": {
+        "containerPath": "container:Moru.xcodeproj",
+        "identifier": "F10000000000000000000005",
+        "name": "MoruUITests"
+      }
+    }
+  ],
+  "version": 1
+}
