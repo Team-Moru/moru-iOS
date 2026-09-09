@@ -97,3 +97,20 @@ bash Scripts/run-tests.sh smoke
 bash Scripts/run-tests.sh full -only-testing:MoruTests/FinalScreenVisualTests
 bash Scripts/run-tests.sh build
 ```
+
+## 7. 알려진 사전 실패 (2026-09-10 기준)
+
+`MoruSmoke`를 처음 돌렸을 때 아래 3건은 `main`에서 이미 실패하고 있었다. 단독 실행에서도
+같은 값으로 재현되므로 플레이키가 아니라 코드와 기대값이 어긋난 상태다. 러너를 켜면
+이 3건 때문에 PR 체크가 빨간불이 되니, 별도 작업으로 원인을 정리한 뒤 required check로
+올린다.
+
+| 테스트 | 증상 |
+| --- | --- |
+| `AccountServerRemoteContractTests/testProfileRequiresMatchingMemberAndText` | 빈 닉네임 프로필을 `invalidResponse`로 기대하지만 통과시킨다 (닉네임 없는 프로필 허용 수정과 충돌) |
+| `ServerRoutineSuggestionTests/testImmediateDisappearanceAfterCTAStopsRequestBeforeItStarts` | 화면 이탈 직후에도 추천이 진행돼 `step`이 `suggestedRoutine`이 된다 |
+| `OnboardingStatusRuntimeCoordinatorTests/testAccountSwitchDoesNotPublishDelayedPreviousAccountResponse` | 계정 전환 뒤 이전 계정(memberID 21)의 지연 응답이 채택된다 |
+
+뒤의 두 건은 온보딩·계정 전환의 stale 응답 처리 문제일 수 있어 로드맵 5·6단계에서
+제품 코드 쪽을 먼저 확인한다.
+
