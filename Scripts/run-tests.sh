@@ -10,6 +10,9 @@
 #   MORU_SIMULATOR_UDID   사용할 시뮬레이터 UDID (지정 시 자동 탐색 생략)
 #   MORU_SIMULATOR_NAME   자동 탐색 시 name 필터 정규식 (기본 .*)
 #   MORU_XCODEBUILD_QUIET 1이면 xcodebuild -quiet
+#
+# 시뮬레이터 빌드는 기본 ad-hoc 서명을 그대로 쓴다. CODE_SIGNING_ALLOWED=NO로 끄면
+# entitlement가 빠져 Keychain 테스트가 -34018(errSecMissingEntitlement)로 실패한다.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -75,7 +78,6 @@ common_args=(
   -destination "platform=iOS Simulator,id=$UDID"
   -derivedDataPath "$BUILD_DIR/DerivedData"
   -clonedSourcePackagesDirPath "$BUILD_DIR/SourcePackages"
-  CODE_SIGNING_ALLOWED=NO
 )
 if [[ "${MORU_XCODEBUILD_QUIET:-0}" == "1" ]]; then
   common_args+=(-quiet)
