@@ -13,7 +13,7 @@ struct MoruToggle: View {
 
   init(
     isOn: Binding<Bool>,
-    componentStyle: MoruPilotComponentStyle = .legacy
+    componentStyle: MoruPilotComponentStyle = .figmaPilot
   ) {
     _isOn = isOn
     self.componentStyle = componentStyle

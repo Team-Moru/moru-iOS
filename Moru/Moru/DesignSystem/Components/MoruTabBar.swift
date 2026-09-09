@@ -57,7 +57,7 @@ struct MoruTabBar: View {
   init(
     selection: Binding<MoruTabItem>,
     items: [MoruTabItem] = MoruTabItem.allCases,
-    componentStyle: MoruPilotComponentStyle = .legacy
+    componentStyle: MoruPilotComponentStyle = .figmaPilot
   ) {
     _selection = selection
     self.items = items

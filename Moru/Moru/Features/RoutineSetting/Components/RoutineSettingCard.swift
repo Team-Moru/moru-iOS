@@ -18,7 +18,7 @@ struct RoutineSettingCard: View {
   init(
     routine: RoutineSettingItemState,
     isActive: Binding<Bool>,
-    componentStyle: MoruPilotComponentStyle = .legacy,
+    componentStyle: MoruPilotComponentStyle = .figmaPilot,
     onTap: @escaping () -> Void,
     onRetryAlarm: (() -> Void)? = nil
   ) {

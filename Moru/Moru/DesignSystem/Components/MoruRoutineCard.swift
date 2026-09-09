@@ -20,7 +20,7 @@ struct MoruRoutineCard: View {
     description: String = "",
     isActive: Bool = false,
     isAddCard: Bool = false,
-    componentStyle: MoruPilotComponentStyle = .legacy
+    componentStyle: MoruPilotComponentStyle = .figmaPilot
   ) {
     self.title = title
     self.description = description
@@ -33,7 +33,7 @@ struct MoruRoutineCard: View {
     title: String,
     description: String = "",
     isActive: Binding<Bool>,
-    componentStyle: MoruPilotComponentStyle = .legacy
+    componentStyle: MoruPilotComponentStyle = .figmaPilot
   ) {
     self.title = title
     self.description = description

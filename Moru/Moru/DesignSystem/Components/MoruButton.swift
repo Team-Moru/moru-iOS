@@ -25,7 +25,7 @@ struct MoruButton: View {
     _ title: String,
     style: MoruButtonStyle = .primary,
     isEnabled: Bool = true,
-    componentStyle: MoruPilotComponentStyle = .legacy,
+    componentStyle: MoruPilotComponentStyle = .figmaPilot,
     action: @escaping () -> Void
   ) {
     self.title = title

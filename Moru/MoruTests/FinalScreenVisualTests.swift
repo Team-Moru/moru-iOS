@@ -524,7 +524,7 @@ private enum VisualBaseline {
     "moru-pr50-session-empty-home-light-AX3.png":
       "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gCpCalFLAUOnakla0QBGBgAGAAaAOyAzODCEOaFJOWTIZMgAAA==",
     "moru-pr50-session-empty-routine-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAxANSB2AGOIGgwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAESJsyGTIAAAAAA==",
+      "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOYGgwaDAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACiIszIzMgAAA==",
     "moru-pr50-session-empty-routine-light-AX3.png":
       "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sHLYDTcZAzkjGSMbJgDQAAAAAAAAAAAAIGTIZMgAAA==",
   ]

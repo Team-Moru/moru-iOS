@@ -20,7 +20,7 @@ struct MoruProgressBar: View {
   init(
     current: Int,
     total: Int,
-    componentStyle: MoruPilotComponentStyle = .legacy,
+    componentStyle: MoruPilotComponentStyle = .figmaPilot,
     showsLabel: Bool = true
   ) {
     self.current = current
