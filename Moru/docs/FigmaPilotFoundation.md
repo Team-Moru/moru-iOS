@@ -31,25 +31,17 @@ Text("활력 루틴")
 
 ## 공용 컴포넌트
 
-기존 initializer의 기본값은 `.legacy`입니다. 파일럿에서만
-`componentStyle: .figmaPilot`을 전달합니다.
+공용 컴포넌트(`MoruButton`, `MoruProgressBar`, `MoruToggle`, `MoruTabBar`,
+`MoruRoutineCard`)는 Figma 파일럿 외형을 기본값으로 사용합니다. 예전의
+`componentStyle: .legacy / .figmaPilot` opt-in 파라미터는 제거되었습니다.
 
 ```swift
 MoruRoutineCard(
   title: "활력 루틴",
   description: "6개 항목 ・15분",
-  isActive: $isActive,
-  componentStyle: .figmaPilot
+  isActive: $isActive
 )
 ```
-
-같은 opt-in parameter를 다음 컴포넌트에서 사용할 수 있습니다.
-
-- `MoruProgressBar`
-- `MoruToggle`
-- `MoruTabBar`
-- `MoruButton`
-- `MoruRoutineCard`
 
 ## 결정적 캡처 fixture
 

@@ -158,8 +158,7 @@ struct RoutineSettingView: View {
 
       MoruButton(
         "새 루틴 만들기",
-        style: .secondary,
-        componentStyle: .figmaPilot
+        style: .secondary
       ) {
         presentCreationSheet()
       }
@@ -191,8 +190,7 @@ struct RoutineSettingView: View {
 
       MoruButton(
         "다시 불러오기",
-        style: .secondary,
-        componentStyle: .figmaPilot
+        style: .secondary
       ) {
         viewModel.load()
       }
@@ -237,7 +235,6 @@ struct RoutineSettingView: View {
             RoutineSettingCard(
               routine: routine,
               isActive: activationBinding(for: routine),
-              componentStyle: .figmaPilot,
               onTap: {
                 editorDraft = viewModel.makeDraft(for: routine.id)
               },
@@ -260,8 +257,7 @@ struct RoutineSettingView: View {
     } label: {
       MoruRoutineCard(
         title: RoutineManagementCopy.addRoutine,
-        isAddCard: true,
-        componentStyle: .figmaPilot
+        isAddCard: true
       )
     }
     .buttonStyle(.plain)

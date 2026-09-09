@@ -92,7 +92,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
     XCTAssertEqual(MoruTextStyle.b3.weight(.semiBold).weight, .semiBold)
   }
 
-  func testLegacyCommonComponentInitializersRemainSourceCompatible() {
+  func testDefaultCommonComponentInitializersCompile() {
     _ = MoruProgressBar(current: 1, total: 9)
     _ = MoruToggle(isOn: .constant(true))
     _ = MoruTabBar(selection: .constant(.routine))
@@ -120,20 +120,14 @@ final class FigmaPilotFoundationTests: XCTestCase {
 
     for variant in MoruVisualCaptureVariant.allCases {
       let first = try MoruVisualCaptureFixture.render(
-        componentBoard(componentStyle: .figmaPilot),
+        componentBoard(),
         filename: "after-\(variant.rawValue).png",
         variant: variant,
         outputDirectory: outputDirectory
       )
       let second = try MoruVisualCaptureFixture.render(
-        componentBoard(componentStyle: .figmaPilot),
+        componentBoard(),
         filename: "after-repeat-\(variant.rawValue).png",
-        variant: variant,
-        outputDirectory: outputDirectory
-      )
-      _ = try MoruVisualCaptureFixture.render(
-        componentBoard(componentStyle: .legacy),
-        filename: "before-\(variant.rawValue).png",
         variant: variant,
         outputDirectory: outputDirectory
       )
@@ -208,9 +202,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
       | UInt32(round(blue * 255))
   }
 
-  private func componentBoard(
-    componentStyle: MoruPilotComponentStyle
-  ) -> some View {
+  private func componentBoard() -> some View {
     VStack(spacing: 0) {
       ScrollView {
         VStack(spacing: MoruPilotSpacing.twenty) {
@@ -221,35 +213,29 @@ final class FigmaPilotFoundationTests: XCTestCase {
 
           MoruProgressBar(
             current: 5,
-            total: 9,
-            componentStyle: componentStyle
+            total: 9
           )
 
           HStack(spacing: MoruPilotSpacing.twenty) {
             MoruToggle(
-              isOn: .constant(true),
-              componentStyle: componentStyle
+              isOn: .constant(true)
             )
             MoruToggle(
-              isOn: .constant(false),
-              componentStyle: componentStyle
+              isOn: .constant(false)
             )
           }
 
           MoruRoutineCard(
             title: "활력 루틴",
             description: "6개 항목 ・15분",
-            isActive: true,
-            componentStyle: componentStyle
+            isActive: true
           )
           MoruRoutineCard(
             title: "새 루틴 추가하기",
-            isAddCard: true,
-            componentStyle: componentStyle
+            isAddCard: true
           )
           MoruButton(
-            "루틴 시작하기",
-            componentStyle: componentStyle
+            "루틴 시작하기"
           ) {}
         }
         .padding(.vertical, MoruPilotSpacing.thirtySix)
@@ -257,8 +243,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
       }
 
       MoruTabBar(
-        selection: .constant(.routine),
-        componentStyle: componentStyle
+        selection: .constant(.routine)
       )
     }
     .background(MoruPilotColor.canvas)
@@ -269,8 +254,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
       .ignoresSafeArea()
       .safeAreaInset(edge: .bottom, spacing: 0) {
         MoruTabBar(
-          selection: .constant(selection),
-          componentStyle: .figmaPilot
+          selection: .constant(selection)
         )
       }
   }

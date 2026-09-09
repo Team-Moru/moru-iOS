@@ -11,7 +11,6 @@ struct MoruRoutineCard: View {
   let title: String
   let description: String
   let isAddCard: Bool
-  let componentStyle: MoruPilotComponentStyle
   @Binding private var isActive: Bool
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -19,38 +18,35 @@ struct MoruRoutineCard: View {
     title: String,
     description: String = "",
     isActive: Bool = false,
-    isAddCard: Bool = false,
-    componentStyle: MoruPilotComponentStyle = .figmaPilot
+    isAddCard: Bool = false
   ) {
     self.title = title
     self.description = description
     self.isAddCard = isAddCard
-    self.componentStyle = componentStyle
     self._isActive = .constant(isActive)
   }
 
   init(
     title: String,
     description: String = "",
-    isActive: Binding<Bool>,
-    componentStyle: MoruPilotComponentStyle = .figmaPilot
+    isActive: Binding<Bool>
   ) {
     self.title = title
     self.description = description
     self.isAddCard = false
-    self.componentStyle = componentStyle
     self._isActive = isActive
   }
 
   var body: some View {
     Group {
       if isAddCard {
-        HStack(spacing: horizontalContentSpacing) {
+        HStack(spacing: MoruPilotSpacing.ten) {
           Spacer(minLength: 0)
 
           addIcon
 
-          addCardTitle
+          Text(title)
+            .moruTextStyle(.b4.weight(.semiBold))
             .foregroundStyle(AppColor.moruDisabled)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -60,12 +56,12 @@ struct MoruRoutineCard: View {
         routineCardContent
       }
     }
-    .padding(.horizontal, horizontalPadding)
+    .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.vertical, AppSpacing.md)
     .frame(maxWidth: .infinity)
     .frame(minHeight: minimumHeight)
     .background {
-      RoundedRectangle(cornerRadius: cornerRadius)
+      RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
         .fill(backgroundColor)
         .shadow(
           color: shadowColor,
@@ -78,25 +74,25 @@ struct MoruRoutineCard: View {
 
   @ViewBuilder
   private var routineCardContent: some View {
-    if componentStyle == .figmaPilot && dynamicTypeSize.isAccessibilitySize {
+    if dynamicTypeSize.isAccessibilitySize {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-        HStack(alignment: .top, spacing: horizontalContentSpacing) {
+        HStack(alignment: .top, spacing: MoruPilotSpacing.ten) {
           MoruRoutineNoteIcon(isActive: isActive)
           routineLabels
         }
 
         HStack(spacing: MoruPilotSpacing.four) {
           Spacer(minLength: 0)
-          MoruToggle(isOn: $isActive, componentStyle: componentStyle)
+          MoruToggle(isOn: $isActive)
           MoruChevron(color: AppColor.moruTextSecondary)
         }
       }
     } else {
-      HStack(spacing: horizontalContentSpacing) {
+      HStack(spacing: MoruPilotSpacing.ten) {
         MoruRoutineNoteIcon(isActive: isActive)
         routineLabels
         Spacer()
-        MoruToggle(isOn: $isActive, componentStyle: componentStyle)
+        MoruToggle(isOn: $isActive)
         MoruChevron(color: AppColor.moruTextSecondary)
       }
     }
@@ -104,64 +100,15 @@ struct MoruRoutineCard: View {
 
   private var routineLabels: some View {
     VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-      constrainedRoutineTitle
-        .foregroundStyle(routineTitleColor)
-
-      constrainedRoutineDescription
-        .foregroundStyle(routineDescriptionColor)
-    }
-  }
-
-  @ViewBuilder
-  private var constrainedRoutineTitle: some View {
-    if componentStyle == .figmaPilot {
-      routineTitle
-        .fixedSize(horizontal: false, vertical: true)
-    } else {
-      routineTitle
-    }
-  }
-
-  @ViewBuilder
-  private var constrainedRoutineDescription: some View {
-    if componentStyle == .figmaPilot {
-      routineDescription
-        .fixedSize(horizontal: false, vertical: true)
-    } else {
-      routineDescription
-    }
-  }
-
-  @ViewBuilder
-  private var addCardTitle: some View {
-    if componentStyle == .figmaPilot {
-      Text(title)
-        .moruTextStyle(.b4.weight(.semiBold))
-    } else {
-      Text(title)
-        .font(AppFont.label1NormalSemiBold)
-    }
-  }
-
-  @ViewBuilder
-  private var routineTitle: some View {
-    if componentStyle == .figmaPilot {
       Text(title)
         .moruTextStyle(.b3.weight(.semiBold))
-    } else {
-      Text(title)
-        .font(AppFont.pretendardSemiBold(size: 18))
-    }
-  }
+        .foregroundStyle(MoruPilotColor.textStrong)
+        .fixedSize(horizontal: false, vertical: true)
 
-  @ViewBuilder
-  private var routineDescription: some View {
-    if componentStyle == .figmaPilot {
       Text(description)
         .moruTextStyle(.c1)
-    } else {
-      Text(description)
-        .font(AppFont.pretendardMedium(size: 14))
+        .foregroundStyle(routineDescriptionColor)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 
@@ -173,17 +120,9 @@ struct MoruRoutineCard: View {
       .frame(width: 18, height: 18)
   }
 
-  private var cornerRadius: CGFloat {
-    guard componentStyle == .figmaPilot else {
-      return isAddCard ? AppRadius.routineCard : AppRadius.lg
-    }
-
-    return MoruPilotRadius.largeCard
-  }
-
   private var backgroundColor: Color {
     if isActive && !isAddCard {
-      return componentStyle == .figmaPilot ? MoruPilotColor.accentTint : AppColor.orange150
+      return MoruPilotColor.accentTint
     }
 
     return AppColor.grayWhite.opacity(0.2)
@@ -194,54 +133,22 @@ struct MoruRoutineCard: View {
       return Color.clear
     }
 
-    return componentStyle == .figmaPilot ? MoruPilotColor.shadow : AppColor.babyBlue150
+    return MoruPilotColor.shadow
   }
 
   private var shadowRadius: CGFloat {
     isActive && !isAddCard ? 0 : 7.5
   }
 
-  private var routineTitleColor: Color {
-    componentStyle == .figmaPilot
-      ? MoruPilotColor.textStrong
-      : AppColor.moruTextPrimary
-  }
-
   private var routineDescriptionColor: Color {
-    if isActive {
-      return componentStyle == .figmaPilot
-        ? MoruPilotColor.textTertiary
-        : AppColor.moruTextTertiary
-    }
-
-    return AppColor.gray200
+    isActive ? MoruPilotColor.textTertiary : AppColor.gray200
   }
 
   private var minimumHeight: CGFloat {
     if isAddCard {
-      if componentStyle == .figmaPilot {
-        return dynamicTypeSize.isAccessibilitySize ? 104 : 60
-      }
-
-      return dynamicTypeSize.isAccessibilitySize ? 104 : 64
+      return dynamicTypeSize.isAccessibilitySize ? 104 : 60
     }
 
     return dynamicTypeSize.isAccessibilitySize ? 176 : 100
-  }
-
-  private var horizontalPadding: CGFloat {
-    guard componentStyle == .figmaPilot else {
-      return isAddCard ? AppSpacing.lg : AppSpacing.xl
-    }
-
-    return MoruPilotSpacing.twenty
-  }
-
-  private var horizontalContentSpacing: CGFloat {
-    if componentStyle == .figmaPilot {
-      return MoruPilotSpacing.ten
-    }
-
-    return isAddCard ? AppSpacing.iconTextGap : AppSpacing.md
   }
 }

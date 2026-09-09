@@ -155,7 +155,6 @@ private struct OnboardingHeaderView: View {
           MoruProgressBar(
             current: progressIndex,
             total: viewModel.progressTotal,
-            componentStyle: .figmaPilot,
             showsLabel: false
           )
           .frame(maxWidth: .infinity)

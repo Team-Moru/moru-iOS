@@ -1078,7 +1078,6 @@ struct HistoryStatusView: View {
                             MoruButton(
                                 primaryActionTitle,
                                 style: .secondary,
-                                componentStyle: .figmaPilot,
                                 action: primaryAction
                             )
                         }

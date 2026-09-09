@@ -63,8 +63,3 @@ enum MoruPilotRadius {
   static let largeCard: CGFloat = 24
   static let pill: CGFloat = 100
 }
-
-enum MoruPilotComponentStyle: Equatable {
-  case legacy
-  case figmaPilot
-}

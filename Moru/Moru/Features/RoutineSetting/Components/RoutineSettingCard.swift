@@ -10,7 +10,6 @@ import SwiftUI
 struct RoutineSettingCard: View {
   let routine: RoutineSettingItemState
   @Binding var isActive: Bool
-  let componentStyle: MoruPilotComponentStyle
   let onTap: () -> Void
   var onRetryAlarm: (() -> Void)? = nil
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -18,13 +17,11 @@ struct RoutineSettingCard: View {
   init(
     routine: RoutineSettingItemState,
     isActive: Binding<Bool>,
-    componentStyle: MoruPilotComponentStyle = .figmaPilot,
     onTap: @escaping () -> Void,
     onRetryAlarm: (() -> Void)? = nil
   ) {
     self.routine = routine
     _isActive = isActive
-    self.componentStyle = componentStyle
     self.onTap = onTap
     self.onRetryAlarm = onRetryAlarm
   }
@@ -32,34 +29,28 @@ struct RoutineSettingCard: View {
   var body: some View {
     Group {
       if dynamicTypeSize.isAccessibilitySize {
-        VStack(alignment: .leading, spacing: verticalContentSpacing) {
-          HStack(alignment: .top, spacing: horizontalContentSpacing) {
+        VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+          HStack(alignment: .top, spacing: MoruPilotSpacing.twelve) {
             MoruRoutineNoteIcon(isActive: isActive)
             routineDetails
           }
 
-          HStack(spacing: trailingControlSpacing) {
+          HStack(spacing: MoruPilotSpacing.four) {
             Spacer(minLength: 0)
 
-            MoruToggle(
-              isOn: $isActive,
-              componentStyle: componentStyle
-            )
+            MoruToggle(isOn: $isActive)
               .accessibilityLabel("\(routine.title) 활성화")
 
             editButton
           }
         }
       } else {
-        HStack(spacing: horizontalContentSpacing) {
+        HStack(spacing: MoruPilotSpacing.twelve) {
           MoruRoutineNoteIcon(isActive: isActive)
           routineDetails
 
-          HStack(spacing: trailingControlSpacing) {
-            MoruToggle(
-              isOn: $isActive,
-              componentStyle: componentStyle
-            )
+          HStack(spacing: MoruPilotSpacing.four) {
+            MoruToggle(isOn: $isActive)
               .accessibilityLabel("\(routine.title) 활성화")
 
             compactEditButton
@@ -67,12 +58,12 @@ struct RoutineSettingCard: View {
         }
       }
     }
-    .padding(.horizontal, horizontalPadding)
+    .padding(.horizontal, MoruPilotSpacing.twenty)
     .padding(.vertical, MoruPilotSpacing.sixteen)
     .frame(maxWidth: .infinity)
     .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 176 : 100)
     .background {
-      RoundedRectangle(cornerRadius: cornerRadius)
+      RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
         .fill(backgroundColor)
         .shadow(
           color: shadowColor,
@@ -85,8 +76,22 @@ struct RoutineSettingCard: View {
 
   private var routineDetails: some View {
     VStack(alignment: .leading, spacing: AppSpacing.xxs) {
-      routineTitle
-      routineDescription
+      Text(routine.title)
+        .routineListTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruPilotColor.textStrong)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Text(
+        RoutineManagementCopy.routineMetadata(
+          stepCountText: routine.stepCountText,
+          durationText: routine.estimatedDurationText
+        )
+      )
+      .routineListTextStyle(.c1)
+      .foregroundStyle(
+        isActive ? MoruPilotColor.textTertiary : AppColor.gray200
+      )
+      .fixedSize(horizontal: false, vertical: true)
 
       if let alarmDeliveryText = routine.alarmDeliveryText {
         HStack(spacing: AppSpacing.xs) {
@@ -112,43 +117,6 @@ struct RoutineSettingCard: View {
     routine.needsAlarmAction ? AppColor.orange500 : AppColor.moruTextTertiary
   }
 
-  @ViewBuilder
-  private var routineTitle: some View {
-    if componentStyle == .figmaPilot {
-      Text(routine.title)
-        .routineListTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
-        .fixedSize(horizontal: false, vertical: true)
-    } else {
-      Text(routine.title)
-        .font(AppFont.body1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-  }
-
-  @ViewBuilder
-  private var routineDescription: some View {
-    let description = RoutineManagementCopy.routineMetadata(
-      stepCountText: routine.stepCountText,
-      durationText: routine.estimatedDurationText
-    )
-
-    if componentStyle == .figmaPilot {
-      Text(description)
-        .routineListTextStyle(.c1)
-        .foregroundStyle(
-          isActive ? MoruPilotColor.textTertiary : AppColor.gray200
-        )
-        .fixedSize(horizontal: false, vertical: true)
-    } else {
-      Text(description)
-        .font(AppFont.caption1Medium)
-        .foregroundStyle(isActive ? AppColor.moruTextTertiary : AppColor.gray200)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-  }
-
   private var editButton: some View {
     Button(action: onTap) {
       Image(systemName: "chevron.right")
@@ -172,62 +140,16 @@ struct RoutineSettingCard: View {
     .accessibilityLabel("\(routine.title) 편집")
   }
 
-  private var horizontalPadding: CGFloat {
-    componentStyle == .figmaPilot
-      ? MoruPilotSpacing.twenty
-      : AppSpacing.lg
-  }
-
-  private var horizontalContentSpacing: CGFloat {
-    componentStyle == .figmaPilot
-      ? MoruPilotSpacing.twelve
-      : AppSpacing.xs
-  }
-
-  private var verticalContentSpacing: CGFloat {
-    componentStyle == .figmaPilot
-      ? MoruPilotSpacing.twelve
-      : AppSpacing.md
-  }
-
-  private var trailingControlSpacing: CGFloat {
-    componentStyle == .figmaPilot
-      ? MoruPilotSpacing.four
-      : AppSpacing.xs
-  }
-
-  private var cornerRadius: CGFloat {
-    componentStyle == .figmaPilot
-      ? MoruPilotRadius.largeCard
-      : AppRadius.routineCard
-  }
-
   private var backgroundColor: Color {
-    if isActive {
-      return componentStyle == .figmaPilot
-        ? MoruPilotColor.accentTint
-        : AppColor.orange150
-    }
-
-    return AppColor.grayWhite.opacity(0.2)
+    isActive ? MoruPilotColor.accentTint : AppColor.grayWhite.opacity(0.2)
   }
 
   private var shadowColor: Color {
-    guard !isActive else {
-      return Color.clear
-    }
-
-    return componentStyle == .figmaPilot
-      ? MoruPilotColor.shadow
-      : AppColor.babyBlue150
+    isActive ? Color.clear : MoruPilotColor.shadow
   }
 
   private var shadowRadius: CGFloat {
-    guard !isActive else {
-      return 0
-    }
-
-    return componentStyle == .figmaPilot ? 7.5 : 10
+    isActive ? 0 : 7.5
   }
 }
 

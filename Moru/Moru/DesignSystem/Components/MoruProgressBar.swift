@@ -12,7 +12,6 @@ struct MoruProgressBar: View {
 
   let current: Int
   let total: Int
-  let componentStyle: MoruPilotComponentStyle
   let showsLabel: Bool
 
   private let figmaGaugeWidth: CGFloat = 352
@@ -20,12 +19,10 @@ struct MoruProgressBar: View {
   init(
     current: Int,
     total: Int,
-    componentStyle: MoruPilotComponentStyle = .figmaPilot,
     showsLabel: Bool = true
   ) {
     self.current = current
     self.total = total
-    self.componentStyle = componentStyle
     self.showsLabel = showsLabel
   }
 
@@ -39,10 +36,10 @@ struct MoruProgressBar: View {
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule()
-            .fill(trackColor)
+            .fill(MoruPilotColor.progressTrack)
 
           Capsule()
-            .fill(progressColor)
+            .fill(MoruPilotColor.accent)
             .frame(width: proxy.size.width * progress)
         }
       }
@@ -58,37 +55,19 @@ struct MoruProgressBar: View {
   @ViewBuilder
   private var progressLabel: some View {
     let label = Text("\(current)/\(total)")
-      .foregroundStyle(labelColor)
+      .foregroundStyle(MoruPilotColor.textPrimary)
       .frame(maxWidth: figmaGaugeWidth, alignment: .leading)
 
-    if componentStyle == .figmaPilot {
-      if dynamicTypeSize.isAccessibilitySize {
-        label.font(
-          .custom(
-            MoruTextWeight.regular.rawValue,
-            size: MoruTextStyle.c2.fontSize,
-            relativeTo: MoruTextStyle.c2.relativeTextStyle
-          )
+    if dynamicTypeSize.isAccessibilitySize {
+      label.font(
+        .custom(
+          MoruTextWeight.regular.rawValue,
+          size: MoruTextStyle.c2.fontSize,
+          relativeTo: MoruTextStyle.c2.relativeTextStyle
         )
-      } else {
-        label.moruTextStyle(.c2.weight(.regular))
-      }
+      )
     } else {
-      label.font(AppFont.pretendardRegular(size: 12))
+      label.moruTextStyle(.c2.weight(.regular))
     }
-  }
-
-  private var trackColor: Color {
-    componentStyle == .figmaPilot
-      ? MoruPilotColor.progressTrack
-      : AppColor.moruSurfaceMuted
-  }
-
-  private var progressColor: Color {
-    componentStyle == .figmaPilot ? MoruPilotColor.accent : AppColor.orange350
-  }
-
-  private var labelColor: Color {
-    componentStyle == .figmaPilot ? MoruPilotColor.textPrimary : AppColor.moruTextBody
   }
 }

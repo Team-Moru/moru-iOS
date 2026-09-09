@@ -86,8 +86,7 @@ struct MainTabView: View {
       .safeAreaInset(edge: .bottom, spacing: 0) {
         MoruTabBar(
           selection: $selection,
-          items: MainTabState.availableTabs,
-          componentStyle: .figmaPilot
+          items: MainTabState.availableTabs
         )
       }
   }

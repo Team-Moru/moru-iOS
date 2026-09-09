@@ -51,82 +51,57 @@ struct MoruTabBar: View {
 
   @Binding var selection: MoruTabItem
   let items: [MoruTabItem]
-  let componentStyle: MoruPilotComponentStyle
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   init(
     selection: Binding<MoruTabItem>,
-    items: [MoruTabItem] = MoruTabItem.allCases,
-    componentStyle: MoruPilotComponentStyle = .figmaPilot
+    items: [MoruTabItem] = MoruTabItem.allCases
   ) {
     _selection = selection
     self.items = items
-    self.componentStyle = componentStyle
   }
 
   var body: some View {
-    Group {
-      if componentStyle == .figmaPilot {
-        VStack(spacing: 0) {
-          HStack(spacing: MoruPilotSpacing.thirtyTwo) {
-            ForEach(items) { item in
-              tabButton(for: item)
-                .frame(width: 60)
-            }
-          }
-          .frame(width: 346, alignment: .leading)
-
-          Spacer(minLength: 0)
+    VStack(spacing: 0) {
+      HStack(spacing: MoruPilotSpacing.thirtyTwo) {
+        ForEach(items) { item in
+          tabButton(for: item)
+            .frame(width: 60)
         }
-        .padding(.top, dynamicTypeSize.isAccessibilitySize ? 12 : 15)
-      } else {
-        HStack(spacing: 0) {
-          ForEach(items) { item in
-            tabButton(for: item)
-              .frame(maxWidth: .infinity)
-          }
-        }
-        .padding(.horizontal, AppSpacing.screenHorizontal)
       }
+      .frame(width: 346, alignment: .leading)
+
+      Spacer(minLength: 0)
     }
+    .padding(.top, dynamicTypeSize.isAccessibilitySize ? 12 : 15)
     .frame(maxWidth: .infinity)
     .frame(height: minimumHeight)
     .background {
-      if componentStyle == .figmaPilot {
-        AppColor.grayWhite
-          .opacity(0.7)
-          .background(.ultraThinMaterial)
-          .ignoresSafeArea(edges: .bottom)
-      } else {
-        AppColor.grayWhite
-      }
+      AppColor.grayWhite
+        .opacity(0.7)
+        .background(.ultraThinMaterial)
+        .ignoresSafeArea(edges: .bottom)
     }
     .shadow(
-      color: componentStyle == .figmaPilot
-        ? Color(red: 2 / 255, green: 24 / 255, blue: 100 / 255).opacity(0.05)
-        : .clear,
-      radius: componentStyle == .figmaPilot ? 10 : 0,
+      color: Color(red: 2 / 255, green: 24 / 255, blue: 100 / 255).opacity(0.05),
+      radius: 10,
       x: 0,
-      y: componentStyle == .figmaPilot ? -2 : 0
+      y: -2
     )
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.accessibilityIdentifier)
   }
 
   private var selectedColor: Color {
-    componentStyle == .figmaPilot ? MoruPilotColor.accent : AppColor.orange350
+    MoruPilotColor.accent
   }
 
   private var unselectedColor: Color {
-    componentStyle == .figmaPilot ? MoruPilotColor.textPrimary : AppColor.moruTextBody
+    MoruPilotColor.textPrimary
   }
 
   private var minimumHeight: CGFloat {
-    if componentStyle == .figmaPilot {
-      return dynamicTypeSize.isAccessibilitySize ? 70 : 61
-    }
-
-    return dynamicTypeSize.isAccessibilitySize ? 72 : 65
+    dynamicTypeSize.isAccessibilitySize ? 70 : 61
   }
 
   private func tabButton(for item: MoruTabItem) -> some View {
@@ -148,7 +123,8 @@ struct MoruTabBar: View {
           .accessibilityHidden(true)
 
         if !dynamicTypeSize.isAccessibilitySize {
-          tabTitle(for: item)
+          Text(item.title)
+            .moruTextStyle(.c2.weight(.regular))
             .foregroundStyle(
               selection == item ? selectedColor : unselectedColor
             )
@@ -160,20 +136,5 @@ struct MoruTabBar: View {
     .accessibilityLabel(item.title)
     .accessibilityAddTraits(selection == item ? .isSelected : [])
     .accessibilityIdentifier(Self.accessibilityIdentifier(for: item))
-  }
-
-  @ViewBuilder
-  private func tabTitle(for item: MoruTabItem) -> some View {
-    if componentStyle == .figmaPilot {
-      Text(item.title)
-        .moruTextStyle(.c2.weight(.regular))
-    } else {
-      Text(item.title)
-        .font(
-          selection == item
-            ? AppFont.pretendardMedium(size: 10)
-            : AppFont.pretendardRegular(size: 10)
-        )
-    }
   }
 }

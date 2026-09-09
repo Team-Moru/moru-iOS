@@ -9,14 +9,9 @@ import SwiftUI
 
 struct MoruToggle: View {
   @Binding var isOn: Bool
-  let componentStyle: MoruPilotComponentStyle
 
-  init(
-    isOn: Binding<Bool>,
-    componentStyle: MoruPilotComponentStyle = .figmaPilot
-  ) {
+  init(isOn: Binding<Bool>) {
     _isOn = isOn
-    self.componentStyle = componentStyle
   }
 
   var body: some View {
@@ -25,7 +20,7 @@ struct MoruToggle: View {
     } label: {
       ZStack(alignment: isOn ? .trailing : .leading) {
         Capsule()
-          .fill(trackColor)
+          .fill(isOn ? MoruPilotColor.accent : AppColor.moruDisabled)
           .frame(width: 52, height: 28)
 
         Circle()
@@ -36,13 +31,5 @@ struct MoruToggle: View {
     }
     .buttonStyle(.plain)
     .accessibilityLabel(isOn ? "켜짐" : "꺼짐")
-  }
-
-  private var trackColor: Color {
-    guard componentStyle == .figmaPilot else {
-      return isOn ? AppColor.orange350 : AppColor.moruDisabled
-    }
-
-    return isOn ? MoruPilotColor.accent : AppColor.moruDisabled
   }
 }
