@@ -17,26 +17,16 @@ enum AppColor {
   static let babyBlue250 = Color("babyBlue250")
   static let babyBlue300 = Color("babyBlue300")
   static let babyBlue350 = Color("babyBlue350")
-  static let babyBlue400 = Color("babyBlue400")
   static let babyBlue450 = Color("babyBlue450")
 
   // MARK: - Coral
 
   static let coral100 = Color("coral100")
-  static let coral150 = Color("coral150")
-  static let coral200 = Color("coral200")
-  static let coral250 = Color("coral250")
   static let coral300 = Color("coral300")
 
   // MARK: - Purple
 
   static let purple350 = Color("purple350")
-  static let purple400 = Color("purple400")
-  static let purple450 = Color("purple450")
-  static let purple500 = Color("purple500")
-  static let purple550 = Color("purple550")
-  static let purple600 = Color("purple600")
-  static let purple650 = Color("purple650")
 
   // MARK: - Gray
 
@@ -51,7 +41,6 @@ enum AppColor {
   static let gray500 = Color("gray500")
   static let gray550 = Color("gray550")
   static let gray600 = Color("gray600")
-  static let gray650 = Color("gray650")
   static let grayBlack = Color("grayBlack")
   static let grayWhite = Color("grayWhite")
 
@@ -78,7 +67,6 @@ enum AppColor {
   static let orange300 = Color("orange300")
   static let orange350 = Color("orange350")
   static let orange400 = Color("orange400")
-  static let orange450 = Color("orange450")
   static let orange500 = Color("orange500")
   static let orange550 = Color("orange550")
 }

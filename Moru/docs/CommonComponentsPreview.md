@@ -31,19 +31,12 @@ Figma `Hi-fi` 페이지의 왼쪽에 있는 `컴포넌트` 영역을 기준으�
 | ![gage bar](images/components/moru-progress-bar.png) | `gage bar` | `MoruProgressBar` |
 | ![keyword](images/components/moru-chip.png) | `keyword` | `MoruChip` |
 | ![toggle](images/components/moru-toggle.png) | `toggle` | `MoruToggle` |
-| ![요일](images/components/moru-weekday-selector.png) | `요일` | `MoruWeekdaySelector` |
 | ![navi_bar](images/components/moru-tab-bar.png) | `navi_bar` | `MoruTabBar` |
 | ![check](images/components/moru-check-state.png) | `check` | `MoruCheckBadge` |
 | ![select](images/components/moru-icon-button-select.png) | `select` | `MoruSelectControl` |
-| ![Frame 2147239094](images/components/moru-selection-card-routine-experience.png) | `Frame 2147239094` | `MoruSelectionCard` |
-| ![Frame 2147239102](images/components/moru-selection-card-goal.png) | `Frame 2147239102` | `MoruSelectionCard` |
-| ![Frame 2147239112](images/components/moru-routine-step-row.png) | `Frame 2147239112` | `MoruRoutineStepRow` |
-| ![Time setting](images/components/moru-time-setting-card.png) | `Time setting` | `MoruTimeSettingCard` |
 | ![음성 선택](images/components/moru-voice-card.png) | `음성 선택` | `MoruVoiceCard` |
 | ![Frame 2147239165](images/components/moru-voice-card.png) | `Frame 2147239165` | `MoruVoiceCard` |
 | ![Component 3](images/components/moru-routine-card.png) | `Component 3` | `MoruRoutineCard` |
-| ![Frame 2147224501](images/components/moru-timer-status.png) | `Frame 2147224501` | `MoruTimerStatus` |
-| ![Recoarding End](images/components/moru-recording-status.png) | `Recoarding/End` | `MoruRecordingStatus` |
 | ![sound_module](images/components/moru-sound-module.png) | `sound_module` | `MoruSoundModule` |
 | ![dialog](images/components/moru-dialog.png) | 와이어프레임 팝업 | `MoruDialog` |
 
@@ -53,8 +46,6 @@ Figma `Hi-fi` 페이지의 왼쪽에 있는 `컴포넌트` 영역을 기준으�
 
 | SwiftUI 이름 | 용도 |
 | --- | --- |
-| `MoruCard` | 흰색 카드 박스 |
-| `MoruBottomCTA` | 화면 하단 버튼 영역 |
 | `MoruDialog` | 확인 팝업 |
 
 ## 만들지 않은 것

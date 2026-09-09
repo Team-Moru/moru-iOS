@@ -35,10 +35,6 @@ private struct MoruIconsPreviewHost: View {
           MoruCheckIcon(isOn: false)
         }
 
-        previewItem("check") {
-          MoruSmallCheckIcon()
-        }
-
         previewItem("minus") {
           MoruSelectIcon(style: .minus)
         }
@@ -55,20 +51,12 @@ private struct MoruIconsPreviewHost: View {
           MoruChevron(direction: .down)
         }
 
-        previewItem("sound") {
-          MoruSoundSymbol()
-        }
-
         previewItem("pause") {
           MoruSoundPauseButtonIcon()
         }
 
         previewItem("stop") {
           MoruSoundStopButtonIcon()
-        }
-
-        previewItem("heart") {
-          MoruVoiceHeartIcon()
         }
 
         previewItem("play") {
@@ -107,28 +95,12 @@ private struct MoruIconsPreviewHost: View {
           MoruSelectionIcon(icon: .habit)
         }
 
-        previewItem("record") {
-          MoruVoiceRecordingIcon()
-        }
-
-        previewItem("mic") {
-          MoruSoundIcon()
-        }
-
-        previewItem("fire") {
-          MoruFireIcon(size: 36)
-        }
-
         previewItem("note") {
           MoruRoutineNoteIcon(isActive: true)
         }
 
         previewItem("note off") {
           MoruRoutineNoteIcon(isActive: false)
-        }
-
-        previewItem("routine edit") {
-          MoruRoutineEditIcon()
         }
 
         previewItem("step minus") {

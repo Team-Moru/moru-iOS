@@ -44,9 +44,3 @@ enum AppRadius {
   static let xl: CGFloat = 24
   static let pill: CGFloat = 100
 }
-
-enum AppShadow {
-  static let cardColor = AppColor.grayBlack.opacity(0.06)
-  static let cardRadius: CGFloat = 16
-  static let cardY: CGFloat = 6
-}
