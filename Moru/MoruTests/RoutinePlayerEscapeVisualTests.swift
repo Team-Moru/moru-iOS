@@ -51,7 +51,7 @@ final class RoutinePlayerEscapeVisualTests: XCTestCase {
         )
 
         XCTAssertEqual(first.size, CGSize(width: 393, height: 852), state.rawValue)
-        XCTAssertEqual(first.pngData(), second.pngData(), state.rawValue)
+        try assertVisualRepeat(first, second, state.rawValue)
       }
     }
   }
