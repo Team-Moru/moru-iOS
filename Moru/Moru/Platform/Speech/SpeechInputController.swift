@@ -14,6 +14,17 @@ enum SpeechInputFailure: Equatable {
   case audioSession
   case recognition
   case silence
+
+  /// 이 세션 안에서 다시 시도해도 회복되지 않는 실패.
+  /// 권한은 설정 앱에서 바꿔야 하고, 기기·언어 미지원은 바뀌지 않는다.
+  var isPermanent: Bool {
+    switch self {
+    case .microphonePermissionDenied, .transcriberUnavailable, .localeUnavailable:
+      return true
+    case .modelDownloadFailed, .audioSession, .recognition, .silence:
+      return false
+    }
+  }
 }
 
 @MainActor
@@ -191,6 +202,15 @@ final class SpeechInputController {
 
   var shouldShowControls: Bool {
     isPreparing || phase == .listening || phase == .paused || phase == .finishing
+  }
+
+  /// 재시도로 회복되지 않는 실패에 빠졌을 때만 값이 있다. 이때 단계는 수동 완료로만 끝낼 수 있다.
+  var permanentFailure: SpeechInputFailure? {
+    guard case .failed(let failure) = phase, failure.isPermanent else {
+      return nil
+    }
+
+    return failure
   }
 
   var isPaused: Bool {

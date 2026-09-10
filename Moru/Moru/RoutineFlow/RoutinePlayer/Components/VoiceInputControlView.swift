@@ -43,6 +43,8 @@ struct VoiceInputControlView: View {
   let waitUntilGuidanceFinishes: () async -> Bool
   let onNoSpeechReminder: () async -> Bool
   let onAutomaticSkip: () -> Void
+  /// 음성 인식이 영구 실패했을 때 손으로 단계를 끝내는 경로. nil이면 버튼을 숨긴다.
+  let onManualComplete: (() -> Void)?
   let onFinished: (String) -> Void
   private let appSettingsOpener: AppSettingsOpener
   @State private var isAutomaticallyFinishing = false
@@ -60,6 +62,7 @@ struct VoiceInputControlView: View {
     waitUntilGuidanceFinishes: @escaping () async -> Bool = { true },
     onNoSpeechReminder: @escaping () async -> Bool = { true },
     onAutomaticSkip: @escaping () -> Void = {},
+    onManualComplete: (() -> Void)? = nil,
     appSettingsOpener: AppSettingsOpener = AppSettingsOpener(),
     onFinished: @escaping (String) -> Void
   ) {
@@ -71,6 +74,7 @@ struct VoiceInputControlView: View {
     self.waitUntilGuidanceFinishes = waitUntilGuidanceFinishes
     self.onNoSpeechReminder = onNoSpeechReminder
     self.onAutomaticSkip = onAutomaticSkip
+    self.onManualComplete = onManualComplete
     self.appSettingsOpener = appSettingsOpener
     self.onFinished = onFinished
   }
@@ -383,15 +387,26 @@ struct VoiceInputControlView: View {
         .foregroundStyle(AppColor.gray500)
         .multilineTextAlignment(.center)
 
-      if isMicrophonePermissionDenied {
-        Button("설정 열기") {
-          Task {
-            await appSettingsOpener.open()
+      if speechInputController.permanentFailure != nil {
+        // 재시도가 무의미한 실패. 완주 경로가 건너뛰기뿐이면 완수율이 0%로 고정되므로
+        // 손으로 끝내는 큰 버튼을 준다.
+        if let onManualComplete {
+          MoruButton(RoutinePlayerCopy.manualCompletionTitle) {
+            onManualComplete()
           }
+          .padding(.top, 4)
         }
-        .buttonStyle(.plain)
-        .font(AppFont.label1NormalSemiBold)
-        .foregroundStyle(AppColor.orange350)
+
+        if isMicrophonePermissionDenied {
+          Button("설정 열기") {
+            Task {
+              await appSettingsOpener.open()
+            }
+          }
+          .buttonStyle(.plain)
+          .font(AppFont.label1NormalSemiBold)
+          .foregroundStyle(AppColor.orange350)
+        }
       } else {
         Button("다시 시도") {
           Task {

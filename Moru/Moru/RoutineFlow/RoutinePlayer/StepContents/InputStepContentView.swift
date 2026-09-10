@@ -66,7 +66,10 @@ struct InputStepContentView: View {
           feedbackText = "아직 음성이 들리지 않아요. 준비되면 말해 주세요."
           return await onNoSpeechReminder()
         },
-        onAutomaticSkip: onAutomaticSkip
+        onAutomaticSkip: onAutomaticSkip,
+        onManualComplete: {
+          onComplete(nil)
+        }
       ) { transcript in
         guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
           feedbackText = "음성이 들리지 않았어요. 다시 말해 주세요."
