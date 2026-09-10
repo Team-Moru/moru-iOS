@@ -1220,6 +1220,66 @@ final class RouterRuntimeContractTests: XCTestCase {
     }
   }
 
+  // MARK: - 완료 요약 정합성
+
+  @MainActor
+  func testSummaryListsEveryPlannedStepAndKeepsUnreachedOnesOutOfTheSavedRecord() {
+    let routine = makeExecutableRoutine(
+      steps: [
+        RoutineStep(type: .confirm, title: "첫째", order: 0),
+        RoutineStep(type: .timer, title: "둘째", order: 1),
+        RoutineStep(type: .input, title: "셋째", order: 2),
+      ]
+    )
+    let saver = RoutineRunSaverSpy()
+    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: .manual
+      ),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: UUID()
+    ) { _, _ in }
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep(transcript: "완료했어요")
+    viewModel.finishStepCompletedScreen()
+    viewModel.requestSkipStep()
+    viewModel.confirmActiveDialog()
+    viewModel.requestEndRoutine()
+    viewModel.confirmActiveDialog()
+
+    guard case .summary(let summary) = viewModel.screenState else {
+      XCTFail("Ending early should display the summary.")
+      return
+    }
+
+    // 저장되는 결과는 완료·건너뜀 2건뿐이다.
+    XCTAssertEqual(saver.requests.first?.results.count, 2)
+    XCTAssertEqual(summary.totalStepCount, 3)
+    XCTAssertEqual(summary.completedStepCount, 1)
+    XCTAssertEqual(summary.skippedStepCount, 1)
+
+    // 요약은 계획된 3단계를 순서대로 보여 주고 셋째는 미완료다.
+    let displayed = viewModel.summaryStepResults
+    XCTAssertEqual(displayed.map(\.stepTitle), ["첫째", "둘째", "셋째"])
+    XCTAssertTrue(displayed[0].isCompleted)
+    XCTAssertTrue(displayed[1].skipped)
+    XCTAssertFalse(displayed[2].isCompleted)
+    XCTAssertFalse(displayed[2].skipped)
+    XCTAssertEqual(
+      displayed.map(RoutineFinishedView.statusSymbolName(for:)),
+      ["checkmark", "xmark", "minus"]
+    )
+    XCTAssertEqual(
+      displayed.map(RoutineFinishedView.statusLabel(for:)),
+      ["완료", "건너뜀", "미완료"]
+    )
+  }
+
   // MARK: - 저장 실패 시 종료 의도
 
   @MainActor

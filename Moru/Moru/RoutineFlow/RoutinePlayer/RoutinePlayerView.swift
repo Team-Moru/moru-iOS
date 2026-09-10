@@ -497,7 +497,7 @@ struct RoutinePlayerView: View {
         RoutineFinishedView(
             completionRate: summary.completionRate,
             streak: summary.streak,
-            stepResults: viewModel.stepResults,
+            stepResults: viewModel.summaryStepResults,
             isTrial: summary.persistedRunID == nil,
             onTapTodayRecord: {
                 if summary.persistedRunID == nil {
@@ -522,7 +522,7 @@ struct RoutinePlayerView: View {
                     for: summary
                 ),
                 wakeUpTime: summary.startedAt,
-                results: viewModel.stepResults,
+                results: viewModel.summaryStepResults,
                 onTapBack: {
                     isShowingTodayRecord = false
                 },

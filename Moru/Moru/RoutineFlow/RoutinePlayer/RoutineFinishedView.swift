@@ -15,7 +15,7 @@ struct RoutineFinishedView: View {
   /// 체험에는 값이 없다.
   let streak: RoutineStreak?
 
-  /// 실제로 완료하거나 건너뛴 루틴 단계 결과
+  /// 계획된 모든 단계의 결과. 완료·건너뜀·미완료(도달하지 못함)를 구분해 그린다.
   let stepResults: [RoutineStepResult]
 
   /// 저장하지 않는 온보딩 체험 완료 상태
@@ -73,7 +73,7 @@ struct RoutineFinishedView: View {
   }
 
   private var displayedStepResults: [RoutineStepResult] {
-    stepResults.filter { $0.isCompleted || $0.skipped }
+    stepResults
   }
 
   var body: some View {
@@ -268,7 +268,7 @@ struct RoutineFinishedView: View {
   @ViewBuilder
   private var stepResultsSection: some View {
     if displayedStepResults.isEmpty {
-      Text("완료하거나 건너뛴 루틴이 없습니다.")
+      Text("표시할 루틴 항목이 없습니다.")
         .moruTextStyle(.c1)
         .foregroundStyle(AppColor.gray350)
         .frame(maxWidth: .infinity, alignment: .center)
@@ -302,7 +302,7 @@ struct RoutineFinishedView: View {
 
   private func stepResultRow(_ result: RoutineStepResult) -> some View {
     HStack(alignment: .firstTextBaseline, spacing: 5) {
-      Image(systemName: result.isCompleted ? "checkmark" : "xmark")
+      Image(systemName: Self.statusSymbolName(for: result))
         .font(.system(size: 10, weight: .semibold))
         .foregroundStyle(AppColor.gray350)
         .accessibilityHidden(true)
@@ -314,11 +314,24 @@ struct RoutineFinishedView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(
-      result.isCompleted
-        ? "완료, \(result.stepTitle)"
-        : "건너뜀, \(result.stepTitle)"
-    )
+    .accessibilityLabel("\(Self.statusLabel(for: result)), \(result.stepTitle)")
+  }
+
+  /// 완료 ✓ · 건너뜀 ✕ · 미완료 −. 오늘의 기록·기록 탭의 아이콘 어휘와 맞춘다.
+  static func statusSymbolName(for result: RoutineStepResult) -> String {
+    if result.isCompleted {
+      return "checkmark"
+    }
+
+    return result.skipped ? "xmark" : "minus"
+  }
+
+  static func statusLabel(for result: RoutineStepResult) -> String {
+    if result.isCompleted {
+      return "완료"
+    }
+
+    return result.skipped ? "건너뜀" : "미완료"
   }
 
   @ViewBuilder

@@ -19,6 +19,7 @@ final class RoutinePlayerEscapeVisualTests: XCTestCase {
     case transcriberUnavailableComplete = "transcriber-unavailable-complete"
     case microphoneDeniedComplete = "microphone-denied-complete"
     case alarmStopRetryBanner = "alarm-stop-retry-banner"
+    case endedEarlySummary = "ended-early-summary"
   }
 
   func testAlarmStopRetryBannerCopyExplainsThatTheRoutineContinues() {
@@ -90,6 +91,18 @@ final class RoutinePlayerEscapeVisualTests: XCTestCase {
 
     case .microphoneDeniedComplete:
       return try await failedSpeechView(.microphonePermissionDenied)
+
+    case .endedEarlySummary:
+      let viewModel = makeViewModel()
+      viewModel.resolveRoutine()
+      viewModel.completeCurrentStep(transcript: "완료했어요")
+      viewModel.finishStepCompletedScreen()
+      viewModel.requestEndRoutine()
+      viewModel.confirmActiveDialog()
+      guard case .summary = viewModel.screenState else {
+        throw XCTSkip("Ending early should display the summary.")
+      }
+      return AnyView(RoutinePlayerView(viewModel: viewModel))
 
     case .alarmStopRetryBanner:
       let viewModel = makeViewModel()

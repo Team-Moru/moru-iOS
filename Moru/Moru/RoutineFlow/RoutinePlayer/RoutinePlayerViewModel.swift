@@ -203,6 +203,19 @@ final class RoutinePlayerViewModel {
         return false
     }
 
+    /// 완료 요약용 결과. 저장되는 `stepResults`는 완료·건너뜀만 담지만, 요약은 기록 탭과 같이
+    /// 계획된 모든 단계를 보여 준다. 도달하지 못한 단계는 완료도 건너뜀도 아닌 "미완료"다.
+    var summaryStepResults: [RoutineStepResult] {
+        steps.map { step in
+            stepResults.first(where: { $0.stepID == step.id })
+                ?? RoutineStepResult(
+                    stepID: step.id,
+                    stepTitle: step.title,
+                    stepType: step.type
+                )
+        }
+    }
+
     var isGuidancePlaying: Bool {
         guidanceCoordinator.isPlaying
     }
