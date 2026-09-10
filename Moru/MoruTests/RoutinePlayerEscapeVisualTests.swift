@@ -8,8 +8,9 @@ import XCTest
 @testable import Moru
 
 /// 2단계(루틴 실행 탈출구·안전)에서 추가된 상태를 결정적으로 렌더한다.
-/// 승인 기준선(after.png)은 두지 않는다 — 새 PNG를 리포에 넣지 않기로 했으므로
-/// 결정성(같은 입력 → 같은 PNG)과 문구만 고정하고, 캡처는 검토용으로 출력한다.
+/// 승인 기준선은 두지 않는다 — 새 기준값을 딕셔너리에 넣지 않기로 했으므로
+/// 반복 캡처가 지각적으로 같은지(dHash 거리 ≤ MoruVisualHash.repeatThreshold)와
+/// 문구만 고정하고, 캡처는 검토용으로 출력한다.
 @MainActor
 final class RoutinePlayerEscapeVisualTests: XCTestCase {
   private enum CaptureState: String, CaseIterable {

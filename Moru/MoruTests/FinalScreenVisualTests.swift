@@ -387,8 +387,6 @@ final class FinalScreenVisualTests: XCTestCase {
     )
   }
 
-
-
 }
 
 private enum VisualBaseline {

@@ -74,8 +74,6 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
     )
   }
 
-
-
   private func view(for state: RoutineManagementCaptureState) -> AnyView {
     switch state {
     case .routineList:

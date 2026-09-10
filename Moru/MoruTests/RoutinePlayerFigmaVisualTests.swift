@@ -123,8 +123,6 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
     }
   }
 
-
-
   private func view(
     for state: RoutinePlayerCaptureState
   ) async throws -> AnyView {
