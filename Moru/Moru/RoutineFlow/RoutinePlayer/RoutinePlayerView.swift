@@ -186,7 +186,6 @@ struct RoutinePlayerView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .disabled(viewModel.isStepInteractionDisabled)
     }
 
     private func runningView(
@@ -210,7 +209,10 @@ struct RoutinePlayerView: View {
                             height: viewModel.isTrialExecution ? 70 : 20
                         )
 
+                    // 단계 게이트는 단계 콘텐츠에만 건다. 상단바의 닫기·종료는
+                    // 저장 실패 중에도 눌러서 나갈 수 있어야 한다.
                     stepContent(for: step)
+                        .disabled(viewModel.isStepInteractionDisabled)
 
                 }
                 .frame(
@@ -220,7 +222,6 @@ struct RoutinePlayerView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .disabled(viewModel.isStepInteractionDisabled)
         .onAppear {
             viewModel.runnableContentDidAppear()
         }
@@ -349,6 +350,17 @@ struct RoutinePlayerView: View {
 
         case .some(.exit(_)):
             EndRoutineDialogView(
+                onCancel: {
+                    viewModel.cancelActiveDialog()
+                },
+                onConfirm: {
+                    speechInputController.cancel()
+                    viewModel.confirmActiveDialog()
+                }
+            )
+
+        case .some(.discardUnsavedRun):
+            DiscardUnsavedRunDialogView(
                 onCancel: {
                     viewModel.cancelActiveDialog()
                 },
@@ -530,6 +542,14 @@ struct RoutinePlayerView: View {
 
             MoruButton("다시 시도", isEnabled: !viewModel.isSavingRun) {
                 viewModel.retrySavingRun()
+            }
+
+            MoruButton(
+                RoutinePlayerDialogCopy.discardUnsavedRun.confirmTitle,
+                style: .text,
+                isEnabled: viewModel.hasUnsavedRun
+            ) {
+                viewModel.requestDiscardUnsavedRun()
             }
         }
         .padding(20)

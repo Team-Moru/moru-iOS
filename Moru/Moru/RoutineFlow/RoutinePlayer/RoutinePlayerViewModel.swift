@@ -49,6 +49,8 @@ final class RoutinePlayerViewModel {
         
         case skipStep
         case exit(Exit)
+        /// 저장에 실패한 기록을 버리고 나갈지 묻는다.
+        case discardUnsavedRun
     }
     
     private enum FinalizationMode {
@@ -101,12 +103,27 @@ final class RoutinePlayerViewModel {
     private(set) var isSavingRun = false
     private(set) var errorMessage: String?
 
+    /// 단계 상호작용(완료·건너뛰기·다음 단계)을 막는 단일 게이트.
+    /// 저장 대기 중에도 중복 완료를 막기 위해 `pendingSave`를 포함한다.
     var isStepInteractionDisabled: Bool {
         !isPresentationActive
             || dialogState != nil
             || pendingSave != nil
             || isSavingRun
             || didRequestExit
+    }
+
+    /// 종료 의도 게이트. 저장 실패로 `pendingSave`가 남아 있어도 나가는 길은 항상 열어 둔다.
+    private var canRequestExit: Bool {
+        isPresentationActive
+            && dialogState == nil
+            && !isSavingRun
+            && !didRequestExit
+    }
+
+    /// 저장하지 못한 실행 기록이 남아 있어 "기록 없이 나가기"를 제안할 수 있는 상태
+    var hasUnsavedRun: Bool {
+        pendingSave != nil && !isSavingRun
     }
     
     init(
@@ -274,6 +291,15 @@ final class RoutinePlayerViewModel {
     func requestCloseRoutine() {
         requestExitDialog(.userDismissed)
     }
+
+    /// 저장 실패 배너의 "기록 없이 나가기"
+    func requestDiscardUnsavedRun() {
+        guard canRequestExit, hasUnsavedRun else {
+            return
+        }
+
+        dialogState = .discardUnsavedRun
+    }
     
     func cancelActiveDialog() {
         dialogState = nil
@@ -294,6 +320,9 @@ final class RoutinePlayerViewModel {
             
         case .exit(let exit):
             confirmExit(exit)
+
+        case .discardUnsavedRun:
+            discardUnsavedRunAndExit()
         }
     }
     
@@ -538,7 +567,12 @@ final class RoutinePlayerViewModel {
     }
     
     private func requestExitDialog(_ exit: DialogState.Exit) {
-        guard !isStepInteractionDisabled else {
+        guard canRequestExit else {
+            return
+        }
+
+        if hasUnsavedRun {
+            dialogState = .discardUnsavedRun
             return
         }
         
@@ -547,6 +581,16 @@ final class RoutinePlayerViewModel {
         }
         
         dialogState = .exit(exit)
+    }
+
+    private func discardUnsavedRunAndExit() {
+        guard hasUnsavedRun else {
+            return
+        }
+
+        pendingSave = nil
+        errorMessage = nil
+        emitExit(.discardedUnsavedRun)
     }
 
     private func applyPendingStepCompletion() {
@@ -567,7 +611,7 @@ final class RoutinePlayerViewModel {
     }
     
     private func confirmExit(_ exit: DialogState.Exit) {
-        guard !isStepInteractionDisabled else {
+        guard canRequestExit, !hasUnsavedRun else {
             return
         }
         
@@ -720,7 +764,7 @@ final class RoutinePlayerViewModel {
                 terminalIntent = .summary
             case .userDismissed:
                 terminalIntent = .exit(.userDismissed)
-            case .summaryCTA, .summaryRecord, .terminalUnavailable:
+            case .summaryCTA, .summaryRecord, .terminalUnavailable, .discardedUnsavedRun:
                 assertionFailure("Unsupported early exit: \(exit)")
                 return
             }
