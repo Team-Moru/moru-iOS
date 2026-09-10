@@ -114,3 +114,12 @@ bash Scripts/run-tests.sh build
 뒤의 두 건은 온보딩·계정 전환의 stale 응답 처리 문제일 수 있어 로드맵 5·6단계에서
 제품 코드 쪽을 먼저 확인한다.
 
+### 간헐적으로 멈추는 테스트
+
+| 테스트 | 증상 |
+| --- | --- |
+| `RoutineTTSAudioStorageTests/testPurgeCancelsOldLoadAndDoesNotRemoveSameKeyReplacement` | 세 번 중 두 번 await에서 돌아오지 않았다. 테스트 플랜의 실행 시간 상한(180초)에 걸려 실패로 기록된다. |
+| `HistoryRunReportingTests/testRunDetailDestinationRejectsMissingAndDuplicateRunIDs` | 한 번 실패한 뒤 단독 실행 2회는 통과했다. |
+
+플레이키가 반복되면 해당 테스트만 `MoruSmoke`의 `skippedTests`에 넣고 `MoruFull`에서만 돌린다.
+
