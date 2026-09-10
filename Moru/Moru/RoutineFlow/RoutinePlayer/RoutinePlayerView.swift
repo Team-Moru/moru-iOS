@@ -348,8 +348,9 @@ struct RoutinePlayerView: View {
                 }
             )
 
-        case .some(.exit(_)):
-            EndRoutineDialogView(
+        case .some(.exit(let exit)):
+            ExitRoutineDialogView(
+                exit: exit,
                 onCancel: {
                     viewModel.cancelActiveDialog()
                 },
@@ -408,17 +409,20 @@ struct RoutinePlayerView: View {
         .padding(.horizontal, 20)
     }
 
+    /// 닫기(X): 기록을 저장하고 요약 없이 홈으로. "종료"와 역할이 다르므로 아이콘으로 구분한다.
     private var closeButton: some View {
         Button {
             viewModel.requestCloseRoutine()
         } label: {
-            Text("닫기")
-                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
+            Image(systemName: "xmark")
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(AppColor.gray350)
-                .frame(minWidth: 56, minHeight: 40)
+                .frame(minWidth: 44, minHeight: 40)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("닫기")
+        .accessibilityHint("지금까지의 진행을 기록하고 홈으로 돌아갑니다")
     }
 
     private var topBarTitle: some View {
@@ -440,6 +444,7 @@ struct RoutinePlayerView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityHint("지금까지의 결과를 저장하고 완료 화면으로 이동합니다")
     }
 
     private var progressSection: some View {
