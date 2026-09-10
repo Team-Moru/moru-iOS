@@ -80,6 +80,17 @@ struct RoutineTimerState: Equatable {
         return [.announce(remainingSeconds)]
     }
 
+    /// 사용자가 남은 시간을 기다리지 않고 단계를 끝낸다. 이후 tick은 아무것도 내지 않는다.
+    mutating func completeEarly() -> [Action] {
+        guard !didComplete else {
+            return []
+        }
+
+        didStart = true
+        didComplete = true
+        return [.complete]
+    }
+
 }
 
 struct TimerStepContentView: View {
@@ -142,7 +153,17 @@ struct TimerStepContentView: View {
             }
 
             Spacer()
-                .frame(height: timerSegments == nil ? 116 : 16)
+                .frame(height: timerSegments == nil ? 48 : 16)
+
+            // 3분 스트레칭을 30초에 끝낸 사용자에게도 완료 경로를 준다.
+            MoruButton(
+                RoutinePlayerCopy.manualCompletionTitle,
+                style: .secondary
+            ) {
+                handleTimerActions(timerState.completeEarly())
+            }
+            .padding(.horizontal, 16)
+            .accessibilityHint("남은 시간을 기다리지 않고 이 항목을 완료합니다")
 
             RoutineStepSkipFooterView(
                 horizontalPadding: 16,

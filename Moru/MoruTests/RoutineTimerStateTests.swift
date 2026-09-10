@@ -42,4 +42,25 @@ final class RoutineTimerStateTests: XCTestCase {
     XCTAssertEqual(state.tick(), [.complete])
     XCTAssertTrue(state.tick().isEmpty)
   }
+
+  func testEarlyCompletionCompletesOnceAndSilencesLaterTicks() {
+    var state = RoutineTimerState(totalSeconds: 180)
+    _ = state.start()
+    _ = state.tick()
+    _ = state.tick()
+
+    XCTAssertEqual(state.completeEarly(), [.complete])
+    XCTAssertTrue(state.didComplete)
+    XCTAssertTrue(state.tick().isEmpty)
+    XCTAssertTrue(state.completeEarly().isEmpty)
+    XCTAssertEqual(state.remainingSeconds, 178)
+  }
+
+  func testEarlyCompletionAfterNaturalCompletionIsIgnored() {
+    var state = RoutineTimerState(totalSeconds: 1)
+    _ = state.start()
+
+    XCTAssertEqual(state.tick(), [.complete])
+    XCTAssertTrue(state.completeEarly().isEmpty)
+  }
 }
