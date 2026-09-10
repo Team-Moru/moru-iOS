@@ -29,8 +29,7 @@ struct EndRoutineDialogView: View {
                 primaryTitle: "계속하기",
                 secondaryTitle: "종료하기",
                 primaryAction: onCancel,
-                secondaryAction: onConfirm,
-                adaptsForAccessibility: true
+                secondaryAction: onConfirm
             )
             .offset(y: dynamicTypeSize.isAccessibilitySize ? 0 : -12)
         }

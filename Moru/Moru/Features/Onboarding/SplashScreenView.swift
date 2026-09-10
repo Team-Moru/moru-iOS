@@ -38,6 +38,7 @@ struct SplashScreenView: View {
               .accessibilityIdentifier(
                 SplashScreenAccessibility.startIdentifier
               )
+              .padding(.horizontal, AppSpacing.screenHorizontal)
               .padding(
                 .bottom,
                 max(AppSpacing.xxl, proxy.safeAreaInsets.bottom)

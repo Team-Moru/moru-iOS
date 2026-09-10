@@ -13,6 +13,11 @@ enum MoruButtonStyle {
   case text
 }
 
+enum MoruButtonMetric {
+  /// 주요·보조 CTA의 최소 높이. Figma 파일럿 기준 54pt.
+  static let minimumHeight: CGFloat = 54
+}
+
 struct MoruButton: View {
   let title: String
   let style: MoruButtonStyle
@@ -37,10 +42,10 @@ struct MoruButton: View {
       Text(title)
         .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(foregroundColor)
-        .padding(.horizontal, AppSpacing.buttonHorizontal)
+        .padding(.horizontal, MoruPilotSpacing.twenty)
         .padding(.vertical, verticalPadding)
-        .frame(width: buttonWidth)
-        .frame(minHeight: 54)
+        .frame(maxWidth: style == .text ? nil : .infinity)
+        .frame(minHeight: MoruButtonMetric.minimumHeight)
         .background(backgroundColor)
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
     }
@@ -67,17 +72,6 @@ struct MoruButton: View {
       AppColor.grayWhite
     case .text:
       Color.clear
-    }
-  }
-
-  private var buttonWidth: CGFloat? {
-    switch style {
-    case .primary:
-      349
-    case .secondary:
-      353
-    case .text:
-      nil
     }
   }
 

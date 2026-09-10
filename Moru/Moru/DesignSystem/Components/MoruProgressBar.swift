@@ -14,8 +14,6 @@ struct MoruProgressBar: View {
   let total: Int
   let showsLabel: Bool
 
-  private let figmaGaugeWidth: CGFloat = 352
-
   init(
     current: Int,
     total: Int,
@@ -44,7 +42,7 @@ struct MoruProgressBar: View {
         }
       }
       .frame(height: 5)
-      .frame(maxWidth: figmaGaugeWidth)
+      .frame(maxWidth: .infinity)
 
       if showsLabel {
         progressLabel
@@ -56,7 +54,7 @@ struct MoruProgressBar: View {
   private var progressLabel: some View {
     let label = Text("\(current)/\(total)")
       .foregroundStyle(MoruPilotColor.textPrimary)
-      .frame(maxWidth: figmaGaugeWidth, alignment: .leading)
+      .frame(maxWidth: .infinity, alignment: .leading)
 
     if dynamicTypeSize.isAccessibilitySize {
       label.font(

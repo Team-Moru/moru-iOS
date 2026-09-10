@@ -63,13 +63,13 @@ struct MoruTabBar: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      HStack(spacing: MoruPilotSpacing.thirtyTwo) {
+      HStack(spacing: 0) {
         ForEach(items) { item in
           tabButton(for: item)
-            .frame(width: 60)
+            .frame(maxWidth: .infinity)
         }
       }
-      .frame(width: 346, alignment: .leading)
+      .padding(.horizontal, MoruPilotSpacing.twenty)
 
       Spacer(minLength: 0)
     }

@@ -473,7 +473,7 @@ private enum RoutineManagementVisualBaseline {
     "creation-choice-light-M.png":
       "AAAAAEDBggaDBpBAgALEAxUDZSMSAsgAwQCKBKAEwADIAHEH0A0QQwMBAwAcANoG2oYdQAAA2QDKBshAJABAAQ==",
     "delete-dialog-light-AX3.png":
-      "AAAAACYDyXTZbNl0JjZg2WrZbNkMWISXmyebpx6jNCMWZxynHOc51wiHNOM0400nbSdnp2S38CjDdMFk5GAggg==",
+      "AAAAACYDyXTZbNl0JjZg2WjZqN0ABxtHj+ecBx5nHqccpznHGJcGBw4HACcPBwcHRSdnpWS38CDBdNFk9GAigw==",
     "delete-dialog-light-M.png":
       "AAAAAEDBggaDBpBAgALEAxUDZSMSAsgAyACAFhyHHoeGhwaHEGcQZ1AfUAQ4hlANogJQBVAFuAL4BMTEwMBAAQ==",
     "editor-collapsed-light-AX3.png":
@@ -495,7 +495,7 @@ private enum RoutineManagementVisualBaseline {
     "list-error-light-AX3.png":
       "AAAAACgAxADEAOSAGwADAAaQAxAZIBmkYsBo2RlECUAawBhkBk8MwzyLNlMyUgQkAAAAAAAAAACSIkzIxNgAAA==",
     "list-error-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMgAwgeZByABMIHAwcDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIiTMyMzIRMgAAA==",
+      "AAAAACAAwADAACAAAAAAgAMAAxgeZBwABMoHBwcDAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACSImzIbMgACA==",
     "routine-list-light-AX3.png":
       "AAAAACgAxADEAOSQykDKRMpg2RTZDNow2nDAYMBgwBCoAugArEBZA10TXSMaYwDxAHEgSlsRWRNZgkzIxNgiMA==",
     "routine-list-light-M.png":
@@ -509,7 +509,7 @@ private enum RoutineManagementVisualBaseline {
     "step-edit-light-M.png":
       "AAAAAEDBggaDBpBAgALEAxUD5iIhAwMBAgAAAMAAwADoAtCE4xjhGOMYkACAgMMkwyTggMDE4ECDAoMCAMBAAQ==",
     "weekday-conflict-light-AX3.png":
-      "AAAAACYDyXTZbNl0RhQCDxUnPTcdZw0HjYe1IyUzDUcpQz0zNGMWAx+HG0MaxxynEMcQ4xjH4DDDdMFk5GAggg==",
+      "AAAAACYDyXTZbNl2AAcdJx1nDAcNhx1nmUexUzlTKXM2YzZjBocbQxtHHKcUpwIHAwcAJw8HhgbTdNFk9GAigw==",
     "weekday-conflict-light-M.png":
       "AAAAAEDBggaDBpBAgALEAxUDZSMSAsAAyASQtg5HHwe9YzrjBgcYZxFn0AQ4hlANogJQBVAFuAL4BMTEwMBAAQ==",
   ]
