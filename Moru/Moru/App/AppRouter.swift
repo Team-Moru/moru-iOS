@@ -81,6 +81,13 @@ struct AppRouter: View {
   private let onboardingBuilder: any OnboardingFlowBuilding
   private let routinePlayerBuilder: any RoutinePlayerBuilding
   private let homeBuilder: any HomeFlowBuilding
+  private let historyBuilder: any HistoryFlowBuilding
+  private let injectedProfileBuilder: (any ProfileFlowBuilding)?
+  // 프로필 빌더의 콜백은 뷰의 @State를 만지므로 body에서 만들고, 무거운 의존은 여기 한 번만 만든다.
+  private let profileSettingsUseCase: any ProfileSettingsUseCaseProtocol
+  private let profileAlarmService: any ProfileAlarmServicing
+  private let profileResetUseCase: (any ResetLocalDataUseCaseProtocol)?
+  private let profileVoicePreviewPlayer: any VoicePreviewPlaying
   private let onboardingStatusRuntimeCoordinator:
     OnboardingStatusRuntimeCoordinator?
   private let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
@@ -103,6 +110,8 @@ struct AppRouter: View {
     onboardingBuilder: any OnboardingFlowBuilding,
     routinePlayerBuilder: any RoutinePlayerBuilding,
     homeBuilder: (any HomeFlowBuilding)? = nil,
+    historyBuilder: (any HistoryFlowBuilding)? = nil,
+    profileBuilder: (any ProfileFlowBuilding)? = nil,
     onboardingStatusRuntimeCoordinator:
       OnboardingStatusRuntimeCoordinator? = nil,
     routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator? = nil,
@@ -149,6 +158,48 @@ struct AppRouter: View {
       )
     )
     _state = StateObject(wrappedValue: state ?? AppRouterState())
+    if let historyBuilder {
+      self.historyBuilder = historyBuilder
+    } else {
+      self.historyBuilder = DefaultHistoryFlowBuilder(
+        loadHistoryUseCase: LoadHistoryUseCase(
+          routineRepository: dependencies.routineRepository,
+          routineRunRepository: dependencies.routineRunRepository
+        ),
+        summaryEnricher: dependencies.accountHistoryRemoteService.map {
+          AccountHistorySummaryEnricher(
+            remoteService: $0,
+            signedInMemberProvider: accountSessionStore
+          )
+        },
+        accountDailyReportLoader: dependencies.accountHistoryRemoteService.map {
+          LoadAccountHistoryDailyReportUseCase(
+            remoteService: $0,
+            signedInMemberProvider: accountSessionStore
+          )
+        },
+        signedInMemberProvider: accountSessionStore
+      )
+    }
+    self.injectedProfileBuilder = profileBuilder
+    self.profileSettingsUseCase = ProfileSettingsUseCase(
+      localProfileRepository: dependencies.localProfileRepository,
+      voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
+    )
+    let profileAlarmService = dependencies.profileAlarmService
+      ?? UnavailableProfileAlarmService()
+    self.profileAlarmService = profileAlarmService
+    self.profileResetUseCase = dependencies.localDataResetRepository.map {
+      ResetLocalDataUseCase(
+        localDataResetRepository: $0,
+        alarmService: profileAlarmService,
+        routineTTSAudioCacheCleaner:
+          dependencies.routineTTSAudioCache.map {
+            RoutineTTSAudioCacheCleaner(cache: $0)
+          }
+      )
+    }
+    self.profileVoicePreviewPlayer = dependencies.makeVoicePreviewPlayer()
     if let homeBuilder {
       self.homeBuilder = homeBuilder
     } else {
@@ -530,48 +581,30 @@ struct AppRouter: View {
   }
 
   @MainActor
-  var mainTabView: MainTabView {
-    let historySummaryEnricher = dependencies.accountHistoryRemoteService.map {
-      AccountHistorySummaryEnricher(
-        remoteService: $0,
-        signedInMemberProvider: accountSessionStore
-      )
-    }
-    let accountDailyReportLoader =
-      dependencies.accountHistoryRemoteService.map {
-        LoadAccountHistoryDailyReportUseCase(
-          remoteService: $0,
-          signedInMemberProvider: accountSessionStore
-        )
-      }
-    let historyBuilder = DefaultHistoryFlowBuilder(
-      loadHistoryUseCase: LoadHistoryUseCase(
-        routineRepository: dependencies.routineRepository,
-        routineRunRepository: dependencies.routineRunRepository
+  var mainTabView: some View {
+    MainTabView(
+      home: homeBuilder.make(
+        onStartRoutine: handleRegularRoutineLaunch,
+        refreshToken: state.homeRefreshToken
       ),
-      summaryEnricher: historySummaryEnricher,
-      accountDailyReportLoader: accountDailyReportLoader,
-      accountIdentity: accountSessionStore.signedInMemberID
+      routineSetting: RoutineSettingView(dependencies: dependencies),
+      history: historyBuilder.make(
+        destination: historyDestinationBinding,
+        reloadToken: state.mainTabState.historyReloadToken
+      ),
+      profile: profileBuilder.make(),
+      selection: mainTabSelectionBinding
     )
-    let profileSettingsUseCase = ProfileSettingsUseCase(
-      localProfileRepository: dependencies.localProfileRepository,
-      voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
-    )
-    let profileAlarmService = dependencies.profileAlarmService
-      ?? UnavailableProfileAlarmService()
-    let resetUseCase = dependencies.localDataResetRepository.map {
-      ResetLocalDataUseCase(
-        localDataResetRepository: $0,
-        alarmService: profileAlarmService,
-        routineTTSAudioCacheCleaner:
-          dependencies.routineTTSAudioCache.map {
-            RoutineTTSAudioCacheCleaner(cache: $0)
-          }
-      )
+  }
+
+  private var profileBuilder: any ProfileFlowBuilding {
+    if let injectedProfileBuilder {
+      return injectedProfileBuilder
     }
-    let profileBuilder = DefaultProfileFlowBuilder(
+
+    return DefaultProfileFlowBuilder(
       profileSettingsUseCase: profileSettingsUseCase,
-      voicePreviewPlayer: dependencies.makeVoicePreviewPlayer(),
+      voicePreviewPlayer: profileVoicePreviewPlayer,
       alarmService: profileAlarmService,
       accountServerViewModel: accountServerViewModel,
       accountRoutineGroupRemoteService:
@@ -584,7 +617,7 @@ struct AppRouter: View {
       accountLifecycleService: accountLifecycleService,
       geminiDataConsentStore: geminiDataConsentStore,
       appCapabilities: appCapabilities,
-      resetUseCase: resetUseCase,
+      resetUseCase: profileResetUseCase,
       resetAvailability: {
         coordinator.presentation == nil && coordinator.pendingDismissalToken == nil
       },
@@ -596,19 +629,6 @@ struct AppRouter: View {
         UIApplication.shared.open(url)
       },
       onResetSucceeded: resetToNewUserFlow
-    )
-    let mainTabState = state.mainTabState
-
-    return MainTabView(
-      home: homeBuilder.make(
-        onStartRoutine: handleRegularRoutineLaunch,
-        refreshToken: state.homeRefreshToken
-      ),
-      routineSetting: RoutineSettingView(dependencies: dependencies),
-      history: historyBuilder.make(destination: historyDestinationBinding),
-      profile: profileBuilder.make(),
-      selection: mainTabSelectionBinding,
-      historyReloadToken: mainTabState.historyReloadToken
     )
   }
 

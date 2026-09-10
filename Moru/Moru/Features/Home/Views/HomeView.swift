@@ -87,8 +87,9 @@ struct HomeView: View {
   private let routineLaunchBoundary: HomeRoutineLaunchBoundary
   private let routineServerNoticeBoundary: HomeRoutineServerNoticeBoundary
   private let refreshToken: Int
-  private let routineSettingContent: AnyView
-  private let routineCreationContent: AnyView
+  /// 시트를 열 때만 만든다. body 평가마다 루틴 설정 화면을 세 번씩 만들던 비용을 없앤다.
+  private let routineSettingContent: @MainActor () -> AnyView
+  private let routineCreationContent: @MainActor () -> AnyView
   private let clearsRoutineLaunchMessageOnRefresh: Bool
   private let automaticallyLoads: Bool
 
@@ -102,8 +103,8 @@ struct HomeView: View {
     viewModel: HomeViewModel,
     onStartRoutine: @escaping RoutineLaunchHandler,
     refreshToken: Int,
-    routineSettingContent: AnyView,
-    routineCreationContent: AnyView? = nil,
+    routineSettingContent: @escaping @MainActor () -> AnyView,
+    routineCreationContent: (@MainActor () -> AnyView)? = nil,
     initialRoutineLaunchMessage: String? = nil,
     automaticallyLoads: Bool = true
   ) {
@@ -116,6 +117,27 @@ struct HomeView: View {
     self.automaticallyLoads = automaticallyLoads
     _viewModel = State(initialValue: viewModel)
     _routineLaunchMessage = State(initialValue: initialRoutineLaunchMessage)
+  }
+
+  /// 이미 만들어진 뷰를 넘기는 호출부(테스트·프리뷰)용
+  init(
+    viewModel: HomeViewModel,
+    onStartRoutine: @escaping RoutineLaunchHandler,
+    refreshToken: Int,
+    routineSettingContent: AnyView,
+    routineCreationContent: AnyView? = nil,
+    initialRoutineLaunchMessage: String? = nil,
+    automaticallyLoads: Bool = true
+  ) {
+    self.init(
+      viewModel: viewModel,
+      onStartRoutine: onStartRoutine,
+      refreshToken: refreshToken,
+      routineSettingContent: { routineSettingContent },
+      routineCreationContent: routineCreationContent.map { content in { content } },
+      initialRoutineLaunchMessage: initialRoutineLaunchMessage,
+      automaticallyLoads: automaticallyLoads
+    )
   }
 
   var body: some View {
@@ -193,9 +215,9 @@ struct HomeView: View {
     }) { sheet in
       switch sheet {
       case .settings:
-        routineSettingContent
+        routineSettingContent()
       case .create:
-        routineCreationContent
+        routineCreationContent()
       }
     }
   }

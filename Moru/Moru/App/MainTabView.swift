@@ -56,28 +56,27 @@ struct MainTabState: Equatable {
   }
 }
 
-struct MainTabView: View {
-  private let home: AnyView
-  private let routineSetting: RoutineSettingView
-  private let history: AnyView
-  private let profile: AnyView
+/// 탭 루트 4개를 담는다. 각 탭의 정체성·새로고침은 빌더가 정한다(Home: sessionID + refreshToken,
+/// History: 회원 + reloadToken, Profile: 회원).
+struct MainTabView<Home: View, Routine: View, History: View, Profile: View>: View {
+  private let home: Home
+  private let routineSetting: Routine
+  private let history: History
+  private let profile: Profile
   @Binding private var selection: MoruTabItem
-  private let historyReloadToken: Int
 
   init(
-    home: AnyView,
-    routineSetting: RoutineSettingView,
-    history: AnyView,
-    profile: AnyView = AnyView(EmptyView()),
-    selection: Binding<MoruTabItem>,
-    historyReloadToken: Int
+    home: Home,
+    routineSetting: Routine,
+    history: History,
+    profile: Profile,
+    selection: Binding<MoruTabItem>
   ) {
     self.home = home
     self.routineSetting = routineSetting
     self.history = history
     self.profile = profile
     _selection = selection
-    self.historyReloadToken = historyReloadToken
   }
 
   var body: some View {
@@ -98,9 +97,26 @@ struct MainTabView: View {
     } else if selection == .routine {
       routineSetting
     } else if selection == .record {
-      history.id(historyReloadToken)
+      history
     } else {
       profile
     }
+  }
+}
+
+extension MainTabView where Profile == EmptyView {
+  init(
+    home: Home,
+    routineSetting: Routine,
+    history: History,
+    selection: Binding<MoruTabItem>
+  ) {
+    self.init(
+      home: home,
+      routineSetting: routineSetting,
+      history: history,
+      profile: EmptyView(),
+      selection: selection
+    )
   }
 }

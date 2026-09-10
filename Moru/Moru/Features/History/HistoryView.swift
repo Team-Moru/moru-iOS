@@ -65,17 +65,21 @@ struct HistoryView: View {
   private let accountDailyReportLoader:
     (any AccountHistoryDailyReportLoading)?
   private let automaticallyLoads: Bool
+  /// 이력 탭에 다시 들어올 때마다 올라간다. 화면 정체성은 유지하고 데이터만 다시 불러온다.
+  private let reloadToken: Int
 
   init(
     viewModel: HistoryViewModel,
     accountDailyReportLoader:
       (any AccountHistoryDailyReportLoading)? = nil,
     destination: Binding<HistoryDestination?> = .constant(nil),
+    reloadToken: Int = 0,
     automaticallyLoads: Bool = true
   ) {
     _viewModel = State(initialValue: viewModel)
     _pendingDestination = destination
     self.accountDailyReportLoader = accountDailyReportLoader
+    self.reloadToken = reloadToken
     self.automaticallyLoads = automaticallyLoads
   }
 
@@ -154,7 +158,7 @@ struct HistoryView: View {
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
     .accessibilityLabel("이력")
-    .task {
+    .task(id: reloadToken) {
       guard automaticallyLoads else {
         return
       }

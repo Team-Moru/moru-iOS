@@ -141,8 +141,7 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       home: AnyView(EmptyView()),
       routineSetting: RoutineSettingView(dependencies: dependencies),
       history: AnyView(EmptyView()),
-      selection: .constant(.routine),
-      historyReloadToken: 0
+      selection: .constant(.routine)
     )
   }
 

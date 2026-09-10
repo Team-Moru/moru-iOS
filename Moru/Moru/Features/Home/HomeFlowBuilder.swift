@@ -62,8 +62,8 @@ final class DefaultHomeFlowBuilder: HomeFlowBuilding {
         ),
         onStartRoutine: onStartRoutine,
         refreshToken: refreshToken,
-        routineSettingContent: routineSettingContentFactory(),
-        routineCreationContent: routineCreationContentFactory()
+        routineSettingContent: routineSettingContentFactory,
+        routineCreationContent: routineCreationContentFactory
       )
       .id(sessionIdentityProvider?.currentAccountSessionIdentity?.sessionID)
     )

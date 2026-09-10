@@ -349,8 +349,7 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
           automaticallyLoads: false
         )
       ),
-      selection: .constant(.my),
-      historyReloadToken: 0
+      selection: .constant(.my)
     )
     let image = try MoruVisualCaptureFixture.render(
       screen,
@@ -556,8 +555,7 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       home: AnyView(home),
       routineSetting: RoutineSettingView(dependencies: .mock()),
       history: AnyView(EmptyView()),
-      selection: .constant(.home),
-      historyReloadToken: 0
+      selection: .constant(.home)
     )
   }
 
@@ -606,8 +604,7 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
           automaticallyLoads: false
         )
       ),
-      selection: .constant(.my),
-      historyReloadToken: 0
+      selection: .constant(.my)
     )
   }
 

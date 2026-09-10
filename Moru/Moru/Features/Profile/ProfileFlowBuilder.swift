@@ -97,6 +97,9 @@ final class DefaultProfileFlowBuilder: ProfileFlowBuilding {
         geminiDataConsentStore: geminiDataConsentStore,
         appCapabilities: appCapabilities
       )
+      // 프로필의 뷰모델들은 @State로 첫 값만 붙잡는다. 계정이 바뀌면 화면을 새로 만들어
+      // 이전 회원의 뷰모델이 살아남지 않게 한다(탭 상태 보존 아래에서 실제 버그가 된다).
+      .id(accountSessionStore.signedInMemberID)
     )
   }
 }

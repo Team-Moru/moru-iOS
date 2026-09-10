@@ -58,8 +58,7 @@ final class HistoryOverviewFigmaVisualTests: XCTestCase {
           automaticallyLoads: false
         )
       ),
-      selection: .constant(.record),
-      historyReloadToken: 0
+      selection: .constant(.record)
     )
   }
 
