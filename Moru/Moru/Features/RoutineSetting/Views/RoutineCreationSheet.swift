@@ -117,14 +117,14 @@ struct RoutineCreationModeSelectionView: View {
     VStack(spacing: 0) {
       Text(RoutineManagementCopy.creationTitle)
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .frame(maxWidth: .infinity)
         .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 76 : 55)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityAddTraits(.isHeader)
 
       Divider()
-        .overlay(MoruPilotColor.border)
+        .overlay(MoruColor.border)
 
       ScrollView(showsIndicators: false) {
         VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 20 : 12) {
@@ -148,7 +148,7 @@ struct RoutineCreationModeSelectionView: View {
             onSelect(.directAddition)
           }
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.twenty)
         .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 12)
       }
     }
@@ -166,18 +166,18 @@ struct RoutineCreationModeSelectionView: View {
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
-      HStack(spacing: MoruPilotSpacing.sixteen) {
+      HStack(spacing: MoruSpacing.sixteen) {
         creationImage(imageName)
 
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+        VStack(alignment: .leading, spacing: MoruSpacing.four) {
           Text(title)
             .moruTextStyle(.b3.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .foregroundStyle(MoruColor.textStrong)
             .fixedSize(horizontal: false, vertical: true)
 
           Text(subtitle)
             .moruTextStyle(.b4)
-            .foregroundStyle(MoruPilotColor.textTertiary)
+            .foregroundStyle(MoruColor.textTertiary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -186,7 +186,7 @@ struct RoutineCreationModeSelectionView: View {
         Spacer()
 
         MoruChevron(
-          color: MoruPilotColor.textSecondary,
+          color: MoruColor.textSecondary,
           direction: .right
         )
         .frame(width: 24, height: 44)

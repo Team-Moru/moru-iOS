@@ -51,7 +51,7 @@ struct SplashScreenView: View {
       LinearGradient(
         colors: [
           AppColor.grayWhite,
-          MoruPilotColor.canvas,
+          MoruColor.canvas,
         ],
         startPoint: .top,
         endPoint: .bottom

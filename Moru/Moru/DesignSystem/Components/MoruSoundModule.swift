@@ -34,7 +34,7 @@ struct MoruSoundModule: View {
   var body: some View {
     ZStack {
       RoundedRectangle(cornerRadius: AppRadius.pill)
-        .fill(MoruPilotColor.accentTint)
+        .fill(MoruColor.accentTint)
         .frame(maxWidth: .infinity)
         .frame(height: 76)
 

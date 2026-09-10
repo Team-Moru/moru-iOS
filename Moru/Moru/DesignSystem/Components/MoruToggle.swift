@@ -20,7 +20,7 @@ struct MoruToggle: View {
     } label: {
       ZStack(alignment: isOn ? .trailing : .leading) {
         Capsule()
-          .fill(isOn ? MoruPilotColor.accent : MoruPilotColor.disabled)
+          .fill(isOn ? MoruColor.accent : MoruColor.disabled)
           .frame(width: 52, height: 28)
 
         Circle()

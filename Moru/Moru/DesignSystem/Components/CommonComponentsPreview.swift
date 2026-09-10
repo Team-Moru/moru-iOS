@@ -69,7 +69,7 @@ private struct MoruCommonComponentsPreviewHost: View {
 
           Text(soundTapMessage)
             .font(AppFont.caption1Medium)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
         }
         MoruDialog(
           title: "이 항목을 건너뛸까요?",

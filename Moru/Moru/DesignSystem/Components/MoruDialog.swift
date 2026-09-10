@@ -37,14 +37,14 @@ struct MoruDialog: View {
       VStack(spacing: AppSpacing.md) {
         Text(title)
           .font(AppFont.pretendardSemiBold(size: 22, relativeTo: .title3))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .fixedSize(horizontal: false, vertical: true)
 
         Text(message)
           .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .fixedSize(horizontal: false, vertical: true)
@@ -57,15 +57,15 @@ struct MoruDialog: View {
           actionButton(
             action: primaryAction,
             title: primaryTitle,
-            color: MoruPilotColor.textSecondary
+            color: MoruColor.textSecondary
           )
           Rectangle()
-            .fill(MoruPilotColor.border)
+            .fill(MoruColor.border)
             .frame(height: 1)
           actionButton(
             action: secondaryAction,
             title: secondaryTitle,
-            color: MoruPilotColor.textStrong
+            color: MoruColor.textStrong
           )
         }
       } else {
@@ -73,15 +73,15 @@ struct MoruDialog: View {
           actionButton(
             action: primaryAction,
             title: primaryTitle,
-            color: MoruPilotColor.textSecondary
+            color: MoruColor.textSecondary
           )
           Rectangle()
-            .fill(MoruPilotColor.border)
+            .fill(MoruColor.border)
             .frame(width: 1, height: 54)
           actionButton(
             action: secondaryAction,
             title: secondaryTitle,
-            color: MoruPilotColor.textStrong
+            color: MoruColor.textStrong
           )
         }
         .frame(minHeight: 54)
@@ -90,7 +90,7 @@ struct MoruDialog: View {
     .frame(maxWidth: .infinity)
     .background(AppColor.grayWhite)
     .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
-    .padding(.horizontal, MoruPilotSpacing.thirtySix)
+    .padding(.horizontal, MoruSpacing.thirtySix)
   }
 
   private func actionButton(

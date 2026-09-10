@@ -470,7 +470,7 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
       ),
       requestWeather: {}
     )
-    .padding(MoruPilotSpacing.twenty)
+    .padding(MoruSpacing.twenty)
     .frame(
       maxWidth: .infinity,
       maxHeight: .infinity,

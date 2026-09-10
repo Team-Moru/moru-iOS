@@ -69,7 +69,7 @@ struct MoruTabBar: View {
             .frame(maxWidth: .infinity)
         }
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.twenty)
 
       Spacer(minLength: 0)
     }
@@ -83,7 +83,7 @@ struct MoruTabBar: View {
         .ignoresSafeArea(edges: .bottom)
     }
     .shadow(
-      color: MoruPilotColor.tabBarShadow,
+      color: MoruColor.tabBarShadow,
       radius: 10,
       x: 0,
       y: -2
@@ -93,11 +93,11 @@ struct MoruTabBar: View {
   }
 
   private var selectedColor: Color {
-    MoruPilotColor.accent
+    MoruColor.accent
   }
 
   private var unselectedColor: Color {
-    MoruPilotColor.textPrimary
+    MoruColor.textPrimary
   }
 
   private var minimumHeight: CGFloat {
@@ -108,7 +108,7 @@ struct MoruTabBar: View {
     Button {
       selection = item
     } label: {
-      VStack(spacing: MoruPilotSpacing.four) {
+      VStack(spacing: MoruSpacing.four) {
         Image(item.iconName)
           .renderingMode(.template)
           .resizable()

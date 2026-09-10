@@ -27,61 +27,61 @@ struct HomeStreakCard: View {
         )
         .accessibilityHidden(true)
 
-      HStack(alignment: .firstTextBaseline, spacing: MoruPilotSpacing.four) {
+      HStack(alignment: .firstTextBaseline, spacing: MoruSpacing.four) {
         Text("\(streak.currentDays)")
           .moruTextStyle(.h2)
-          .foregroundStyle(MoruPilotColor.accent)
+          .foregroundStyle(MoruColor.accent)
 
         Text("일 연속")
           .moruTextStyle(.c1.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textPrimary)
+          .foregroundStyle(MoruColor.textPrimary)
       }
 
       if dynamicTypeSize.isAccessibilitySize {
         LazyVGrid(
           columns: Array(
-            repeating: GridItem(.flexible(), spacing: MoruPilotSpacing.eight),
+            repeating: GridItem(.flexible(), spacing: MoruSpacing.eight),
             count: 4
           ),
-          spacing: MoruPilotSpacing.eight
+          spacing: MoruSpacing.eight
         ) {
           ForEach(streak.weekdays) { weekday in
             weekdayCell(weekday)
           }
         }
-        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.top, MoruSpacing.eight)
       } else {
-        HStack(spacing: MoruPilotSpacing.eight) {
+        HStack(spacing: MoruSpacing.eight) {
           ForEach(streak.weekdays) { weekday in
             weekdayCell(weekday)
           }
         }
-        .padding(.top, MoruPilotSpacing.four)
+        .padding(.top, MoruSpacing.four)
       }
 
       Text("최고 기록 \(streak.bestDays)일")
         .moruTextStyle(.c2)
-        .foregroundStyle(MoruPilotColor.textSecondary)
-        .padding(.horizontal, MoruPilotSpacing.sixteen)
+        .foregroundStyle(MoruColor.textSecondary)
+        .padding(.horizontal, MoruSpacing.sixteen)
         .frame(minHeight: 22)
         .background(AppColor.babyBlue100)
         .clipShape(Capsule())
-        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.top, MoruSpacing.eight)
     }
     .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 16)
-    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .padding(.horizontal, MoruSpacing.sixteen)
     .frame(maxWidth: .infinity)
     .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 304 : 184)
     .homePilotSurface()
   }
 
   private func weekdayCell(_ weekday: HomeWeekdayState) -> some View {
-    VStack(spacing: MoruPilotSpacing.four) {
+    VStack(spacing: MoruSpacing.four) {
       ZStack {
         Circle()
           .fill(
             weekday.isCompleted
-              ? MoruPilotColor.accent
+              ? MoruColor.accent
               : AppColor.babyBlue150
           )
 
@@ -99,7 +99,7 @@ struct HomeStreakCard: View {
 
       Text(weekday.label)
         .moruTextStyle(.c2.weight(.regular))
-        .foregroundStyle(MoruPilotColor.textTertiary)
+        .foregroundStyle(MoruColor.textTertiary)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(weekday.label)

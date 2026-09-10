@@ -23,7 +23,7 @@ struct EditableRoutineReviewForm: View {
 
       Text("\(routine.steps.count)개 - 총 \(totalMinutes)분")
         .font(AppFont.body1NormalSemiBold)
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
     }
   }
 
@@ -53,11 +53,11 @@ struct EditableRoutineReviewForm: View {
           text: stepTitleBinding(for: step.id)
         )
         .font(AppFont.label1NormalSemiBold)
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
 
         Text("\(stepTypeTitle(step.type)) - \(durationTitle(step))")
           .font(AppFont.caption1Medium)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
       }
     }
     .padding(.horizontal, AppSpacing.md)
@@ -70,12 +70,12 @@ struct EditableRoutineReviewForm: View {
   private func sectionTitle(_ title: String) -> some View {
     Text(title)
       .font(AppFont.heading3SemiBold)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
   }
 
   private var fieldBorder: some View {
     RoundedRectangle(cornerRadius: AppRadius.sm)
-      .stroke(MoruPilotColor.border, lineWidth: 1)
+      .stroke(MoruColor.border, lineWidth: 1)
   }
 
   private func stepTitleBinding(for stepID: UUID) -> Binding<String> {
@@ -124,7 +124,7 @@ struct EditableRoutineIdentityFields: View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
       Text("루틴")
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
 
       EditableRoutineTextField(
         placeholder: "루틴 이름",
@@ -152,17 +152,17 @@ private struct EditableRoutineTextField: View {
   var body: some View {
     TextField(placeholder, text: $text, axis: .vertical)
       .moruTextStyle(.b4.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textPrimary)
-      .tint(MoruPilotColor.accent)
+      .foregroundStyle(MoruColor.textPrimary)
+      .tint(MoruColor.accent)
       .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-      .padding(.horizontal, MoruPilotSpacing.sixteen)
-      .padding(.vertical, MoruPilotSpacing.twelve)
+      .padding(.horizontal, MoruSpacing.sixteen)
+      .padding(.vertical, MoruSpacing.twelve)
       .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 48)
       .background(OnboardingSurface.input)
       .overlay(
-        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-          .stroke(MoruPilotColor.border, lineWidth: 1)
+        RoundedRectangle(cornerRadius: MoruRadius.card)
+          .stroke(MoruColor.border, lineWidth: 1)
       )
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
   }
 }

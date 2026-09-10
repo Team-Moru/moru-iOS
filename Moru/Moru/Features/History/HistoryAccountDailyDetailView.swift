@@ -41,7 +41,7 @@ struct HistoryAccountDailyDetailView: View {
         }
       }
     }
-    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .background(MoruColor.canvas.ignoresSafeArea())
     .toolbar(.hidden, for: .navigationBar)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.accountDailyDetail")
@@ -58,7 +58,7 @@ struct HistoryAccountDailyDetailView: View {
         Text("뒤로")
           .moruTextStyle(.b4)
       }
-      .foregroundStyle(MoruPilotColor.textTertiary)
+      .foregroundStyle(MoruColor.textTertiary)
       .frame(minWidth: 44, minHeight: 44, alignment: .leading)
       .accessibilityLabel("뒤로")
 
@@ -71,13 +71,13 @@ struct HistoryAccountDailyDetailView: View {
     .overlay {
       Text(dateTitle)
         .moruTextStyle(.h3)
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
         .accessibilityAddTraits(.isHeader)
         .allowsHitTesting(false)
     }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.twenty)
     .frame(height: 54)
   }
 
@@ -85,7 +85,7 @@ struct HistoryAccountDailyDetailView: View {
     _ report: ServerHistoryDailySummary
   ) -> some View {
     ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+      VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
         HistoryReportSummaryCard(
           metrics: [
             HistoryReportMetric(
@@ -112,21 +112,21 @@ struct HistoryAccountDailyDetailView: View {
               + "현재 연속 \(report.currentStreak)일"
           )
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
         } icon: {
           Image(systemName: "icloud")
-            .foregroundStyle(MoruPilotColor.accent)
+            .foregroundStyle(MoruColor.accent)
             .accessibilityHidden(true)
         }
-        .padding(MoruPilotSpacing.sixteen)
+        .padding(MoruSpacing.sixteen)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppColor.grayWhite.opacity(0.72))
         .clipShape(
-          RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+          RoundedRectangle(cornerRadius: MoruRadius.largeCard)
         )
 
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+        VStack(alignment: .leading, spacing: MoruSpacing.eight) {
           accountSectionTitle(HistoryCopy.todayRecords)
 
           let records = report.routines.filter {
@@ -135,7 +135,7 @@ struct HistoryAccountDailyDetailView: View {
           if records.isEmpty {
             HistoryInlineEmptyCard(message: HistoryCopy.noTranscripts)
           } else {
-            VStack(spacing: MoruPilotSpacing.twelve) {
+            VStack(spacing: MoruSpacing.twelve) {
               ForEach(
                 Array(records.enumerated()),
                 id: \.offset
@@ -146,13 +146,13 @@ struct HistoryAccountDailyDetailView: View {
           }
         }
 
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+        VStack(alignment: .leading, spacing: MoruSpacing.eight) {
           accountSectionTitle(HistoryCopy.itemResults)
 
           if report.routines.isEmpty {
             HistoryInlineEmptyCard(message: HistoryCopy.noStepResults)
           } else {
-            LazyVStack(spacing: MoruPilotSpacing.twelve) {
+            LazyVStack(spacing: MoruSpacing.twelve) {
               ForEach(
                 Array(report.routines.enumerated()),
                 id: \.offset
@@ -168,16 +168,16 @@ struct HistoryAccountDailyDetailView: View {
           }
         }
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
-      .padding(.top, MoruPilotSpacing.eight)
-      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.top, MoruSpacing.eight)
+      .padding(.bottom, MoruSpacing.sixtyFour)
     }
   }
 
   private func accountSectionTitle(_ title: String) -> some View {
     Text(title)
       .moruTextStyle(.b3.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textPrimary)
+      .foregroundStyle(MoruColor.textPrimary)
       .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
       .fixedSize(horizontal: false, vertical: true)
       .accessibilityAddTraits(.isHeader)
@@ -186,23 +186,23 @@ struct HistoryAccountDailyDetailView: View {
   private func accountRecordCard(
     _ routine: ServerHistoryDailyRoutine
   ) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Text(routine.title)
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
 
       Text(
         DailyReportInputAnswerPolicy.answer(for: routine)
           ?? HistoryCopy.noTranscripts
       )
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
-    .padding(MoruPilotSpacing.twenty)
+    .padding(MoruSpacing.twenty)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(historyPilotSurface)
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
     .accessibilityElement(children: .combine)
   }
 

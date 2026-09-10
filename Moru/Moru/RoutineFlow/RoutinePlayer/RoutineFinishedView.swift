@@ -118,7 +118,7 @@ struct RoutineFinishedView: View {
       LinearGradient(
         colors: [
           Color(red: 230 / 255, green: 237 / 255, blue: 255 / 255),
-          MoruPilotColor.canvas,
+          MoruColor.canvas,
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -227,7 +227,7 @@ struct RoutineFinishedView: View {
             LinearGradient(
               colors: [
                 AppColor.orange150,
-                MoruPilotColor.accent,
+                MoruColor.accent,
               ],
               startPoint: .leading,
               endPoint: .trailing
@@ -343,13 +343,13 @@ struct RoutineFinishedView: View {
 
   private var cardBackground: some View {
     RoundedRectangle(
-      cornerRadius: MoruPilotRadius.largeCard,
+      cornerRadius: MoruRadius.largeCard,
       style: .continuous
     )
     .fill(AppColor.grayWhite.opacity(0.2))
     .overlay {
       RoundedRectangle(
-        cornerRadius: MoruPilotRadius.largeCard,
+        cornerRadius: MoruRadius.largeCard,
         style: .continuous
       )
       .stroke(
@@ -366,7 +366,7 @@ struct RoutineFinishedView: View {
       )
     }
     .shadow(
-      color: MoruPilotColor.shadow,
+      color: MoruColor.shadow,
       radius: 7.5
     )
   }

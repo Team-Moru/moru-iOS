@@ -425,7 +425,7 @@ struct TodayRoutineRecordView: View {
             Circle()
                 .stroke(
                     isCompleted
-                        ? MoruPilotColor.link
+                        ? MoruColor.link
                         : AppColor.gray250,
                     lineWidth: 1.2
                 )
@@ -444,7 +444,7 @@ struct TodayRoutineRecordView: View {
             )
             .foregroundStyle(
                 isCompleted
-                    ? MoruPilotColor.link
+                    ? MoruColor.link
                     : AppColor.gray300
             )
         }

@@ -143,7 +143,7 @@ private struct MoruIconsPreviewHost: View {
 
       Text(title)
         .font(AppFont.caption1Medium)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .lineLimit(1)
     }
   }

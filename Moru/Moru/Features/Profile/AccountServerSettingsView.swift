@@ -11,7 +11,7 @@ struct AccountServerSettingsSummaryView: View {
   let onOpenVoiceSelection: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       accountRow(
         title: "계정 닉네임",
         detail: profileDetail,
@@ -45,7 +45,7 @@ struct AccountServerSettingsSummaryView: View {
           }
         }
         .buttonStyle(.bordered)
-        .tint(MoruPilotColor.accent)
+        .tint(MoruColor.accent)
         .accessibilityIdentifier("profile.account.server-retry")
       }
     }
@@ -170,29 +170,29 @@ struct AccountServerSettingsSummaryView: View {
     detail: String,
     systemImage: String
   ) -> some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
+    HStack(spacing: MoruSpacing.twelve) {
       Image(systemName: systemImage)
         .font(.system(size: 18, weight: .semibold))
-        .foregroundStyle(MoruPilotColor.accent)
+        .foregroundStyle(MoruColor.accent)
         .frame(width: 30)
         .accessibilityHidden(true)
 
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      VStack(alignment: .leading, spacing: MoruSpacing.four) {
         Text(title)
           .moruTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
         Text(detail)
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
 
-      Spacer(minLength: MoruPilotSpacing.eight)
+      Spacer(minLength: MoruSpacing.eight)
     }
-    .padding(.horizontal, MoruPilotSpacing.sixteen)
-    .padding(.vertical, MoruPilotSpacing.twelve)
+    .padding(.horizontal, MoruSpacing.sixteen)
+    .padding(.vertical, MoruSpacing.twelve)
     .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
     .accessibilityElement(children: .combine)
   }
 }
@@ -206,7 +206,7 @@ struct AccountServerVoiceSelectionView: View {
   var body: some View {
     NavigationStack {
       ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+        VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
           Text(
             "서버에 동기화된 루틴의 첫 안내 음성을 만들 때 "
               + "쓰는 선택입니다. 선택한 서버 음성의 루틴 시작·완료·알림 "
@@ -214,7 +214,7 @@ struct AccountServerVoiceSelectionView: View {
               + "준비된 음성은 공통 샘플로 미리 들을 수 있습니다."
           )
           .moruTextStyle(.b4)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
 
           if viewModel.voicePreparationState != .idle {
@@ -223,7 +223,7 @@ struct AccountServerVoiceSelectionView: View {
               systemImage: preparationStatusImage
             )
             .moruTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
             .accessibilityIdentifier(
               "profile.account.server-voice.preparation-status"
             )
@@ -247,9 +247,9 @@ struct AccountServerVoiceSelectionView: View {
               .accessibilityIdentifier("profile.account.server-voice.error")
           }
         }
-        .padding(MoruPilotSpacing.twenty)
+        .padding(MoruSpacing.twenty)
       }
-      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .background(MoruColor.canvas.ignoresSafeArea())
       .navigationTitle("서버 생성 음성")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -295,7 +295,7 @@ struct AccountServerVoiceSelectionView: View {
   @ViewBuilder
   private var voiceContent: some View {
     if let voices = viewModel.voiceState.value, !voices.isEmpty {
-      LazyVStack(spacing: MoruPilotSpacing.eight) {
+      LazyVStack(spacing: MoruSpacing.eight) {
         ForEach(voices, id: \.ttsID) { voice in
           voiceButton(voice)
         }
@@ -303,7 +303,7 @@ struct AccountServerVoiceSelectionView: View {
     } else {
       Text(voiceEmptyMessage)
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .frame(maxWidth: .infinity, minHeight: 120)
     }
   }
@@ -311,22 +311,22 @@ struct AccountServerVoiceSelectionView: View {
   private func voiceButton(_ voice: ServerTTSVoice) -> some View {
     let isSelected = viewModel.selectedTTSID == voice.ttsID
 
-    return VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-      HStack(spacing: MoruPilotSpacing.twelve) {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
-          HStack(spacing: MoruPilotSpacing.eight) {
+    return VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
+      HStack(spacing: MoruSpacing.twelve) {
+        VStack(alignment: .leading, spacing: MoruSpacing.four) {
+          HStack(spacing: MoruSpacing.eight) {
             Text(voice.displayName)
               .moruTextStyle(.b4.weight(.semiBold))
-              .foregroundStyle(MoruPilotColor.textStrong)
+              .foregroundStyle(MoruColor.textStrong)
           }
 
           Text(voice.description)
             .moruTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
         }
 
-        Spacer(minLength: MoruPilotSpacing.eight)
+        Spacer(minLength: MoruSpacing.eight)
 
         if viewModel.updatingTTSID == voice.ttsID {
           ProgressView()
@@ -334,26 +334,26 @@ struct AccountServerVoiceSelectionView: View {
         } else {
           Image(systemName: selectionImage(isSelected))
             .foregroundStyle(
-              isSelected ? MoruPilotColor.accent : MoruPilotColor.textTertiary
+              isSelected ? MoruColor.accent : MoruColor.textTertiary
             )
             .accessibilityHidden(true)
         }
       }
 
       ViewThatFits(in: .horizontal) {
-        HStack(spacing: MoruPilotSpacing.eight) {
+        HStack(spacing: MoruSpacing.eight) {
           selectionButton(voice, isSelected: isSelected)
           previewButton(voice)
         }
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+        VStack(alignment: .leading, spacing: MoruSpacing.eight) {
           selectionButton(voice, isSelected: isSelected)
           previewButton(voice)
         }
       }
     }
-    .padding(MoruPilotSpacing.sixteen)
+    .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("profile.account.server-voice.\(voice.ttsID)")
   }
@@ -369,7 +369,7 @@ struct AccountServerVoiceSelectionView: View {
       }
     }
     .buttonStyle(.borderedProminent)
-    .tint(MoruPilotColor.accent)
+    .tint(MoruColor.accent)
     .disabled(viewModel.isUpdatingVoice || isSelected)
     .accessibilityLabel(
       "\(voice.displayName) 서버 생성 음성"
@@ -382,7 +382,7 @@ struct AccountServerVoiceSelectionView: View {
       previewPlayer.togglePreview(voice, memberID: memberID)
     }
     .buttonStyle(.bordered)
-    .tint(MoruPilotColor.accent)
+    .tint(MoruColor.accent)
     .disabled(
       viewModel.isUpdatingVoice
         || !previewPlayer.isPreviewAvailable(for: voice)

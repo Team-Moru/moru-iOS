@@ -247,7 +247,7 @@ struct AccountEntryView: View {
 
             Spacer(minLength: 24)
 
-            VStack(spacing: MoruPilotSpacing.sixteen) {
+            VStack(spacing: MoruSpacing.sixteen) {
               if viewModel.status != .idle {
                 statusView
                   .accessibilitySortPriority(6)
@@ -262,7 +262,7 @@ struct AccountEntryView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilitySortPriority(1)
             }
-            .padding(.horizontal, MoruPilotSpacing.twenty)
+            .padding(.horizontal, MoruSpacing.twenty)
             .padding(.bottom, max(56, proxy.safeAreaInsets.bottom + 48))
           }
           .frame(maxWidth: .infinity, minHeight: proxy.size.height)
@@ -279,7 +279,7 @@ struct AccountEntryView: View {
   }
 
   private var brand: some View {
-    VStack(spacing: MoruPilotSpacing.sixteen) {
+    VStack(spacing: MoruSpacing.sixteen) {
       Image(AppImage.moruLoginLogo)
         .resizable()
         .scaledToFit()
@@ -317,39 +317,39 @@ struct AccountEntryView: View {
   }
 
   private var header: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Text(copy.title)
         .font(AppFont.pretendardBold(size: 28, relativeTo: .title))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier(AccountEntryAccessibility.titleIdentifier)
 
       Text(copy.subtitle)
         .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
   }
 
   private var localFirstCard: some View {
-    HStack(alignment: .top, spacing: MoruPilotSpacing.twelve) {
+    HStack(alignment: .top, spacing: MoruSpacing.twelve) {
       Image(systemName: "iphone.gen3")
         .font(.system(size: 20, weight: .semibold))
-        .foregroundStyle(MoruPilotColor.accent)
+        .foregroundStyle(MoruColor.accent)
         .accessibilityHidden(true)
 
       Text(copy.localFirstGuidance)
         .font(AppFont.pretendardMedium(size: 14, relativeTo: .callout))
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .foregroundStyle(MoruColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
     }
-    .padding(MoruPilotSpacing.sixteen)
+    .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(AppColor.grayWhite.opacity(0.9))
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
     .overlay {
-      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-        .stroke(MoruPilotColor.border, lineWidth: 1)
+      RoundedRectangle(cornerRadius: MoruRadius.card)
+        .stroke(MoruColor.border, lineWidth: 1)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("로컬 우선 안내")
@@ -358,10 +358,10 @@ struct AccountEntryView: View {
   }
 
   private var statusView: some View {
-    HStack(alignment: .top, spacing: MoruPilotSpacing.ten) {
+    HStack(alignment: .top, spacing: MoruSpacing.ten) {
       if viewModel.status == .loading {
         ProgressView()
-          .tint(MoruPilotColor.accent)
+          .tint(MoruColor.accent)
           .accessibilityHidden(true)
       } else {
         Image(systemName: statusSymbolName)
@@ -371,20 +371,20 @@ struct AccountEntryView: View {
 
       Text(statusMessage)
         .font(AppFont.pretendardMedium(size: 14, relativeTo: .callout))
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .foregroundStyle(MoruColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
     }
-    .padding(MoruPilotSpacing.twelve)
+    .padding(MoruSpacing.twelve)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(statusBackgroundColor)
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
+    .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.twelve))
     .accessibilityElement(children: .combine)
     .accessibilityLabel(statusMessage)
     .accessibilityIdentifier(AccountEntryAccessibility.statusIdentifier)
   }
 
   private var providerButtons: some View {
-    HStack(spacing: MoruPilotSpacing.twenty) {
+    HStack(spacing: MoruSpacing.twenty) {
       googleButton
       kakaoButton
       appleButton
@@ -501,14 +501,14 @@ struct AccountEntryView: View {
   }
 
   private var policyLinks: some View {
-    VStack(spacing: MoruPilotSpacing.eight) {
+    VStack(spacing: MoruSpacing.eight) {
       Text("계속하면 아래 정책을 확인한 것으로 간주됩니다.")
         .font(AppFont.pretendardMedium(size: 12, relativeTo: .caption))
-        .foregroundStyle(MoruPilotColor.textTertiary)
+        .foregroundStyle(MoruColor.textTertiary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
 
-      HStack(spacing: MoruPilotSpacing.sixteen) {
+      HStack(spacing: MoruSpacing.sixteen) {
         policyLink(
           title: "MORU 홈",
           url: policyConfiguration.mainURL,
@@ -522,7 +522,7 @@ struct AccountEntryView: View {
         )
       }
 
-      HStack(spacing: MoruPilotSpacing.sixteen) {
+      HStack(spacing: MoruSpacing.sixteen) {
         policyLink(
           title: "이용약관",
           url: policyConfiguration.termsOfServiceURL,
@@ -542,7 +542,7 @@ struct AccountEntryView: View {
             + "링크를 열 수 없어요."
         )
           .font(AppFont.pretendardMedium(size: 12, relativeTo: .caption))
-          .foregroundStyle(MoruPilotColor.textTertiary)
+          .foregroundStyle(MoruColor.textTertiary)
           .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -559,13 +559,13 @@ struct AccountEntryView: View {
     if let url {
       Link(title, destination: url)
         .font(AppFont.pretendardSemiBold(size: 12, relativeTo: .caption))
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .foregroundStyle(MoruColor.textPrimary)
         .accessibilityHint("Safari에서 엽니다.")
         .accessibilityIdentifier(identifier)
     } else {
       Button(title) {}
         .font(AppFont.pretendardSemiBold(size: 12, relativeTo: .caption))
-        .foregroundStyle(MoruPilotColor.textTertiary)
+        .foregroundStyle(MoruColor.textTertiary)
         .disabled(true)
         .accessibilityHint("공개 URL이 구성되지 않아 열 수 없습니다.")
         .accessibilityIdentifier(identifier)
@@ -575,7 +575,7 @@ struct AccountEntryView: View {
   private func providerConfigurationMessage(_ message: String) -> some View {
     Text(message)
       .font(AppFont.pretendardMedium(size: 12, relativeTo: .caption))
-      .foregroundStyle(MoruPilotColor.textTertiary)
+      .foregroundStyle(MoruColor.textTertiary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
@@ -610,7 +610,7 @@ struct AccountEntryView: View {
 
   private var statusForegroundColor: Color {
     viewModel.status == .cancelled
-      ? MoruPilotColor.textSecondary
+      ? MoruColor.textSecondary
       : AppColor.coral300
   }
 

@@ -41,19 +41,19 @@ struct RoutineSettingView: View {
           if let errorMessage = viewModel.state.errorMessage,
              viewModel.state.routines.isEmpty {
             routineErrorState(message: errorMessage)
-              .padding(.top, MoruPilotSpacing.thirtyTwo)
+              .padding(.top, MoruSpacing.thirtyTwo)
           } else if viewModel.state.routines.isEmpty {
             emptyRoutineState
-              .padding(.top, MoruPilotSpacing.thirtyTwo)
+              .padding(.top, MoruSpacing.thirtyTwo)
           } else {
             activeRoutineSection
-              .padding(.top, MoruPilotSpacing.thirtyTwo)
+              .padding(.top, MoruSpacing.thirtyTwo)
 
             inactiveRoutineSection
               .padding(.top, AppSpacing.forty)
 
             addRoutineButton
-              .padding(.top, MoruPilotSpacing.sixteen)
+              .padding(.top, MoruSpacing.sixteen)
           }
 
           if let errorMessage = viewModel.state.errorMessage,
@@ -62,12 +62,12 @@ struct RoutineSettingView: View {
               .padding(.top, AppSpacing.sm)
           }
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.twenty)
-        .padding(.bottom, MoruPilotSpacing.thirtySix)
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.twenty)
+        .padding(.bottom, MoruSpacing.thirtySix)
       }
       .defaultScrollAnchor(.top)
-      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .background(MoruColor.canvas.ignoresSafeArea())
       .navigationBarTitleDisplayMode(.inline)
     }
     .accessibilityElement(children: .contain)
@@ -145,15 +145,15 @@ struct RoutineSettingView: View {
     VStack(spacing: AppSpacing.md) {
       Image(systemName: "checklist")
         .font(AppFont.title1SemiBold)
-        .foregroundStyle(MoruPilotColor.accentSoft)
+        .foregroundStyle(MoruColor.accentSoft)
 
       Text("아직 만든 루틴이 없어요.")
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
 
       Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
         .moruTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .multilineTextAlignment(.center)
 
       MoruButton(
@@ -173,18 +173,18 @@ struct RoutineSettingView: View {
     VStack(spacing: AppSpacing.md) {
       Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
         .font(AppFont.title1SemiBold)
-        .foregroundStyle(MoruPilotColor.accentSoft)
+        .foregroundStyle(MoruColor.accentSoft)
         .accessibilityHidden(true)
 
       Text(message)
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
 
       Text("잠시 후 다시 시도해 주세요.")
         .moruTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
 
@@ -199,7 +199,7 @@ struct RoutineSettingView: View {
   }
 
   private func retainedRoutineErrorState(message: String) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Text(message)
         .moruTextStyle(.c1)
         .foregroundStyle(AppColor.orange500)
@@ -209,7 +209,7 @@ struct RoutineSettingView: View {
         viewModel.load()
       }
       .moruTextStyle(.c1.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.accent)
+      .foregroundStyle(MoruColor.accent)
       .buttonStyle(.plain)
       .accessibilityHint("루틴 목록을 다시 불러옵니다.")
     }
@@ -228,9 +228,9 @@ struct RoutineSettingView: View {
 
       if routines.isEmpty {
         emptySectionCard(title: emptyTitle)
-          .padding(.top, MoruPilotSpacing.sixteen)
+          .padding(.top, MoruSpacing.sixteen)
       } else {
-        VStack(spacing: MoruPilotSpacing.sixteen) {
+        VStack(spacing: MoruSpacing.sixteen) {
           ForEach(routines) { routine in
             RoutineSettingCard(
               routine: routine,
@@ -246,7 +246,7 @@ struct RoutineSettingView: View {
             )
           }
         }
-        .padding(.top, MoruPilotSpacing.sixteen)
+        .padding(.top, MoruSpacing.sixteen)
       }
     }
   }
@@ -276,14 +276,14 @@ struct RoutineSettingView: View {
     VStack(spacing: AppSpacing.md) {
       Text(title)
         .moruTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .frame(maxWidth: .infinity)
     .frame(minHeight: 76)
     .padding(.vertical, AppSpacing.sm)
     .background(AppColor.grayWhite.opacity(0.35))
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-    .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
+    .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
   }
 
   private func activationBinding(for routine: RoutineSettingItemState) -> Binding<Bool> {

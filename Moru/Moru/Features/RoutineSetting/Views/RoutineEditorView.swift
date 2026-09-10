@@ -66,25 +66,25 @@ struct RoutineEditorView: View {
             .padding(.top, dynamicTypeSize.isAccessibilitySize ? 28 : 20)
 
           alarmSection
-            .padding(.top, MoruPilotSpacing.thirtySix)
+            .padding(.top, MoruSpacing.thirtySix)
 
           stepSection
-            .padding(.top, MoruPilotSpacing.thirtySix)
+            .padding(.top, MoruSpacing.thirtySix)
 
           if let saveErrorMessage {
             Text(saveErrorMessage)
               .moruTextStyle(.c1)
-              .foregroundStyle(MoruPilotColor.accent)
+              .foregroundStyle(MoruColor.accent)
               .fixedSize(horizontal: false, vertical: true)
-              .padding(.top, MoruPilotSpacing.sixteen)
+              .padding(.top, MoruSpacing.sixteen)
           }
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.eight)
         .padding(.bottom, 112)
       }
       .defaultScrollAnchor(.top)
-      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .background(MoruColor.canvas.ignoresSafeArea())
       .toolbar(.hidden, for: .navigationBar)
       .safeAreaInset(edge: .bottom) {
         VStack(spacing: AppSpacing.none) {
@@ -112,17 +112,17 @@ struct RoutineEditorView: View {
               .frame(maxWidth: .infinity)
               .frame(minHeight: 54)
               .background(
-                draft.canSave ? MoruPilotColor.ctaFill : MoruPilotColor.disabled
+                draft.canSave ? MoruColor.ctaFill : MoruColor.disabled
               )
-              .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
+              .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
           }
           .disabled(!draft.canSave)
           .buttonStyle(.plain)
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.eight)
-        .padding(.bottom, MoruPilotSpacing.eight)
-        .background(MoruPilotColor.canvas.opacity(0.94))
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.eight)
+        .padding(.bottom, MoruSpacing.eight)
+        .background(MoruColor.canvas.opacity(0.94))
       }
       .sheet(isPresented: $isStepAddSheetPresented) {
         RoutineStepAddSheet { step in
@@ -175,7 +175,7 @@ struct RoutineEditorView: View {
   private var editorHeader: some View {
     Group {
       if dynamicTypeSize.isAccessibilitySize {
-        VStack(spacing: MoruPilotSpacing.eight) {
+        VStack(spacing: MoruSpacing.eight) {
           HStack {
             backButton
             Spacer()
@@ -202,7 +202,7 @@ struct RoutineEditorView: View {
   private var editorTitle: some View {
     Text(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
       .moruTextStyle(.b3.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textStrong)
+      .foregroundStyle(MoruColor.textStrong)
       .frame(maxWidth: .infinity)
       .fixedSize(horizontal: false, vertical: true)
       .accessibilityAddTraits(.isHeader)
@@ -214,7 +214,7 @@ struct RoutineEditorView: View {
     } label: {
       Text("뒤로")
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .frame(minWidth: 44, minHeight: 44, alignment: .leading)
     }
     .buttonStyle(.plain)
@@ -226,7 +226,7 @@ struct RoutineEditorView: View {
     } label: {
       Text("삭제")
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
     }
     .opacity(draft.routineID == nil ? 0 : 1)
@@ -236,10 +236,10 @@ struct RoutineEditorView: View {
   }
 
   private var titleSection: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       sectionTitle("루틴")
 
-      VStack(spacing: MoruPilotSpacing.eight) {
+      VStack(spacing: MoruSpacing.eight) {
         editorInputRow(text: $draft.title, placeholder: "루틴 이름")
         editorInputRow(text: $draft.summary, placeholder: "루틴 설명")
       }
@@ -247,7 +247,7 @@ struct RoutineEditorView: View {
   }
 
   private var alarmSection: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       sectionTitle("루틴 알림")
 
       Button {
@@ -255,17 +255,17 @@ struct RoutineEditorView: View {
           isScheduleExpanded.toggle()
         }
       } label: {
-        HStack(spacing: MoruPilotSpacing.sixteen) {
+        HStack(spacing: MoruSpacing.sixteen) {
           Text(alarmTitle)
             .moruTextStyle(.b4)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
 
           Spacer(minLength: 0)
 
           MoruChevron(
-            color: MoruPilotColor.textPrimary,
+            color: MoruColor.textPrimary,
             direction: .down
           )
           .rotationEffect(isScheduleExpanded ? .degrees(180) : .zero)
@@ -282,26 +282,26 @@ struct RoutineEditorView: View {
           minute: $draft.minute,
           selectedWeekdays: $draft.selectedWeekdays
         )
-        .padding(.top, MoruPilotSpacing.four)
+        .padding(.top, MoruSpacing.four)
       }
     }
   }
 
   private var stepSection: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-      HStack(alignment: .firstTextBaseline, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
+      HStack(alignment: .firstTextBaseline, spacing: MoruSpacing.twelve) {
         sectionTitle("루틴 항목")
 
         Text("\(draft.steps.count)개 - 총 \(totalMinutes)분")
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textTertiary)
+          .foregroundStyle(MoruColor.textTertiary)
           .fixedSize(horizontal: false, vertical: true)
 
         Spacer()
       }
 
       ZStack {
-        VStack(spacing: MoruPilotSpacing.ten) {
+        VStack(spacing: MoruSpacing.ten) {
           ForEach($draft.steps) { $step in
             let stepID = step.id
             let order = stepOrder(for: stepID)
@@ -352,7 +352,7 @@ struct RoutineEditorView: View {
             y: dragStartFrame.midY + dragTranslation
           )
           .shadow(
-            color: MoruPilotColor.shadow.opacity(0.7),
+            color: MoruColor.shadow.opacity(0.7),
             radius: 14,
             x: 0,
             y: 4
@@ -373,24 +373,24 @@ struct RoutineEditorView: View {
     Button {
       isStepAddSheetPresented = true
     } label: {
-      HStack(spacing: MoruPilotSpacing.eight) {
+      HStack(spacing: MoruSpacing.eight) {
         MoruRoutineStepControlIcon(style: .plus)
           .frame(width: 18, height: 18)
 
         Text(RoutineManagementCopy.addStep)
           .moruTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textTertiary)
+          .foregroundStyle(MoruColor.textTertiary)
           .fixedSize(horizontal: false, vertical: true)
       }
       .frame(maxWidth: .infinity)
       .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 88 : 62)
       .background(AppColor.grayWhite)
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
       .overlay(
-        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-          .stroke(MoruPilotColor.border, lineWidth: 1)
+        RoundedRectangle(cornerRadius: MoruRadius.card)
+          .stroke(MoruColor.border, lineWidth: 1)
       )
-      .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+      .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
     }
     .buttonStyle(.plain)
   }
@@ -479,7 +479,7 @@ struct RoutineEditorView: View {
   private func sectionTitle(_ title: String) -> some View {
     Text(title)
       .moruTextStyle(.b4.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textPrimary)
+      .foregroundStyle(MoruColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
@@ -489,21 +489,21 @@ struct RoutineEditorView: View {
   ) -> some View {
     TextField(placeholder, text: text, axis: .vertical)
       .moruTextStyle(.b4)
-      .foregroundStyle(MoruPilotColor.textStrong)
-      .tint(MoruPilotColor.accent)
+      .foregroundStyle(MoruColor.textStrong)
+      .tint(MoruColor.accent)
       .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-      .padding(.horizontal, MoruPilotSpacing.sixteen)
-      .padding(.vertical, MoruPilotSpacing.twelve)
+      .padding(.horizontal, MoruSpacing.sixteen)
+      .padding(.vertical, MoruSpacing.twelve)
       .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 72 : 48)
       .background(inputBackground)
   }
 
   private var inputBackground: some View {
-    RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+    RoundedRectangle(cornerRadius: MoruRadius.card)
       .fill(AppColor.grayWhite.opacity(0.4))
       .overlay(
-        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-          .stroke(MoruPilotColor.border, lineWidth: 1)
+        RoundedRectangle(cornerRadius: MoruRadius.card)
+          .stroke(MoruColor.border, lineWidth: 1)
       )
   }
 

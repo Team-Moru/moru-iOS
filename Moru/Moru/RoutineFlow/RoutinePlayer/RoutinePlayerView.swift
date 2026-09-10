@@ -435,10 +435,10 @@ struct RoutinePlayerView: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(MoruPilotColor.progressTrack)
+                        .fill(MoruColor.progressTrack)
 
                     Capsule()
-                        .fill(MoruPilotColor.accent)
+                        .fill(MoruColor.accent)
                         .frame(
                             width: geometry.size.width
                               * min(max(viewModel.progressValue, 0), 1)

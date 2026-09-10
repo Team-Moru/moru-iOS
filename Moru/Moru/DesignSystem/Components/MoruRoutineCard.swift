@@ -40,14 +40,14 @@ struct MoruRoutineCard: View {
   var body: some View {
     Group {
       if isAddCard {
-        HStack(spacing: MoruPilotSpacing.ten) {
+        HStack(spacing: MoruSpacing.ten) {
           Spacer(minLength: 0)
 
           addIcon
 
           Text(title)
             .moruTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.disabled)
+            .foregroundStyle(MoruColor.disabled)
             .fixedSize(horizontal: false, vertical: true)
 
           Spacer(minLength: 0)
@@ -56,12 +56,12 @@ struct MoruRoutineCard: View {
         routineCardContent
       }
     }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.twenty)
     .padding(.vertical, AppSpacing.md)
     .frame(maxWidth: .infinity)
     .frame(minHeight: minimumHeight)
     .background {
-      RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+      RoundedRectangle(cornerRadius: MoruRadius.largeCard)
         .fill(backgroundColor)
         .shadow(
           color: shadowColor,
@@ -75,25 +75,25 @@ struct MoruRoutineCard: View {
   @ViewBuilder
   private var routineCardContent: some View {
     if dynamicTypeSize.isAccessibilitySize {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-        HStack(alignment: .top, spacing: MoruPilotSpacing.ten) {
+      VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
+        HStack(alignment: .top, spacing: MoruSpacing.ten) {
           MoruRoutineNoteIcon(isActive: isActive)
           routineLabels
         }
 
-        HStack(spacing: MoruPilotSpacing.four) {
+        HStack(spacing: MoruSpacing.four) {
           Spacer(minLength: 0)
           MoruToggle(isOn: $isActive)
-          MoruChevron(color: MoruPilotColor.textSecondary)
+          MoruChevron(color: MoruColor.textSecondary)
         }
       }
     } else {
-      HStack(spacing: MoruPilotSpacing.ten) {
+      HStack(spacing: MoruSpacing.ten) {
         MoruRoutineNoteIcon(isActive: isActive)
         routineLabels
         Spacer()
         MoruToggle(isOn: $isActive)
-        MoruChevron(color: MoruPilotColor.textSecondary)
+        MoruChevron(color: MoruColor.textSecondary)
       }
     }
   }
@@ -102,7 +102,7 @@ struct MoruRoutineCard: View {
     VStack(alignment: .leading, spacing: AppSpacing.xxs) {
       Text(title)
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .fixedSize(horizontal: false, vertical: true)
 
       Text(description)
@@ -116,13 +116,13 @@ struct MoruRoutineCard: View {
     Image(systemName: "plus")
       .resizable()
       .scaledToFit()
-      .foregroundStyle(MoruPilotColor.disabled)
+      .foregroundStyle(MoruColor.disabled)
       .frame(width: 18, height: 18)
   }
 
   private var backgroundColor: Color {
     if isActive && !isAddCard {
-      return MoruPilotColor.accentTint
+      return MoruColor.accentTint
     }
 
     return AppColor.grayWhite.opacity(0.2)
@@ -133,7 +133,7 @@ struct MoruRoutineCard: View {
       return Color.clear
     }
 
-    return MoruPilotColor.shadow
+    return MoruColor.shadow
   }
 
   private var shadowRadius: CGFloat {
@@ -141,7 +141,7 @@ struct MoruRoutineCard: View {
   }
 
   private var routineDescriptionColor: Color {
-    isActive ? MoruPilotColor.textTertiary : AppColor.gray200
+    isActive ? MoruColor.textTertiary : AppColor.gray200
   }
 
   private var minimumHeight: CGFloat {

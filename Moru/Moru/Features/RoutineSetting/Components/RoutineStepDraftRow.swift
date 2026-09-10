@@ -15,23 +15,23 @@ struct RoutineStepDraftRow: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    HStack(alignment: .center, spacing: MoruPilotSpacing.twelve) {
+    HStack(alignment: .center, spacing: MoruSpacing.twelve) {
       Text("\(order)")
         .moruTextStyle(.c2)
         .foregroundStyle(AppColor.grayWhite)
         .frame(width: 24, height: 24)
-        .background(MoruPilotColor.accentSoft)
+        .background(MoruColor.accentSoft)
         .clipShape(Circle())
 
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      VStack(alignment: .leading, spacing: MoruSpacing.four) {
         TextField("예) 물 한 잔 마시기", text: $step.title, axis: .vertical)
           .moruTextStyle(.c1.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
 
         Text("\(step.type.routineSettingTitle) - \(step.estimatedMinutes)분")
           .moruTextStyle(.c2)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -41,23 +41,23 @@ struct RoutineStepDraftRow: View {
           .resizable()
           .scaledToFit()
           .frame(width: 22, height: 22)
-          .foregroundStyle(MoruPilotColor.accent)
+          .foregroundStyle(MoruColor.accent)
           .frame(minWidth: 44, minHeight: 44)
       }
       .buttonStyle(.plain)
       .accessibilityLabel("\(step.title) 항목 삭제")
     }
-    .padding(.leading, MoruPilotSpacing.sixteen)
-    .padding(.trailing, MoruPilotSpacing.eight)
-    .padding(.vertical, MoruPilotSpacing.eight)
+    .padding(.leading, MoruSpacing.sixteen)
+    .padding(.trailing, MoruSpacing.eight)
+    .padding(.vertical, MoruSpacing.eight)
     .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 62)
     .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
     .overlay(
-      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-        .stroke(MoruPilotColor.border, lineWidth: 1)
+      RoundedRectangle(cornerRadius: MoruRadius.card)
+        .stroke(MoruColor.border, lineWidth: 1)
     )
-    .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+    .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
     .contentShape(Rectangle())
     .onTapGesture {
       onTapCard()

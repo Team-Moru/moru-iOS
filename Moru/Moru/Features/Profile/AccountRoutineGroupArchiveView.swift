@@ -15,13 +15,13 @@ struct AccountRoutineGroupListView: View {
 
   var body: some View {
     ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+      VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
         readOnlyBanner
         content
       }
-      .padding(MoruPilotSpacing.twenty)
+      .padding(MoruSpacing.twenty)
     }
-    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .background(MoruColor.canvas.ignoresSafeArea())
     .navigationTitle("서버 루틴 보관함")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar(.visible, for: .navigationBar)
@@ -53,11 +53,11 @@ struct AccountRoutineGroupListView: View {
       systemImage: "lock.fill"
     )
     .moruTextStyle(.c1)
-    .foregroundStyle(MoruPilotColor.textSecondary)
+    .foregroundStyle(MoruColor.textSecondary)
     .fixedSize(horizontal: false, vertical: true)
-    .padding(MoruPilotSpacing.sixteen)
+    .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
     .accessibilityIdentifier(
       "profile.account.routine-archive.read-only"
     )
@@ -95,11 +95,11 @@ struct AccountRoutineGroupListView: View {
   }
 
   private var loadingView: some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
+    HStack(spacing: MoruSpacing.twelve) {
       ProgressView()
       Text("서버 루틴을 불러오고 있어요.")
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .frame(maxWidth: .infinity, minHeight: 120)
     .accessibilityElement(children: .combine)
@@ -109,11 +109,11 @@ struct AccountRoutineGroupListView: View {
     _ summaries: [ServerRoutineGroupSummary],
     notice: String? = nil
   ) -> some View {
-    LazyVStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    LazyVStack(alignment: .leading, spacing: MoruSpacing.eight) {
       if let notice {
         Text(notice)
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
 
@@ -134,7 +134,7 @@ struct AccountRoutineGroupListView: View {
   }
 
   private var failureView: some View {
-    VStack(spacing: MoruPilotSpacing.twelve) {
+    VStack(spacing: MoruSpacing.twelve) {
       messageView(
         viewModel.failureMessage ?? "서버 루틴을 불러오지 못했어요."
       )
@@ -150,7 +150,7 @@ struct AccountRoutineGroupListView: View {
       }
     }
     .buttonStyle(.bordered)
-    .tint(MoruPilotColor.accent)
+    .tint(MoruColor.accent)
     .accessibilityIdentifier(
       "profile.account.routine-archive.retry"
     )
@@ -159,7 +159,7 @@ struct AccountRoutineGroupListView: View {
   private func messageView(_ message: String) -> some View {
     Text(message)
       .moruTextStyle(.b4)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
       .multilineTextAlignment(.center)
       .fixedSize(horizontal: false, vertical: true)
       .frame(maxWidth: .infinity, minHeight: 120)
@@ -177,36 +177,36 @@ private struct AccountRoutineGroupSummaryRow: View {
   let summary: ServerRoutineGroupSummary
 
   var body: some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
+    HStack(spacing: MoruSpacing.twelve) {
       Image(systemName: "archivebox.fill")
         .font(.system(size: 18, weight: .semibold))
-        .foregroundStyle(MoruPilotColor.accent)
+        .foregroundStyle(MoruColor.accent)
         .frame(width: 30)
         .accessibilityHidden(true)
 
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      VStack(alignment: .leading, spacing: MoruSpacing.four) {
         Text(summary.title ?? "제목 확인 불가")
           .moruTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
           .fixedSize(horizontal: false, vertical: true)
 
         Text(statusText)
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
 
         Text(metadataText)
           .moruTextStyle(.c2)
-          .foregroundStyle(MoruPilotColor.textTertiary)
+          .foregroundStyle(MoruColor.textTertiary)
           .fixedSize(horizontal: false, vertical: true)
       }
 
-      Spacer(minLength: MoruPilotSpacing.eight)
-      MoruChevron(color: MoruPilotColor.textPrimary)
+      Spacer(minLength: MoruSpacing.eight)
+      MoruChevron(color: MoruColor.textPrimary)
     }
-    .padding(MoruPilotSpacing.sixteen)
+    .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
     .accessibilityElement(children: .combine)
   }
 
@@ -242,13 +242,13 @@ struct AccountRoutineGroupDetailView: View {
 
   var body: some View {
     ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+      VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
         readOnlyBanner
         content
       }
-      .padding(MoruPilotSpacing.twenty)
+      .padding(MoruSpacing.twenty)
     }
-    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .background(MoruColor.canvas.ignoresSafeArea())
     .navigationTitle("서버 루틴 상세")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar(.visible, for: .navigationBar)
@@ -289,11 +289,11 @@ struct AccountRoutineGroupDetailView: View {
       systemImage: "lock.fill"
     )
     .moruTextStyle(.c1)
-    .foregroundStyle(MoruPilotColor.textSecondary)
+    .foregroundStyle(MoruColor.textSecondary)
     .fixedSize(horizontal: false, vertical: true)
-    .padding(MoruPilotSpacing.sixteen)
+    .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
   }
 
   @ViewBuilder
@@ -328,11 +328,11 @@ struct AccountRoutineGroupDetailView: View {
   }
 
   private var loadingView: some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
+    HStack(spacing: MoruSpacing.twelve) {
       ProgressView()
       Text("서버 루틴 상세를 불러오고 있어요.")
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .frame(maxWidth: .infinity, minHeight: 120)
     .accessibilityElement(children: .combine)
@@ -342,27 +342,27 @@ struct AccountRoutineGroupDetailView: View {
     _ detail: ServerRoutineGroupDetail,
     notice: String? = nil
   ) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+    VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
       if let notice {
         Text(notice)
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
 
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      VStack(alignment: .leading, spacing: MoruSpacing.eight) {
         Text(detail.title ?? "제목 확인 불가")
           .moruTextStyle(.b2.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
           .fixedSize(horizontal: false, vertical: true)
         Text(detail.description ?? "설명 확인 불가")
           .moruTextStyle(.b4)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
       .accountRoutineGroupSurface()
 
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      VStack(alignment: .leading, spacing: MoruSpacing.eight) {
         AccountRoutineGroupMetadataRow(
           title: "알람 요일 원문",
           value: detail.alarmDaysRaw ?? "설정 없음"
@@ -388,10 +388,10 @@ struct AccountRoutineGroupDetailView: View {
   private func routineSection(
     _ routines: [ServerRoutineItem]?
   ) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Text("루틴")
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
 
       switch routines {
       case nil:
@@ -407,7 +407,7 @@ struct AccountRoutineGroupDetailView: View {
   }
 
   private var failureView: some View {
-    VStack(spacing: MoruPilotSpacing.twelve) {
+    VStack(spacing: MoruSpacing.twelve) {
       messageView(
         viewModel.failureMessage ?? "서버 루틴 상세를 불러오지 못했어요."
       )
@@ -426,13 +426,13 @@ struct AccountRoutineGroupDetailView: View {
       }
     }
     .buttonStyle(.bordered)
-    .tint(MoruPilotColor.accent)
+    .tint(MoruColor.accent)
   }
 
   private func messageView(_ message: String) -> some View {
     Text(message)
       .moruTextStyle(.b4)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
       .frame(maxWidth: .infinity, minHeight: 80)
   }
@@ -455,13 +455,13 @@ private struct AccountRoutineGroupMetadataRow: View {
   let value: String
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+    VStack(alignment: .leading, spacing: MoruSpacing.four) {
       Text(title)
         .moruTextStyle(.c2.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textTertiary)
+        .foregroundStyle(MoruColor.textTertiary)
       Text(value)
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .textSelection(.enabled)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -473,10 +473,10 @@ private struct AccountRoutineItemView: View {
   let routine: ServerRoutineItem
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Text(routine.title ?? "제목 확인 불가")
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .fixedSize(horizontal: false, vertical: true)
 
       Text(
@@ -487,7 +487,7 @@ private struct AccountRoutineItemView: View {
           )
       )
       .moruTextStyle(.c1)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
 
       stepSection
@@ -505,12 +505,12 @@ private struct AccountRoutineItemView: View {
       Text("등록된 단계 없음")
         .accountRoutineGroupStepText()
     case .some(let steps):
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+      VStack(alignment: .leading, spacing: MoruSpacing.four) {
         ForEach(steps, id: \.stepID) { step in
-          HStack(alignment: .firstTextBaseline, spacing: MoruPilotSpacing.eight) {
+          HStack(alignment: .firstTextBaseline, spacing: MoruSpacing.eight) {
             Image(systemName: "circle.fill")
               .font(.system(size: 5))
-              .foregroundStyle(MoruPilotColor.textTertiary)
+              .foregroundStyle(MoruColor.textTertiary)
               .accessibilityHidden(true)
             Text(AccountRoutineGroupDisplayText.step(step))
               .accountRoutineGroupStepText()
@@ -580,14 +580,14 @@ nonisolated enum AccountRoutineGroupDisplayText {
 
 private extension View {
   func accountRoutineGroupSurface() -> some View {
-    padding(MoruPilotSpacing.sixteen)
+    padding(MoruSpacing.sixteen)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .homePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+      .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
   }
 
   func accountRoutineGroupStepText() -> some View {
     moruTextStyle(.c1)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
   }
 }

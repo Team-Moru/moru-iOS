@@ -143,7 +143,7 @@ struct ProfileView: View {
           failureView(message)
         }
       }
-      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .background(MoruColor.canvas.ignoresSafeArea())
       .toolbar(.hidden, for: .navigationBar)
       .navigationDestination(
         isPresented: $routineArchiveNavigation.isArchivePresented
@@ -286,35 +286,35 @@ struct ProfileView: View {
         profileCard(
           displayName: profileSummaryDisplayName(for: content.profile)
         )
-          .padding(.top, MoruPilotSpacing.twelve)
+          .padding(.top, MoruSpacing.twelve)
 
         settingsSection(title: ProfileCopy.voiceSettings) {
           voiceCard(content)
         }
-        .padding(.top, MoruPilotSpacing.thirtyEight)
+        .padding(.top, MoruSpacing.thirtyEight)
 
         if appCapabilities.shouldShowAccountUI {
           settingsSection(title: ProfileCopy.account) {
             accountCard
           }
-          .padding(.top, MoruPilotSpacing.twentyEight)
+          .padding(.top, MoruSpacing.twentyEight)
         }
 
         settingsSection(title: ProfileCopy.aiDataHandling) {
           geminiDataConsentCard
         }
-        .padding(.top, MoruPilotSpacing.twentyEight)
+        .padding(.top, MoruSpacing.twentyEight)
 
         settingsSection(title: ProfileCopy.dataManagement) {
           dataManagementCard
         }
-        .padding(.top, MoruPilotSpacing.twentyEight)
+        .padding(.top, MoruSpacing.twentyEight)
 
         supportSection
-          .padding(.top, MoruPilotSpacing.twentyEight)
+          .padding(.top, MoruSpacing.twentyEight)
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
-      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.bottom, MoruSpacing.sixtyFour)
     }
   }
 
@@ -329,10 +329,10 @@ struct ProfileView: View {
     title: String,
     @ViewBuilder content: () -> Content
   ) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+    VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
       Text(title)
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
 
       content()
     }
@@ -345,21 +345,21 @@ struct ProfileView: View {
       VStack(alignment: .leading, spacing: 0) {
         Text(displayName)
           .moruTextStyle(.b2.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
           .layoutPriority(1)
 
         Text(profileSubtitle)
           .moruTextStyle(.b4)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
       }
 
-      Spacer(minLength: MoruPilotSpacing.eight)
+      Spacer(minLength: MoruSpacing.eight)
     }
-    .padding(.horizontal, MoruPilotSpacing.sixteen)
-    .padding(.vertical, MoruPilotSpacing.eight)
+    .padding(.horizontal, MoruSpacing.sixteen)
+    .padding(.vertical, MoruSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-    .profilePilotSurface(cornerRadius: MoruPilotSpacing.sixteen)
+    .profilePilotSurface(cornerRadius: MoruSpacing.sixteen)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(displayName), \(profileSubtitle)")
     .accessibilityIdentifier("profile.summary")
@@ -379,7 +379,7 @@ struct ProfileView: View {
   private func profileAvatar(displayName: String) -> some View {
     if case .signedIn = accountSessionStore.state {
       Circle()
-        .fill(MoruPilotColor.accent)
+        .fill(MoruColor.accent)
         .frame(width: 58, height: 58)
         .overlay {
           Text(profileInitial(for: displayName))
@@ -411,7 +411,7 @@ struct ProfileView: View {
 
   @ViewBuilder
   private var accountCard: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       switch accountSessionStore.state {
       case .signedOut:
         accountConnectButton
@@ -419,7 +419,7 @@ struct ProfileView: View {
         figmaNavigationRow(title: "계정 확인 중", showsChevron: false)
         .overlay(alignment: .trailing) {
           ProgressView()
-            .padding(.trailing, MoruPilotSpacing.sixteen)
+            .padding(.trailing, MoruSpacing.sixteen)
             .accessibilityLabel("계정 연결 확인 중")
         }
       case .signedIn:
@@ -435,7 +435,7 @@ struct ProfileView: View {
           ProgressView()
           Text("계정을 연결하고 있어요.")
             .moruTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("계정을 연결하고 있어요.")
@@ -446,7 +446,7 @@ struct ProfileView: View {
           ProgressView()
           Text(accountProgressMessage(for: action))
             .moruTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accountProgressMessage(for: action))
@@ -461,7 +461,7 @@ struct ProfileView: View {
   }
 
   private var signedInAccountActions: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       Button {
         Task {
           await viewModel.logoutButtonDidTap()
@@ -489,10 +489,10 @@ struct ProfileView: View {
   }
 
   private var geminiDataConsentCard: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       Text(geminiDataConsentDescription)
         .moruTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
 
       Button {
@@ -530,11 +530,11 @@ struct ProfileView: View {
   }
 
   private var pendingWithdrawalActions: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       if viewModel.requiresAppleWithdrawalReauthentication {
         profileMessage(
           ProfileCopy.appleWithdrawalReauthenticationDescription,
-          color: MoruPilotColor.textSecondary
+          color: MoruColor.textSecondary
         )
         .accessibilityIdentifier(
           "profile.account.withdrawal-apple-reauthentication-message"
@@ -565,7 +565,7 @@ struct ProfileView: View {
       } else {
         profileMessage(
           ProfileCopy.withdrawalPendingDescription,
-          color: MoruPilotColor.textSecondary
+          color: MoruColor.textSecondary
         )
         .accessibilityIdentifier("profile.account.withdrawal-pending-message")
 
@@ -653,7 +653,7 @@ struct ProfileView: View {
   }
 
   private func voiceCard(_ content: ProfileSettingsLoadResult) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Button {
         isMoruVoiceSettingsPresented = true
       } label: {
@@ -667,7 +667,7 @@ struct ProfileView: View {
       .accessibilityIdentifier("profile.voice.chooser")
 
       if let fallbackNotice = content.fallbackNotice {
-        profileMessage(fallbackNotice, color: MoruPilotColor.textSecondary)
+        profileMessage(fallbackNotice, color: MoruColor.textSecondary)
       }
 
       if let voiceErrorMessage = viewModel.voiceErrorMessage {
@@ -677,7 +677,7 @@ struct ProfileView: View {
   }
 
   private var dataManagementCard: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Button(role: .destructive) {
         isResetConfirmationPresented = true
       } label: {
@@ -692,17 +692,17 @@ struct ProfileView: View {
           ProgressView()
           Text("초기화하고 있어요.")
             .font(AppFont.label1NormalMedium)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
         }
       }
 
       if accountSessionStore.isWithdrawalPending {
         profileMessage(
           ProfileCopy.withdrawalResetUnavailable,
-          color: MoruPilotColor.textSecondary
+          color: MoruColor.textSecondary
         )
       } else if let message = viewModel.resetAvailabilityMessage {
-        profileMessage(message, color: MoruPilotColor.textSecondary)
+        profileMessage(message, color: MoruColor.textSecondary)
       }
 
       if let message = viewModel.resetErrorMessage {
@@ -712,7 +712,7 @@ struct ProfileView: View {
   }
 
   private var supportCard: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       ForEach(ProfileSupportLinkDestination.allCases, id: \.self) { destination in
         Button {
           openSupportLink(destination)
@@ -773,26 +773,26 @@ struct ProfileView: View {
       VStack(alignment: .leading, spacing: 0) {
         profileTitle
 
-        VStack(spacing: MoruPilotSpacing.twenty) {
-          ProfileSkeletonBlock(cornerRadius: MoruPilotSpacing.sixteen)
+        VStack(spacing: MoruSpacing.twenty) {
+          ProfileSkeletonBlock(cornerRadius: MoruSpacing.sixteen)
             .frame(height: 82)
-          ProfileSkeletonBlock(cornerRadius: MoruPilotSpacing.twelve)
+          ProfileSkeletonBlock(cornerRadius: MoruSpacing.twelve)
             .frame(height: 64)
-          ProfileSkeletonBlock(cornerRadius: MoruPilotSpacing.twelve)
+          ProfileSkeletonBlock(cornerRadius: MoruSpacing.twelve)
             .frame(height: 64)
         }
-        .padding(.top, MoruPilotSpacing.twelve)
+        .padding(.top, MoruSpacing.twelve)
 
         Text("프로필 설정을 불러오고 있어요.")
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
-          .padding(.top, MoruPilotSpacing.sixteen)
+          .foregroundStyle(MoruColor.textSecondary)
+          .padding(.top, MoruSpacing.sixteen)
 
         supportSection
-          .padding(.top, MoruPilotSpacing.twentyEight)
+          .padding(.top, MoruSpacing.twentyEight)
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
-      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.bottom, MoruSpacing.sixtyFour)
     }
     .accessibilityElement(children: .contain)
   }
@@ -802,28 +802,28 @@ struct ProfileView: View {
       VStack(alignment: .leading, spacing: 0) {
         profileTitle
 
-        VStack(spacing: MoruPilotSpacing.sixteen) {
+        VStack(spacing: MoruSpacing.sixteen) {
           Image(systemName: "exclamationmark.triangle.fill")
             .font(AppFont.title1SemiBold)
-            .foregroundStyle(MoruPilotColor.accent)
+            .foregroundStyle(MoruColor.accent)
             .accessibilityHidden(true)
 
           Text(message)
             .moruTextStyle(.b4)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
             .multilineTextAlignment(.center)
 
           Button("다시 시도", action: viewModel.retryButtonDidTap)
             .buttonStyle(.borderedProminent)
-            .tint(MoruPilotColor.accent)
+            .tint(MoruColor.accent)
         }
         .frame(maxWidth: .infinity, minHeight: 320)
 
         supportSection
-          .padding(.top, MoruPilotSpacing.twentyEight)
+          .padding(.top, MoruSpacing.twentyEight)
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
-      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.bottom, MoruSpacing.sixtyFour)
     }
   }
 
@@ -836,7 +836,7 @@ struct ProfileView: View {
 
         Text("앞뒤 공백을 제외한 1자에서 20자까지 입력할 수 있어요.")
           .font(AppFont.label1NormalMedium)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
 
         if let message = viewModel.displayNameErrorMessage {
           profileMessage(message, color: AppColor.coral300)
@@ -892,37 +892,37 @@ struct ProfileView: View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 0) {
         accountConnectionHeader
-          .padding(.top, MoruPilotSpacing.twenty)
+          .padding(.top, MoruSpacing.twenty)
 
         Text(ProfileCopy.accountConnection)
           .moruTextStyle(.h3.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
-          .padding(.top, MoruPilotSpacing.sixteen)
+          .foregroundStyle(MoruColor.textStrong)
+          .padding(.top, MoruSpacing.sixteen)
 
         Text(ProfileCopy.accountConnectionDescription)
           .moruTextStyle(.b4)
-          .foregroundStyle(MoruPilotColor.textSecondary)
-          .padding(.top, MoruPilotSpacing.twelve)
+          .foregroundStyle(MoruColor.textSecondary)
+          .padding(.top, MoruSpacing.twelve)
           .fixedSize(horizontal: false, vertical: true)
 
-        HStack(spacing: MoruPilotSpacing.twenty) {
+        HStack(spacing: MoruSpacing.twenty) {
           googleSocialLoginButton
           kakaoSocialLoginButton
           appleSocialLoginButton
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, MoruPilotSpacing.thirtyEight)
+        .padding(.top, MoruSpacing.thirtyEight)
       }
-      .padding(.horizontal, MoruPilotSpacing.twentyEight)
-      .padding(.bottom, MoruPilotSpacing.twentyEight)
+      .padding(.horizontal, MoruSpacing.twentyEight)
+      .padding(.bottom, MoruSpacing.twentyEight)
     }
-    .background(MoruPilotColor.profileSurface)
+    .background(MoruColor.profileSurface)
     .presentationDetents([
       .height(dynamicTypeSize.isAccessibilitySize ? 608 : 288),
     ])
     .presentationDragIndicator(.visible)
     .presentationCornerRadius(32)
-    .presentationBackground(MoruPilotColor.profileSurface)
+    .presentationBackground(MoruColor.profileSurface)
     .accessibilityIdentifier("profile.account.sheet")
   }
 
@@ -1001,7 +1001,7 @@ struct ProfileView: View {
     ZStack {
       Text(ProfileCopy.accountConnection)
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .frame(maxWidth: .infinity)
 
       HStack {
@@ -1012,8 +1012,8 @@ struct ProfileView: View {
         } label: {
           Text(ProfileCopy.close)
             .moruTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textPrimary)
-            .padding(.horizontal, MoruPilotSpacing.sixteen)
+            .foregroundStyle(MoruColor.textPrimary)
+            .padding(.horizontal, MoruSpacing.sixteen)
             .frame(minHeight: 48)
             .background(AppColor.gray100, in: Capsule())
         }
@@ -1033,17 +1033,17 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
           Text(voice.displayName)
             .font(AppFont.label1NormalSemiBold)
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .foregroundStyle(MoruColor.textStrong)
           Text(isAvailable ? "앱 내장 음성" : "음성 파일 없음")
             .font(AppFont.caption1Medium)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .foregroundStyle(MoruColor.textSecondary)
         }
 
         Spacer()
 
         if isSelected {
           Image(systemName: "checkmark.circle.fill")
-            .foregroundStyle(MoruPilotColor.link)
+            .foregroundStyle(MoruColor.link)
             .accessibilityLabel("현재 선택됨")
         }
       }
@@ -1073,7 +1073,7 @@ struct ProfileView: View {
       }
     }
     .buttonStyle(.borderedProminent)
-    .tint(MoruPilotColor.link)
+    .tint(MoruColor.link)
     .disabled(!isAvailable || isSelected)
   }
 
@@ -1111,19 +1111,19 @@ struct ProfileView: View {
     HStack {
       Text(title)
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .foregroundStyle(MoruColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
 
-      Spacer(minLength: MoruPilotSpacing.eight)
+      Spacer(minLength: MoruSpacing.eight)
 
       if showsChevron {
-        MoruChevron(color: MoruPilotColor.textPrimary)
+        MoruChevron(color: MoruColor.textPrimary)
       }
     }
-    .padding(.horizontal, MoruPilotSpacing.sixteen)
-    .padding(.vertical, MoruPilotSpacing.eight)
+    .padding(.horizontal, MoruSpacing.sixteen)
+    .padding(.vertical, MoruSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-    .profilePilotSurface(cornerRadius: MoruPilotSpacing.twelve)
+    .profilePilotSurface(cornerRadius: MoruSpacing.twelve)
   }
 }
 
@@ -1230,8 +1230,8 @@ struct MoruVoiceSettingsView: View {
 
   var body: some View {
     ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+      VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
+        VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
           Button(action: onOpenDeviceVoiceSelection) {
             voiceSettingsRow(
               title: "기기 내장 음성",
@@ -1246,7 +1246,7 @@ struct MoruVoiceSettingsView: View {
           .accessibilityIdentifier("profile.voice.device")
 
           Divider()
-            .overlay(MoruPilotColor.border)
+            .overlay(MoruColor.border)
 
           Button(action: onOpenServerVoiceSelection) {
             voiceSettingsRow(
@@ -1260,8 +1260,8 @@ struct MoruVoiceSettingsView: View {
           .accessibilityHint(serverVoiceAccessibilityHint)
           .accessibilityIdentifier("profile.voice.server")
         }
-        .padding(MoruPilotSpacing.sixteen)
-        .profilePilotSurface(cornerRadius: MoruPilotSpacing.twelve)
+        .padding(MoruSpacing.sixteen)
+        .profilePilotSurface(cornerRadius: MoruSpacing.twelve)
 
         if let message = profileViewModel.voiceErrorMessage {
           Text(message)
@@ -1270,11 +1270,11 @@ struct MoruVoiceSettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
-      .padding(.top, MoruPilotSpacing.twenty)
-      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.top, MoruSpacing.twenty)
+      .padding(.bottom, MoruSpacing.sixtyFour)
     }
-    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .background(MoruColor.canvas.ignoresSafeArea())
     .navigationTitle("")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar(.visible, for: .navigationBar)
@@ -1282,10 +1282,10 @@ struct MoruVoiceSettingsView: View {
       ToolbarItem(placement: .principal) {
         Text(ProfileCopy.moruVoice)
           .moruTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
       }
     }
-    .tint(MoruPilotColor.textPrimary)
+    .tint(MoruColor.textPrimary)
     .accessibilityIdentifier("profile.voice.settings")
   }
 
@@ -1343,19 +1343,19 @@ struct MoruVoiceSettingsView: View {
     title: String,
     detail: String
   ) -> some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+    HStack(spacing: MoruSpacing.twelve) {
+      VStack(alignment: .leading, spacing: MoruSpacing.four) {
         Text(title)
           .moruTextStyle(.b4)
-          .foregroundStyle(MoruPilotColor.textPrimary)
+          .foregroundStyle(MoruColor.textPrimary)
         Text(detail)
           .moruTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
 
-      Spacer(minLength: MoruPilotSpacing.eight)
-      MoruChevron(color: MoruPilotColor.textPrimary)
+      Spacer(minLength: MoruSpacing.eight)
+      MoruChevron(color: MoruColor.textPrimary)
         .accessibilityHidden(true)
     }
     .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
@@ -1413,12 +1413,12 @@ private extension View {
   func profilePilotSurface(cornerRadius: CGFloat) -> some View {
     background(
       RoundedRectangle(cornerRadius: cornerRadius)
-        .fill(MoruPilotColor.profileSurface)
+        .fill(MoruColor.profileSurface)
     )
     .overlay {
       RoundedRectangle(cornerRadius: cornerRadius)
-        .stroke(MoruPilotColor.border, lineWidth: 1)
+        .stroke(MoruColor.border, lineWidth: 1)
     }
-    .shadow(color: MoruPilotColor.shadow, radius: 7.5)
+    .shadow(color: MoruColor.shadow, radius: 7.5)
   }
 }

@@ -42,7 +42,7 @@ struct MoruButton: View {
       Text(title)
         .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(foregroundColor)
-        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.twenty)
         .padding(.vertical, verticalPadding)
         .frame(maxWidth: style == .text ? nil : .infinity)
         .frame(minHeight: MoruButtonMetric.minimumHeight)
@@ -60,9 +60,9 @@ struct MoruButton: View {
   private var foregroundColor: Color {
     switch style {
     case .primary:
-      MoruPilotColor.onCTA
+      MoruColor.onCTA
     case .secondary:
-      MoruPilotColor.textStrong
+      MoruColor.textStrong
     case .text:
       AppColor.gray550
     }
@@ -71,7 +71,7 @@ struct MoruButton: View {
   private var backgroundColor: Color {
     switch style {
     case .primary:
-      MoruPilotColor.ctaFill
+      MoruColor.ctaFill
     case .secondary:
       AppColor.grayWhite
     case .text:
@@ -80,7 +80,7 @@ struct MoruButton: View {
   }
 
   private var borderColor: Color {
-    style == .secondary ? MoruPilotColor.border : Color.clear
+    style == .secondary ? MoruColor.border : Color.clear
   }
 
   private var verticalPadding: CGFloat {

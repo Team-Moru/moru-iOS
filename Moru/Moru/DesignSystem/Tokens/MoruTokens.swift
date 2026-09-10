@@ -1,5 +1,5 @@
 //
-//  MoruPilotTokens.swift
+//  MoruTokens.swift
 //  Moru
 //
 //  Created by Codex on 7/24/26.
@@ -8,7 +8,7 @@
 import SwiftUI
 
 /// 화면이 쓰는 시맨틱 색 토큰. 값의 단일 출처는 `AppColor` 팔레트다.
-enum MoruPilotColor {
+enum MoruColor {
   static let canvas = AppColor.babyBlue50
 
   // MARK: - Accent
@@ -65,7 +65,7 @@ enum MoruPilotColor {
 }
 
 /// 간격 토큰. 값은 `AppSpacing`과 같은 출처를 쓴다.
-enum MoruPilotSpacing {
+enum MoruSpacing {
   static let four = AppSpacing.xxs
   static let eight = AppSpacing.xs
   static let ten = AppSpacing.ten
@@ -80,7 +80,7 @@ enum MoruPilotSpacing {
 }
 
 /// 모서리 토큰. 값은 `AppRadius`와 같은 출처를 쓴다.
-enum MoruPilotRadius {
+enum MoruRadius {
   static let card = AppRadius.sm
   static let largeCard = AppRadius.lg
   static let pill = AppRadius.pill

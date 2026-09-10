@@ -32,13 +32,13 @@ struct HomePilotSurfaceModifier: ViewModifier {
     content
       .background(AppColor.grayWhite.opacity(0.2))
       .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-      .shadow(color: MoruPilotColor.shadow, radius: 15)
+      .shadow(color: MoruColor.shadow, radius: 15)
   }
 }
 
 extension View {
   func homePilotSurface(
-    cornerRadius: CGFloat = MoruPilotRadius.largeCard
+    cornerRadius: CGFloat = MoruRadius.largeCard
   ) -> some View {
     modifier(HomePilotSurfaceModifier(cornerRadius: cornerRadius))
   }

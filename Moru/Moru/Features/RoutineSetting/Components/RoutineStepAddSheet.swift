@@ -35,21 +35,21 @@ struct RoutineStepAddSheet: View {
   var body: some View {
     VStack(spacing: 0) {
       Capsule()
-        .fill(MoruPilotColor.border)
+        .fill(MoruColor.border)
         .frame(width: 36, height: 3)
-        .padding(.top, MoruPilotSpacing.eight)
+        .padding(.top, MoruSpacing.eight)
 
       Text(initialStep == nil ? "항목 추가" : "항목 수정")
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
-        .padding(.top, MoruPilotSpacing.twenty)
+        .foregroundStyle(MoruColor.textStrong)
+        .padding(.top, MoruSpacing.twenty)
 
       Divider()
-        .overlay(MoruPilotColor.border)
-        .padding(.top, MoruPilotSpacing.twenty)
+        .overlay(MoruColor.border)
+        .padding(.top, MoruSpacing.twenty)
 
       ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.twenty) {
+        VStack(alignment: .leading, spacing: MoruSpacing.twenty) {
           nameField
           stepTypeSelector
           durationControl
@@ -59,41 +59,41 @@ struct RoutineStepAddSheet: View {
             deleteButton(onDelete)
           }
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.twenty)
-        .padding(.bottom, MoruPilotSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.twenty)
+        .padding(.bottom, MoruSpacing.twenty)
       }
     }
     .background(AppColor.grayWhite)
   }
 
   private var nameField: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+    VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
       Text("항목명")
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
 
       TextField("예) 물 한 잔 마시기", text: $title, axis: .vertical)
         .moruTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textStrong)
-        .tint(MoruPilotColor.accent)
+        .foregroundStyle(MoruColor.textStrong)
+        .tint(MoruColor.accent)
         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
-        .padding(.horizontal, MoruPilotSpacing.sixteen)
-        .padding(.vertical, MoruPilotSpacing.twelve)
+        .padding(.horizontal, MoruSpacing.sixteen)
+        .padding(.vertical, MoruSpacing.twelve)
         .frame(minHeight: 46)
         .background(
-          RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+          RoundedRectangle(cornerRadius: MoruRadius.card)
             .fill(AppColor.grayWhite)
             .overlay(
-              RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-                .stroke(MoruPilotColor.border, lineWidth: 1)
+              RoundedRectangle(cornerRadius: MoruRadius.card)
+                .stroke(MoruColor.border, lineWidth: 1)
             )
         )
     }
   }
 
   private var stepTypeSelector: some View {
-    HStack(spacing: MoruPilotSpacing.eight) {
+    HStack(spacing: MoruSpacing.eight) {
       ForEach(stepTypes, id: \.self) { type in
         stepTypeButton(type)
       }
@@ -101,10 +101,10 @@ struct RoutineStepAddSheet: View {
   }
 
   private var durationControl: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+    VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
       Text("시간")
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
 
       HStack {
         Button {
@@ -122,7 +122,7 @@ struct RoutineStepAddSheet: View {
 
         Text("\(estimatedMinutes)분")
           .moruTextStyle(.b2.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .foregroundStyle(MoruColor.textStrong)
 
         Spacer()
 
@@ -137,10 +137,10 @@ struct RoutineStepAddSheet: View {
         .buttonStyle(.plain)
         .accessibilityLabel("시간 1분 늘리기")
       }
-      .padding(.horizontal, MoruPilotSpacing.eight)
+      .padding(.horizontal, MoruSpacing.eight)
       .frame(minHeight: 52)
-      .background(MoruPilotColor.surfaceMuted)
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+      .background(MoruColor.surfaceMuted)
+      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
     }
   }
 
@@ -168,8 +168,8 @@ struct RoutineStepAddSheet: View {
         .foregroundStyle(AppColor.grayWhite)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 54)
-        .background(canSave ? MoruPilotColor.ctaFill : MoruPilotColor.disabled)
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
+        .background(canSave ? MoruColor.ctaFill : MoruColor.disabled)
+        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
     }
     .disabled(!canSave)
     .buttonStyle(.plain)
@@ -182,15 +182,15 @@ struct RoutineStepAddSheet: View {
     } label: {
       Text("항목 삭제")
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 54)
         .background(AppColor.grayWhite)
         .overlay(
-          RoundedRectangle(cornerRadius: MoruPilotRadius.pill)
-            .stroke(MoruPilotColor.border, lineWidth: 1)
+          RoundedRectangle(cornerRadius: MoruRadius.pill)
+            .stroke(MoruColor.border, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
+        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
     }
     .buttonStyle(.plain)
   }
@@ -212,25 +212,25 @@ struct RoutineStepAddSheet: View {
       VStack(spacing: AppSpacing.xs) {
         MoruRoutineStepTypeIcon(
           type: type,
-          tint: isSelected ? MoruPilotColor.accent : nil
+          tint: isSelected ? MoruColor.accent : nil
         )
 
         Text(type.routineSettingTitle)
           .moruTextStyle(.c1)
           .foregroundStyle(
-            isSelected ? MoruPilotColor.accent : MoruPilotColor.textSecondary
+            isSelected ? MoruColor.accent : MoruColor.textSecondary
           )
       }
       .frame(maxWidth: .infinity)
       .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 120 : 80)
       .background(
-        isSelected ? MoruPilotColor.accentTint : AppColor.grayWhite
+        isSelected ? MoruColor.accentTint : AppColor.grayWhite
       )
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
       .overlay(
-        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+        RoundedRectangle(cornerRadius: MoruRadius.card)
           .stroke(
-            isSelected ? MoruPilotColor.accentTint : MoruPilotColor.border,
+            isSelected ? MoruColor.accentTint : MoruColor.border,
             lineWidth: 1
           )
       )

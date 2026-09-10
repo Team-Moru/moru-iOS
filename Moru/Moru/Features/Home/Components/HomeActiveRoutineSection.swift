@@ -15,11 +15,11 @@ struct HomeActiveRoutineSection: View {
       HStack(spacing: AppSpacing.xs) {
         Text(HomeCopy.activeRoutines)
           .moruTextStyle(.b3.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textPrimary)
+          .foregroundStyle(MoruColor.textPrimary)
 
         Text("\(routines.count)")
           .moruTextStyle(.c2.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.accent)
+          .foregroundStyle(MoruColor.accent)
           .padding(.horizontal, AppSpacing.sm)
           .padding(.vertical, AppSpacing.xxs)
           .background(AppColor.orange100)
@@ -49,9 +49,9 @@ struct HomeActiveRoutineSection: View {
   private var emptyState: some View {
     Text("추가로 실행할 활성 루틴이 없어요.")
       .moruTextStyle(.c1)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(MoruPilotSpacing.twenty)
+      .padding(MoruSpacing.twenty)
       .homePilotSurface()
       .accessibilityIdentifier("home.active-routines.empty")
   }
@@ -64,18 +64,18 @@ private struct HomeActiveRoutineCard: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+    VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
       settingsButton
 
       Rectangle()
-        .fill(MoruPilotColor.border)
+        .fill(MoruColor.border)
         .frame(height: 1)
         .accessibilityHidden(true)
 
       progressContent
       startButton
     }
-    .padding(MoruPilotSpacing.twenty)
+    .padding(MoruSpacing.twenty)
     .homePilotSurface()
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("home.active-routine.\(routine.id.uuidString)")
@@ -87,12 +87,12 @@ private struct HomeActiveRoutineCard: View {
         HStack(alignment: .firstTextBaseline, spacing: AppSpacing.sm) {
           Text(routine.title)
             .moruTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textPrimary)
+            .foregroundStyle(MoruColor.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
 
           activeBadge
           Spacer(minLength: AppSpacing.sm)
-          MoruChevron(color: MoruPilotColor.textSecondary)
+          MoruChevron(color: MoruColor.textSecondary)
         }
 
         routineMetadata
@@ -124,14 +124,14 @@ private struct HomeActiveRoutineCard: View {
   private var scheduleLabel: some View {
     Label(routine.scheduleText, systemImage: "alarm")
       .moruTextStyle(.c2)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private var stepSummary: some View {
     Text(routine.stepSummaryText)
       .moruTextStyle(.c2)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
@@ -139,12 +139,12 @@ private struct HomeActiveRoutineCard: View {
     Text(routine.isActive ? "활성" : "비활성")
       .moruTextStyle(.c2.weight(.semiBold))
       .foregroundStyle(
-        routine.isActive ? MoruPilotColor.accent : MoruPilotColor.textSecondary
+        routine.isActive ? MoruColor.accent : MoruColor.textSecondary
       )
       .padding(.horizontal, AppSpacing.sm)
       .padding(.vertical, AppSpacing.xxs)
       .background(
-        routine.isActive ? MoruPilotColor.accentSurface : MoruPilotColor.surfaceMuted
+        routine.isActive ? MoruColor.accentSurface : MoruColor.surfaceMuted
       )
       .clipShape(Capsule())
   }
@@ -157,15 +157,15 @@ private struct HomeActiveRoutineCard: View {
         Text(routine.progressText)
       }
       .moruTextStyle(.c2.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .foregroundStyle(MoruColor.textSecondary)
 
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule()
-            .fill(MoruPilotColor.surfaceMuted)
+            .fill(MoruColor.surfaceMuted)
 
           Capsule()
-            .fill(MoruPilotColor.accent)
+            .fill(MoruColor.accent)
             .frame(width: proxy.size.width * routine.progress)
         }
       }
@@ -173,7 +173,7 @@ private struct HomeActiveRoutineCard: View {
 
       Text(routine.completionText)
         .moruTextStyle(.c2)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("오늘 진행률")
@@ -188,8 +188,8 @@ private struct HomeActiveRoutineCard: View {
         .padding(.horizontal, AppSpacing.buttonHorizontal)
         .padding(.vertical, AppSpacing.buttonVertical)
         .frame(maxWidth: .infinity)
-        .background(MoruPilotColor.ctaFill)
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
+        .background(MoruColor.ctaFill)
+        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
     }
     .buttonStyle(.plain)
     .accessibilityIdentifier("home.active-routine.\(routine.id.uuidString).start")

@@ -29,13 +29,13 @@ struct RoutineSettingCard: View {
   var body: some View {
     Group {
       if dynamicTypeSize.isAccessibilitySize {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-          HStack(alignment: .top, spacing: MoruPilotSpacing.twelve) {
+        VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
+          HStack(alignment: .top, spacing: MoruSpacing.twelve) {
             MoruRoutineNoteIcon(isActive: isActive)
             routineDetails
           }
 
-          HStack(spacing: MoruPilotSpacing.four) {
+          HStack(spacing: MoruSpacing.four) {
             Spacer(minLength: 0)
 
             MoruToggle(isOn: $isActive)
@@ -45,11 +45,11 @@ struct RoutineSettingCard: View {
           }
         }
       } else {
-        HStack(spacing: MoruPilotSpacing.twelve) {
+        HStack(spacing: MoruSpacing.twelve) {
           MoruRoutineNoteIcon(isActive: isActive)
           routineDetails
 
-          HStack(spacing: MoruPilotSpacing.four) {
+          HStack(spacing: MoruSpacing.four) {
             MoruToggle(isOn: $isActive)
               .accessibilityLabel("\(routine.title) 활성화")
 
@@ -58,12 +58,12 @@ struct RoutineSettingCard: View {
         }
       }
     }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
-    .padding(.vertical, MoruPilotSpacing.sixteen)
+    .padding(.horizontal, MoruSpacing.twenty)
+    .padding(.vertical, MoruSpacing.sixteen)
     .frame(maxWidth: .infinity)
     .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 176 : 100)
     .background {
-      RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+      RoundedRectangle(cornerRadius: MoruRadius.largeCard)
         .fill(backgroundColor)
         .shadow(
           color: shadowColor,
@@ -78,7 +78,7 @@ struct RoutineSettingCard: View {
     VStack(alignment: .leading, spacing: AppSpacing.xxs) {
       Text(routine.title)
         .moruTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .foregroundStyle(MoruColor.textStrong)
         .fixedSize(horizontal: false, vertical: true)
 
       Text(
@@ -89,7 +89,7 @@ struct RoutineSettingCard: View {
       )
       .moruTextStyle(.c1)
       .foregroundStyle(
-        isActive ? MoruPilotColor.textTertiary : AppColor.gray200
+        isActive ? MoruColor.textTertiary : AppColor.gray200
       )
       .fixedSize(horizontal: false, vertical: true)
 
@@ -114,7 +114,7 @@ struct RoutineSettingCard: View {
   }
 
   private var alarmStatusColor: Color {
-    routine.needsAlarmAction ? AppColor.orange500 : MoruPilotColor.textTertiary
+    routine.needsAlarmAction ? AppColor.orange500 : MoruColor.textTertiary
   }
 
   private var editButton: some View {
@@ -123,7 +123,7 @@ struct RoutineSettingCard: View {
         .resizable()
         .scaledToFit()
         .frame(width: 18, height: 18)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .frame(minWidth: 44, minHeight: 44)
     }
     .buttonStyle(.plain)
@@ -132,7 +132,7 @@ struct RoutineSettingCard: View {
 
   private var compactEditButton: some View {
     Button(action: onTap) {
-      MoruChevron(color: MoruPilotColor.textSecondary)
+      MoruChevron(color: MoruColor.textSecondary)
     }
     .buttonStyle(.plain)
     .frame(width: 20, height: 44)
@@ -141,11 +141,11 @@ struct RoutineSettingCard: View {
   }
 
   private var backgroundColor: Color {
-    isActive ? MoruPilotColor.accentTint : AppColor.grayWhite.opacity(0.2)
+    isActive ? MoruColor.accentTint : AppColor.grayWhite.opacity(0.2)
   }
 
   private var shadowColor: Color {
-    isActive ? Color.clear : MoruPilotColor.shadow
+    isActive ? Color.clear : MoruColor.shadow
   }
 
   private var shadowRadius: CGFloat {

@@ -32,10 +32,10 @@ struct MoruProgressBar: View {
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule()
-            .fill(MoruPilotColor.progressTrack)
+            .fill(MoruColor.progressTrack)
 
           Capsule()
-            .fill(MoruPilotColor.accent)
+            .fill(MoruColor.accent)
             .frame(width: proxy.size.width * progress)
         }
       }
@@ -51,7 +51,7 @@ struct MoruProgressBar: View {
   private var progressLabel: some View {
     Text("\(current)/\(total)")
       .moruTextStyle(.c2.weight(.regular))
-      .foregroundStyle(MoruPilotColor.textPrimary)
+      .foregroundStyle(MoruColor.textPrimary)
       .frame(maxWidth: .infinity, alignment: .leading)
   }
 }

@@ -11,16 +11,16 @@
 출처는 `AppColor` 팔레트이고, 간격·모서리는 `AppSpacing`·`AppRadius`를 alias합니다.
 
 ```swift
-MoruPilotColor.canvas        // 화면 배경
-MoruPilotColor.accent        // 브랜드 강조 (탭 선택, 진행 바, 활성 카드 틴트)
-MoruPilotColor.ctaFill       // 주요 CTA 채움 (흰 글자 대비 4.5:1 이상)
-MoruPilotColor.textStrong    // 제목
-MoruPilotColor.textPrimary   // 본문
-MoruPilotColor.textSecondary // 보조 텍스트
-MoruPilotColor.disabled      // 비활성 채움
-MoruPilotColor.link          // 링크·시스템 파란 액션
-MoruPilotSpacing.twenty
-MoruPilotRadius.largeCard
+MoruColor.canvas        // 화면 배경
+MoruColor.accent        // 브랜드 강조 (탭 선택, 진행 바, 활성 카드 틴트)
+MoruColor.ctaFill       // 주요 CTA 채움 (흰 글자 대비 4.5:1 이상)
+MoruColor.textStrong    // 제목
+MoruColor.textPrimary   // 본문
+MoruColor.textSecondary // 보조 텍스트
+MoruColor.disabled      // 비활성 채움
+MoruColor.link          // 링크·시스템 파란 액션
+MoruSpacing.twenty
+MoruRadius.largeCard
 ```
 
 예전 `AppColor.moruText*`, `moruBorder`, `moruDisabled`, `moruSurfaceMuted`, `moruBlue`

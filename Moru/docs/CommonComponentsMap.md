@@ -16,12 +16,13 @@
 4. 같은 UI가 여러 화면에서 반복되면 공용 컴포넌트로 옮깁니다.
 
 색상, 폰트, 간격, radius는 직접 만들지 말고 아래 값을 사용합니다.
+색은 팔레트(`AppColor.gray500`)보다 시맨틱 토큰(`MoruColor.textStrong`)을 먼저 씁니다.
 
 ```swift
-AppColor
-AppFont
-AppSpacing
-AppRadius
+MoruColor      // 시맨틱 색 (canvas, accent, ctaFill, textStrong, border, ...)
+MoruSpacing    // 간격 (AppSpacing alias)
+MoruRadius     // 모서리 (AppRadius alias)
+AppFont        // 폰트. 본문 텍스트는 .moruTextStyle(_:)을 우선 사용
 ```
 
 토큰과 컴포넌트의 시각 기준, 캡처·비교 방법은 `docs/FigmaPilotFoundation.md`를
