@@ -113,14 +113,12 @@ final class FinalScreenVisualTests: XCTestCase {
       try render(
         mainScreen(await historyView(), selection: .record),
         filename: "moru-pr52-history-streak-\(variant.filenameSuffix).png",
-        variant: variant,
-        matchesApprovedBaseline: false
+        variant: variant
       )
       try render(
         weeklyComparisonCard(),
         filename: "moru-pr52-weekly-comparison-\(variant.filenameSuffix).png",
-        variant: variant,
-        matchesApprovedBaseline: false
+        variant: variant
       )
       try render(
         routineFinishedView(streak: RoutineStreak(
@@ -129,14 +127,12 @@ final class FinalScreenVisualTests: XCTestCase {
           completedWeekdays: [.sunday, .monday, .tuesday]
         )),
         filename: "moru-pr52-regular-completion-\(variant.filenameSuffix).png",
-        variant: variant,
-        matchesApprovedBaseline: false
+        variant: variant
       )
       try render(
         routineFinishedView(streak: nil, isTrial: true),
         filename: "moru-pr52-trial-completion-\(variant.filenameSuffix).png",
-        variant: variant,
-        matchesApprovedBaseline: false
+        variant: variant
       )
     }
   }
@@ -360,8 +356,7 @@ final class FinalScreenVisualTests: XCTestCase {
   private func render<Content: View>(
     _ content: Content,
     filename: String,
-    variant: VisualVariant,
-    matchesApprovedBaseline: Bool = true
+    variant: VisualVariant
   ) throws {
     let renderedContent = content
       .environment(\.dynamicTypeSize, variant.dynamicTypeSize)
@@ -393,11 +388,7 @@ final class FinalScreenVisualTests: XCTestCase {
     let url = URL(fileURLWithPath: "/private/tmp/\(filename)")
     try data.write(to: url, options: .atomic)
 
-    if matchesApprovedBaseline {
-      try assertMatchesApprovedBaseline(image, filename: filename)
-    } else {
-      XCTAssertGreaterThan(data.count, 1_000)
-    }
+    try assertMatchesApprovedBaseline(image, filename: filename)
   }
 
   private func assertMatchesApprovedBaseline(
@@ -527,6 +518,22 @@ private enum VisualBaseline {
       "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOYGgwaDAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACiIszIzMgAAA==",
     "moru-pr50-session-empty-routine-light-AX3.png":
       "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwMXAAAAAAAAAAAAAAAAAACSImzI5MgAIA==",
+    "moru-pr52-history-streak-light-M.png":
+      "AAAAACAAwALAAMoUzBjdGMSEyACgAuKAKHAxcXFhOWFEUMAA4CAGAkcBAGlVVU9wz3D3MHc881Dz0GzIbMgECA==",
+    "moru-pr52-history-streak-light-AX3.png":
+      "AAAIAOAA5ADUAcpEwWTAJMAkwLTFVMBk0jTTNMjMyMzIzMjQyNDIzMiEyATIBMgEUIDKIsogaQCZZGTI5MgCAA==",
+    "moru-pr52-weekly-comparison-light-M.png":
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMSA8zDjOOK42ATgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "moru-pr52-weekly-comparison-light-AX3.png":
+      "AAAAAAAAAAAAAAAAAAAAAOAIxQTMFMxE2KTcpMBc3iTeZM1MzEzANMzMzozchNkk2STikAAAAAAAAAAAAAAAAA==",
+    "moru-pr52-regular-completion-light-M.png":
+      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QHygPwA/AAMGf5ErUYAEAwAGghBAYMBxwHAgAAAAAABjBoMmicDAwMRjCA==",
+    "moru-pr52-regular-completion-light-AX3.png":
+      "AQAKAQ8EZghyKXKpclFzUPvg8PBw4HhBPQAtSg8iDgJOWHO4AAKRIASABogMiA6gjqIBUCJAKEA8AHxgNoBygA==",
+    "moru-pr52-trial-completion-light-M.png":
+      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QH6APwA/AAMGf5Eq0QAAByAHAAOAAEAAAAAAAAAAAQAAAAJjAeDAwMRjCA==",
+    "moru-pr52-trial-completion-light-AX3.png":
+      "AQAKAR8EbwhiKXOpcrByMPWQ8PBwYHhBPQAtSg8iDgJOWHO4AAJEQBqAGgAfOB0gHSQUMQAAAAPhIMlk8WBmkQ==",
   ]
 }
 

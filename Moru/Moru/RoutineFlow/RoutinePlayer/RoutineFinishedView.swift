@@ -324,48 +324,21 @@ struct RoutineFinishedView: View {
   @ViewBuilder
   private var bottomButtonSection: some View {
     if isTrial {
-      finishedButton(
-        title: "홈으로",
-        foregroundColor: AppColor.grayWhite,
-        backgroundColor: MoruPilotColor.ctaFill,
-        action: onTapHome
-      )
+      MoruButton("홈으로") {
+        onTapHome()
+      }
       .padding(.horizontal, 2)
     } else {
       VStack(spacing: 10) {
-        finishedButton(
-          title: "오늘의 기록 확인",
-          foregroundColor: AppColor.gray600,
-          backgroundColor: AppColor.grayWhite,
-          action: onTapTodayRecord
-        )
+        MoruButton("오늘의 기록 확인", style: .secondary) {
+          onTapTodayRecord()
+        }
 
-        finishedButton(
-          title: "홈으로",
-          foregroundColor: AppColor.grayWhite,
-          backgroundColor: MoruPilotColor.ctaFill,
-          action: onTapHome
-        )
+        MoruButton("홈으로") {
+          onTapHome()
+        }
       }
     }
-  }
-
-  private func finishedButton(
-    title: String,
-    foregroundColor: Color,
-    backgroundColor: Color,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      Text(title)
-        .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(foregroundColor)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 54)
-        .background(backgroundColor)
-        .clipShape(Capsule())
-    }
-    .buttonStyle(.plain)
   }
 
   private var cardBackground: some View {

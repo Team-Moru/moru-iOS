@@ -1060,27 +1060,11 @@ struct HistoryStatusView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     if let primaryActionTitle, let primaryAction {
-                        if dynamicTypeSize.isAccessibilitySize {
-                            Button(action: primaryAction) {
-                                Text(primaryActionTitle)
-                                    .moruTextStyle(.b4.weight(.semiBold))
-                                    .foregroundStyle(MoruPilotColor.textStrong)
-                                    .multilineTextAlignment(.center)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .padding(.horizontal, MoruPilotSpacing.twenty)
-                                    .padding(.vertical, MoruPilotSpacing.sixteen)
-                                    .frame(maxWidth: .infinity, minHeight: 54)
-                                    .background(AppColor.grayWhite)
-                                    .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            MoruButton(
-                                primaryActionTitle,
-                                style: .secondary,
-                                action: primaryAction
-                            )
-                        }
+                        MoruButton(
+                            primaryActionTitle,
+                            style: .secondary,
+                            action: primaryAction
+                        )
                     }
 
                     if let secondaryActionTitle, let secondaryAction {

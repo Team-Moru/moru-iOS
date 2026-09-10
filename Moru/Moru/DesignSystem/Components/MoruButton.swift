@@ -47,6 +47,10 @@ struct MoruButton: View {
         .frame(maxWidth: style == .text ? nil : .infinity)
         .frame(minHeight: MoruButtonMetric.minimumHeight)
         .background(backgroundColor)
+        .overlay(
+          RoundedRectangle(cornerRadius: AppRadius.pill)
+            .stroke(borderColor, lineWidth: style == .secondary ? 1 : 0)
+        )
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
     }
     .disabled(!isEnabled)
@@ -73,6 +77,10 @@ struct MoruButton: View {
     case .text:
       Color.clear
     }
+  }
+
+  private var borderColor: Color {
+    style == .secondary ? MoruPilotColor.border : Color.clear
   }
 
   private var verticalPadding: CGFloat {

@@ -395,19 +395,10 @@ struct TodayRoutineRecordView: View {
     /// 홈으로 버튼
     private var fixedHomeButton: some View {
         VStack(spacing: 0) {
-            Button {
+            MoruButton("홈으로") {
                 onTapHome()
-            } label: {
-                Text("홈으로")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.grayWhite)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(MoruPilotColor.ctaFill)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 20)
             .padding(.top, 10)
             .padding(.bottom, 8)
         }

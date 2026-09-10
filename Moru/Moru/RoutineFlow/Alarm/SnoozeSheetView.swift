@@ -64,36 +64,14 @@ struct SnoozeSheetView: View {
 
             Spacer(minLength: 0)
 
-            Button {
+            MoruButton("다시 알림 설정") {
                 onConfirm(selectedMinutes)
-            } label: {
-                Text("다시 알림 설정")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.grayWhite)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(MoruPilotColor.ctaFill)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 22)
+            .padding(.horizontal, 20)
 
-            Button {
+            MoruButton("취소", style: .secondary) {
                 onCancel()
-            } label: {
-                Text("취소")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.gray600)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
-                    .background(AppColor.grayWhite)
-                    .overlay {
-                        Capsule()
-                            .stroke(AppColor.gray150, lineWidth: 1)
-                    }
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
             .padding(.horizontal, 20)
             .padding(.top, 10)
             .padding(.bottom, 21)

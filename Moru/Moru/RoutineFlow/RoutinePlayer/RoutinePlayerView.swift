@@ -109,18 +109,9 @@ struct RoutinePlayerView: View {
                 .foregroundStyle(AppColor.gray500)
                 .multilineTextAlignment(.center)
 
-            Button {
+            MoruButton("다시 시도") {
                 viewModel.retryResolution()
-            } label: {
-                Text("다시 시도")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.grayWhite)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(MoruPilotColor.ctaFill)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
         }
         .padding(32)
     }
@@ -138,18 +129,9 @@ struct RoutinePlayerView: View {
                 .foregroundStyle(AppColor.gray500)
                 .multilineTextAlignment(.center)
 
-            Button {
+            MoruButton("계속") {
                 viewModel.continueAfterTerminalFailure()
-            } label: {
-                Text("계속")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.grayWhite)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(MoruPilotColor.ctaFill)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
         }
         .padding(32)
     }
@@ -546,19 +528,9 @@ struct RoutinePlayerView: View {
                 .foregroundStyle(AppColor.gray500)
                 .multilineTextAlignment(.center)
 
-            Button {
+            MoruButton("다시 시도", isEnabled: !viewModel.isSavingRun) {
                 viewModel.retrySavingRun()
-            } label: {
-                Text("다시 시도")
-                    .font(AppFont.body1NormalSemiBold)
-                    .foregroundStyle(AppColor.grayWhite)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(MoruPilotColor.ctaFill)
-                    .clipShape(Capsule())
             }
-            .buttonStyle(.plain)
-            .disabled(viewModel.isSavingRun)
         }
         .padding(20)
         .background(AppColor.grayWhite)
