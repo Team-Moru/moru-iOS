@@ -1,11 +1,26 @@
 # Self-hosted macOS 러너 설정
 
+> **상태 (2026-09-10): 보류.** 당분간 GitHub에 올리기 전 로컬에서 개발·테스트를 끝내는
+> 흐름을 기준으로 하므로 self-hosted 러너와 자동 CI는 도입하지 않는다. 팀 PR이 늘거나
+> 자동 테스트가 필요해지면 이 문서대로 도입한다. 그때까지는:
+>
+> - `.github/workflows/ios-tests.yml`은 **수동 실행(`workflow_dispatch`)만** 받는다.
+>   러너가 없어도 `queued` 실행이 쌓이지 않는다. `pull_request`/`push` 트리거는 파일 안에
+>   주석으로 남겨 두었다.
+> - 브랜치 보호 규칙의 required check에 `iOS Tests`를 **추가하지 않는다**.
+> - 로컬 검증은 `bash Scripts/run-tests.sh smoke|full`
+>   (`Moru/docs/iPhoneFunctionalGate.md` 자동 검증 절)로 한다.
+>
+> 재도입 절차: (1) §2대로 러너 등록 → (2) `ios-tests.yml`의 트리거 주석 해제와 fork 가드
+> `if:` 복원 → (3) §7의 사전 실패 3건 정리 → (4) required check 지정.
+
 `.github/workflows/ios-tests.yml`은 `runs-on: [self-hosted, macOS]` 러너에서
 `Scripts/run-tests.sh`를 실행합니다. GitHub 호스팅 macOS 러너는 분당 과금이 Linux의
 10배라, 팀 Mac 한 대를 러너로 등록해 비용 없이 테스트를 돌리는 구성을 기본으로 합니다.
 
-러너가 등록되기 전에는 `iOS Tests` 워크플로가 `queued` 상태로 남습니다. **러너를 등록하기
-전까지 브랜치 보호 규칙의 required check에 `iOS Tests`를 추가하지 마세요.**
+`pull_request`/`push` 트리거를 되살린 뒤 러너가 없으면 `iOS Tests` 워크플로가 `queued`
+상태로 남습니다. **러너를 등록하기 전까지 브랜치 보호 규칙의 required check에
+`iOS Tests`를 추가하지 마세요.**
 
 ## 1. 요구 사항
 
