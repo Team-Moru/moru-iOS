@@ -646,7 +646,7 @@ private struct HomeRefreshIndicator: View {
         .tint(AppColor.orange400)
       Text("홈 정보를 새로 불러오는 중이에요.")
         .font(AppFont.caption1Medium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruPilotColor.textSecondary)
     }
     .padding(.horizontal, AppSpacing.screenHorizontal)
     .accessibilityElement(children: .combine)
@@ -756,11 +756,11 @@ private struct HomeEmptyView: View {
 
       Text("아직 만든 루틴이 없어요.")
         .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruPilotColor.textStrong)
 
       Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
         .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .multilineTextAlignment(.center)
 
       MoruButton("새 루틴 만들기", style: .secondary, action: onCreateRoutine)
@@ -785,7 +785,7 @@ private struct HomeFailureView: View {
 
       Text(failure.userMessage)
         .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruPilotColor.textStrong)
         .multilineTextAlignment(.center)
 
       MoruButton("다시 시도", style: .secondary, action: retryAction)
@@ -803,7 +803,7 @@ private struct HomeFailureBanner: View {
     VStack(spacing: AppSpacing.sm) {
       Text(failure.userMessage)
         .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruPilotColor.textStrong)
         .multilineTextAlignment(.center)
 
       MoruButton("다시 시도", style: .secondary, action: retryAction)

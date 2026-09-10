@@ -44,20 +44,6 @@ enum AppColor {
   static let grayBlack = Color("grayBlack")
   static let grayWhite = Color("grayWhite")
 
-  // MARK: - Semantic
-
-  static let moruBorder = Color("moruBorder")
-  static let moruTextPrimary = Color("moruTextPrimary")
-  static let moruTextSecondary = Color("moruTextSecondary")
-  static let moruTextStrong = Color("moruTextStrong")
-  static let moruTextBody = Color("moruTextBody")
-  static let moruTextTertiary = Color("moruTextTertiary")
-  static let moruDisabled = Color("moruDisabled")
-  static let moruSurfaceMuted = Color("moruSurfaceMuted")
-  static let moruOrangePale = Color("moruOrangePale")
-  static let moruBlue = Color("moruBlue")
-  static let moruBlueDisabled = Color("moruBlueDisabled")
-
   // MARK: - Orange
 
   static let orange100 = Color("orange100")

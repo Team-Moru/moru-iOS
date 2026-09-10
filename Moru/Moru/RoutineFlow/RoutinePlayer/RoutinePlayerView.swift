@@ -117,7 +117,7 @@ struct RoutinePlayerView: View {
                     .foregroundStyle(AppColor.grayWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(AppColor.orange350)
+                    .background(MoruPilotColor.ctaFill)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -146,7 +146,7 @@ struct RoutinePlayerView: View {
                     .foregroundStyle(AppColor.grayWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .background(AppColor.orange350)
+                    .background(MoruPilotColor.ctaFill)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -554,7 +554,7 @@ struct RoutinePlayerView: View {
                     .foregroundStyle(AppColor.grayWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                    .background(AppColor.orange350)
+                    .background(MoruPilotColor.ctaFill)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

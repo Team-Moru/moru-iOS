@@ -114,7 +114,7 @@ struct RoutineSettingCard: View {
   }
 
   private var alarmStatusColor: Color {
-    routine.needsAlarmAction ? AppColor.orange500 : AppColor.moruTextTertiary
+    routine.needsAlarmAction ? AppColor.orange500 : MoruPilotColor.textTertiary
   }
 
   private var editButton: some View {
@@ -123,7 +123,7 @@ struct RoutineSettingCard: View {
         .resizable()
         .scaledToFit()
         .frame(width: 18, height: 18)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(minWidth: 44, minHeight: 44)
     }
     .buttonStyle(.plain)
@@ -132,7 +132,7 @@ struct RoutineSettingCard: View {
 
   private var compactEditButton: some View {
     Button(action: onTap) {
-      MoruChevron(color: AppColor.moruTextSecondary)
+      MoruChevron(color: MoruPilotColor.textSecondary)
     }
     .buttonStyle(.plain)
     .frame(width: 20, height: 44)

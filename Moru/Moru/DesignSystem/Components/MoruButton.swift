@@ -51,7 +51,7 @@ struct MoruButton: View {
   private var foregroundColor: Color {
     switch style {
     case .primary:
-      AppColor.grayWhite
+      MoruPilotColor.onCTA
     case .secondary:
       MoruPilotColor.textStrong
     case .text:
@@ -62,7 +62,7 @@ struct MoruButton: View {
   private var backgroundColor: Color {
     switch style {
     case .primary:
-      MoruPilotColor.accent
+      MoruPilotColor.ctaFill
     case .secondary:
       AppColor.grayWhite
     case .text:

@@ -72,7 +72,7 @@ struct SnoozeSheetView: View {
                     .foregroundStyle(AppColor.grayWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(AppColor.orange350)
+                    .background(MoruPilotColor.ctaFill)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)

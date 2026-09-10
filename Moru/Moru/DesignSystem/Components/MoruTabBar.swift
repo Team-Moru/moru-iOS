@@ -83,7 +83,7 @@ struct MoruTabBar: View {
         .ignoresSafeArea(edges: .bottom)
     }
     .shadow(
-      color: Color(red: 2 / 255, green: 24 / 255, blue: 100 / 255).opacity(0.05),
+      color: MoruPilotColor.tabBarShadow,
       radius: 10,
       x: 0,
       y: -2

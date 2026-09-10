@@ -50,13 +50,13 @@ struct MoruDialog: View {
       VStack(spacing: AppSpacing.md) {
         Text(title)
           .font(AppFont.pretendardSemiBold(size: 22))
-          .foregroundStyle(AppColor.moruTextStrong)
+          .foregroundStyle(MoruPilotColor.textStrong)
           .multilineTextAlignment(.center)
           .frame(width: 320)
 
         Text(message)
           .font(AppFont.pretendardMedium(size: 16))
-          .foregroundStyle(AppColor.moruTextSecondary)
+          .foregroundStyle(MoruPilotColor.textSecondary)
           .multilineTextAlignment(.center)
           .frame(width: 320)
       }
@@ -67,15 +67,15 @@ struct MoruDialog: View {
         legacyDialogActionButton(
           action: primaryAction,
           title: primaryTitle,
-          color: AppColor.moruTextSecondary
+          color: MoruPilotColor.textSecondary
         )
         Rectangle()
-          .fill(AppColor.moruBorder)
+          .fill(MoruPilotColor.border)
           .frame(width: 1, height: 54)
         legacyDialogActionButton(
           action: secondaryAction,
           title: secondaryTitle,
-          color: AppColor.moruTextStrong
+          color: MoruPilotColor.textStrong
         )
       }
       .frame(width: 320, height: 54)
@@ -90,14 +90,14 @@ struct MoruDialog: View {
       VStack(spacing: AppSpacing.md) {
         Text(title)
           .font(AppFont.pretendardSemiBold(size: 22, relativeTo: .title3))
-          .foregroundStyle(AppColor.moruTextStrong)
+          .foregroundStyle(MoruPilotColor.textStrong)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .fixedSize(horizontal: false, vertical: true)
 
         Text(message)
           .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-          .foregroundStyle(AppColor.moruTextSecondary)
+          .foregroundStyle(MoruPilotColor.textSecondary)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .fixedSize(horizontal: false, vertical: true)
@@ -110,16 +110,16 @@ struct MoruDialog: View {
           adaptiveDialogActionButton(
             action: primaryAction,
             title: primaryTitle,
-            color: AppColor.moruTextSecondary,
+            color: MoruPilotColor.textSecondary,
             width: 320
           )
           Rectangle()
-            .fill(AppColor.moruBorder)
+            .fill(MoruPilotColor.border)
             .frame(width: 320, height: 1)
           adaptiveDialogActionButton(
             action: secondaryAction,
             title: secondaryTitle,
-            color: AppColor.moruTextStrong,
+            color: MoruPilotColor.textStrong,
             width: 320
           )
         }
@@ -128,16 +128,16 @@ struct MoruDialog: View {
           adaptiveDialogActionButton(
             action: primaryAction,
             title: primaryTitle,
-            color: AppColor.moruTextSecondary,
+            color: MoruPilotColor.textSecondary,
             width: 159.5
           )
           Rectangle()
-            .fill(AppColor.moruBorder)
+            .fill(MoruPilotColor.border)
             .frame(width: 1, height: 54)
           adaptiveDialogActionButton(
             action: secondaryAction,
             title: secondaryTitle,
-            color: AppColor.moruTextStrong,
+            color: MoruPilotColor.textStrong,
             width: 159.5
           )
         }

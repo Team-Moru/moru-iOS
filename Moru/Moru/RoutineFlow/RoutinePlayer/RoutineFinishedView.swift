@@ -327,7 +327,7 @@ struct RoutineFinishedView: View {
       finishedButton(
         title: "홈으로",
         foregroundColor: AppColor.grayWhite,
-        backgroundColor: MoruPilotColor.accent,
+        backgroundColor: MoruPilotColor.ctaFill,
         action: onTapHome
       )
       .padding(.horizontal, 2)
@@ -343,7 +343,7 @@ struct RoutineFinishedView: View {
         finishedButton(
           title: "홈으로",
           foregroundColor: AppColor.grayWhite,
-          backgroundColor: MoruPilotColor.accent,
+          backgroundColor: MoruPilotColor.ctaFill,
           action: onTapHome
         )
       }

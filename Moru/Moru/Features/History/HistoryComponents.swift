@@ -855,7 +855,7 @@ struct HistoryRunRow: View {
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
         .overlay {
             RoundedRectangle(cornerRadius: AppRadius.xs)
-                .stroke(AppColor.moruBorder, lineWidth: 1)
+                .stroke(MoruPilotColor.border, lineWidth: 1)
         }
     }
 }

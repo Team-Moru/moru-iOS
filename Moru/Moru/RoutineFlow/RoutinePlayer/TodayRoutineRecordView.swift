@@ -403,7 +403,7 @@ struct TodayRoutineRecordView: View {
                     .foregroundStyle(AppColor.grayWhite)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(AppColor.orange350)
+                    .background(MoruPilotColor.ctaFill)
                     .clipShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -434,7 +434,7 @@ struct TodayRoutineRecordView: View {
             Circle()
                 .stroke(
                     isCompleted
-                        ? AppColor.moruBlue
+                        ? MoruPilotColor.link
                         : AppColor.gray250,
                     lineWidth: 1.2
                 )
@@ -453,7 +453,7 @@ struct TodayRoutineRecordView: View {
             )
             .foregroundStyle(
                 isCompleted
-                    ? AppColor.moruBlue
+                    ? MoruPilotColor.link
                     : AppColor.gray300
             )
         }

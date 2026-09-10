@@ -852,7 +852,7 @@ private struct HistoryDaySummaryRow: View {
     .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
     .overlay {
       RoundedRectangle(cornerRadius: AppRadius.xs)
-        .stroke(AppColor.moruBorder, lineWidth: 1)
+        .stroke(MoruPilotColor.border, lineWidth: 1)
     }
   }
 }
@@ -1176,13 +1176,13 @@ private struct HistoryWeeklyDailyRateRow: View {
         format: .dateTime.weekday(.abbreviated)
       ))
         .font(AppFont.label1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruPilotColor.textStrong)
         .frame(width: 28, alignment: .leading)
 
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule()
-            .fill(AppColor.moruSurfaceMuted)
+            .fill(MoruPilotColor.surfaceMuted)
 
           Capsule()
             .fill(AppColor.orange350)
@@ -1198,16 +1198,16 @@ private struct HistoryWeeklyDailyRateRow: View {
           : "-"
       )
         .font(AppFont.caption1SemiBold)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(width: 36, alignment: .trailing)
     }
     .padding(AppSpacing.md)
     .frame(maxWidth: .infinity)
     .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+    .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
     .overlay {
-      RoundedRectangle(cornerRadius: AppRadius.md)
-        .stroke(AppColor.moruBorder, lineWidth: 1)
+      RoundedRectangle(cornerRadius: AppRadius.sm)
+        .stroke(MoruPilotColor.border, lineWidth: 1)
     }
   }
 }

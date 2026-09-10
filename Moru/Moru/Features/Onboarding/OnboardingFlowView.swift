@@ -223,7 +223,7 @@ private struct OnboardingFooterView: View {
         .frame(maxWidth: .infinity, minHeight: 54)
         .background(
           viewModel.canAdvance
-            ? MoruPilotColor.accent
+            ? MoruPilotColor.ctaFill
             : MoruPilotColor.textTertiary
         )
         .clipShape(
@@ -1113,7 +1113,7 @@ private struct RoutineStepPreviewRow: View {
     .frame(minHeight: 62)
     .background(
       isSelectableAndExcluded
-        ? AppColor.moruSurfaceMuted
+        ? MoruPilotColor.surfaceMuted
         : OnboardingSurface.listRow
     )
     .overlay(
@@ -1419,7 +1419,7 @@ private struct WeekdayCircleSelector: View {
               .foregroundStyle(
                 viewModel.draft.selectedWeekdays.contains(weekday)
                   ? AppColor.grayWhite
-                  : MoruPilotColor.textTertiary
+                  : MoruPilotColor.textPrimary
               )
               .lineLimit(1)
               .frame(width: 42, height: 42)

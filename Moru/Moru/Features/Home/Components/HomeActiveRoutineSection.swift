@@ -92,7 +92,7 @@ private struct HomeActiveRoutineCard: View {
 
           activeBadge
           Spacer(minLength: AppSpacing.sm)
-          MoruChevron(color: AppColor.moruTextSecondary)
+          MoruChevron(color: MoruPilotColor.textSecondary)
         }
 
         routineMetadata
@@ -144,7 +144,7 @@ private struct HomeActiveRoutineCard: View {
       .padding(.horizontal, AppSpacing.sm)
       .padding(.vertical, AppSpacing.xxs)
       .background(
-        routine.isActive ? MoruPilotColor.accentSurface : AppColor.moruSurfaceMuted
+        routine.isActive ? MoruPilotColor.accentSurface : MoruPilotColor.surfaceMuted
       )
       .clipShape(Capsule())
   }
@@ -162,7 +162,7 @@ private struct HomeActiveRoutineCard: View {
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule()
-            .fill(AppColor.moruSurfaceMuted)
+            .fill(MoruPilotColor.surfaceMuted)
 
           Capsule()
             .fill(MoruPilotColor.accent)
@@ -188,7 +188,7 @@ private struct HomeActiveRoutineCard: View {
         .padding(.horizontal, AppSpacing.buttonHorizontal)
         .padding(.vertical, AppSpacing.buttonVertical)
         .frame(maxWidth: .infinity)
-        .background(MoruPilotColor.accent)
+        .background(MoruPilotColor.ctaFill)
         .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
     }
     .buttonStyle(.plain)

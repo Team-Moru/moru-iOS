@@ -191,7 +191,7 @@ struct CurrentRoutineCard: View {
     .padding(.vertical, MoruPilotSpacing.twelve)
     .overlay(alignment: .bottom) {
       Rectangle()
-        .fill(AppColor.moruBorder)
+        .fill(MoruPilotColor.border)
         .frame(height: 1)
     }
     .accessibilityElement(children: .ignore)

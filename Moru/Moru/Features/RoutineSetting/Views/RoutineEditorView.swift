@@ -112,7 +112,7 @@ struct RoutineEditorView: View {
               .frame(maxWidth: .infinity)
               .frame(minHeight: 54)
               .background(
-                draft.canSave ? MoruPilotColor.accent : AppColor.moruDisabled
+                draft.canSave ? MoruPilotColor.ctaFill : MoruPilotColor.disabled
               )
               .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
           }

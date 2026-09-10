@@ -47,7 +47,7 @@ struct MoruRoutineCard: View {
 
           Text(title)
             .moruTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(AppColor.moruDisabled)
+            .foregroundStyle(MoruPilotColor.disabled)
             .fixedSize(horizontal: false, vertical: true)
 
           Spacer(minLength: 0)
@@ -84,7 +84,7 @@ struct MoruRoutineCard: View {
         HStack(spacing: MoruPilotSpacing.four) {
           Spacer(minLength: 0)
           MoruToggle(isOn: $isActive)
-          MoruChevron(color: AppColor.moruTextSecondary)
+          MoruChevron(color: MoruPilotColor.textSecondary)
         }
       }
     } else {
@@ -93,7 +93,7 @@ struct MoruRoutineCard: View {
         routineLabels
         Spacer()
         MoruToggle(isOn: $isActive)
-        MoruChevron(color: AppColor.moruTextSecondary)
+        MoruChevron(color: MoruPilotColor.textSecondary)
       }
     }
   }
@@ -116,7 +116,7 @@ struct MoruRoutineCard: View {
     Image(systemName: "plus")
       .resizable()
       .scaledToFit()
-      .foregroundStyle(AppColor.moruDisabled)
+      .foregroundStyle(MoruPilotColor.disabled)
       .frame(width: 18, height: 18)
   }
 

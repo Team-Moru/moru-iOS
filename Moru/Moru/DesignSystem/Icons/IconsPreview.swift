@@ -134,7 +134,7 @@ private struct MoruIconsPreviewHost: View {
   ) -> some View {
     VStack(spacing: AppSpacing.xs) {
       ZStack {
-        RoundedRectangle(cornerRadius: AppRadius.md)
+        RoundedRectangle(cornerRadius: AppRadius.sm)
           .fill(AppColor.grayWhite)
 
         content()
@@ -143,7 +143,7 @@ private struct MoruIconsPreviewHost: View {
 
       Text(title)
         .font(AppFont.caption1Medium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .lineLimit(1)
     }
   }

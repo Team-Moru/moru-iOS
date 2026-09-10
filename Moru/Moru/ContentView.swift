@@ -19,11 +19,11 @@ struct ContentView: View {
 
       Text(title)
         .font(AppFont.heading1Bold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruPilotColor.textStrong)
 
       Text(message)
         .font(AppFont.body1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruPilotColor.textSecondary)
         .multilineTextAlignment(.center)
     }
     .padding(24)

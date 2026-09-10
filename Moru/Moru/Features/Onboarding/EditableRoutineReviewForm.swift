@@ -23,7 +23,7 @@ struct EditableRoutineReviewForm: View {
 
       Text("\(routine.steps.count)개 - 총 \(totalMinutes)분")
         .font(AppFont.body1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruPilotColor.textStrong)
     }
   }
 
@@ -53,11 +53,11 @@ struct EditableRoutineReviewForm: View {
           text: stepTitleBinding(for: step.id)
         )
         .font(AppFont.label1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruPilotColor.textStrong)
 
         Text("\(stepTypeTitle(step.type)) - \(durationTitle(step))")
           .font(AppFont.caption1Medium)
-          .foregroundStyle(AppColor.moruTextSecondary)
+          .foregroundStyle(MoruPilotColor.textSecondary)
       }
     }
     .padding(.horizontal, AppSpacing.md)
@@ -70,12 +70,12 @@ struct EditableRoutineReviewForm: View {
   private func sectionTitle(_ title: String) -> some View {
     Text(title)
       .font(AppFont.heading3SemiBold)
-      .foregroundStyle(AppColor.moruTextSecondary)
+      .foregroundStyle(MoruPilotColor.textSecondary)
   }
 
   private var fieldBorder: some View {
     RoundedRectangle(cornerRadius: AppRadius.sm)
-      .stroke(AppColor.moruBorder, lineWidth: 1)
+      .stroke(MoruPilotColor.border, lineWidth: 1)
   }
 
   private func stepTitleBinding(for stepID: UUID) -> Binding<String> {

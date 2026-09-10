@@ -667,7 +667,7 @@ struct ProfileView: View {
       .accessibilityIdentifier("profile.voice.chooser")
 
       if let fallbackNotice = content.fallbackNotice {
-        profileMessage(fallbackNotice, color: AppColor.moruTextSecondary)
+        profileMessage(fallbackNotice, color: MoruPilotColor.textSecondary)
       }
 
       if let voiceErrorMessage = viewModel.voiceErrorMessage {
@@ -692,17 +692,17 @@ struct ProfileView: View {
           ProgressView()
           Text("초기화하고 있어요.")
             .font(AppFont.label1NormalMedium)
-            .foregroundStyle(AppColor.moruTextSecondary)
+            .foregroundStyle(MoruPilotColor.textSecondary)
         }
       }
 
       if accountSessionStore.isWithdrawalPending {
         profileMessage(
           ProfileCopy.withdrawalResetUnavailable,
-          color: AppColor.moruTextSecondary
+          color: MoruPilotColor.textSecondary
         )
       } else if let message = viewModel.resetAvailabilityMessage {
-        profileMessage(message, color: AppColor.moruTextSecondary)
+        profileMessage(message, color: MoruPilotColor.textSecondary)
       }
 
       if let message = viewModel.resetErrorMessage {
@@ -836,7 +836,7 @@ struct ProfileView: View {
 
         Text("앞뒤 공백을 제외한 1자에서 20자까지 입력할 수 있어요.")
           .font(AppFont.label1NormalMedium)
-          .foregroundStyle(AppColor.moruTextSecondary)
+          .foregroundStyle(MoruPilotColor.textSecondary)
 
         if let message = viewModel.displayNameErrorMessage {
           profileMessage(message, color: AppColor.coral300)
@@ -1033,17 +1033,17 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
           Text(voice.displayName)
             .font(AppFont.label1NormalSemiBold)
-            .foregroundStyle(AppColor.moruTextPrimary)
+            .foregroundStyle(MoruPilotColor.textStrong)
           Text(isAvailable ? "앱 내장 음성" : "음성 파일 없음")
             .font(AppFont.caption1Medium)
-            .foregroundStyle(AppColor.moruTextSecondary)
+            .foregroundStyle(MoruPilotColor.textSecondary)
         }
 
         Spacer()
 
         if isSelected {
           Image(systemName: "checkmark.circle.fill")
-            .foregroundStyle(AppColor.moruBlue)
+            .foregroundStyle(MoruPilotColor.link)
             .accessibilityLabel("현재 선택됨")
         }
       }
@@ -1073,7 +1073,7 @@ struct ProfileView: View {
       }
     }
     .buttonStyle(.borderedProminent)
-    .tint(AppColor.moruBlue)
+    .tint(MoruPilotColor.link)
     .disabled(!isAvailable || isSelected)
   }
 

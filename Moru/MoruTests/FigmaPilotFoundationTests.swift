@@ -26,6 +26,13 @@ final class FigmaPilotFoundationTests: XCTestCase {
       (MoruPilotColor.textSecondary, 0x80889E),
       (MoruPilotColor.textTertiary, 0x999FB3),
       (MoruPilotColor.shadow, 0xD8E3FF),
+      (MoruPilotColor.ctaFill, 0xE84000),
+      (MoruPilotColor.onCTA, 0xFFFFFF),
+      (MoruPilotColor.summarySurface, 0xFFC09E),
+      (MoruPilotColor.surfaceMuted, 0xF2F4F9),
+      (MoruPilotColor.disabled, 0xB3B7C9),
+      (MoruPilotColor.link, 0x427DFF),
+      (MoruPilotColor.linkDisabled, 0xADC7FF),
     ]
 
     for (color, expectedHex) in colors {

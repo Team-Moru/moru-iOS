@@ -35,7 +35,7 @@ struct RoutineStepAddSheet: View {
   var body: some View {
     VStack(spacing: 0) {
       Capsule()
-        .fill(AppColor.moruBorder)
+        .fill(MoruPilotColor.border)
         .frame(width: 36, height: 3)
         .padding(.top, MoruPilotSpacing.eight)
 
@@ -139,7 +139,7 @@ struct RoutineStepAddSheet: View {
       }
       .padding(.horizontal, MoruPilotSpacing.eight)
       .frame(minHeight: 52)
-      .background(AppColor.moruSurfaceMuted)
+      .background(MoruPilotColor.surfaceMuted)
       .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
     }
   }
@@ -168,7 +168,7 @@ struct RoutineStepAddSheet: View {
         .foregroundStyle(AppColor.grayWhite)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 54)
-        .background(canSave ? MoruPilotColor.accent : AppColor.moruDisabled)
+        .background(canSave ? MoruPilotColor.ctaFill : MoruPilotColor.disabled)
         .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.pill))
     }
     .disabled(!canSave)

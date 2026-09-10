@@ -47,7 +47,7 @@ struct RoutineWeekdaySelector: View {
           .foregroundStyle(
             selectedWeekdays.contains(weekday)
               ? AppColor.grayWhite
-              : AppColor.moruDisabled
+              : MoruPilotColor.textPrimary
           )
           .frame(
             width: dynamicTypeSize.isAccessibilitySize ? 52 : 40,
@@ -56,7 +56,7 @@ struct RoutineWeekdaySelector: View {
           .background(
             selectedWeekdays.contains(weekday)
               ? MoruPilotColor.accent
-              : AppColor.gray150.opacity(0.55)
+              : MoruPilotColor.border
           )
           .clipShape(Circle())
       }
