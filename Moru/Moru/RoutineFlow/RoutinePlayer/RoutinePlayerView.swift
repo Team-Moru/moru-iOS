@@ -43,7 +43,12 @@ struct RoutinePlayerView: View {
                 viewModel.resolveRoutine()
             }
         }
+        .onAppear {
+            // 루틴은 폰을 내려놓고 하는 것이라 자동 잠금이 실행을 끊으면 안 된다.
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
         .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
             speechInputController.cancel()
             viewModel.viewDidDisappear()
         }
@@ -54,6 +59,13 @@ struct RoutinePlayerView: View {
         ) { _ in
             speechInputController.cancel()
             viewModel.runtimeDidInterrupt()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIApplication.willEnterForegroundNotification
+            )
+        ) { _ in
+            viewModel.runtimeDidResume()
         }
     }
 

@@ -12,6 +12,7 @@
 
 import SwiftUI
 import Combine
+import UIKit
 
 private struct RoutinePlayerCaptureTimerRemainingSecondsKey: EnvironmentKey {
     static let defaultValue: Int? = nil
@@ -80,6 +81,26 @@ struct RoutineTimerState: Equatable {
         return [.announce(remainingSeconds)]
     }
 
+    /// 백그라운드에서 잃어버린 초를 한 번에 차감한다. 지나간 카운트다운은 되풀이하지 않고
+    /// 현재 남은 초가 1~5초면 그 값만 알린다.
+    mutating func catchUp(elapsedSeconds: Int) -> [Action] {
+        guard didStart, !didComplete, elapsedSeconds > 0, remainingSeconds > 0 else {
+            return []
+        }
+
+        remainingSeconds = max(remainingSeconds - elapsedSeconds, 0)
+        if remainingSeconds == 0 {
+            didComplete = true
+            return [.complete]
+        }
+
+        guard (1...5).contains(remainingSeconds) else {
+            return []
+        }
+
+        return [.announce(remainingSeconds)]
+    }
+
     /// 사용자가 남은 시간을 기다리지 않고 단계를 끝낸다. 이후 tick은 아무것도 내지 않는다.
     mutating func completeEarly() -> [Action] {
         guard !didComplete else {
@@ -106,6 +127,8 @@ struct TimerStepContentView: View {
     let onSkip: () -> Void
 
     @State private var timerState: RoutineTimerState
+    /// 백그라운드 진입 시각. 런루프 타이머는 정지된 동안의 tick을 돌려주지 않으므로 복귀 시 벽시계로 보정한다.
+    @State private var backgroundEnteredAt: Date?
 
     private let totalSeconds: Int
 
@@ -176,6 +199,26 @@ struct TimerStepContentView: View {
         }
         .onAppear {
             handleTimerActions(timerState.start())
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIApplication.didEnterBackgroundNotification
+            )
+        ) { _ in
+            backgroundEnteredAt = Date()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIApplication.willEnterForegroundNotification
+            )
+        ) { _ in
+            guard let backgroundEnteredAt else {
+                return
+            }
+
+            self.backgroundEnteredAt = nil
+            let elapsed = Int(Date().timeIntervalSince(backgroundEnteredAt).rounded(.down))
+            handleTimerActions(timerState.catchUp(elapsedSeconds: elapsed))
         }
     }
 

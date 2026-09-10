@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum SpeechNoInputAction: Equatable {
   case playReminder
@@ -52,6 +53,8 @@ struct VoiceInputControlView: View {
   @State private var pendingAutomaticFinishTask: Task<Void, Never>?
   @State private var noInputSequence = SpeechNoInputSequence()
   @State private var noInputHandlingTask: Task<Void, Never>?
+  /// 안내 대기 중에 백그라운드를 다녀오면 대기가 false로 끝나는데, 그 경우에도 자동 시작을 살린다.
+  @State private var shouldResumeAfterInterruptedGuidance = false
 
   init(
     speechInputController: SpeechInputController,
@@ -115,8 +118,17 @@ struct VoiceInputControlView: View {
         return
       }
 
-      automaticStartState = guidanceDidFinish ? .ready : .manualOnly
+      let resumesAfterInterruption = shouldResumeAfterInterruptedGuidance
+      shouldResumeAfterInterruptedGuidance = false
+      automaticStartState = guidanceDidFinish || resumesAfterInterruption ? .ready : .manualOnly
       await startAutomaticallyIfPossible()
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(
+        for: UIApplication.willEnterForegroundNotification
+      )
+    ) { _ in
+      resumeAutomaticStartAfterForeground()
     }
     .onChange(of: speechInputController.latestTranscriptUpdate) { _, update in
       if let update,
@@ -159,6 +171,29 @@ struct VoiceInputControlView: View {
 
     automaticStartState = .started
     await speechInputController.start()
+  }
+
+  /// 백그라운드 진입이 인식을 취소하면 `.started`/`.manualOnly`에 멈춰 자동 시작이 다시 오지 않는다.
+  /// 복귀 시 안내 재생 없이 인식만 다시 켠다. 일시정지·실패 상태는 건드리지 않는다.
+  private func resumeAutomaticStartAfterForeground() {
+    switch automaticStartState {
+    case .waitingForGuidance:
+      shouldResumeAfterInterruptedGuidance = true
+
+    case .started, .manualOnly:
+      guard speechInputController.phase == .idle,
+            !speechInputController.isPreparing else {
+        return
+      }
+
+      automaticStartState = .ready
+      Task {
+        await startAutomaticallyIfPossible()
+      }
+
+    case .ready:
+      break
+    }
   }
 
   private func scheduleAutomaticFinishIfNeeded(for update: SpeechTranscriptUpdate?) {

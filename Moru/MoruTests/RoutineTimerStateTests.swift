@@ -56,6 +56,40 @@ final class RoutineTimerStateTests: XCTestCase {
     XCTAssertEqual(state.remainingSeconds, 178)
   }
 
+  func testCatchUpSubtractsLostSecondsWithoutReplayingTheCountdown() {
+    var state = RoutineTimerState(totalSeconds: 180)
+    _ = state.start()
+
+    XCTAssertTrue(state.catchUp(elapsedSeconds: 30).isEmpty)
+    XCTAssertEqual(state.remainingSeconds, 150)
+
+    // 카운트다운 구간으로 들어오면 현재 남은 초만 알린다.
+    XCTAssertEqual(state.catchUp(elapsedSeconds: 147), [.announce(3)])
+    XCTAssertEqual(state.tick(), [.announce(2)])
+  }
+
+  func testCatchUpPastTheEndCompletesOnce() {
+    var state = RoutineTimerState(totalSeconds: 10)
+    _ = state.start()
+
+    XCTAssertEqual(state.catchUp(elapsedSeconds: 25), [.complete])
+    XCTAssertEqual(state.remainingSeconds, 0)
+    XCTAssertTrue(state.didComplete)
+    XCTAssertTrue(state.tick().isEmpty)
+    XCTAssertTrue(state.catchUp(elapsedSeconds: 5).isEmpty)
+  }
+
+  func testCatchUpBeforeStartOrWithoutElapsedTimeDoesNothing() {
+    var unstarted = RoutineTimerState(totalSeconds: 10)
+    XCTAssertTrue(unstarted.catchUp(elapsedSeconds: 5).isEmpty)
+    XCTAssertEqual(unstarted.remainingSeconds, 10)
+
+    var started = RoutineTimerState(totalSeconds: 10)
+    _ = started.start()
+    XCTAssertTrue(started.catchUp(elapsedSeconds: 0).isEmpty)
+    XCTAssertEqual(started.remainingSeconds, 10)
+  }
+
   func testEarlyCompletionAfterNaturalCompletionIsIgnored() {
     var state = RoutineTimerState(totalSeconds: 1)
     _ = state.start()

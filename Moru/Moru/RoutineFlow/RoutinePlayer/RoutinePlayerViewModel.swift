@@ -11,6 +11,7 @@ nonisolated private enum RoutinePlayerDiagnosticEvent: String, Sendable {
     case stepStarted
     case serverVoiceUnavailableContinuedSilently
     case guidanceInterrupted
+    case resumedFromBackground
 }
 
 /// Records only coarse state transitions so TestFlight diagnostics never
@@ -555,6 +556,15 @@ final class RoutinePlayerViewModel {
         continueAfterInterruptedServerVoicePreparation()
         guidanceCoordinator.stop()
         diagnostics.record(.guidanceInterrupted)
+    }
+
+    /// 포그라운드 복귀. 안내는 다시 틀지 않고(이미 들은 내용) 뷰 쪽이 음성 인식·타이머를 되살린다.
+    func runtimeDidResume() {
+        guard isPresentationActive, !didRequestExit else {
+            return
+        }
+
+        diagnostics.record(.resumedFromBackground)
     }
 
     private var isExitEligible: Bool {
