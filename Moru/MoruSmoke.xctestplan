@@ -18,7 +18,10 @@
       "containerPath": "container:Moru.xcodeproj",
       "identifier": "E0D6C3B62FF1232200DA2A54",
       "name": "Moru"
-    }
+    },
+    "testTimeoutsEnabled": true,
+    "defaultTestExecutionTimeAllowance": 180,
+    "maximumTestExecutionTimeAllowance": 600
   },
   "testTargets": [
     {
