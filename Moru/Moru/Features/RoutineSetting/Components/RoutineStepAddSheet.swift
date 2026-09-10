@@ -40,7 +40,7 @@ struct RoutineStepAddSheet: View {
         .padding(.top, MoruPilotSpacing.eight)
 
       Text(initialStep == nil ? "항목 추가" : "항목 수정")
-        .routineManagementTextStyle(.b3.weight(.semiBold))
+        .moruTextStyle(.b3.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
         .padding(.top, MoruPilotSpacing.twenty)
 
@@ -70,11 +70,11 @@ struct RoutineStepAddSheet: View {
   private var nameField: some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
       Text("항목명")
-        .routineManagementTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
 
       TextField("예) 물 한 잔 마시기", text: $title, axis: .vertical)
-        .routineManagementTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textStrong)
         .tint(MoruPilotColor.accent)
         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
@@ -103,7 +103,7 @@ struct RoutineStepAddSheet: View {
   private var durationControl: some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
       Text("시간")
-        .routineManagementTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
 
       HStack {
@@ -121,7 +121,7 @@ struct RoutineStepAddSheet: View {
         Spacer()
 
         Text("\(estimatedMinutes)분")
-          .routineManagementTextStyle(.b2.weight(.semiBold))
+          .moruTextStyle(.b2.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
 
         Spacer()
@@ -164,7 +164,7 @@ struct RoutineStepAddSheet: View {
       dismiss()
     } label: {
       Text("저장")
-        .routineManagementTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(AppColor.grayWhite)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 54)
@@ -181,7 +181,7 @@ struct RoutineStepAddSheet: View {
       dismiss()
     } label: {
       Text("항목 삭제")
-        .routineManagementTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
         .frame(maxWidth: .infinity)
         .frame(minHeight: 54)
@@ -216,7 +216,7 @@ struct RoutineStepAddSheet: View {
         )
 
         Text(type.routineSettingTitle)
-          .routineManagementTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(
             isSelected ? MoruPilotColor.accent : MoruPilotColor.textSecondary
           )

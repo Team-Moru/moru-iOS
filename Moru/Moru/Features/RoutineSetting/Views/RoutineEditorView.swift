@@ -73,7 +73,7 @@ struct RoutineEditorView: View {
 
           if let saveErrorMessage {
             Text(saveErrorMessage)
-              .routineManagementTextStyle(.c1)
+              .moruTextStyle(.c1)
               .foregroundStyle(MoruPilotColor.accent)
               .fixedSize(horizontal: false, vertical: true)
               .padding(.top, MoruPilotSpacing.sixteen)
@@ -107,7 +107,7 @@ struct RoutineEditorView: View {
                 ? RoutineManagementCopy.createCompletion
                 : RoutineManagementCopy.editCompletion
             )
-              .routineManagementTextStyle(.b4.weight(.semiBold))
+              .moruTextStyle(.b4.weight(.semiBold))
               .foregroundStyle(AppColor.grayWhite)
               .frame(maxWidth: .infinity)
               .frame(minHeight: 54)
@@ -201,7 +201,7 @@ struct RoutineEditorView: View {
 
   private var editorTitle: some View {
     Text(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
-      .routineManagementTextStyle(.b3.weight(.semiBold))
+      .moruTextStyle(.b3.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.textStrong)
       .frame(maxWidth: .infinity)
       .fixedSize(horizontal: false, vertical: true)
@@ -213,7 +213,7 @@ struct RoutineEditorView: View {
       dismiss()
     } label: {
       Text("뒤로")
-        .routineManagementTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(minWidth: 44, minHeight: 44, alignment: .leading)
     }
@@ -225,7 +225,7 @@ struct RoutineEditorView: View {
       isDeleteDialogPresented = true
     } label: {
       Text("삭제")
-        .routineManagementTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
     }
@@ -257,7 +257,7 @@ struct RoutineEditorView: View {
       } label: {
         HStack(spacing: MoruPilotSpacing.sixteen) {
           Text(alarmTitle)
-            .routineManagementTextStyle(.b4)
+            .moruTextStyle(.b4)
             .foregroundStyle(MoruPilotColor.textSecondary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
@@ -293,7 +293,7 @@ struct RoutineEditorView: View {
         sectionTitle("루틴 항목")
 
         Text("\(draft.steps.count)개 - 총 \(totalMinutes)분")
-          .routineManagementTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textTertiary)
           .fixedSize(horizontal: false, vertical: true)
 
@@ -378,7 +378,7 @@ struct RoutineEditorView: View {
           .frame(width: 18, height: 18)
 
         Text(RoutineManagementCopy.addStep)
-          .routineManagementTextStyle(.b4.weight(.semiBold))
+          .moruTextStyle(.b4.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textTertiary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -478,7 +478,7 @@ struct RoutineEditorView: View {
 
   private func sectionTitle(_ title: String) -> some View {
     Text(title)
-      .routineManagementTextStyle(.b4.weight(.semiBold))
+      .moruTextStyle(.b4.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
@@ -488,7 +488,7 @@ struct RoutineEditorView: View {
     placeholder: String
   ) -> some View {
     TextField(placeholder, text: text, axis: .vertical)
-      .routineManagementTextStyle(.b4)
+      .moruTextStyle(.b4)
       .foregroundStyle(MoruPilotColor.textStrong)
       .tint(MoruPilotColor.accent)
       .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)

@@ -205,7 +205,7 @@ struct HistoryReportSummaryCard: View {
 
     private func metricTitle(_ metric: HistoryReportMetric) -> some View {
         Text(metric.title)
-            .historyOverviewTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(MoruPilotColor.textPrimary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
@@ -213,7 +213,7 @@ struct HistoryReportSummaryCard: View {
 
     private func metricValue(_ metric: HistoryReportMetric) -> some View {
         Text(metric.value)
-            .historyOverviewTextStyle(.h1.weight(.bold))
+            .moruTextStyle(.h1.weight(.bold))
             .foregroundStyle(MoruPilotColor.textStrong)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             .minimumScaleFactor(0.62)
@@ -357,17 +357,17 @@ private struct HistoryMetricBlock: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(title)
-                .historyOverviewTextStyle(.c2)
+                .moruTextStyle(.c2)
                 .foregroundStyle(MoruPilotColor.textTertiary)
 
             Text(value)
-                .historyOverviewTextStyle(.h1.weight(.bold))
+                .moruTextStyle(.h1.weight(.bold))
                 .foregroundStyle(MoruPilotColor.accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
 
             Text(detail)
-                .historyOverviewTextStyle(.c2)
+                .moruTextStyle(.c2)
                 .foregroundStyle(MoruPilotColor.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -382,7 +382,7 @@ private struct HistoryPilotSectionHeader: View {
 
     var body: some View {
         Text(title)
-            .historyOverviewTextStyle(.b4.weight(.semiBold))
+            .moruTextStyle(.b4.weight(.semiBold))
             .foregroundStyle(AppColor.gray400)
             .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
     }
@@ -488,7 +488,7 @@ private struct HistoryStepAnalysisRow: View {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
             HStack(alignment: .firstTextBaseline) {
                 Text(item.title)
-                    .historyOverviewTextStyle(.b4.weight(.semiBold))
+                    .moruTextStyle(.b4.weight(.semiBold))
                     .foregroundStyle(MoruPilotColor.textStrong)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -496,7 +496,7 @@ private struct HistoryStepAnalysisRow: View {
                 Spacer()
 
                 Text("완수율 \(Int((item.completionRate * 100).rounded()))%")
-                    .historyOverviewTextStyle(.c1)
+                    .moruTextStyle(.c1)
                     .foregroundStyle(MoruPilotColor.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -551,7 +551,7 @@ private struct HistoryWeekBar: View {
                     .opacity(completion.hasData ? 1 : 0)
 
                 Text(historyWeekdayText(completion.date, calendar: calendar))
-                    .historyOverviewTextStyle(.c1)
+                    .moruTextStyle(.c1)
                     .foregroundStyle(MoruPilotColor.textTertiary)
 
                 Text(
@@ -559,7 +559,7 @@ private struct HistoryWeekBar: View {
                         ? "\(Int((completion.completionRate * 100).rounded()))%"
                         : "-"
                 )
-                    .historyOverviewTextStyle(.c1)
+                    .moruTextStyle(.c1)
                     .foregroundStyle(MoruPilotColor.textPrimary)
             }
             .frame(maxWidth: .infinity)
@@ -595,7 +595,7 @@ struct HistoryInlineEmptyCard: View {
 
     var body: some View {
         Text(message)
-            .historyOverviewTextStyle(.b4)
+            .moruTextStyle(.b4)
             .foregroundStyle(MoruPilotColor.textSecondary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
@@ -665,7 +665,7 @@ struct HistoryMonthlyHeatmapView: View {
 
             VStack(spacing: 0) {
                 Text(monthText)
-                    .historyOverviewTextStyle(.b4)
+                    .moruTextStyle(.b4)
                     .foregroundStyle(AppColor.gray400)
                     .frame(maxWidth: .infinity, minHeight: 40)
 
@@ -676,7 +676,7 @@ struct HistoryMonthlyHeatmapView: View {
                         id: \.self
                     ) { weekday in
                         Text(weekday)
-                            .historyOverviewTextStyle(.c1)
+                            .moruTextStyle(.c1)
                             .foregroundStyle(AppColor.gray400)
                             .lineLimit(1)
                             .minimumScaleFactor(0.45)
@@ -768,7 +768,7 @@ struct HistoryMonthlyHeatmapView: View {
 
             if let date = day.date {
                 Text("\(calendar.component(.day, from: date))")
-                    .historyOverviewTextStyle(.c2)
+                    .moruTextStyle(.c2)
                     .foregroundStyle(AppColor.gray500)
                     .lineLimit(1)
                     .minimumScaleFactor(0.45)
@@ -923,7 +923,7 @@ struct HistoryStepResultRow: View {
 
     private var titleText: some View {
         Text(title)
-            .historyOverviewTextStyle(.b4.weight(.semiBold))
+            .moruTextStyle(.b4.weight(.semiBold))
             .foregroundStyle(MoruPilotColor.textStrong)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             .fixedSize(horizontal: false, vertical: true)
@@ -931,7 +931,7 @@ struct HistoryStepResultRow: View {
 
     private var resultBadge: some View {
         Text(resultText)
-            .historyOverviewTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(
                 isCompleted
                     ? MoruPilotColor.textPrimary
@@ -946,7 +946,7 @@ struct HistoryLoadingView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("이력")
-                    .historyOverviewTextStyle(.h3)
+                    .moruTextStyle(.h3)
                     .foregroundStyle(AppColor.gray550)
                     .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
 
@@ -1048,13 +1048,13 @@ struct HistoryStatusView: View {
                         .accessibilityHidden(true)
 
                     Text(title)
-                        .historyOverviewTextStyle(.h3)
+                        .moruTextStyle(.h3)
                         .foregroundStyle(MoruPilotColor.textStrong)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(message)
-                        .historyOverviewTextStyle(.b4)
+                        .moruTextStyle(.b4)
                         .foregroundStyle(MoruPilotColor.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1063,7 +1063,7 @@ struct HistoryStatusView: View {
                         if dynamicTypeSize.isAccessibilitySize {
                             Button(action: primaryAction) {
                                 Text(primaryActionTitle)
-                                    .historyOverviewTextStyle(.b4.weight(.semiBold))
+                                    .moruTextStyle(.b4.weight(.semiBold))
                                     .foregroundStyle(MoruPilotColor.textStrong)
                                     .multilineTextAlignment(.center)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -1085,7 +1085,7 @@ struct HistoryStatusView: View {
 
                     if let secondaryActionTitle, let secondaryAction {
                         Button(secondaryActionTitle, action: secondaryAction)
-                            .historyOverviewTextStyle(.b4.weight(.semiBold))
+                            .moruTextStyle(.b4.weight(.semiBold))
                             .foregroundStyle(MoruPilotColor.textPrimary)
                             .buttonStyle(.plain)
                             .frame(minHeight: 44)
@@ -1119,33 +1119,6 @@ private struct HistorySkeletonBlock: View {
                 )
             )
             .accessibilityHidden(true)
-    }
-}
-
-private struct HistoryOverviewTextStyleModifier: ViewModifier {
-    let style: MoruTextStyle
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            content.font(
-                .custom(
-                    style.weight.rawValue,
-                    size: style.fontSize,
-                    relativeTo: style.relativeTextStyle
-                )
-            )
-        } else {
-            content.moruTextStyle(style)
-        }
-    }
-}
-
-extension View {
-    func historyOverviewTextStyle(_ style: MoruTextStyle) -> some View {
-        modifier(HistoryOverviewTextStyleModifier(style: style))
     }
 }
 

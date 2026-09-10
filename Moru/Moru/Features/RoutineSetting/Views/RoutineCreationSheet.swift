@@ -116,7 +116,7 @@ struct RoutineCreationModeSelectionView: View {
   var body: some View {
     VStack(spacing: 0) {
       Text(RoutineManagementCopy.creationTitle)
-        .routineManagementTextStyle(.b3.weight(.semiBold))
+        .moruTextStyle(.b3.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
         .frame(maxWidth: .infinity)
         .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 76 : 55)
@@ -171,12 +171,12 @@ struct RoutineCreationModeSelectionView: View {
 
         VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
           Text(title)
-            .routineManagementTextStyle(.b3.weight(.semiBold))
+            .moruTextStyle(.b3.weight(.semiBold))
             .foregroundStyle(MoruPilotColor.textStrong)
             .fixedSize(horizontal: false, vertical: true)
 
           Text(subtitle)
-            .routineManagementTextStyle(.b4)
+            .moruTextStyle(.b4)
             .foregroundStyle(MoruPilotColor.textTertiary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)

@@ -123,7 +123,7 @@ struct EditableRoutineIdentityFields: View {
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
       Text("루틴")
-        .onboardingTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textSecondary)
 
       EditableRoutineTextField(
@@ -151,7 +151,7 @@ private struct EditableRoutineTextField: View {
 
   var body: some View {
     TextField(placeholder, text: $text, axis: .vertical)
-      .onboardingTextStyle(.b4.weight(.semiBold))
+      .moruTextStyle(.b4.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.textPrimary)
       .tint(MoruPilotColor.accent)
       .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)

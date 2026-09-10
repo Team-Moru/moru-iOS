@@ -29,11 +29,11 @@ struct HomeStreakCard: View {
 
       HStack(alignment: .firstTextBaseline, spacing: MoruPilotSpacing.four) {
         Text("\(streak.currentDays)")
-          .homeFigmaTextStyle(.h2)
+          .moruTextStyle(.h2)
           .foregroundStyle(MoruPilotColor.accent)
 
         Text("일 연속")
-          .homeFigmaTextStyle(.c1.weight(.semiBold))
+          .moruTextStyle(.c1.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textPrimary)
       }
 
@@ -60,7 +60,7 @@ struct HomeStreakCard: View {
       }
 
       Text("최고 기록 \(streak.bestDays)일")
-        .homeFigmaTextStyle(.c2)
+        .moruTextStyle(.c2)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .padding(.horizontal, MoruPilotSpacing.sixteen)
         .frame(minHeight: 22)
@@ -98,7 +98,7 @@ struct HomeStreakCard: View {
       )
 
       Text(weekday.label)
-        .homeFigmaTextStyle(.c2.weight(.regular))
+        .moruTextStyle(.c2.weight(.regular))
         .foregroundStyle(MoruPilotColor.textTertiary)
     }
     .accessibilityElement(children: .combine)

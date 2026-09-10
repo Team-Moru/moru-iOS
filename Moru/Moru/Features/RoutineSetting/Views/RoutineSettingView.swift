@@ -120,7 +120,7 @@ struct RoutineSettingView: View {
 
   private var header: some View {
     Text("루틴")
-      .routineListTextStyle(.h3)
+      .moruTextStyle(.h3)
       .foregroundStyle(AppColor.gray550)
       .fixedSize(horizontal: false, vertical: true)
   }
@@ -148,11 +148,11 @@ struct RoutineSettingView: View {
         .foregroundStyle(MoruPilotColor.accentSoft)
 
       Text("아직 만든 루틴이 없어요.")
-        .routineListTextStyle(.b3.weight(.semiBold))
+        .moruTextStyle(.b3.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
 
       Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
-        .routineListTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .multilineTextAlignment(.center)
 
@@ -177,13 +177,13 @@ struct RoutineSettingView: View {
         .accessibilityHidden(true)
 
       Text(message)
-        .routineListTextStyle(.b3.weight(.semiBold))
+        .moruTextStyle(.b3.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
 
       Text("잠시 후 다시 시도해 주세요.")
-        .routineListTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
@@ -201,14 +201,14 @@ struct RoutineSettingView: View {
   private func retainedRoutineErrorState(message: String) -> some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
       Text(message)
-        .routineListTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(AppColor.orange500)
         .fixedSize(horizontal: false, vertical: true)
 
       Button("다시 불러오기") {
         viewModel.load()
       }
-      .routineListTextStyle(.c1.weight(.semiBold))
+      .moruTextStyle(.c1.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.accent)
       .buttonStyle(.plain)
       .accessibilityHint("루틴 목록을 다시 불러옵니다.")
@@ -222,7 +222,7 @@ struct RoutineSettingView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(title)
-        .routineListTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(AppColor.gray400)
         .fixedSize(horizontal: false, vertical: true)
 
@@ -275,7 +275,7 @@ struct RoutineSettingView: View {
   private func emptySectionCard(title: String) -> some View {
     VStack(spacing: AppSpacing.md) {
       Text(title)
-        .routineListTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textSecondary)
     }
     .frame(maxWidth: .infinity)
@@ -346,12 +346,6 @@ struct RoutineSettingView: View {
         }
       )
     }
-  }
-}
-
-extension View {
-  func routineListTextStyle(_ style: MoruTextStyle) -> some View {
-    moruPilotTextStyle(style)
   }
 }
 

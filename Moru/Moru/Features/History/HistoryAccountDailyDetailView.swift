@@ -56,7 +56,7 @@ struct HistoryAccountDailyDetailView: View {
         dismiss()
       } label: {
         Text("뒤로")
-          .historyOverviewTextStyle(.b4)
+          .moruTextStyle(.b4)
       }
       .foregroundStyle(MoruPilotColor.textTertiary)
       .frame(minWidth: 44, minHeight: 44, alignment: .leading)
@@ -70,7 +70,7 @@ struct HistoryAccountDailyDetailView: View {
     }
     .overlay {
       Text(dateTitle)
-        .historyOverviewTextStyle(.h3)
+        .moruTextStyle(.h3)
         .foregroundStyle(MoruPilotColor.textStrong)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
@@ -111,7 +111,7 @@ struct HistoryAccountDailyDetailView: View {
             "\(HistoryCopy.accountRecordNotice) · "
               + "현재 연속 \(report.currentStreak)일"
           )
-          .historyOverviewTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
         } icon: {
@@ -176,7 +176,7 @@ struct HistoryAccountDailyDetailView: View {
 
   private func accountSectionTitle(_ title: String) -> some View {
     Text(title)
-      .historyOverviewTextStyle(.b3.weight(.semiBold))
+      .moruTextStyle(.b3.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.textPrimary)
       .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
       .fixedSize(horizontal: false, vertical: true)
@@ -188,14 +188,14 @@ struct HistoryAccountDailyDetailView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
       Text(routine.title)
-        .historyOverviewTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
 
       Text(
         DailyReportInputAnswerPolicy.answer(for: routine)
           ?? HistoryCopy.noTranscripts
       )
-        .historyOverviewTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }

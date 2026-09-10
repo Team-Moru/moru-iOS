@@ -179,10 +179,10 @@ struct AccountServerSettingsSummaryView: View {
 
       VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
         Text(title)
-          .moruPilotTextStyle(.b4.weight(.semiBold))
+          .moruTextStyle(.b4.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
         Text(detail)
-          .moruPilotTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -213,7 +213,7 @@ struct AccountServerVoiceSelectionView: View {
               + "음원을 미리 준비하며, "
               + "준비된 음성은 공통 샘플로 미리 들을 수 있습니다."
           )
-          .moruPilotTextStyle(.b4)
+          .moruTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
 
@@ -222,7 +222,7 @@ struct AccountServerVoiceSelectionView: View {
               preparationStatusText,
               systemImage: preparationStatusImage
             )
-            .moruPilotTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(MoruPilotColor.textSecondary)
             .accessibilityIdentifier(
               "profile.account.server-voice.preparation-status"
@@ -233,7 +233,7 @@ struct AccountServerVoiceSelectionView: View {
 
           if let message = previewPlayer.errorMessage {
             Text(message)
-              .moruPilotTextStyle(.c1)
+              .moruTextStyle(.c1)
               .foregroundStyle(AppColor.coral300)
               .fixedSize(horizontal: false, vertical: true)
               .accessibilityIdentifier("profile.account.server-voice.preview-error")
@@ -241,7 +241,7 @@ struct AccountServerVoiceSelectionView: View {
 
           if let message = viewModel.voiceUpdateErrorMessage {
             Text(message)
-              .moruPilotTextStyle(.c1)
+              .moruTextStyle(.c1)
               .foregroundStyle(AppColor.coral300)
               .fixedSize(horizontal: false, vertical: true)
               .accessibilityIdentifier("profile.account.server-voice.error")
@@ -302,7 +302,7 @@ struct AccountServerVoiceSelectionView: View {
       }
     } else {
       Text(voiceEmptyMessage)
-        .moruPilotTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(maxWidth: .infinity, minHeight: 120)
     }
@@ -316,12 +316,12 @@ struct AccountServerVoiceSelectionView: View {
         VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
           HStack(spacing: MoruPilotSpacing.eight) {
             Text(voice.displayName)
-              .moruPilotTextStyle(.b4.weight(.semiBold))
+              .moruTextStyle(.b4.weight(.semiBold))
               .foregroundStyle(MoruPilotColor.textStrong)
           }
 
           Text(voice.description)
-            .moruPilotTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(MoruPilotColor.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
         }

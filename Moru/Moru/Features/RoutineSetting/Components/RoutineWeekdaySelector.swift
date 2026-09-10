@@ -43,7 +43,7 @@ struct RoutineWeekdaySelector: View {
         toggle(weekday)
       } label: {
         Text(weekday.shortTitle)
-          .routineManagementTextStyle(.b4.weight(.semiBold))
+          .moruTextStyle(.b4.weight(.semiBold))
           .foregroundStyle(
             selectedWeekdays.contains(weekday)
               ? AppColor.grayWhite

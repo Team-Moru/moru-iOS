@@ -488,7 +488,7 @@ private enum VisualBaseline {
 
   static let hashes: [String: String] = [
     "moru-pr32-final-home-light-M.png":
-      "AAAEAQcAHwQcgDjgMOBw8HDgeOC4wMyAzwCWAAFKGTMwMTDxHMB58DFwggBkAOAAYQEKAmAM4AxEGGTIZMgAAA==",
+      "AAAEAAcAHwQcgDjgMOBw8HDgeOD8wMyAzwCWAAFKGTMwMTDxHMB58DFgggRkAOAJYQEUAGAM4ATJqOzI5MgESA==",
     "moru-pr32-final-home-light-AX3.png":
       "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gAgiAZFCySZBJ2EmoSbJLYkuSQxAgAAHACMgQwASIGTIZMgAAA==",
     "moru-pr32-final-routine-light-M.png":
@@ -526,7 +526,7 @@ private enum VisualBaseline {
     "moru-pr50-session-empty-routine-light-M.png":
       "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOYGgwaDAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACiIszIzMgAAA==",
     "moru-pr50-session-empty-routine-light-AX3.png":
-      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sHLYDTcZAzkjGSMbJgDQAAAAAAAAAAAAIGTIZMgAAA==",
+      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwMXAAAAAAAAAAAAAAAAAACSImzI5MgAIA==",
   ]
 }
 

@@ -18,7 +18,7 @@ struct CurrentRoutineCard: View {
       Button(action: onTap) {
         HStack {
           Text(HomeCopy.currentRoutine)
-            .homeFigmaTextStyle(.c1.weight(.semiBold))
+            .moruTextStyle(.c1.weight(.semiBold))
             .foregroundStyle(MoruPilotColor.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -105,7 +105,7 @@ struct CurrentRoutineCard: View {
       }
 
       Text(routine.estimatedDurationText)
-        .homeFigmaTextStyle(.c2)
+        .moruTextStyle(.c2)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -113,14 +113,14 @@ struct CurrentRoutineCard: View {
 
   private func routineTitle(_ routine: HomeRoutineState) -> some View {
     Text(routine.title)
-      .homeFigmaTextStyle(.b4.weight(.semiBold))
+      .moruTextStyle(.b4.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private func routineStatus(_ routine: HomeRoutineState) -> some View {
     Text(routine.statusText)
-      .homeFigmaTextStyle(.c2)
+      .moruTextStyle(.c2)
       .foregroundStyle(MoruPilotColor.accent)
       .fixedSize(horizontal: false, vertical: true)
       .padding(.horizontal, AppSpacing.sm)
@@ -152,7 +152,7 @@ struct CurrentRoutineCard: View {
         .frame(width: progressRingSize, height: progressRingSize)
 
       Text(routine.progressText)
-        .homeFigmaTextStyle(.c1.weight(.semiBold))
+        .moruTextStyle(.c1.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.accent)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
@@ -201,14 +201,14 @@ struct CurrentRoutineCard: View {
 
   private func stepTitle(_ step: HomeRoutineStepState) -> some View {
     Text(step.title)
-      .homeFigmaTextStyle(.c1)
+      .moruTextStyle(.c1)
       .foregroundStyle(MoruPilotColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private func stepDetail(_ step: HomeRoutineStepState) -> some View {
     Text(step.displayDetail)
-      .homeFigmaTextStyle(.c2)
+      .moruTextStyle(.c2)
       .foregroundStyle(MoruPilotColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
   }
@@ -216,11 +216,11 @@ struct CurrentRoutineCard: View {
   private var emptyState: some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       Text("오늘 사용할 루틴이 아직 없어요.")
-        .homeFigmaTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textPrimary)
 
       Text("루틴 탭에서 아침 루틴을 설정해보세요.")
-        .homeFigmaTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textSecondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)

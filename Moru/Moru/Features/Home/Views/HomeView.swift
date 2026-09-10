@@ -385,7 +385,7 @@ struct HomeWeatherCard: View {
         .tint(AppColor.orange400)
         .accessibilityHidden(true)
       Text("날씨를 불러오는 중이에요")
-        .homeFigmaTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textSecondary)
     }
     .accessibilityElement(children: .combine)
@@ -394,7 +394,7 @@ struct HomeWeatherCard: View {
   private var weatherRequestButton: some View {
     Button(action: requestWeather) {
       Label("현재 위치 날씨 보기", systemImage: "location.fill")
-        .homeFigmaTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textPrimary)
     }
     .accessibilityHint("현재 위치의 날씨를 요청합니다.")
@@ -407,7 +407,7 @@ struct HomeWeatherCard: View {
       }
     } label: {
       Label("설정에서 위치 권한 켜기", systemImage: "gearshape.fill")
-        .homeFigmaTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textPrimary)
     }
     .accessibilityHint("MORU의 위치 권한을 변경할 수 있는 설정을 엽니다.")
@@ -452,7 +452,7 @@ struct HomeWeatherCard: View {
         "최고 \(temperatureText(for: dailyHighCelsius)) · "
           + "최저 \(temperatureText(for: dailyLowCelsius))"
       )
-      .homeFigmaTextStyle(.c2.weight(.regular))
+      .moruTextStyle(.c2.weight(.regular))
       .foregroundStyle(MoruPilotColor.textSecondary)
       .lineLimit(1)
       .accessibilityElement(children: .ignore)
@@ -504,12 +504,12 @@ struct HomeWeatherCard: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(temperatureText(for: snapshot))
-        .homeFigmaTextStyle(.h2)
+        .moruTextStyle(.h2)
         .foregroundStyle(MoruPilotColor.textPrimary)
         .lineLimit(1)
 
       Text("\(conditionLabel(for: snapshot.condition)) · 현재 위치")
-      .homeFigmaTextStyle(.c2.weight(.regular))
+      .moruTextStyle(.c2.weight(.regular))
       .foregroundStyle(MoruPilotColor.textTertiary)
       .lineLimit(1)
     }
@@ -532,7 +532,7 @@ struct HomeWeatherCard: View {
 
   private func weatherMessage(_ message: String) -> some View {
     Text(message)
-      .homeFigmaTextStyle(.c1)
+      .moruTextStyle(.c1)
       .foregroundStyle(MoruPilotColor.textSecondary)
   }
 
@@ -665,7 +665,7 @@ private struct HomeRoutineServerNoticeView: View {
           .tint(AppColor.orange400)
           .accessibilityHidden(true)
         Text(notice.message)
-          .homeFigmaTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -714,7 +714,7 @@ private struct HomeRoutineServerNoticeView: View {
         .foregroundStyle(AppColor.orange500)
         .accessibilityHidden(true)
       Text(notice.message)
-        .homeFigmaTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -723,7 +723,7 @@ private struct HomeRoutineServerNoticeView: View {
 
   private var retryLabel: some View {
     Text("다시 시도")
-      .homeFigmaTextStyle(.c1.weight(.semiBold))
+      .moruTextStyle(.c1.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.accent)
       .fixedSize(horizontal: true, vertical: false)
   }

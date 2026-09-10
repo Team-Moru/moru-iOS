@@ -38,7 +38,7 @@ struct TodayRoutineProgressCard: View {
             Text(percentValueText)
             Text(percentSymbolText)
           }
-            .homeFigmaTextStyle(.h2)
+            .moruTextStyle(.h2)
             .foregroundStyle(MoruPilotColor.textPrimary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, alignment: .center)
@@ -47,7 +47,7 @@ struct TodayRoutineProgressCard: View {
             .offset(x: Metric.percentAlignmentOffset)
 
           Text(progress.completedText)
-            .homeFigmaTextStyle(.c2.weight(.regular))
+            .moruTextStyle(.c2.weight(.regular))
             .foregroundStyle(MoruPilotColor.textTertiary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, alignment: .center)
@@ -61,7 +61,7 @@ struct TodayRoutineProgressCard: View {
       .accessibilityValue("\(progress.percentText), \(progress.completedText)")
 
       Text(HomeCopy.todayRoutine)
-        .homeFigmaTextStyle(.c1.weight(.semiBold))
+        .moruTextStyle(.c1.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textSecondary)
     }
     .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 22)

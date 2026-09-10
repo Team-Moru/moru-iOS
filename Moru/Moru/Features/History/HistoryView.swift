@@ -177,7 +177,7 @@ struct HistoryView: View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 0) {
         Text(HistoryCopy.overviewTitle)
-          .historyOverviewTextStyle(.h3)
+          .moruTextStyle(.h3)
           .foregroundStyle(AppColor.gray550)
           .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
 
@@ -554,11 +554,11 @@ private struct HistoryStreakWeeklyCard: View {
   private var streakSummary: some View {
     VStack(spacing: 0) {
       Text("연속 달성")
-        .historyOverviewTextStyle(.c2)
+        .moruTextStyle(.c2)
         .foregroundStyle(MoruPilotColor.accentSurface)
 
       Text("\(streak.currentDays)일째")
-        .historyOverviewTextStyle(.h1.weight(.bold))
+        .moruTextStyle(.h1.weight(.bold))
         .foregroundStyle(AppColor.grayWhite)
 
       Text("최고 기록 \(max(streak.bestDays, streak.currentDays))일")
@@ -579,7 +579,7 @@ private struct HistoryStreakWeeklyCard: View {
   private var weeklySummary: some View {
     VStack(spacing: 0) {
       Text(HistoryCopy.weeklyReportTitle)
-        .historyOverviewTextStyle(.c2)
+        .moruTextStyle(.c2)
         .foregroundStyle(MoruPilotColor.accentSurface)
 
       Group {
@@ -649,7 +649,7 @@ private struct HistoryStreakWeeklyCard: View {
       )
 
       Text(label)
-        .historyOverviewTextStyle(.c2.weight(.regular))
+        .moruTextStyle(.c2.weight(.regular))
         .foregroundStyle(MoruPilotColor.accentSurface)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -779,7 +779,7 @@ struct HistoryRecordCard: View {
         .accessibilityHidden(true)
 
         Text(result.stepTitle)
-          .historyOverviewTextStyle(.b4.weight(.semiBold))
+          .moruTextStyle(.b4.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
           .fixedSize(horizontal: false, vertical: true)
@@ -787,14 +787,14 @@ struct HistoryRecordCard: View {
         Spacer(minLength: MoruPilotSpacing.eight)
 
         Text(result.displayText)
-          .historyOverviewTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
       .padding(MoruPilotSpacing.twenty)
 
       Text(recordText)
-        .historyOverviewTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -862,7 +862,7 @@ private struct HistoryDetailSectionTitle: View {
 
   var body: some View {
     Text(title)
-      .historyOverviewTextStyle(.b3.weight(.semiBold))
+      .moruTextStyle(.b3.weight(.semiBold))
       .foregroundStyle(MoruPilotColor.textPrimary)
       .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
       .fixedSize(horizontal: false, vertical: true)
@@ -886,7 +886,7 @@ private struct HistoryDetailHeader: View {
             .font(.system(size: 20, weight: .semibold))
         } else {
           Text("뒤로")
-            .historyOverviewTextStyle(.b4)
+            .moruTextStyle(.b4)
         }
       }
       .foregroundStyle(MoruPilotColor.textTertiary)
@@ -902,7 +902,7 @@ private struct HistoryDetailHeader: View {
     }
     .overlay {
       Text(title)
-        .historyOverviewTextStyle(.h3)
+        .moruTextStyle(.h3)
         .foregroundStyle(MoruPilotColor.textStrong)
         .lineLimit(1)
         .minimumScaleFactor(0.75)

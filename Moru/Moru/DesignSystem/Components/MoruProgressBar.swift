@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct MoruProgressBar: View {
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
   let current: Int
   let total: Int
   let showsLabel: Bool
@@ -50,22 +48,10 @@ struct MoruProgressBar: View {
     }
   }
 
-  @ViewBuilder
   private var progressLabel: some View {
-    let label = Text("\(current)/\(total)")
+    Text("\(current)/\(total)")
+      .moruTextStyle(.c2.weight(.regular))
       .foregroundStyle(MoruPilotColor.textPrimary)
       .frame(maxWidth: .infinity, alignment: .leading)
-
-    if dynamicTypeSize.isAccessibilitySize {
-      label.font(
-        .custom(
-          MoruTextWeight.regular.rawValue,
-          size: MoruTextStyle.c2.fontSize,
-          relativeTo: MoruTextStyle.c2.relativeTextStyle
-        )
-      )
-    } else {
-      label.moruTextStyle(.c2.weight(.regular))
-    }
   }
 }

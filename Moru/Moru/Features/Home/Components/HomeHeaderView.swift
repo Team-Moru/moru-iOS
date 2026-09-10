@@ -25,12 +25,12 @@ struct HomeHeaderView: View {
   private func headerContent(at date: Date) -> some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
       Text(greeting(at: date))
-        .homeFigmaTextStyle(.h3)
+        .moruTextStyle(.h3)
         .foregroundStyle(MoruPilotColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
 
       Text(HomeCopy.encouragement)
-        .homeFigmaTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textTertiary)
         .fixedSize(horizontal: false, vertical: true)
     }

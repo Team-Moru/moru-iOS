@@ -17,7 +17,7 @@ struct RoutineStepDraftRow: View {
   var body: some View {
     HStack(alignment: .center, spacing: MoruPilotSpacing.twelve) {
       Text("\(order)")
-        .routineManagementTextStyle(.c2)
+        .moruTextStyle(.c2)
         .foregroundStyle(AppColor.grayWhite)
         .frame(width: 24, height: 24)
         .background(MoruPilotColor.accentSoft)
@@ -25,12 +25,12 @@ struct RoutineStepDraftRow: View {
 
       VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
         TextField("예) 물 한 잔 마시기", text: $step.title, axis: .vertical)
-          .routineManagementTextStyle(.c1.weight(.semiBold))
+          .moruTextStyle(.c1.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? 3 : 1)
 
         Text("\(step.type.routineSettingTitle) - \(step.estimatedMinutes)분")
-          .routineManagementTextStyle(.c2)
+          .moruTextStyle(.c2)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }

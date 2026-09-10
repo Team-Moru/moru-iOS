@@ -320,7 +320,7 @@ struct ProfileView: View {
 
   private var profileTitle: some View {
     Text(ProfileCopy.title)
-      .profileFigmaTextStyle(.b3.weight(.semiBold))
+      .moruTextStyle(.b3.weight(.semiBold))
       .foregroundStyle(AppColor.gray550)
       .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
   }
@@ -331,7 +331,7 @@ struct ProfileView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
       Text(title)
-        .profileFigmaTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textSecondary)
 
       content()
@@ -344,13 +344,13 @@ struct ProfileView: View {
 
       VStack(alignment: .leading, spacing: 0) {
         Text(displayName)
-          .profileFigmaTextStyle(.b2.weight(.semiBold))
+          .moruTextStyle(.b2.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
           .layoutPriority(1)
 
         Text(profileSubtitle)
-          .profileFigmaTextStyle(.b4)
+          .moruTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textSecondary)
       }
 
@@ -383,7 +383,7 @@ struct ProfileView: View {
         .frame(width: 58, height: 58)
         .overlay {
           Text(profileInitial(for: displayName))
-            .profileFigmaTextStyle(.b2.weight(.semiBold))
+            .moruTextStyle(.b2.weight(.semiBold))
             .foregroundStyle(AppColor.grayWhite)
         }
         .accessibilityHidden(true)
@@ -434,7 +434,7 @@ struct ProfileView: View {
         HStack(spacing: AppSpacing.xs) {
           ProgressView()
           Text("계정을 연결하고 있어요.")
-            .profileFigmaTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(MoruPilotColor.textSecondary)
         }
         .accessibilityElement(children: .combine)
@@ -445,7 +445,7 @@ struct ProfileView: View {
         HStack(spacing: AppSpacing.xs) {
           ProgressView()
           Text(accountProgressMessage(for: action))
-            .profileFigmaTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(MoruPilotColor.textSecondary)
         }
         .accessibilityElement(children: .combine)
@@ -491,7 +491,7 @@ struct ProfileView: View {
   private var geminiDataConsentCard: some View {
     VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
       Text(geminiDataConsentDescription)
-        .profileFigmaTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(MoruPilotColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
 
@@ -784,7 +784,7 @@ struct ProfileView: View {
         .padding(.top, MoruPilotSpacing.twelve)
 
         Text("프로필 설정을 불러오고 있어요.")
-          .profileFigmaTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .padding(.top, MoruPilotSpacing.sixteen)
 
@@ -809,7 +809,7 @@ struct ProfileView: View {
             .accessibilityHidden(true)
 
           Text(message)
-            .profileFigmaTextStyle(.b4)
+            .moruTextStyle(.b4)
             .foregroundStyle(MoruPilotColor.textSecondary)
             .multilineTextAlignment(.center)
 
@@ -895,12 +895,12 @@ struct ProfileView: View {
           .padding(.top, MoruPilotSpacing.twenty)
 
         Text(ProfileCopy.accountConnection)
-          .profileFigmaTextStyle(.h3.weight(.semiBold))
+          .moruTextStyle(.h3.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
           .padding(.top, MoruPilotSpacing.sixteen)
 
         Text(ProfileCopy.accountConnectionDescription)
-          .profileFigmaTextStyle(.b4)
+          .moruTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .padding(.top, MoruPilotSpacing.twelve)
           .fixedSize(horizontal: false, vertical: true)
@@ -1000,7 +1000,7 @@ struct ProfileView: View {
   private var accountConnectionHeader: some View {
     ZStack {
       Text(ProfileCopy.accountConnection)
-        .profileFigmaTextStyle(.b3.weight(.semiBold))
+        .moruTextStyle(.b3.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
         .frame(maxWidth: .infinity)
 
@@ -1011,7 +1011,7 @@ struct ProfileView: View {
           isAppleSignInPresented = false
         } label: {
           Text(ProfileCopy.close)
-            .profileFigmaTextStyle(.b4.weight(.semiBold))
+            .moruTextStyle(.b4.weight(.semiBold))
             .foregroundStyle(MoruPilotColor.textPrimary)
             .padding(.horizontal, MoruPilotSpacing.sixteen)
             .frame(minHeight: 48)
@@ -1099,7 +1099,7 @@ struct ProfileView: View {
 
   private func profileMessage(_ message: String, color: Color) -> some View {
     Text(message)
-      .profileFigmaTextStyle(.c1)
+      .moruTextStyle(.c1)
       .foregroundStyle(color)
       .fixedSize(horizontal: false, vertical: true)
   }
@@ -1110,7 +1110,7 @@ struct ProfileView: View {
   ) -> some View {
     HStack {
       Text(title)
-        .profileFigmaTextStyle(.b4)
+        .moruTextStyle(.b4)
         .foregroundStyle(MoruPilotColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
 
@@ -1265,7 +1265,7 @@ struct MoruVoiceSettingsView: View {
 
         if let message = profileViewModel.voiceErrorMessage {
           Text(message)
-            .profileFigmaTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(AppColor.coral300)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -1281,7 +1281,7 @@ struct MoruVoiceSettingsView: View {
     .toolbar {
       ToolbarItem(placement: .principal) {
         Text(ProfileCopy.moruVoice)
-          .profileFigmaTextStyle(.b4.weight(.semiBold))
+          .moruTextStyle(.b4.weight(.semiBold))
           .foregroundStyle(MoruPilotColor.textStrong)
       }
     }
@@ -1346,10 +1346,10 @@ struct MoruVoiceSettingsView: View {
     HStack(spacing: MoruPilotSpacing.twelve) {
       VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
         Text(title)
-          .profileFigmaTextStyle(.b4)
+          .moruTextStyle(.b4)
           .foregroundStyle(MoruPilotColor.textPrimary)
         Text(detail)
-          .profileFigmaTextStyle(.c1)
+          .moruTextStyle(.c1)
           .foregroundStyle(MoruPilotColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
@@ -1409,9 +1409,6 @@ private struct ProfileSkeletonBlock: View {
 }
 
 private extension View {
-  func profileFigmaTextStyle(_ style: MoruTextStyle) -> some View {
-    moruPilotTextStyle(style)
-  }
 
   func profilePilotSurface(cornerRadius: CGFloat) -> some View {
     background(

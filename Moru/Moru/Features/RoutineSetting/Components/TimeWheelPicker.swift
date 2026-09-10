@@ -21,17 +21,17 @@ struct TimeWheelPicker: View {
   var body: some View {
     VStack(spacing: 0) {
       Text(String(format: "%02d", wrappedValue(value - 1, in: range)))
-        .routineManagementTextStyle(.b2.weight(.semiBold))
+        .moruTextStyle(.b2.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(height: itemHeight)
 
       Text(String(format: "%02d", value))
-        .routineManagementTextStyle(.b1.weight(.semiBold))
+        .moruTextStyle(.b1.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
         .frame(height: itemHeight)
 
       Text(String(format: "%02d", wrappedValue(value + 1, in: range)))
-        .routineManagementTextStyle(.b2.weight(.semiBold))
+        .moruTextStyle(.b2.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textSecondary)
         .frame(height: itemHeight)
     }

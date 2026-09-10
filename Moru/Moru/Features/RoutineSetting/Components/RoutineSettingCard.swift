@@ -77,7 +77,7 @@ struct RoutineSettingCard: View {
   private var routineDetails: some View {
     VStack(alignment: .leading, spacing: AppSpacing.xxs) {
       Text(routine.title)
-        .routineListTextStyle(.b3.weight(.semiBold))
+        .moruTextStyle(.b3.weight(.semiBold))
         .foregroundStyle(MoruPilotColor.textStrong)
         .fixedSize(horizontal: false, vertical: true)
 
@@ -87,7 +87,7 @@ struct RoutineSettingCard: View {
           durationText: routine.estimatedDurationText
         )
       )
-      .routineListTextStyle(.c1)
+      .moruTextStyle(.c1)
       .foregroundStyle(
         isActive ? MoruPilotColor.textTertiary : AppColor.gray200
       )
