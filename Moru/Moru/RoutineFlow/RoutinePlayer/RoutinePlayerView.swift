@@ -30,12 +30,13 @@ struct RoutinePlayerView: View {
             ZStack {
                 backgroundView
                 contentView
+                    .overlay(alignment: .bottom) {
+                        // 다이얼로그 스크림 아래에 두어 다이얼로그가 떠 있는 동안은 눌리지 않게 한다.
+                        if let errorMessage = viewModel.errorMessage {
+                            saveErrorBanner(message: errorMessage)
+                        }
+                    }
                 dialogView
-            }
-            .overlay(alignment: .bottom) {
-                if let errorMessage = viewModel.errorMessage {
-                    saveErrorBanner(message: errorMessage)
-                }
             }
             .interactiveDismissDisabled()
             .navigationBarBackButtonHidden(true)

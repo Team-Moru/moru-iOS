@@ -14,24 +14,21 @@ struct AlarmStopRetryBanner: View {
 
   let isRetrying: Bool
   let onRetry: () -> Void
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    HStack(alignment: .center, spacing: 12) {
-      VStack(alignment: .leading, spacing: 4) {
-        Text(Self.title)
-          .moruTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruColor.textStrong)
-
-        Text(Self.message)
-          .moruTextStyle(.c1)
-          .foregroundStyle(MoruColor.textSecondary)
-      }
-      .fixedSize(horizontal: false, vertical: true)
-
-      Spacer(minLength: 0)
-
-      MoruButton(Self.retryTitle, style: .text, isEnabled: !isRetrying) {
-        onRetry()
+    Group {
+      if dynamicTypeSize.isAccessibilitySize {
+        VStack(alignment: .leading, spacing: MoruSpacing.eight) {
+          messageStack
+          retryButton
+        }
+      } else {
+        HStack(alignment: .center, spacing: 12) {
+          messageStack
+          Spacer(minLength: 0)
+          retryButton
+        }
       }
     }
     .padding(.horizontal, MoruSpacing.twenty)
@@ -42,6 +39,44 @@ struct AlarmStopRetryBanner: View {
     .padding(.top, MoruSpacing.eight)
     .accessibilityElement(children: .contain)
     .accessibilityLabel("\(Self.title) \(Self.message)")
+  }
+
+  private var messageStack: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(Self.title)
+        .moruTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruColor.textStrong)
+
+      Text(Self.message)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textSecondary)
+    }
+    .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private var retryButton: some View {
+    MoruButton(Self.retryTitle, style: .text, isEnabled: !isRetrying) {
+      onRetry()
+    }
+  }
+}
+
+/// 배너를 플레이어 위에 겹치지 않고 위쪽에 쌓는다. 라우터와 캡처 테스트가 같은 구성을 쓴다.
+struct AlarmStopRetryBannerContainer<Content: View>: View {
+  let isVisible: Bool
+  let isRetrying: Bool
+  let onRetry: () -> Void
+  @ViewBuilder let content: () -> Content
+
+  var body: some View {
+    VStack(spacing: 0) {
+      if isVisible {
+        AlarmStopRetryBanner(isRetrying: isRetrying, onRetry: onRetry)
+      }
+
+      content()
+    }
+    .background(AppColor.babyBlue50.ignoresSafeArea())
   }
 }
 

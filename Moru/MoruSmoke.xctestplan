@@ -58,6 +58,7 @@
         "RoutineFinishedFigmaVisualTests",
         "RoutineListFigmaVisualTests",
         "RoutineManagementFigmaVisualTests/testRoutineManagementStatesRenderDeterministicallyAtReferenceVariants()",
+        "RoutinePlayerEscapeVisualTests/testEscapeStatesRenderDeterministicallyAtReferenceVariants()",
         "RoutinePlayerFigmaVisualTests/testRoutinePlayerStatesRenderDeterministicallyAtReferenceVariants()"
       ]
     }

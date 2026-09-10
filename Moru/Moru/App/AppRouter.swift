@@ -244,16 +244,15 @@ struct AppRouter: View {
       item: presentationBinding,
       onDismiss: completePendingDismissal
     ) { presentation in
-      routinePlayerView(for: presentation)
-        .id(presentation.id)
-        .interactiveDismissDisabled()
-        .safeAreaInset(edge: .top) {
-          if alarmStopMonitor.showsRetryBanner(for: presentation.id) {
-            AlarmStopRetryBanner(isRetrying: alarmStopMonitor.isRetrying) {
-              retryScheduledAlarmStop()
-            }
-          }
-        }
+      AlarmStopRetryBannerContainer(
+        isVisible: alarmStopMonitor.showsRetryBanner(for: presentation.id),
+        isRetrying: alarmStopMonitor.isRetrying,
+        onRetry: retryScheduledAlarmStop
+      ) {
+        routinePlayerView(for: presentation)
+          .id(presentation.id)
+      }
+      .interactiveDismissDisabled()
     }
     .sheet(isPresented: geminiConsentPresentationBinding) {
       GeminiDataConsentView(consentStore: geminiDataConsentStore)
