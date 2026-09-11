@@ -674,8 +674,6 @@ struct AppRouter: View {
       voicePreviewPlayer: profileVoicePreviewPlayer,
       alarmService: profileAlarmService,
       accountServerViewModel: accountServerViewModel,
-      accountRoutineGroupRemoteService:
-        dependencies.accountRoutineGroupRemoteService,
       serverVoicePreviewPlayer: dependencies.serverVoicePreviewPlayer,
       accountSessionStore: accountSessionStore,
       socialLoginCoordinator: socialLoginCoordinator,
