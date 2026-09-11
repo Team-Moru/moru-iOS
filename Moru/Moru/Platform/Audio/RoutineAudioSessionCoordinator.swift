@@ -27,6 +27,9 @@ final class SystemRoutineSpeechAnnouncer:
   private let synthesizer: AVSpeechSynthesizer
   private let audioSession: any AudioSessionControlling
   private var pendingReminder: PendingReminder?
+  /// 이 안내기가 세션을 켰는지. 켜지 않은 세션을 끄면 진행 중인 다른 재생을
+  /// 끊는다. 카운트다운은 타이머 단계마다 여러 번 불리므로 특히 중요하다.
+  private var ownsAudioSession = false
 
   init(
     synthesizer: AVSpeechSynthesizer = AVSpeechSynthesizer(),
@@ -93,6 +96,7 @@ final class SystemRoutineSpeechAnnouncer:
       options: [.duckOthers]
     )
     try? audioSession.setActive(true)
+    ownsAudioSession = true
     synthesizer.speak(utterance)
   }
 
@@ -148,6 +152,11 @@ final class SystemRoutineSpeechAnnouncer:
   }
 
   private func deactivateAudioSession() {
+    guard ownsAudioSession else {
+      return
+    }
+
+    ownsAudioSession = false
     try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
   }
 

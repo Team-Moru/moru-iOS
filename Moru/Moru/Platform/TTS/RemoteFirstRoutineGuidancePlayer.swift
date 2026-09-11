@@ -289,6 +289,9 @@ final class LocalFileRoutineAudioPlayer: NSObject, RoutineLocalAudioSequencePlay
   private var continuation: CheckedContinuation<Bool, Never>?
   private var isSuspendedForSpeechInput = false
   private var sequenceHasStarted = false
+  /// 이 재생기가 세션을 켰는지. 켜지 않은 세션을 끄면 다른 재생기(번들 안내,
+  /// 프로필 미리듣기) 밑에서 소리가 끊긴다. 번들 재생기는 이미 같은 규칙을 쓴다.
+  private var ownsAudioSession = false
   private var interruptionObservation: LocalAudioNotificationObservation?
   private var routeChangeObservation: LocalAudioNotificationObservation?
   private var mediaResetObservation: LocalAudioNotificationObservation?
@@ -349,6 +352,7 @@ final class LocalFileRoutineAudioPlayer: NSObject, RoutineLocalAudioSequencePlay
     do {
       try audioSession.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
       try audioSession.setActive(true)
+      ownsAudioSession = true
       let player = try AVAudioPlayer(contentsOf: url)
       player.delegate = self
       player.prepareToPlay()
@@ -384,6 +388,11 @@ final class LocalFileRoutineAudioPlayer: NSObject, RoutineLocalAudioSequencePlay
   }
 
   private func deactivateAudioSession() {
+    guard ownsAudioSession else {
+      return
+    }
+
+    ownsAudioSession = false
     try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
   }
 
