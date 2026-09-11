@@ -184,7 +184,7 @@ final class FinalScreenVisualTests: XCTestCase {
       viewModel: viewModel,
       onStartRoutine: { _ in .started },
       refreshToken: 0,
-      routineSettingContent: AnyView(EmptyView())
+      routineCreationContent: AnyView(EmptyView())
     )
   }
 
@@ -202,7 +202,6 @@ final class FinalScreenVisualTests: XCTestCase {
       viewModel: viewModel,
       onStartRoutine: { _ in .started },
       refreshToken: 0,
-      routineSettingContent: AnyView(EmptyView()),
       routineCreationContent: AnyView(EmptyView())
     )
   }

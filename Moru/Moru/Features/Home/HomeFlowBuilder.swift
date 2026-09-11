@@ -11,6 +11,7 @@ import SwiftUI
 protocol HomeFlowBuilding: AnyObject {
   func make(
     onStartRoutine: @escaping RoutineLaunchHandler,
+    onOpenRoutineSettings: @escaping (UUID?) -> Void,
     refreshToken: Int
   ) -> AnyView
 }
@@ -24,7 +25,6 @@ final class DefaultHomeFlowBuilder: HomeFlowBuilding {
   private let weatherService: (any HomeWeatherService)?
   private weak var sessionIdentityProvider:
     (any CurrentAccountSessionIdentityProviding)?
-  private let routineSettingContentFactory: @MainActor () -> AnyView
   private let routineCreationContentFactory: @MainActor () -> AnyView
 
   init(
@@ -35,21 +35,19 @@ final class DefaultHomeFlowBuilder: HomeFlowBuilding {
     weatherService: (any HomeWeatherService)? = nil,
     sessionIdentityProvider:
       (any CurrentAccountSessionIdentityProviding)? = nil,
-    routineSettingContentFactory: @escaping @MainActor () -> AnyView,
-    routineCreationContentFactory: (@MainActor () -> AnyView)? = nil
+    routineCreationContentFactory: @escaping @MainActor () -> AnyView
   ) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
     self.enrichHomeRoutinesUseCase = enrichHomeRoutinesUseCase
     self.weatherRepository = weatherRepository
     self.weatherService = weatherService
     self.sessionIdentityProvider = sessionIdentityProvider
-    self.routineSettingContentFactory = routineSettingContentFactory
-    self.routineCreationContentFactory =
-      routineCreationContentFactory ?? routineSettingContentFactory
+    self.routineCreationContentFactory = routineCreationContentFactory
   }
 
   func make(
     onStartRoutine: @escaping RoutineLaunchHandler,
+    onOpenRoutineSettings: @escaping (UUID?) -> Void,
     refreshToken: Int
   ) -> AnyView {
     AnyView(
@@ -62,7 +60,7 @@ final class DefaultHomeFlowBuilder: HomeFlowBuilding {
         ),
         onStartRoutine: onStartRoutine,
         refreshToken: refreshToken,
-        routineSettingContent: routineSettingContentFactory(),
+        onOpenRoutineSettings: onOpenRoutineSettings,
         routineCreationContent: routineCreationContentFactory()
       )
       .id(sessionIdentityProvider?.currentAccountSessionIdentity?.sessionID)

@@ -87,7 +87,7 @@ struct HomeView: View {
   private let routineLaunchBoundary: HomeRoutineLaunchBoundary
   private let routineServerNoticeBoundary: HomeRoutineServerNoticeBoundary
   private let refreshToken: Int
-  private let routineSettingContent: AnyView
+  private let onOpenRoutineSettings: (UUID?) -> Void
   private let routineCreationContent: AnyView
   private let clearsRoutineLaunchMessageOnRefresh: Bool
   private let automaticallyLoads: Bool
@@ -102,16 +102,16 @@ struct HomeView: View {
     viewModel: HomeViewModel,
     onStartRoutine: @escaping RoutineLaunchHandler,
     refreshToken: Int,
-    routineSettingContent: AnyView,
-    routineCreationContent: AnyView? = nil,
+    onOpenRoutineSettings: @escaping (UUID?) -> Void = { _ in },
+    routineCreationContent: AnyView,
     initialRoutineLaunchMessage: String? = nil,
     automaticallyLoads: Bool = true
   ) {
     self.routineLaunchBoundary = HomeRoutineLaunchBoundary(onStartRoutine: onStartRoutine)
     self.routineServerNoticeBoundary = HomeRoutineServerNoticeBoundary()
     self.refreshToken = refreshToken
-    self.routineSettingContent = routineSettingContent
-    self.routineCreationContent = routineCreationContent ?? routineSettingContent
+    self.onOpenRoutineSettings = onOpenRoutineSettings
+    self.routineCreationContent = routineCreationContent
     self.clearsRoutineLaunchMessageOnRefresh = initialRoutineLaunchMessage == nil
     self.automaticallyLoads = automaticallyLoads
     _viewModel = State(initialValue: viewModel)
@@ -191,8 +191,6 @@ struct HomeView: View {
       viewModel.load()
     }) { sheet in
       switch sheet {
-      case .settings:
-        routineSettingContent
       case .create:
         routineCreationContent
       }
@@ -240,7 +238,7 @@ struct HomeView: View {
     CurrentRoutineCard(
       routine: content.nextAlarmRoutine,
       onTap: {
-        presentedRoutineSheet = .settings
+        onOpenRoutineSettings(content.nextAlarmRoutine?.id)
       },
       onStart: {
         guard let routineID = content.nextAlarmRoutine?.id else {
@@ -255,8 +253,8 @@ struct HomeView: View {
 
     HomeActiveRoutineSection(
       routines: content.activeRoutines,
-      onOpenSettings: { _ in
-        presentedRoutineSheet = .settings
+      onOpenSettings: { routineID in
+        onOpenRoutineSettings(routineID)
       },
       onStartRoutine: startRoutine
     )
@@ -305,7 +303,6 @@ struct HomeView: View {
 }
 
 private enum HomeRoutineSheet: String, Identifiable {
-  case settings
   case create
 
   var id: String {
@@ -815,11 +812,17 @@ private struct HomeFailureBanner: View {
 #Preview {
   DefaultHomeFlowBuilder(
     loadHomeRoutinesUseCase: HomePreviewLoadHomeRoutinesUseCase(),
-    routineSettingContentFactory: {
-      AnyView(RoutineSettingView(dependencies: .homePreview))
+    routineCreationContentFactory: {
+      AnyView(
+        RoutineSettingView(
+          dependencies: .homePreview,
+          entryPoint: .newRoutine
+        )
+      )
     }
   ).make(
     onStartRoutine: { _ in .started },
+    onOpenRoutineSettings: { _ in },
     refreshToken: 0
   )
 }

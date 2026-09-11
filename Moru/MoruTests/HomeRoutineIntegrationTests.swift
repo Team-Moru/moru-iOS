@@ -542,7 +542,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
       viewModel: viewModel,
       onStartRoutine: { _ in .busy },
       refreshToken: 0,
-      routineSettingContent: AnyView(EmptyView()),
+      routineCreationContent: AnyView(EmptyView()),
       initialRoutineLaunchMessage: HomeRoutineLaunchBoundary.busyMessage
     )
 

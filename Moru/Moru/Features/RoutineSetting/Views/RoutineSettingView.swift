@@ -79,8 +79,14 @@ struct RoutineSettingView: View {
       }
 
       didHandleEntryPoint = true
-      if entryPoint == .newRoutine {
+      switch entryPoint {
+      case .list:
+        break
+      case .newRoutine:
         presentCreationSheet()
+      case .editRoutine:
+        // 목록에 없는 루틴이면 초안이 비어 편집기를 열지 않고 목록에 머문다.
+        editorDraft = viewModel.initialDraft(for: entryPoint)
       }
     }
     .alert(
