@@ -51,10 +51,6 @@ struct ProfileView: View {
   @State private var viewModel: ProfileViewModel
   @State private var accountServerViewModel: AccountServerSettingsViewModel
   @State private var serverVoicePreviewPlayer: ServerVoicePreviewPlayer
-  @State private var accountRoutineGroupListViewModel:
-    AccountRoutineGroupListViewModel
-  @State private var accountRoutineGroupDetailViewModel:
-    AccountRoutineGroupDetailViewModel
   @ObservedObject private var accountSessionStore: AccountSessionStore
   @ObservedObject private var geminiDataConsentStore: GeminiDataConsentStore
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -68,8 +64,6 @@ struct ProfileView: View {
   @State private var isAppleSignInPresented = false
   @State private var isWithdrawalConfirmationPresented = false
   @State private var supportLinkAlert: ProfileSupportLinkAlert?
-  @State private var routineArchiveNavigation =
-    AccountRoutineGroupArchiveNavigationState()
   @State private var appleAuthorizationSession = AppleAuthorizationSession()
   private let googleAuthorizationSession: any GoogleAuthorizationStarting
   private let kakaoAuthorizationSession: any KakaoAuthorizationStarting
@@ -83,8 +77,6 @@ struct ProfileView: View {
     accountServerViewModel: AccountServerSettingsViewModel =
       AccountServerSettingsViewModel(),
     serverVoicePreviewPlayer: ServerVoicePreviewPlayer = ServerVoicePreviewPlayer(),
-    accountRoutineGroupRemoteService:
-      (any AccountRoutineGroupRemoteServing)? = nil,
     accountSessionStore: AccountSessionStore,
     googleAuthorizationSession: any GoogleAuthorizationStarting =
       UnavailableGoogleAuthorizationSession(),
@@ -102,16 +94,6 @@ struct ProfileView: View {
     _accountServerViewModel = State(initialValue: accountServerViewModel)
     _serverVoicePreviewPlayer = State(
       initialValue: serverVoicePreviewPlayer
-    )
-    _accountRoutineGroupListViewModel = State(
-      initialValue: AccountRoutineGroupListViewModel(
-        remoteService: accountRoutineGroupRemoteService
-      )
-    )
-    _accountRoutineGroupDetailViewModel = State(
-      initialValue: AccountRoutineGroupDetailViewModel(
-        remoteService: accountRoutineGroupRemoteService
-      )
     )
     _accountSessionStore = ObservedObject(wrappedValue: accountSessionStore)
     _geminiDataConsentStore = ObservedObject(
@@ -146,31 +128,6 @@ struct ProfileView: View {
       .background(MoruColor.canvas.ignoresSafeArea())
       .navigationTitle(ProfileCopy.title)
       .navigationBarTitleDisplayMode(.large)
-      .navigationDestination(
-        isPresented: $routineArchiveNavigation.isArchivePresented
-      ) {
-        AccountRoutineGroupListView(
-          viewModel: accountRoutineGroupListViewModel,
-          memberID: accountSessionStore.signedInMemberID,
-          onSelectRoutineGroup: { routineGroupID in
-            routineArchiveNavigation.presentDetail(
-              routineGroupID: routineGroupID
-            )
-          }
-        )
-      }
-      .navigationDestination(
-        isPresented: $routineArchiveNavigation.isDetailPresented
-      ) {
-        if let selectedRoutineGroupID =
-          routineArchiveNavigation.selectedRoutineGroupID {
-          AccountRoutineGroupDetailView(
-            viewModel: accountRoutineGroupDetailViewModel,
-            routineGroupID: selectedRoutineGroupID,
-            memberID: accountSessionStore.signedInMemberID
-          )
-        }
-      }
       .navigationDestination(isPresented: $isMoruVoiceSettingsPresented) {
         MoruVoiceSettingsView(
           profileViewModel: viewModel,
@@ -204,16 +161,8 @@ struct ProfileView: View {
 
       await accountServerViewModel.load(memberID: memberID)
     }
-    .onChange(of: accountSessionStore.signedInMemberID) {
-      _, memberID in
+    .onChange(of: accountSessionStore.signedInMemberID) { _, _ in
       isServerVoiceSelectionPresented = false
-      routineArchiveNavigation.reset()
-      accountRoutineGroupListViewModel.accountDidChange(
-        memberID: memberID
-      )
-      accountRoutineGroupDetailViewModel.accountDidChange(
-        memberID: memberID
-      )
     }
     .onChange(of: scenePhase) { _, newPhase in
       guard newPhase == .active else {
@@ -353,13 +302,22 @@ struct ProfileView: View {
       }
 
       Spacer(minLength: MoruSpacing.eight)
+
+      MoruChevron(color: MoruColor.textSecondary)
     }
     .padding(.horizontal, MoruSpacing.sixteen)
     .padding(.vertical, MoruSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
     .profilePilotSurface(cornerRadius: MoruRadius.card)
+    .contentShape(Rectangle())
+    .onTapGesture {
+      displayNameDraft = displayName
+      isDisplayNameEditorPresented = true
+    }
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(displayName), \(profileSubtitle)")
+    .accessibilityHint("표시 이름을 변경합니다.")
+    .accessibilityAddTraits(.isButton)
     .accessibilityIdentifier("profile.summary")
   }
 
