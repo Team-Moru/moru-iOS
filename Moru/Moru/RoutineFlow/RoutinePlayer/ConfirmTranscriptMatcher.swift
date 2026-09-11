@@ -175,6 +175,37 @@ enum ConfirmTranscriptMatcher {
     return Unicode.Scalar(withoutFinal).map(Character.init)
   }
 
+  /// 과거형 음절이 사전형에서 어떻게 생겼을지. "썼"은 "쓰"에서, "봤"은 "보"에서,
+  /// "줬"은 "주"에서, "폈"은 "피"에서 왔다. 어미 "-어/-아"가 어간 모음과 줄어들며
+  /// 모음이 바뀐 경우라, 모음만 되돌리면 단계 제목의 사전형과 만난다.
+  ///
+  /// ㄷ·ㅂ·ㅅ 불규칙(걷→걸었, 굽→구웠, 짓→지었)과 르 불규칙(부르→불렀)은
+  /// 받침을 뗀 비교나 앞 음절 대조로 이미 통하므로 여기 없다.
+  static func dictionaryFormCandidates(for character: Character) -> [Character] {
+    guard let scalar = hangulSyllableScalar(character),
+          let ignoringFinal = syllableIgnoringFinal(character) else {
+      return []
+    }
+
+    let offset = scalar.value - hangulSyllableBase
+    let initial = offset / (21 * 28)
+    let vowel = (offset % (21 * 28)) / 28
+    let restored = contractedVowelOrigins[vowel, default: []].compactMap { origin in
+      Unicode.Scalar(hangulSyllableBase + (initial * 21 + origin) * 28).map(Character.init)
+    }
+    return [ignoringFinal] + restored
+  }
+
+  /// 줄어든 모음 → 사전형 모음 (중성 인덱스). ㅓ·ㅏ→ㅡ(쓰→썼, 잠그→잠갔),
+  /// ㅘ→ㅗ(보→봤), ㅝ→ㅜ(주→줬), ㅕ→ㅣ(피→폈).
+  private static let contractedVowelOrigins: [UInt32: [UInt32]] = [
+    4: [18],   // ㅓ → ㅡ
+    0: [18],   // ㅏ → ㅡ
+    9: [8],    // ㅘ → ㅗ
+    14: [13],  // ㅝ → ㅜ
+    6: [20],   // ㅕ → ㅣ
+  ]
+
   private static let hangulSyllableBase: UInt32 = 0xAC00
   private static let hangulSyllableRange: ClosedRange<UInt32> = 0xAC00...0xD7A3
   private static let doubleSiotFinalIndex: UInt32 = 20

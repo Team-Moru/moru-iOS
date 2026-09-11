@@ -153,4 +153,41 @@ final class RoutineStepCompletionMatcherTests: XCTestCase {
       )
     }
   }
+
+  // MARK: - 활용하며 모음이 바뀌는 동사
+
+  func testContractedVerbsMatchTheirDictionaryFormInTheStepTitle() {
+    // 사용자가 만드는 루틴은 제목이 사전형("쓰기")이고 답은 활용형("썼어")이다.
+    let cases: [(title: String, answer: String)] = [
+      ("일기 쓰기", "썼어"),                 // ㅡ 탈락
+      ("불 끄기", "껐어요"),                 // ㅡ 탈락
+      ("창문 열고 하늘 보기", "봤어"),        // ㅗ+ㅏ → ㅘ
+      ("화분에 물 주기", "줬어"),            // ㅜ+ㅓ → ㅝ
+      ("기지개 펴기", "폈다"),               // 그대로
+      ("담배 대신 껌 씹기", "씹었어"),        // 규칙 활용
+      ("산책 10분 걷기", "걸었어"),          // ㄷ 불규칙 — 받침 무시로 통과
+      ("노래 한 곡 부르기", "불렀어"),        // 르 불규칙 — 앞 음절로 통과
+    ]
+
+    for (title, answer) in cases {
+      let step = RoutineStep(type: .input, title: title, order: 0)
+      XCTAssertEqual(
+        RoutineStepCompletionMatcher.match(answer, for: step),
+        .contextual,
+        "\(title) ← \(answer)"
+      )
+    }
+  }
+
+  func testContractedVerbsStillDoNotCrossOverToOtherSteps() {
+    let writingStep = RoutineStep(type: .input, title: "일기 쓰기", order: 0)
+
+    for answer in ["봤어", "줬어", "마셨어"] {
+      XCTAssertEqual(
+        RoutineStepCompletionMatcher.match(answer, for: writingStep),
+        .none,
+        answer
+      )
+    }
+  }
 }
