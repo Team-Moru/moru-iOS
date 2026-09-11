@@ -424,10 +424,6 @@ final class HomeWeatherTests: XCTestCase {
     }
 
     XCTAssertEqual(repository.savedSnapshots, [snapshot])
-    XCTAssertEqual(
-      viewModel.state.routineContent?.weather,
-      .fresh(makeWeatherContent(snapshot))
-    )
   }
 
   @MainActor

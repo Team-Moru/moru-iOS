@@ -196,7 +196,6 @@ struct HomeContentState: Equatable {
   var activeRoutines: [HomeRoutineState]
   var todayProgress: HomeProgressState
   var streak: HomeStreakState
-  var weather: HomeWeatherState = .notRequested
 }
 
 struct HomeProgressState: Equatable {

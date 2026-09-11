@@ -625,20 +625,6 @@ final class HomeViewModel {
     }
 
     self.weatherState = weatherState
-    switch state {
-    case .loading(var previousContent):
-      previousContent?.weather = weatherState
-      state = .loading(previousContent: previousContent)
-    case .content(var content):
-      content.weather = weatherState
-      state = .content(content)
-    case .empty(var content):
-      content.weather = weatherState
-      state = .empty(content)
-    case .failed(let failure, var previousContent):
-      previousContent?.weather = weatherState
-      state = .failed(failure, previousContent: previousContent)
-    }
   }
 
   private func makeViewState(from result: HomeRoutineLoadResult) -> HomeViewState {
@@ -673,8 +659,7 @@ final class HomeViewModel {
         weekdays: makeWeekdayStates(
           completedWeekdays: result.streak.completedWeekdays
         )
-      ),
-      weather: weatherState
+      )
     )
 
     return result.manualRoutines.isEmpty ? .empty(content) : .content(content)
