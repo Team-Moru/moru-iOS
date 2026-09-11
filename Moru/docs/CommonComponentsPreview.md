@@ -31,22 +31,14 @@ Figma `Hi-fi` 페이지의 왼쪽에 있는 `컴포넌트` 영역을 기준으�
 | ![gage bar](images/components/moru-progress-bar.png) | `gage bar` | `MoruProgressBar` |
 | ![keyword](images/components/moru-chip.png) | `keyword` | `MoruChip` |
 | ![toggle](images/components/moru-toggle.png) | `toggle` | `MoruToggle` |
-| ![navi_bar](images/components/moru-tab-bar.png) | `navi_bar` | `MoruTabBar` |
+| ![navi_bar](images/components/moru-tab-bar.png) | `navi_bar` | 네이티브 `TabView`/`Tab` (전용 컴포넌트 없음) |
 | ![check](images/components/moru-check-state.png) | `check` | `MoruCheckBadge` |
 | ![select](images/components/moru-icon-button-select.png) | `select` | `MoruSelectControl` |
 | ![음성 선택](images/components/moru-voice-card.png) | `음성 선택` | `MoruVoiceCard` |
 | ![Frame 2147239165](images/components/moru-voice-card.png) | `Frame 2147239165` | `MoruVoiceCard` |
 | ![Component 3](images/components/moru-routine-card.png) | `Component 3` | `MoruRoutineCard` |
 | ![sound_module](images/components/moru-sound-module.png) | `sound_module` | `MoruSoundModule` |
-| ![dialog](images/components/moru-dialog.png) | 와이어프레임 팝업 | `MoruDialog` |
-
-## Figma 컴포넌트에는 없지만 추가한 것
-
-화면에서 자주 반복될 것 같아서 추가한 공용 컴포넌트입니다.
-
-| SwiftUI 이름 | 용도 |
-| --- | --- |
-| `MoruDialog` | 확인 팝업 |
+| ![dialog](images/components/moru-dialog.png) | 와이어프레임 팝업 | 네이티브 `.alert` (전용 컴포넌트 없음) |
 
 ## 만들지 않은 것
 

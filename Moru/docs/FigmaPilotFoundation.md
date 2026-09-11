@@ -40,9 +40,11 @@ Text("활력 루틴")
 
 ## 공용 컴포넌트
 
-공용 컴포넌트(`MoruButton`, `MoruProgressBar`, `MoruToggle`, `MoruTabBar`,
-`MoruRoutineCard`)는 Figma 파일럿 외형을 기본값으로 사용합니다. 예전의
+공용 컴포넌트(`MoruButton`, `MoruProgressBar`, `MoruToggle`, `MoruRoutineCard`,
+`MoruWeekdaySelector`)는 Figma 파일럿 외형을 기본값으로 사용합니다. 예전의
 `componentStyle: .legacy / .figmaPilot` opt-in 파라미터는 제거되었습니다.
+탭바는 네이티브 `TabView`/`Tab`으로, 다이얼로그는 네이티브 `.alert`로 대체되어
+`MoruTabBar`·`MoruDialog`는 삭제되었습니다.
 
 ```swift
 MoruRoutineCard(
@@ -68,7 +70,7 @@ MoruRoutineCard(
 출력 위치는 `MORU_CAPTURE_OUTPUT_DIR` 환경 변수로 바꿀 수 있습니다.
 
 판정은 `MoruTests/Support/MoruVisualHash.swift`의 17×32 휘도 dHash 하나로 합니다.
-같은 입력을 두 번 그린 반복 캡처는 거리 6 이하, 승인 기준선과는 거리 24 이하여야 합니다
+같은 입력을 두 번 그린 반복 캡처는 거리 8 이하, 승인 기준선과는 거리 24 이하여야 합니다
 (glass는 프레임마다 미세하게 달라 바이트 동일성을 요구하지 않습니다). 기준선은 테스트 파일의
 base64 딕셔너리에 있고, 재승인은 캡처 디렉터리에 함께 쓰이는 `<이름>.png.dhash`를 옮겨 적습니다.
 
