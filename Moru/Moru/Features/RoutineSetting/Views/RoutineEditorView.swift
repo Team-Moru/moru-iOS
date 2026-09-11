@@ -153,14 +153,53 @@ struct RoutineEditorView: View {
           .presentationCornerRadius(AppRadius.lg)
         }
       }
-      .overlay {
-        if isDeleteDialogPresented {
-          deleteDialogOverlay
+      .alert(
+        RoutineManagementCopy.deleteConfirmationTitle,
+        isPresented: $isDeleteDialogPresented
+      ) {
+        Button(RoutineManagementCopy.deleteConfirmationCancelTitle, role: .cancel) {}
+        Button(RoutineManagementCopy.deleteConfirmationDeleteTitle, role: .destructive) {
+          if let routineID = draft.routineID {
+            Task {
+              let didDelete = await onDelete?(routineID) ?? false
+              isDeleteDialogPresented = false
+              if didDelete {
+                dismiss()
+              } else {
+                saveErrorMessage =
+                  "알람 취소에 실패해 루틴을 삭제하지 않았어요."
+              }
+            }
+          } else {
+            isDeleteDialogPresented = false
+            dismiss()
+          }
         }
-
-        if let activeRoutineConflict {
-          activeRoutineConflictDialogOverlay(activeRoutineConflict)
+      } message: {
+        Text(RoutineManagementCopy.deleteConfirmationMessage)
+      }
+      .alert(
+        RoutineManagementCopy.activeRoutineReplacementTitle,
+        isPresented: Binding(
+          get: { activeRoutineConflict != nil },
+          set: { isPresented in
+            if !isPresented {
+              activeRoutineConflict = nil
+            }
+          }
+        ),
+        presenting: activeRoutineConflict
+      ) { _ in
+        Button("취소", role: .cancel) {
+          activeRoutineConflict = nil
         }
+        Button("변경하기") {
+          Task {
+            await replaceActiveRoutineAndDismissIfNeeded()
+          }
+        }
+      } message: { conflict in
+        Text(RoutineManagementCopy.activeRoutineReplacementMessage(conflict))
       }
     }
   }
@@ -343,66 +382,6 @@ struct RoutineEditorView: View {
     }
     .buttonStyle(.plain)
   }
-  private var deleteDialogOverlay: some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "이 루틴을 삭제할까요?",
-        message: "삭제한 루틴은\n되돌릴 수 없어요.",
-        primaryTitle: "뒤로가기",
-        secondaryTitle: "삭제하기",
-        primaryAction: {
-          isDeleteDialogPresented = false
-        },
-        secondaryAction: {
-          if let routineID = draft.routineID {
-            Task {
-              let didDelete = await onDelete?(routineID) ?? false
-              isDeleteDialogPresented = false
-              if didDelete {
-                dismiss()
-              } else {
-                saveErrorMessage =
-                  "알람 취소에 실패해 루틴을 삭제하지 않았어요."
-              }
-            }
-          } else {
-            isDeleteDialogPresented = false
-            dismiss()
-          }
-        }
-      )
-    }
-  }
-
-  private func activeRoutineConflictDialogOverlay(
-    _ conflict: RoutineActivationConflictState
-  ) -> some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "다른 루틴을 끌까요?",
-        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
-        primaryTitle: "취소",
-        secondaryTitle: "변경하기",
-        primaryAction: {
-          activeRoutineConflict = nil
-        },
-        secondaryAction: {
-          Task {
-            await replaceActiveRoutineAndDismissIfNeeded()
-          }
-        }
-      )
-    }
-  }
-
   private func saveAndDismissIfNeeded() async {
     saveErrorMessage = nil
 

@@ -30,12 +30,10 @@ struct RoutinePlayerView: View {
                 backgroundView
                 contentView
                     .overlay(alignment: .bottom) {
-                        // 다이얼로그 스크림 아래에 두어 다이얼로그가 떠 있는 동안은 눌리지 않게 한다.
                         if let errorMessage = viewModel.errorMessage {
                             saveErrorBanner(message: errorMessage)
                         }
                     }
-                dialogView
             }
             .safeAreaInset(edge: .top, spacing: 0) {
                 if showsProgressChrome {
@@ -60,6 +58,31 @@ struct RoutinePlayerView: View {
             )
             .navigationTitle("오늘의 루틴")
             .navigationBarTitleDisplayMode(.inline)
+            .alert(
+                activeDialogCopy?.title ?? "",
+                isPresented: Binding(
+                    get: { viewModel.dialogState != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            viewModel.cancelActiveDialog()
+                        }
+                    }
+                ),
+                presenting: activeDialogCopy
+            ) { copy in
+                Button(copy.cancelTitle, role: .cancel) {
+                    viewModel.cancelActiveDialog()
+                }
+                Button(
+                    copy.confirmTitle,
+                    role: isDiscardUnsavedRunDialog ? .destructive : nil
+                ) {
+                    speechInputController.cancel()
+                    viewModel.confirmActiveDialog()
+                }
+            } message: { copy in
+                Text(copy.message)
+            }
             .interactiveDismissDisabled()
             .navigationBarBackButtonHidden(true)
             .task {
@@ -344,46 +367,26 @@ struct RoutinePlayerView: View {
 
     // MARK: - Dialog
 
-    @ViewBuilder
-    private var dialogView: some View {
+    /// 현재 dialogState에 맞는 문구. 네이티브 alert는 바깥을 탭해도 닫히지 않는다(시스템 규칙).
+    private var activeDialogCopy: RoutinePlayerDialogCopy? {
         switch viewModel.dialogState {
-        case .some(.skipStep):
-            SkipStepDialogView(
-                onCancel: {
-                    viewModel.cancelActiveDialog()
-                },
-                onConfirm: {
-                    speechInputController.cancel()
-                    viewModel.confirmActiveDialog()
-                }
-            )
-
-        case .some(.exit(let exit)):
-            ExitRoutineDialogView(
-                exit: exit,
-                onCancel: {
-                    viewModel.cancelActiveDialog()
-                },
-                onConfirm: {
-                    speechInputController.cancel()
-                    viewModel.confirmActiveDialog()
-                }
-            )
-
-        case .some(.discardUnsavedRun):
-            DiscardUnsavedRunDialogView(
-                onCancel: {
-                    viewModel.cancelActiveDialog()
-                },
-                onConfirm: {
-                    speechInputController.cancel()
-                    viewModel.confirmActiveDialog()
-                }
-            )
-
-        case .none:
-            EmptyView()
+        case .skipStep:
+            RoutinePlayerDialogCopy.skipStep
+        case .exit(let exit):
+            RoutinePlayerDialogCopy.exit(exit)
+        case .discardUnsavedRun:
+            RoutinePlayerDialogCopy.discardUnsavedRun
+        case nil:
+            nil
         }
+    }
+
+    /// 되돌릴 수 없는 동작만 destructive로 강조한다(삭제하기·기록 없이 나가기).
+    private var isDiscardUnsavedRunDialog: Bool {
+        if case .discardUnsavedRun = viewModel.dialogState {
+            return true
+        }
+        return false
     }
 
     // MARK: - Header

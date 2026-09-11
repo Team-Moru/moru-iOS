@@ -72,6 +72,14 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       ),
       "다른 사용 중인 루틴이 1개 있어요.\n이 루틴으로 바꾸면 기존 루틴과 알람이 꺼져요.\n기존 요일 설정은 그대로 남아요."
     )
+    XCTAssertEqual(RoutineManagementCopy.deleteConfirmationTitle, "이 루틴을 삭제할까요?")
+    XCTAssertEqual(
+      RoutineManagementCopy.deleteConfirmationMessage,
+      "삭제한 루틴은\n되돌릴 수 없어요."
+    )
+    XCTAssertEqual(RoutineManagementCopy.deleteConfirmationCancelTitle, "뒤로가기")
+    XCTAssertEqual(RoutineManagementCopy.deleteConfirmationDeleteTitle, "삭제하기")
+    XCTAssertEqual(RoutineManagementCopy.activeRoutineReplacementTitle, "다른 루틴을 끌까요?")
   }
 
   private func view(for state: RoutineManagementCaptureState) -> AnyView {
@@ -90,26 +98,6 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
             onDelete: {}
           ) { _ in }
         }
-      )
-    case .deleteDialog:
-      AnyView(
-        dialogStage(
-          title: "이 루틴을 삭제할까요?",
-          message: "삭제한 루틴은\n되돌릴 수 없어요.",
-          primaryTitle: "뒤로가기",
-          secondaryTitle: "삭제하기"
-        )
-      )
-    case .weekdayConflict:
-      AnyView(
-        dialogStage(
-          title: "다른 루틴을 끌까요?",
-          message: RoutineManagementCopy.activeRoutineReplacementMessage(
-            RoutineActivationConflictState(activeRoutineIDs: [UUID()])
-          ),
-          primaryTitle: "취소",
-          secondaryTitle: "변경하기"
-        )
       )
     case .creationChoice:
       AnyView(
@@ -165,31 +153,6 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       background: editor(draft: regularDraft),
       sheet: sheet()
     )
-  }
-
-  private func dialogStage(
-    title: String,
-    message: String,
-    primaryTitle: String,
-    secondaryTitle: String
-  ) -> some View {
-    ZStack {
-      editor(draft: regularDraft)
-        .blur(radius: 4)
-
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: title,
-        message: message,
-        primaryTitle: primaryTitle,
-        secondaryTitle: secondaryTitle,
-        primaryAction: {},
-        secondaryAction: {}
-      )
-    }
   }
 
   private var regularDraft: RoutineDraftState {
@@ -399,10 +362,6 @@ private enum RoutineManagementVisualBaseline {
       "gACAAIKSxpSCmoAMyABDMwyBDIAAEA2AHIAcAB4gTODMpsyGDcAMAA4ADwANAB2AHIAcAM4GzuZNwAzAWpD6gA==",
     "creation-choice-light-M.png":
       "gACAAIIKwhSCGoAMkADAAsCC4gLiAoCAwQDIBIwEgQLIALkC0AwARwMBAwAcANoG2oYdQAAA2QDKBshAJCDQAA==",
-    "delete-dialog-light-AX3.png":
-      "gACAAIKSxpSCmoAMyADCAOgAyIYABxtHD+ccAx5nHqecp7nHmJeGB44HACePB4cHEKYxB/EB8RDExMDE9AD0AA==",
-    "delete-dialog-light-M.png":
-      "gACAAIIKwhSCGoAMkADAAsCC4gLiAoCAyACAFoyHHoeGhwaHEGcYZ5Ae0A24AtAN0ga4BtANkAL5BMjEwMDwBA==",
     "editor-collapsed-light-AX3.png":
       "AAAAAAIQxpSCmoAIyADCAEiDyIMUI/VDdUNzI0kDJkDZANmQpWDhZPKUIoLZWdlJJoMxR3EB8RDExMTM8QD0AQ==",
     "editor-collapsed-light-M.png":
@@ -435,10 +394,6 @@ private enum RoutineManagementVisualBaseline {
       "gACAAIKSxpSCmoAMyABBAwRBDsAMwAAQwADQAHig+ILRkOBE4VjSuMK00ELAAMAA4yDDJPMA8gDEzMDE8gDwAA==",
     "step-edit-light-M.png":
       "gACAAIIKwhSCGoAMkADAAsCC5CJjAwMBAgAAAMAAwADoAtCE4xjhGOMYkACAgMMkwwTgwMDEwEADAoMi4MDgAA==",
-    "weekday-conflict-light-AX3.png":
-      "gACAAIKSxpTCmIBOgAedJx1nDAcNhx1nGUcxUzlTKXO2Y5ZjhoebR5tHHKeUp4IHAwcAJw0HjgbAzMTE9AD0AA==",
-    "weekday-conflict-light-M.png":
-      "gACAAIIKwhSCGoAMkADAAsCC4gLiAogAyASANg5HHwe9IzrjBgcYZ5Bn0A24AtAN0ga4BtANkAL5BMDEwMDwBA==",
   ]
 }
 
@@ -447,8 +402,6 @@ private enum RoutineManagementCaptureState: String, CaseIterable {
   case editorCollapsed = "editor-collapsed"
   case editorSchedule = "editor-schedule"
   case stepEdit = "step-edit"
-  case deleteDialog = "delete-dialog"
-  case weekdayConflict = "weekday-conflict"
   case creationChoice = "creation-choice"
   case createEmpty = "create-empty"
   case stepAdd = "step-add"

@@ -83,10 +83,37 @@ struct RoutineSettingView: View {
         presentCreationSheet()
       }
     }
-    .overlay {
-      if let activationConflict {
-        activationConflictDialogOverlay(activationConflict)
+    .alert(
+      "다른 루틴을 끌까요?",
+      isPresented: Binding(
+        get: { activationConflict != nil },
+        set: { isPresented in
+          if !isPresented {
+            activationConflict = nil
+            activationConflictRoutineID = nil
+          }
+        }
+      ),
+      presenting: activationConflict
+    ) { _ in
+      Button("취소", role: .cancel) {
+        activationConflict = nil
+        activationConflictRoutineID = nil
       }
+      Button("변경하기") {
+        if let activationConflictRoutineID {
+          Task {
+            await viewModel.activateRoutineReplacingActiveRoutine(
+              id: activationConflictRoutineID
+            )
+          }
+        }
+
+        activationConflict = nil
+        activationConflictRoutineID = nil
+      }
+    } message: { conflict in
+      Text(RoutineManagementCopy.activeRoutineReplacementMessage(conflict))
     }
     .sheet(item: $editorDraft) { draft in
       RoutineEditorView(draft: draft) { savedDraft in
@@ -306,38 +333,6 @@ struct RoutineSettingView: View {
     }
   }
 
-  private func activationConflictDialogOverlay(
-    _ conflict: RoutineActivationConflictState
-  ) -> some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "다른 루틴을 끌까요?",
-        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
-        primaryTitle: "취소",
-        secondaryTitle: "변경하기",
-        primaryAction: {
-          activationConflict = nil
-          activationConflictRoutineID = nil
-        },
-        secondaryAction: {
-          if let activationConflictRoutineID {
-            Task {
-              await viewModel.activateRoutineReplacingActiveRoutine(
-                id: activationConflictRoutineID
-              )
-            }
-          }
-
-          activationConflict = nil
-          activationConflictRoutineID = nil
-        }
-      )
-    }
-  }
 }
 
 #if DEBUG

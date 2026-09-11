@@ -18,6 +18,11 @@ enum RoutineManagementCopy {
   static let recommendedDescription = "경험과 목표를 바탕으로\n수정 가능한 초안을 추천해요."
   static let directTitle = "직접 루틴 만들기"
   static let directDescription = "각각의 항목을 직접 지정할 수 있어요."
+  static let deleteConfirmationTitle = "이 루틴을 삭제할까요?"
+  static let deleteConfirmationMessage = "삭제한 루틴은\n되돌릴 수 없어요."
+  static let deleteConfirmationCancelTitle = "뒤로가기"
+  static let deleteConfirmationDeleteTitle = "삭제하기"
+  static let activeRoutineReplacementTitle = "다른 루틴을 끌까요?"
 
   static func routineMetadata(stepCount: Int, totalMinutes: Int) -> String {
     "\(stepCount)개 항목 ・\(totalMinutes)분"

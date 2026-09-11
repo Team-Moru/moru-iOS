@@ -15,8 +15,9 @@ import XCTest
 final class RoutinePlayerEscapeVisualTests: XCTestCase {
   private enum CaptureState: String, CaseIterable {
     case saveFailureBanner = "save-failure-banner"
-    case discardDialog = "discard-dialog"
-    case closeDialog = "close-dialog"
+    /// alert 캡처는 이 하나만 남긴다 — 카피 계약은 `RoutinePlayerDialogCopyTests`가
+    /// 담당하고, 여기서는 네이티브 alert가 결정적으로 캡처되는지만 확인한다.
+    case alertDeterminism = "alert-determinism"
     case transcriberUnavailableComplete = "transcriber-unavailable-complete"
     case microphoneDeniedComplete = "microphone-denied-complete"
     case alarmStopRetryBanner = "alarm-stop-retry-banner"
@@ -71,16 +72,7 @@ final class RoutinePlayerEscapeVisualTests: XCTestCase {
       XCTAssertNotNil(viewModel.errorMessage)
       return AnyView(RoutinePlayerView(viewModel: viewModel))
 
-    case .discardDialog:
-      let viewModel = makeViewModel(finalizer: EscapeFailingFinalizer())
-      viewModel.resolveRoutine()
-      viewModel.requestCloseRoutine()
-      viewModel.confirmActiveDialog()
-      viewModel.requestDiscardUnsavedRun()
-      XCTAssertEqual(viewModel.dialogState, .discardUnsavedRun)
-      return AnyView(RoutinePlayerView(viewModel: viewModel))
-
-    case .closeDialog:
+    case .alertDeterminism:
       let viewModel = makeViewModel()
       viewModel.resolveRoutine()
       viewModel.requestCloseRoutine()

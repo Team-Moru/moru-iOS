@@ -173,16 +173,6 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
       viewModel.resolveRoutine()
       viewModel.completeCurrentStep(transcript: "완료했어요")
       return AnyView(RoutinePlayerView(viewModel: viewModel))
-    case .skipDialog:
-      let viewModel = makeViewModel()
-      advance(viewModel, to: 3)
-      viewModel.requestSkipStep()
-      return AnyView(RoutinePlayerView(viewModel: viewModel))
-    case .endDialog:
-      let viewModel = makeViewModel()
-      advance(viewModel, to: 3)
-      viewModel.requestEndRoutine()
-      return AnyView(RoutinePlayerView(viewModel: viewModel))
     case .resolutionRetry:
       let viewModel = makeViewModel(
         resolution: .temporarilyUnavailable(.repositoryUnavailable)
@@ -414,8 +404,6 @@ private enum RoutinePlayerCaptureState: String, CaseIterable {
   case regularInput = "regular-input"
   case inputLongKorean = "input-long-korean"
   case stepCompleted = "step-completed"
-  case skipDialog = "skip-dialog"
-  case endDialog = "end-dialog"
   case resolutionRetry = "resolution-retry"
   case terminalFailure = "terminal-failure"
   case trialConfirm = "trial-confirm"
@@ -535,10 +523,6 @@ private enum RoutinePlayerVisualBaseline {
       "AAAAAAGQxpyGHMgowAIhCW0haREJTg1IBhAeADjAMOBwcmDycPIw8BjAHAAMIAgEZIlsiQ1ODEgOyAAwCsgOQA==",
     "confirm-transcript-light-M.png":
       "AAAAAAEKxpzGHIAYrIhNiAYQAiAOABzAMOAw8mDycPIwcDjgHAAMIADAGmQOAAMAAyLjAP0A/QBlCAMCAIAAAA==",
-    "end-dialog-light-AX3.png":
-      "AACADCETNoUkk8iPyQAkAAdAT0QRpwaHBscXhxQnEmcexxnHFacwsx5DDkcAJw4HDgcARwQHBAeAro0EjU6MRg==",
-    "end-dialog-light-M.png":
-      "AACADCATNpEgE4QvDYANgAYQAAACIA4IGORyMJMWAQcNhxqnG0cFRxhnEGfAUIMmgwRDAAAAAAAAAAAAAAAAAA==",
     "input-long-korean-light-AX3.png":
       "AAAAAAGQxpzCHMAozggZRB1kHGQNiAyoDkgJSACQAACMkGJA82DywPLA8gDyAOsE9Ih0yPYk9hj5UOsQ6hDl4A==",
     "input-long-korean-light-M.png":
@@ -563,10 +547,6 @@ private enum RoutinePlayerVisualBaseline {
       "AAAAAAGABpAGAABAAACCAABAEqAxkDWYFqQypDOkNiQ2oBbgORAx0hrEGuJ0keM44Tj0gPgAAAQAAAAAAAAAAA==",
     "resolution-retry-light-M.png":
       "AAAAAAEABpACAAEAAACCAAAAAAAAAAAAAAAAAAMcZGB1aBqm6KjkyOAIAAYAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-    "skip-dialog-light-AX3.png":
-      "AACADCETNoUkk8iPyQAkAGdAB1YABxuHGkcaBxNnGmcbRxGnHocehx0nHYcNRwAHDgcOBwUHBQcEh80EjU6MRg==",
-    "skip-dialog-light-M.png":
-      "AACADCATNpEgE4QvDYANgAYQAAACIA4IGORyMJMWAQccxxqHHMcEBxhnEGfAUIMmgwRDAAAAAAAAAAAAAAAAAA==",
     "step-completed-light-AX3.png":
       "AAAAAAGQxpyGHMgoyAAyAAAAAAAAQAcADMAY4BGwEzAaZBjgDgADAYpIqqqSZmqjarHxMMlUZFQACAAAAAAAAA==",
     "step-completed-light-M.png":

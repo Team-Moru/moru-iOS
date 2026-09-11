@@ -96,10 +96,22 @@ struct OnboardingFlowView: View {
         ? Self.recommendedRootAccessibilityIdentifier
         : ""
     )
-    .overlay {
-      if let activeRoutineConflict = viewModel.activeRoutineConflict {
-        activeRoutineConflictDialogOverlay(activeRoutineConflict)
-      }
+    .alert(
+      "다른 루틴을 끌까요?",
+      isPresented: Binding(
+        get: { viewModel.activeRoutineConflict != nil },
+        set: { isPresented in
+          if !isPresented {
+            viewModel.keepExistingActiveRoutineButtonDidTap()
+          }
+        }
+      ),
+      presenting: viewModel.activeRoutineConflict
+    ) { _ in
+      Button("취소", role: .cancel, action: viewModel.keepExistingActiveRoutineButtonDidTap)
+      Button("변경하기", action: viewModel.replaceActiveRoutineButtonDidTap)
+    } message: { conflict in
+      Text(RoutineManagementCopy.activeRoutineReplacementMessage(conflict))
     }
     .onDisappear(perform: viewModel.viewDidDisappear)
   }
@@ -140,24 +152,6 @@ struct OnboardingFlowView: View {
     }
   }
 
-  private func activeRoutineConflictDialogOverlay(
-    _ conflict: RoutineActivationConflictState
-  ) -> some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "다른 루틴을 끌까요?",
-        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
-        primaryTitle: "취소",
-        secondaryTitle: "변경하기",
-        primaryAction: viewModel.keepExistingActiveRoutineButtonDidTap,
-        secondaryAction: viewModel.replaceActiveRoutineButtonDidTap
-      )
-    }
-  }
 }
 
 /// 툴바 principal에 얹는 진행바. 제목 대신 위젯을 넣는 경우라 navigationTitle을 쓰지 않는다.
