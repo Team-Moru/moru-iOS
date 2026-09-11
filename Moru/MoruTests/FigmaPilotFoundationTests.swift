@@ -102,7 +102,6 @@ final class FigmaPilotFoundationTests: XCTestCase {
   func testDefaultCommonComponentInitializersCompile() {
     _ = MoruProgressBar(current: 1, total: 9)
     _ = MoruToggle(isOn: .constant(true))
-    _ = MoruTabBar(selection: .constant(.routine))
     _ = MoruButton("다음") {}
     _ = MoruRoutineCard(
       title: "활력 루틴",
@@ -142,55 +141,6 @@ final class FigmaPilotFoundationTests: XCTestCase {
       XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
       XCTAssertEqual(first.scale, 3)
       try assertVisualRepeat(first, second)
-    }
-  }
-
-  func testPilotTabBarBackgroundContinuesThroughBottomSafeArea() throws {
-    let fallbackDirectory = FileManager.default.temporaryDirectory
-      .appendingPathComponent("moru-tab-safe-area-77")
-    let outputDirectory = URL(
-      fileURLWithPath: ProcessInfo.processInfo.environment[
-        "MORU_CAPTURE_OUTPUT_DIR"
-      ] ?? fallbackDirectory.path
-    )
-
-    for variant in MoruVisualCaptureVariant.allCases {
-      for selection in MainTabState.availableTabs {
-        let first = try MoruVisualCaptureFixture.render(
-          tabBarSafeAreaScreen(selection: selection),
-          filename: "tab-safe-area-\(selection.rawValue)-\(variant.rawValue).png",
-          variant: variant,
-          outputDirectory: outputDirectory,
-          additionalSafeAreaInsets: UIEdgeInsets(
-            top: 0,
-            left: 0,
-            bottom: 34,
-            right: 0
-          )
-        )
-        let second = try MoruVisualCaptureFixture.render(
-          tabBarSafeAreaScreen(selection: selection),
-          filename: "tab-safe-area-repeat-\(selection.rawValue)-\(variant.rawValue).png",
-          variant: variant,
-          outputDirectory: outputDirectory,
-          additionalSafeAreaInsets: UIEdgeInsets(
-            top: 0,
-            left: 0,
-            bottom: 34,
-            right: 0
-          )
-        )
-
-        try assertVisualRepeat(first, second)
-        // drawHierarchy는 탭바의 머티리얼 블러까지 그리므로 두 지점이 한두 단계 어긋날 수 있다.
-        let body = try rgba(at: CGPoint(x: 8, y: 760), in: first)
-        let safeArea = try rgba(at: CGPoint(x: 8, y: 840), in: first)
-        XCTAssertEqual(body.count, safeArea.count)
-        XCTAssertTrue(
-          zip(body, safeArea).allSatisfy { abs(Int($0) - Int($1)) <= 4 },
-          "Tab body and bottom safe area must use the same background layer: \(body) vs \(safeArea)"
-        )
-      }
     }
   }
 
@@ -251,49 +201,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
         .padding(.vertical, MoruSpacing.thirtySix)
         .padding(.horizontal, MoruSpacing.twenty)
       }
-
-      MoruTabBar(
-        selection: .constant(.routine)
-      )
     }
     .background(MoruColor.canvas)
-  }
-
-  private func tabBarSafeAreaScreen(selection: MoruTabItem) -> some View {
-    MoruColor.accent
-      .ignoresSafeArea()
-      .safeAreaInset(edge: .bottom, spacing: 0) {
-        MoruTabBar(
-          selection: .constant(selection)
-        )
-      }
-  }
-
-  private func rgba(
-    at point: CGPoint,
-    in image: UIImage
-  ) throws -> [UInt8] {
-    let cgImage = try XCTUnwrap(image.cgImage)
-    let pixel = CGRect(
-      x: point.x * image.scale,
-      y: point.y * image.scale,
-      width: 1,
-      height: 1
-    )
-    let croppedImage = try XCTUnwrap(cgImage.cropping(to: pixel))
-    var rgba = [UInt8](repeating: 0, count: 4)
-    let context = try XCTUnwrap(
-      CGContext(
-        data: &rgba,
-        width: 1,
-        height: 1,
-        bitsPerComponent: 8,
-        bytesPerRow: 4,
-        space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-      )
-    )
-    context.draw(croppedImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-    return rgba
   }
 }

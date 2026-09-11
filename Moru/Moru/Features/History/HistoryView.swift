@@ -125,7 +125,8 @@ struct HistoryView: View {
         }
       }
       .background(MoruColor.canvas.ignoresSafeArea())
-      .navigationBarTitleDisplayMode(.inline)
+      .navigationTitle(HistoryCopy.overviewTitle)
+      .navigationBarTitleDisplayMode(.large)
       .navigationDestination(isPresented: $isWeeklyReportPresented) {
         if case .content(let overview) = viewModel.state {
           HistoryWeeklyReportView(overview: overview)
@@ -180,11 +181,6 @@ struct HistoryView: View {
   private func overviewContent(_ overview: HistoryOverview) -> some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 0) {
-        Text(HistoryCopy.overviewTitle)
-          .moruTextStyle(.h3)
-          .foregroundStyle(AppColor.gray550)
-          .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-
         VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryStreakWeeklyCard(
             streak: overview.streak,
@@ -238,7 +234,6 @@ struct HistoryView: View {
         }
       }
       .padding(.horizontal, MoruSpacing.twenty)
-      .padding(.bottom, MoruSpacing.sixtyFour)
     }
   }
 

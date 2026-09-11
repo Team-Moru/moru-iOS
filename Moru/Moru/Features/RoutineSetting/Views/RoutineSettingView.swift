@@ -36,8 +36,6 @@ struct RoutineSettingView: View {
     NavigationStack {
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 0) {
-          header
-
           if let errorMessage = viewModel.state.errorMessage,
              viewModel.state.routines.isEmpty {
             routineErrorState(message: errorMessage)
@@ -64,11 +62,11 @@ struct RoutineSettingView: View {
         }
         .padding(.horizontal, MoruSpacing.twenty)
         .padding(.top, MoruSpacing.twenty)
-        .padding(.bottom, MoruSpacing.thirtySix)
       }
       .defaultScrollAnchor(.top)
       .background(MoruColor.canvas.ignoresSafeArea())
-      .navigationBarTitleDisplayMode(.inline)
+      .navigationTitle("루틴")
+      .navigationBarTitleDisplayMode(.large)
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
@@ -116,13 +114,6 @@ struct RoutineSettingView: View {
         viewModel.activeRoutineConflict(for: draft)
       }
     }
-  }
-
-  private var header: some View {
-    Text("루틴")
-      .moruTextStyle(.h3)
-      .foregroundStyle(AppColor.gray550)
-      .fixedSize(horizontal: false, vertical: true)
   }
 
   private var activeRoutineSection: some View {

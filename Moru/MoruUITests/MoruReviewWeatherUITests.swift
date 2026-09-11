@@ -12,7 +12,9 @@ final class MoruReviewWeatherUITests: XCTestCase {
   func testAccountConnectionShowsRoundSocialLoginButtons() {
     launchAppForAccountConnection()
 
-    let profileTab = app.buttons["app.tab.my"]
+    // 네이티브 탭바 버튼은 accessibilityIdentifier가 반영되지 않아(2026-09-11 확인)
+    // 레이블(제목)로 찾는다.
+    let profileTab = app.tabBars.buttons["마이"]
     XCTAssertTrue(profileTab.waitForExistence(timeout: 5))
     profileTab.tap()
 

@@ -158,7 +158,6 @@ struct HomeView: View {
           }
         }
       }
-      .padding(.bottom, MoruSpacing.sixtyFour)
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)

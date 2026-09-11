@@ -13,7 +13,6 @@ import SwiftUI
 
 private struct MoruCommonComponentsPreviewHost: View {
   @State private var toggleOn = true
-  @State private var tab: MoruTabItem = .home
   @State private var morningRoutineOn = false
   @State private var energyRoutineOn = true
   @State private var voiceCardSelected = true
@@ -80,7 +79,6 @@ private struct MoruCommonComponentsPreviewHost: View {
           primaryAction: {},
           secondaryAction: {}
         )
-        MoruTabBar(selection: $tab)
       }
       .padding(AppSpacing.screenHorizontal)
     }

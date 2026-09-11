@@ -144,7 +144,8 @@ struct ProfileView: View {
         }
       }
       .background(MoruColor.canvas.ignoresSafeArea())
-      .toolbar(.hidden, for: .navigationBar)
+      .navigationTitle(ProfileCopy.title)
+      .navigationBarTitleDisplayMode(.large)
       .navigationDestination(
         isPresented: $routineArchiveNavigation.isArchivePresented
       ) {
@@ -281,8 +282,6 @@ struct ProfileView: View {
   private func profileContent(_ content: ProfileSettingsLoadResult) -> some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 0) {
-        profileTitle
-
         profileCard(
           displayName: profileSummaryDisplayName(for: content.profile)
         )
@@ -314,7 +313,6 @@ struct ProfileView: View {
           .padding(.top, MoruSpacing.twentyEight)
       }
       .padding(.horizontal, MoruSpacing.twenty)
-      .padding(.bottom, MoruSpacing.sixtyFour)
     }
   }
 
