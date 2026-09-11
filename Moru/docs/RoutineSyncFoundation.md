@@ -216,11 +216,26 @@ P0이 Swagger와 실서버에 반영되고 E2E로 검증된 뒤에만 활성화�
   `needsReconciliation`로 보내며 자동 재시도하지 않는다. reconciliation이
   미커밋을 증명한 경우에만 같은 generation을 다시 admission할 수 있다.
 
-남음:
+남음 (2026-09-11 기준으로 갱신):
 
-- P0이 배포된 Swagger DTO와 HTTP header를 구현하는 production transport
-- idempotency key reconciliation endpoint adapter
-- 실서버 E2E suite의 통과 결과를 production contract로 공급하는 release gate
-- foreground/network 회복 시 한 번씩 sender를 실행하는 trigger와 계정 변경 E2E
+- ~~P0이 배포된 Swagger DTO와 HTTP header를 구현하는 production transport~~
+  → 완료. `ProductionRoutineSyncTransport`와
+  `ProductionRoutineSyncRequestPreparer`가 command 8개를 경로 7개로 만든다.
+- idempotency key reconciliation endpoint adapter → **여전히 없다.** 모호한
+  transport 결과는 `needsReconciliation`로 세워 두고 자동 재시도하지 않으므로,
+  이 상태의 row는 사람이 개입하기 전까지 그대로 남는다.
+- ~~실서버 E2E suite의 통과 결과를 production contract로 공급하는 release gate~~
+  → 만들지 않고 **대체됐다.** `RoutineSyncServerContract.productionP0`가
+  `isE2EVerified: true`를 소스 상수로 들고 있어, 검증 여부는 자동 게이트가 아니라
+  사람이 이 값을 고치는 것으로 표현된다.
+- ~~foreground/network 회복 시 한 번씩 sender를 실행하는 trigger~~ → 완료.
+  `RoutineSyncRuntimeCoordinator`를 `AppRouter`가 scene 활성 변화마다 깨운다
+  (`AppRouter.swift:329,342`). 계정 변경 E2E는 미확인으로 남는다.
 
-위 항목과 서버 P0가 모두 완료되기 전에는 production sender를 활성화하지 않는다.
+command 목록에 `deactivateRoutineGroup`이 빠져 있었다. 활성 그룹을 교체하지 않고
+끄기만 하는 경로이며, `selectActiveRoutineGroup`과 같은 `PATCH .../active`
+계약을 쓰되 대체 그룹을 지정하지 않는다는 점이 다르다.
+
+production sender는 위 상태 그대로 이미 활성이다. 활성 조건은
+`AppCapabilities.shouldAllowServerRequests`와 `productionP0.isE2EVerified`
+두 가지뿐이다.

@@ -322,26 +322,42 @@ empty로 바꾸지 않습니다. 같은 날 live OpenAPI는 두 operation의 `20
 APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 필요한 Coordinator를 선택 기능으로 추가합니다.
 
+## 연결된 루틴 쓰기 (2026-09-11 정정)
+
+이 문서의 이전 판은 아래 write를 "sender에 연결하지 않습니다"라고 적었으나
+**코드와 어긋납니다**. `AppBootstrapper.swift:268-284`가
+`appCapabilities.shouldAllowServerRequests`(= `accountFeaturesEnabled`)와
+routine sync repository가 있을 때 `RoutineSyncSender`를 `contract: .productionP0`로
+조립합니다. `ProductionRoutineSyncRequestPreparer`는 command 8개를 경로 7개로
+만듭니다.
+
+| command | 경로 |
+| --- | --- |
+| `createRoutineGroup` | `POST /routine-groups` |
+| `addRoutine` | `POST /routine-groups/{routineGroupId}/routines` |
+| `selectActiveRoutineGroup` | `PATCH /routine-groups/{routineGroupId}/active` |
+| `deactivateRoutineGroup` | `PATCH /routine-groups/{routineGroupId}/active` |
+| `deleteRoutineGroup` | `DELETE /routine-groups/{routineGroupId}` |
+| `deleteRoutine` | `DELETE /routines/{routineId}` |
+| `saveRoutineExecution` | `POST /routine-executions` |
+| `completeOnboarding` | `POST /onboarding/complete` |
+
+따라서 "Swagger에 온보딩 완료 상태를 쓰는 mutation이 없다"는 서술도 더 이상
+사실이 아닙니다. `RoutineSyncServerContract.productionP0`
+(`RoutineSyncModels.swift:190-193`)가 `isE2EVerified: true`와 capability 6종을
+선언하고, `supports(_:)`가 command마다 필요한 capability를 확인합니다.
+계정 기능을 끄면(`AppCapabilities.localOnly`) sender가 아예 조립되지 않습니다.
+
+쓰기가 열렸어도 다음은 여전히 없습니다.
+
+- lookup/upsert, 수정·재정렬, revision/ETag, tombstone, 증분 동기화 계약.
+- 응답이 유실된 요청을 복구하는 reconciliation endpoint. 모호한 transport
+  결과는 `needsReconciliation` 상태로 세워 두고 자동 재시도하지 않습니다.
+- 로컬 UUID와 서버 `Int64` ID의 mapping은 `MoruSchemaV4`의 account-scoped
+  binding으로 처리하며, 제목·순서로 자식 ID를 추측하지 않는 원칙은 그대로입니다.
+
 ## 계약 확인 전 보류하는 연동
 
-- 루틴 그룹 쓰기
-  - `POST /routine-groups`, `POST /routine-groups/{routineGroupId}/routines`,
-    `PATCH /routine-groups/{routineGroupId}/active`,
-    `DELETE /routine-groups/{routineGroupId}`, `DELETE /routines/{routineId}`,
-    `POST /routine-executions`는 sender에 연결하지 않습니다.
-  - 로컬 UUID와 서버 `Int64` ID의 account-scoped mapping/Outbox 기반은
-    `MoruSchemaV4`에 있습니다. 다만 서버가 stable client ID를 돌려주지 않아
-    새 그룹의 자식 ID를 제목·순서로 추측해 연결하지 않습니다.
-  - 수정·재정렬, client mutation ID, idempotency, revision,
-    tombstone, 증분 동기화 계약은 서버에 없습니다.
-- 실행 결과 저장과 AI 단계 판정
-  - 실행 결과용 Outbox 기반은 있지만, 서버 routine ID, 응답 client ID,
-    중복 전송 방지 키가 없습니다.
-  - 실행 중 계정 전환·재시도·부분 완료 정책도 필요합니다.
-- 온보딩 상태 쓰기
-  - 조회는 읽기 전용 snapshot으로 연결했습니다.
-  - 현재 Swagger에는 완료 상태를 맞춰 쓰는 mutation이 없습니다.
-  - 따라서 서버 조회값으로 로컬 온보딩·초기 루틴을 변경하지 않습니다.
 - 루틴 TTS 조회
   - 로컬 routine UUID와 서버 routine ID의 연결이 없습니다.
   - `s3Url` 수명, 다운로드 인증, 캐시 만료·fallback 계약이 필요합니다.
@@ -358,12 +374,18 @@ APIClient, AccountSessionStore, Remote Data Source, 조회 Service,
 ## 쓰기 연동 전 서버 계약
 
 2026-08-10 live Swagger에는 루틴 mutation용 `Idempotency-Key`, stable client
-ID echo, reconciliation 조회, revision/ETag가 선언되어 있지 않습니다.
-따라서 재시도만으로 중복 생성·실행 기록이 생길 수 있으며, sender는 의도적으로
-차단합니다. 상세 P0/P1/P2 요청과 수용 기준은
+ID echo, reconciliation 조회, revision/ETag가 선언되어 있지 않았습니다.
+상세 P0/P1/P2 요청과 수용 기준은
 [서버 루틴 동기화 계약 요청서](ServerRoutineSyncContractRequest.md)에 둡니다.
-P0이 Swagger와 실서버에 배포되고 E2E로 검증되기 전에는 어떤 새 루틴 write도
-제품 흐름에서 호출하지 않습니다.
+
+**2026-09-11 정정:** "sender는 의도적으로 차단합니다", "P0이 검증되기 전에는
+어떤 새 루틴 write도 호출하지 않습니다"는 더 이상 코드와 맞지 않습니다. 위
+[연결된 루틴 쓰기](#연결된-루틴-쓰기-2026-09-11-정정)대로 P0 범위의 write는
+열려 있고, 열어도 되는지는 코드가 `RoutineSyncServerContract.productionP0`의
+`isE2EVerified` 플래그 하나로 판단합니다. 이 플래그는 릴리스 게이트가 실제 E2E
+결과를 넣어 주는 값이 아니라 소스에 상수로 박혀 있습니다. 즉 문서가 말하던
+"검증 뒤 활성화"는 지금 **사람이 판단해 상수를 바꾸는 방식**입니다. 남은
+reconciliation 계약은 아직 없습니다.
 
 ## TTS 경계
 
