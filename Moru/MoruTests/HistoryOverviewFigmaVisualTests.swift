@@ -38,7 +38,7 @@ final class HistoryOverviewFigmaVisualTests: XCTestCase {
 
         XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
         XCTAssertEqual(first.scale, 3)
-        XCTAssertEqual(first.pngData(), second.pngData())
+        try assertVisualRepeat(first, second)
       }
     }
   }

@@ -36,10 +36,14 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
 
         XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
         XCTAssertEqual(first.scale, 3)
-        XCTAssertEqual(first.pngData(), second.pngData())
-        try assertMatchesApprovedBaseline(
+        try assertVisualRepeat(first, second, "\(state.rawValue)-\(variant.rawValue)")
+        try assertVisualBaseline(
           first,
-          filename: "\(state.rawValue)-\(variant.rawValue).png"
+          name: "\(state.rawValue)-\(variant.rawValue).png",
+          expected: RoutineManagementVisualBaseline.hashes[
+            "\(state.rawValue)-\(variant.rawValue).png"
+          ],
+          outputDirectory: outputDirectory
         )
       }
     }
@@ -70,80 +74,7 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
     )
   }
 
-  private func assertMatchesApprovedBaseline(
-    _ image: UIImage,
-    filename: String,
-    file: StaticString = #filePath,
-    line: UInt = #line
-  ) throws {
-    let actualHash = try visualHash(for: image)
 
-    guard let encodedBaseline = RoutineManagementVisualBaseline.hashes[filename],
-          let expectedHash = Data(base64Encoded: encodedBaseline) else {
-      XCTFail("Missing or invalid visual baseline: \(filename)", file: file, line: line)
-      return
-    }
-
-    XCTAssertEqual(actualHash.count, expectedHash.count, file: file, line: line)
-    let distance = zip(actualHash, expectedHash).reduce(0) { result, pair in
-      result + Int((pair.0 ^ pair.1).nonzeroBitCount)
-    }
-    XCTAssertLessThanOrEqual(
-      distance,
-      RoutineManagementVisualBaseline.maximumHammingDistance,
-      "Visual regression in \(filename), hash distance: \(distance), "
-        + "actual hash: \(actualHash.base64EncodedString())",
-      file: file,
-      line: line
-    )
-  }
-
-  private func visualHash(for image: UIImage) throws -> Data {
-    let width = 17
-    let height = 32
-    var pixels = [UInt8](repeating: 0, count: width * height * 4)
-    let context = try XCTUnwrap(
-      CGContext(
-        data: &pixels,
-        width: width,
-        height: height,
-        bitsPerComponent: 8,
-        bytesPerRow: width * 4,
-        space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-      )
-    )
-    let cgImage = try XCTUnwrap(image.cgImage)
-    context.interpolationQuality = .high
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-    var luminance = [Int]()
-    luminance.reserveCapacity(width * height)
-    for offset in stride(from: 0, to: pixels.count, by: 4) {
-      let red = 299 * Int(pixels[offset])
-      let green = 587 * Int(pixels[offset + 1])
-      let blue = 114 * Int(pixels[offset + 2])
-      luminance.append((red + green + blue) / 1_000)
-    }
-
-    var hash = Data(capacity: (width - 1) * height / 8)
-    var byte: UInt8 = 0
-    var bitIndex = 0
-    for row in 0..<height {
-      for column in 0..<(width - 1) {
-        if luminance[row * width + column] > luminance[row * width + column + 1] {
-          byte |= 1 << (7 - bitIndex)
-        }
-        bitIndex += 1
-        if bitIndex == 8 {
-          hash.append(byte)
-          byte = 0
-          bitIndex = 0
-        }
-      }
-    }
-    return hash
-  }
 
   private func view(for state: RoutineManagementCaptureState) -> AnyView {
     switch state {
@@ -462,56 +393,55 @@ private struct RoutineManagementBottomSheetCaptureStage<
 }
 
 private enum RoutineManagementVisualBaseline {
-  static let maximumHammingDistance = 24
   static let hashes: [String: String] = [
     "create-empty-light-AX3.png":
-      "AAAAABAAyADIgBmEPYDAMMgALAJRA1gDJANMg2gDJgDZANmQpWLlZPIU8gDZSNl48GgEAz6jPKPBCMDEwMAgAQ==",
+      "AAAAABAAyADIgBmEPYDAMMgALAJRA1gDJANMg2gDJgDZANmQpWLlZPIU8gDZSNl48GgEEz6jPKPiAMTExMAgAQ==",
     "create-empty-light-M.png":
-      "AAAAACBAlgCHAJBAgAFIAwADYAMwAsgAwQKqBJAEyADIADICDwMEA4AAAAAAAAAAAAAAAAAAAALAAMCEwIAgAQ==",
+      "AAAAACBAlgCHAJBAgAFIAwADYAMwAsgAwQKuBJAEyADIACICDwMEA4AAAAAAAAAAAAAAAAAAAALhCMCEwAAgAQ==",
     "creation-choice-light-AX3.png":
-      "AAAAABAByAzMTAzJjsgDMwyBDIAAEA2AHIAcAB4gTODMpsyGDcAMAA4ADwANAB2AHIAcAM4GzuZNwAzAGpA6AQ==",
+      "gACAAKACyAzETIzIzsgDMwyBDIAAEA2AHIAcAB4gTODMpsyGDcAMAA4ADwANAB2AHIAcAM4GzuZNwAzAGpC6gA==",
     "creation-choice-light-M.png":
-      "AAAAAEDBggaDBpBAgALEAxUDZSMSAsgAwQCKBKAEwADIAHEH0A0QQwMBAwAcANoG2oYdQAAA2QDKBshAJABAAQ==",
+      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyACKBIQEyADIAHEG0AwgQwMBAwAcANoG2oYdQAAA2QDKBshAIADAAA==",
     "delete-dialog-light-AX3.png":
-      "AAAAABAByAzMTAzJHsjBMMgAAAYABxtHD+ccAx5nHqccpznHmJcGB44HgCcPBwcH2WnQSDEDMUfBFMzE4MgzAQ==",
+      "gACAAKACyAzETIzIjsjBMMgAgA4ABxtHD+ccAx5nHqccpznHmJcGB44HgCcPBwcH2WrQSDECMQfBDMjU4MhlAA==",
     "delete-dialog-light-M.png":
-      "AAAAAEDBggaDBpBAgALEAxUDZSMSAsgAyACAFhyHHoeGhwaHEGcQZ1AfUAQ4hlANogJQBVAFuAL4BMTEwMBAAQ==",
+      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyACAFgyHHoeGhwaHEGcYZ5AP0Qy4BtANogLQBdANuAL5DMTEwIhAAA==",
     "editor-collapsed-light-AX3.png":
-      "AAAAABAByAzMTCzJLsjBMMgAIgLIg0yDIwP1Q3EDeyMNgdgA2YDtYKVk82TyggSC2WnQaDGDcUfBHMTExMBzAQ==",
+      "AAAAABAByAzMTCzJLsjBMMgAIgLIg0yDIwP1Q3EDeyMNgdgA2YDtYKVk82TyggSC2WnQSDEDcUfBHMTExMAzAQ==",
     "editor-collapsed-light-M.png":
-      "AAAAACBBkgaCBpBAgAHEAxADZiNSAsgAwQKqBJAEyQDIAHAHUA2wAlANUg88BlANogJYDVANuAL5DMTEyMRAAQ==",
+      "AAAAACBBkgaCBpBAgAHEAxADZiNSAsgAwQKuBJAEyADIAHAHUA00AlANUAc8B1ANIgJQDVANOAP5DMDE4MBBAQ==",
     "editor-long-korean-light-AX3.png":
-      "AAAAABAByAzMTCzJLsjBMMgAKoJ3JEck7SdoM2yHTKPss+SDVudkZ2RjAgjZANlApZCXFJOQEofgQMTE4MBzgQ==",
+      "AAAAABAByAzMTCzJLsjBMMgAKoN3JEck7SdoM2yHTKPss+SDVudkZ2RjAgjZANlApZCXFJOQEofhAMTE0MAzgQ==",
     "editor-long-korean-light-M.png":
-      "AAAAACBBkgaCBpBAgIFUWQAD6sNQAsgAyIKTBJMEyADIUHEHUQ2oAlANUCcGAg8DACKAAAAAAAPgAMDEwIAgAQ==",
+      "AAAAACBBkgaCBpBAgIFUWRAD6sNQAsgAyIKTBJMEyADIMHEHUQ04ElANUCUjAw8DICNAAAAAAAfhAMDEwMBBAQ==",
     "editor-schedule-light-AX3.png":
-      "AAAAABAByAzMTCzJLsjBMMgAIgLIg0yDIwP1Q3EDeyMNgdgA2YDtYKVk80T8ygzIAzDMyMzIzMThMMTE5MhOiQ==",
+      "AAAAABAByAzMTCzJLsjBMMgAIgLIg0yDIwP1Q3EDeyMNgdgA2YDtYKVk80T8ygzIAzDMyMzIzMThMMTExMBuiQ==",
     "editor-schedule-light-M.png":
-      "AAAAACBBkgaCBpBAgAHEAxADZiNSAsgAwQKqBIIkBNDEwMTAxNAk0BEq1UTVRMiqyABwB1ANhALwAMDEwMBAAQ==",
+      "AAAAACBBkgaCBpBAgAHEAxADZiNSAsgAwQKuBIIkBNDEwMTAxMAk0BEq1VTVVMgRyABwD1ANJAPwAMDEwMBBAQ==",
     "list-empty-light-AX3.png":
-      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwMXAAAAAAAAAAAAAAAAAACRImTI7MgAIA==",
+      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwIfAAAAAAAAAAAAAAAAAACSImzIZMgAIA==",
     "list-empty-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOYGgwaDAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACSImzIbMgASA==",
+      "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOIGiwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRImzIbMkgSA==",
     "list-error-light-AX3.png":
-      "AAAAACgAxADEAOSAGwADAAaQAxAZIBmkYsBo2RlECUAawAhmGwcbQwJXAAAAAAAAAAAAAAAAAACRImTI7MgAIA==",
+      "AAAAACgAxADEAOSAGwADAAaQAxAZIBmkYsBo2RlECUAawAxiGwMbQwJXAAAAAAAAAAAAAAAAAACSImzIZMgAIA==",
     "list-error-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAxgeZBwABMoHBwcDAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACSImzIbMgACA==",
+      "AAAAACAAwADAACAAAAAAgAMAAxgeZBwABNIHAwcDAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRImzIbMkgSA==",
     "routine-list-light-AX3.png":
-      "AAAAACgAxADEAOSQykDKRMpg2RTZDNow2nDAYMBgwBCoAugArEBZA10TXSMaYwDxAHEgSlsRWRNZgkzIxNgiMA==",
+      "AAAAACgAxADEAOSQykDKRMpg2RTZDNow2nDAYMBgwBCoAugArMBZAN0QXSBaZETwQHCESlMQ2RDZkGTIbMiRMA==",
     "routine-list-light-M.png":
-      "AAAAACAAwADEAOAA4ADWDNkwwLDCDBAAyACCAlgzSDlAEwACWBNYOUg5EAYHAQ8DACAAAAAAAACyIszIzMgAAA==",
+      "AAAAACAAwADEAOAA4ADWDNkwwLDCDBAAyACCBFgYyDhCEIIEWBDYOEA4gAJHAE8AQBAAAAAAAACRImzIbMkgSA==",
     "step-add-light-AX3.png":
-      "AAAAABAByAzMTAzJjsgBMwUBDoAMgAAQwADQAFwg1IKgAOAE4VjSuMK00ELAAMAA4yDDLMMgwMDAxEIIAAIyAQ==",
+      "gACAAKACyAzETIzIzsgBMwUBDoAMgAAQwADQAFwg1IKgAOAE4VjSuMK00ELAAMAA4yDDLMMgwMDAxGIIAQK0AA==",
     "step-add-light-M.png":
-      "AAAAAEDBggaDBpBAgALEAxUDZSMSAsgASAMTAwIAAADAAMAAwALAhOMY4RjhGJAEgADDBMME4MDAxMAAAAFAAQ==",
+      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyAMTAwIAAADAAMAAwALQhOMY4RjhGJAEgADDBMME4MDAxMAAAAHAAA==",
     "step-edit-light-AX3.png":
-      "AAAAABAByAzMTAzJjsgBMwRBDsAMwAAQwADQAHig+ILRkOBE4VjSuMK00ELAAMAA4yDDJOMAxMDExOMgjsI+wQ==",
+      "gACAAKACyAzETIzIzsgBMwRBDsAMwAAQwADQAHig+ILRkOBE4VjSuMK00ELAAMAA4yDDJOMAxMDExOMgjsK+wA==",
     "step-edit-light-M.png":
-      "AAAAAEDBggaDBpBAgALEAxUD5iIhAwMBAgAAAMAAwADoAtCE4xjhGOMYkACAgMMkwyTggMDE4ECDAoMCAMBAAQ==",
+      "gACAAMBAggaCBpBAgALEAoAC5AIBAwMBAgAAAMAAwADoAtCE4xjhGOMYkACAgMMkwwTggMDE4IADAIMCKMjAAA==",
     "weekday-conflict-light-AX3.png":
-      "AAAAABAByAzMTAzOAAcdJ51nDAcNhx1nGUcxUzlTKXM2YzZjhocbQ5tHnKcUpwIHgweAJw8HBgfBLMTE4MgzAQ==",
+      "gACAAKACyAzMTIzOAAedJ51nDAcNhx1nGUcxUzlTKXM2YzZjhocbQ5tHnKcUpwIHgweAJw8HBgfBPMDE4MhlAA==",
     "weekday-conflict-light-M.png":
-      "AAAAAEDBggaDBpBAgALEAxUDZSMSAsAAyASQtg5HHwe9YzrjBgcYZxFn0AQ4hlANogJQBVAFuAL4BMTEwMBAAQ==",
+      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyASQNg5HHwe9IzrjBgcYZ5Fn0Ry4BtANogLQBdANuAL5DMTEwIhAAA==",
   ]
 }
 

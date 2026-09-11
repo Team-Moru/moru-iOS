@@ -366,223 +366,108 @@ final class FinalScreenVisualTests: XCTestCase {
     filename: String,
     variant: VisualVariant
   ) throws {
-    let renderedContent = content
-      .environment(\.dynamicTypeSize, variant.dynamicTypeSize)
-      .environment(\.locale, Locale(identifier: "ko_KR"))
-      // 홈 인사말은 시간대(오전/오후/저녁)에 따라 바뀌어 AX3 레이아웃이 흔들린다.
-      // 기준선은 오전에 승인됐으므로 09:00 KST로 고정한다.
-      .environment(\.homeCaptureReferenceDate, Self.homeReferenceDate)
-      .preferredColorScheme(.light)
-
-    let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)
-    let windowScene = try XCTUnwrap(
-      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+    let outputDirectory = URL(
+      fileURLWithPath: ProcessInfo.processInfo.environment["MORU_CAPTURE_OUTPUT_DIR"]
+        ?? "/private/tmp/moru-final-screens"
     )
-    let hostingController = UIHostingController(rootView: renderedContent)
-    let window = UIWindow(windowScene: windowScene)
-    window.frame = bounds
-    window.overrideUserInterfaceStyle = variant.userInterfaceStyle
-    window.rootViewController = hostingController
-    window.makeKeyAndVisible()
-    hostingController.view.frame = bounds
-    hostingController.view.layoutIfNeeded()
-    RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-    hostingController.view.layoutIfNeeded()
-
-    let renderer = UIGraphicsImageRenderer(bounds: bounds)
-    let image = renderer.image { _ in
-      hostingController.view.drawHierarchy(in: bounds, afterScreenUpdates: true)
-    }
-    window.isHidden = true
-
-    let data = try XCTUnwrap(image.pngData())
-    let url = URL(fileURLWithPath: "/private/tmp/\(filename)")
-    try data.write(to: url, options: .atomic)
-
-    try assertMatchesApprovedBaseline(image, filename: filename)
-  }
-
-  private func assertMatchesApprovedBaseline(
-    _ image: UIImage,
-    filename: String,
-    file: StaticString = #filePath,
-    line: UInt = #line
-  ) throws {
-    let baselineFilename = filename.replacingOccurrences(of: "-dark-", with: "-light-")
-    let baseline = try XCTUnwrap(
-      VisualBaseline.hashes[baselineFilename],
-      "Missing visual baseline: \(baselineFilename)",
-      file: file,
-      line: line
+    let image = try MoruVisualCaptureFixture.render(
+      content
+        // 홈 인사말은 시간대(오전/오후/저녁)에 따라 바뀌어 AX3 레이아웃이 흔들린다.
+        // 기준선은 오전에 승인됐으므로 09:00 KST로 고정한다.
+        .environment(\.homeCaptureReferenceDate, Self.homeReferenceDate),
+      filename: filename,
+      variant: variant.captureVariant,
+      outputDirectory: outputDirectory
     )
-    let expectedHash = try XCTUnwrap(
-      Data(base64Encoded: baseline),
-      "Invalid visual baseline: \(baselineFilename)",
-      file: file,
-      line: line
-    )
-    let actualHash = try visualHash(for: image)
-    XCTAssertEqual(actualHash.count, expectedHash.count, file: file, line: line)
-    let distance = zip(actualHash, expectedHash).reduce(0) { result, pair in
-      result + Int((pair.0 ^ pair.1).nonzeroBitCount)
-    }
-    XCTAssertLessThanOrEqual(
-      distance,
-      VisualBaseline.maximumHammingDistance,
-      "Visual regression in \(filename), hash distance: \(distance), "
-        + "actual hash: \(actualHash.base64EncodedString())",
-      file: file,
-      line: line
+    try assertVisualBaseline(
+      image,
+      name: filename,
+      expected: VisualBaseline.hashes[filename],
+      outputDirectory: outputDirectory
     )
   }
 
-  private func visualHash(for image: UIImage) throws -> Data {
-    let width = 17
-    let height = 32
-    var pixels = [UInt8](repeating: 0, count: width * height * 4)
-    let context = try XCTUnwrap(
-      CGContext(
-        data: &pixels,
-        width: width,
-        height: height,
-        bitsPerComponent: 8,
-        bytesPerRow: width * 4,
-        space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-      )
-    )
-    let cgImage = try XCTUnwrap(image.cgImage)
-    context.interpolationQuality = .high
-    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-    var luminance = [Int]()
-    luminance.reserveCapacity(width * height)
-    for offset in stride(from: 0, to: pixels.count, by: 4) {
-      let red = 299 * Int(pixels[offset])
-      let green = 587 * Int(pixels[offset + 1])
-      let blue = 114 * Int(pixels[offset + 2])
-      luminance.append((red + green + blue) / 1_000)
-    }
-
-    var hash = Data(capacity: (width - 1) * height / 8)
-    var byte: UInt8 = 0
-    var bitIndex = 0
-    for row in 0..<height {
-      for column in 0..<(width - 1) {
-        if luminance[row * width + column] > luminance[row * width + column + 1] {
-          byte |= 1 << (7 - bitIndex)
-        }
-        bitIndex += 1
-        if bitIndex == 8 {
-          hash.append(byte)
-          byte = 0
-          bitIndex = 0
-        }
-      }
-    }
-    return hash
-  }
 
 }
 
 private enum VisualBaseline {
-  static let maximumHammingDistance = 24
-
   static let hashes: [String: String] = [
-    "moru-pr32-final-home-light-M.png":
-      "AAAEAAcAHwQcgDjgMOBw8HDgeOD8wMyAzwCWAAFKGTMwMTDxHMB58DFgggRkAOAJYQEUAGAM4ATJqOzI5MgESA==",
-    "moru-pr32-final-home-light-AX3.png":
-      "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gAgiAZFCySZBJ2EmoSbJLYkuSQxAgAAHACMgQwASIGTIZMgAAA==",
-    "moru-pr32-final-routine-light-M.png":
-      "AAAAACAAwADEAOAA4ADWDNkwwLDCDBAAyACCBFgYyDhCEIIEWBDYOEA4gAJHAE8AQBAAAAAAAAAAgGzIZMgAAA==",
-    "moru-pr32-final-routine-light-AX3.png":
-      "AAAAACgAxADEAOSQykDKRMpg2RTZDNow2nDAYMBgwBCoAugArMBZAN0QXSBaZETwQHCESlMA2QDZgGTIZMgAAA==",
-    "moru-pr32-final-history-light-M.png":
-      "AAAAACAAwALAAMoUzBjNGNUEyACgAuCAOHBxcXlhOGFECMAA4CAGAkcBAGlVVU9wz3D3MPU881Dz0GTIZMgAAA==",
-    "moru-pr32-final-history-light-AX3.png":
-      "AAAIAOAA5ADUAcpEwWTAJMAkwLTFVMBk0jTTNMjMyMzIzMjQyNDIzMiEyATIBMgEUIDKIsogaSIZJGTIZMgAAA==",
-    "moru-pr32-final-profile-light-M.png":
-      "AAAAAGAAkACBAJoCakLIgjEAyADIAOQE4ASQAJAAYATABIgAwETCIOIg4JTpBJIAwACCAMkEwASEAGzIZMgAAA==",
-    "moru-pr32-final-profile-light-AX3.png":
-      "AAAAAEAAxADBCB7SutJMQp1KgiDJANkA0ADohMiExgDIAMWA6kTqRBXA8yChGOIkxKTFwuWZ5Ti0oGTIZMgAAA==",
-    "moru-pr32-final-current-routine-light-M.png":
-      "AAAAAAAA4ARiBfKY8pjoGFANUA1RDVEFWQ1RBVAN0AyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr32-final-current-routine-light-AX3.png":
       "AAAAAAAAgoJlZWUk8kj6QMpA2kDyyPLAyWjAYMBowFB0oXSFeAF5mW9hf2F9YVwZVZF5kXjROAlpQXlBXUFYkQ==",
-    "moru-pr34-home-active-routines-light-M.png":
-      "AAAAABgAwACCAlAFQAVkQUGNSAxgAWRJ5MhyEJQCcA1kAXQBQIRIBGIBZMhgyGIAAAAAAAAAAAAAAAAAAAAAAA==",
+    "moru-pr32-final-current-routine-light-M.png":
+      "AAAAAAAAoAhgBfKY8tj4GEAE0A1QBVANWQVZDVAN0A2EAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+    "moru-pr32-final-history-light-AX3.png":
+      "AAAIAOAA5ADUAcpEwWTAJMAkwLTFVMBk0jTTNMjMyMzIzMjQyNDIzMiEyATIBMgEUIDKIsogaQCZZGTI5MgCAA==",
+    "moru-pr32-final-history-light-M.png":
+      "AAAAACAAwALAAMoUzBjdGMSEyACgAuKAKHAxcXFhOWFEUMAA4CAGAkcBAGlVVU9wz3D3MHc881Dz0GzIbMgECA==",
+    "moru-pr32-final-home-light-AX3.png":
+      "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gAgiAZFCySZBJ2EmoSbJLYkuSQxAgAAHACMgoyCEIGTI5MgCIA==",
+    "moru-pr32-final-home-light-M.png":
+      "AAAEAAcAHwQcgDjgMOBw8HDgeOD8wMyAzwCWAAFKGTMwMTDxHMB58DFgggRkAOAJYQEUAGAM4ATJqOzI5MgESA==",
+    "moru-pr32-final-profile-light-AX3.png":
+      "AAAAAEAAxADBCB7SutJMQp1KgiDJANkA0ADohMiExgDIAMWA6kTqRBXA8yChGOIkxKTFwuWZ5Si0JGTY5MgCIA==",
+    "moru-pr32-final-profile-light-M.png":
+      "AAAAAGAAkACBAJoCakLIgjEAyADIAOQE4ASQAJAAYATABIgAwETCIOIg4JTpBJIAwACCAMkEwQSTMGzYbMgESA==",
+    "moru-pr32-final-routine-light-AX3.png":
+      "AAAAACgAxADEAOSQykDKRMpg2RTZDNow2nDAYMBgwBCoAugArMBZAN0QXSBaZETwQHCESlMQ2RDZhGTI5MgAIA==",
+    "moru-pr32-final-routine-light-M.png":
+      "AAAAACAAwADEAOAA4ADWDNkwwLDCDBAAyACCBFgYyDhCEIIEWBDYOEA4gAJHAE8AQBAAAAAAAACSImzIbMgESA==",
     "moru-pr34-home-active-routines-light-AX3.png":
-      "AAAAAAaAyQDJAKVCSIVIjWMBYiFSgWmBaZEUgWkxajBoCWkBczHjOHExsgDBAmyNZIVlYVqBWoFpkWmBYmlgGQ==",
-    "moru-pr43-alarm-ring-light-M.png":
-      "AAAAAAAAIiEAABAABVglOAZYACASMAQAAAAAAAAAwIALIyYDBhPRdEDwAGAAAAAAAAAgAIACOoca4xAHwAQAAA==",
+      "AAAAAAaAyQDJAKVCSIVIjWMBYiFSgWmBaZEUgWkxajBoAUkHcyHjOHExtALBimyNZIVlYVqBWoFpkWmBYmlgGQ==",
+    "moru-pr34-home-active-routines-light-M.png":
+      "AAAAABgAwACBAnAFQAVkQUGNSAxiA2DJ5MhjAIQGUAVkAXQBSI1ABGIRYMlkyHIAAAQAAAAAAAAAAAAAAAAAAA==",
     "moru-pr43-alarm-ring-light-AX3.png":
       "AAAAAAAAAEEAABM2K4sqmxY2KIhEDAAsAAAAAAAAQAAIaiaTLkspQ4BwIHAAIAQAAAAAAEAAGAceez5XkAYAAA==",
-    "moru-pr44-bundled-voices-light-M.png":
-      "AAAAAEABsAawBkgJyQDQgNSA5ogIInAFUAwoAlANUA0oA1ANUAU0A1ANVAcqAAAAAAAAAAAAAAPggMlkwGAgAQ==",
+    "moru-pr43-alarm-ring-light-M.png":
+      "AAAAAAAAIiEAABAABVglOAZYACASMAQAAAAAAAAAwIALIyYDBhPRdEDwAGAAAAAAAAAgAIACOoca4xAHwAQAAA==",
     "moru-pr44-bundled-voices-light-AX3.png":
-      "AAAAAEABsAywDAAL5eTlZOdAxUH1Yuaw2QDZRMyIlAAHADADUA16BQwDMANQDVoFOgMxA1gNUgdyIM0czRwwAQ==",
-    "moru-pr50-session-empty-home-light-M.png":
-      "AAAEAQcAHwQcgDjgMOBw8HDgeOC4wMyAzwDWAABCdIFgAWABAgAAAACAAwADMA1IPUAwsgaLBoMEIGzIZMgAAA==",
+      "AAAAAEABsAywDAAL5eTlZOdAxUH1Yuaw2QDZRMyIlAAHADADUA16BQwDMANQDVoFOgMxA1gNUgfyAM08zRxQAQ==",
+    "moru-pr44-bundled-voices-light-M.png":
+      "AAAAAEABsAawBiIJxADUgNSA5ogIInAFUAwoAlANUA0oA1ANUAU0A1ANVAcqAAAAAAAAAAAAAAf2gMlkwWBCAQ==",
     "moru-pr50-session-empty-home-light-AX3.png":
-      "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gCpCalFLAUOnakla0QBGBgAGAAaAOyAzODCEOaFJOWTIZMgAAA==",
-    "moru-pr50-session-empty-routine-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOYGgwaDAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACiIszIzMgAAA==",
+      "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gCpCalFLAUOnakla0QJGBgAGAAaAOyA7ODCEOaCJPOTI5MgCIA==",
+    "moru-pr50-session-empty-home-light-M.png":
+      "AAAEAAcAHwQcgDjgMOBw8HDgeOD8wMyAzwDWAABCdIFgAWABAgAAAACAAwADMA1IPUAwsgaHBoOBJuTI5MgESA==",
     "moru-pr50-session-empty-routine-light-AX3.png":
-      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwMXAAAAAAAAAAAAAAAAAACSImzI5MgAIA==",
-    "moru-pr52-history-streak-light-M.png":
-      "AAAAACAAwALAAMoUzBjdGMSEyACgAuKAKHAxcXFhOWFEUMAA4CAGAkcBAGlVVU9wz3D3MHc881Dz0GzIbMgECA==",
+      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwIfAAAAAAAAAAAAAAAAAACSImzI5MgAIA==",
+    "moru-pr50-session-empty-routine-light-M.png":
+      "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOIGiwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACSImzIbMgESA==",
     "moru-pr52-history-streak-light-AX3.png":
       "AAAIAOAA5ADUAcpEwWTAJMAkwLTFVMBk0jTTNMjMyMzIzMjQyNDIzMiEyATIBMgEUIDKIsogaQCZZGTI5MgCAA==",
-    "moru-pr52-weekly-comparison-light-M.png":
-      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMSA8zDjOOK42ATgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-    "moru-pr52-weekly-comparison-light-AX3.png":
-      "AAAAAAAAAAAAAAAAAAAAAOAIxQTMFMxE2KTcpMBc3iTeZM1MzEzANMzMzozchNkk2STikAAAAAAAAAAAAAAAAA==",
-    "moru-pr52-regular-completion-light-M.png":
-      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QHygPwA/AAMGf5ErUYAEAwAGghBAYMBxwHAgAAAAAABjBoMmicDAwMRjCA==",
+    "moru-pr52-history-streak-light-M.png":
+      "AAAAACAAwALAAMoUzBjdGMSEyACgAuKAKHAxcXFhOWFEUMAA4CAGAkcBAGlVVU9wz3D3MHc881Dz0GzIbMgECA==",
     "moru-pr52-regular-completion-light-AX3.png":
       "AQAKAQ8EZghyKXKpclFzUPvg8PBw4HhBPQAtSg8iDgJOWHO4AAKRIASABogMiA6gjqIBUCJAKEA8AHxgNoBygA==",
-    "moru-pr52-trial-completion-light-M.png":
-      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QH6APwA/AAMGf5Eq0QAAByAHAAOAAEAAAAAAAAAAAQAAAAJjAeDAwMRjCA==",
+    "moru-pr52-regular-completion-light-M.png":
+      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QHygPwA/AAMGf5ErUYAEAwAGghBAYMBxwHAgAAAAAABjBoMmicDAwMRjCA==",
     "moru-pr52-trial-completion-light-AX3.png":
       "AQAKAR8EbwhiKXOpcrByMPWQ8PBwYHhBPQAtSg8iDgJOWHO4AAJEQBqAGgAfOB0gHSQUMQAAAAPhIMlk8WBmkQ==",
+    "moru-pr52-trial-completion-light-M.png":
+      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QH6APwA/AAMGf5Eq0QAAByAHAAOAAEAAAAAAAAAAAQAAAAJjAeDAwMRjCA==",
+    "moru-pr52-weekly-comparison-light-AX3.png":
+      "AAAAAAAAAAAAAAAAAAAAAOAIxQTMFMxE2KTcpMBc3iTeZM1MzEzANMzMzozchNkk2STikAAAAAAAAAAAAAAAAA==",
+    "moru-pr52-weekly-comparison-light-M.png":
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMSA8zDjOOK42ATgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
   ]
 }
 
+/// 앱 루트가 Light로 고정돼 있어(`.preferredColorScheme(.light)` 게이트) 다크 변형은 찍지 않는다.
 private enum VisualVariant: CaseIterable {
   case lightMedium
   case lightAccessibility3
-  case darkMedium
-  case darkAccessibility3
 
-  var userInterfaceStyle: UIUserInterfaceStyle {
+  var captureVariant: MoruVisualCaptureVariant {
     switch self {
-    case .lightMedium, .lightAccessibility3:
-      return .light
-    case .darkMedium, .darkAccessibility3:
-      return .dark
-    }
-  }
-
-  var dynamicTypeSize: DynamicTypeSize {
-    switch self {
-    case .lightMedium, .darkMedium:
-      return .medium
-    case .lightAccessibility3, .darkAccessibility3:
-      return .accessibility3
+    case .lightMedium:
+      return .lightMedium
+    case .lightAccessibility3:
+      return .lightAccessibility3
     }
   }
 
   var filenameSuffix: String {
-    switch self {
-    case .lightMedium:
-      return "light-M"
-    case .lightAccessibility3:
-      return "light-AX3"
-    case .darkMedium:
-      return "dark-M"
-    case .darkAccessibility3:
-      return "dark-AX3"
-    }
+    captureVariant.rawValue
   }
 }
 

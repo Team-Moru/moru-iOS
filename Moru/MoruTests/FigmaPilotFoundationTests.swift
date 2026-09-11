@@ -141,7 +141,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
 
       XCTAssertEqual(first.size, CGSize(width: 393, height: 852))
       XCTAssertEqual(first.scale, 3)
-      XCTAssertEqual(first.pngData(), second.pngData())
+      try assertVisualRepeat(first, second)
     }
   }
 
@@ -181,11 +181,14 @@ final class FigmaPilotFoundationTests: XCTestCase {
           )
         )
 
-        XCTAssertEqual(first.pngData(), second.pngData())
-        XCTAssertEqual(
-          try rgba(at: CGPoint(x: 8, y: 760), in: first),
-          try rgba(at: CGPoint(x: 8, y: 840), in: first),
-          "Tab body and bottom safe area must use the same background layer"
+        try assertVisualRepeat(first, second)
+        // drawHierarchy는 탭바의 머티리얼 블러까지 그리므로 두 지점이 한두 단계 어긋날 수 있다.
+        let body = try rgba(at: CGPoint(x: 8, y: 760), in: first)
+        let safeArea = try rgba(at: CGPoint(x: 8, y: 840), in: first)
+        XCTAssertEqual(body.count, safeArea.count)
+        XCTAssertTrue(
+          zip(body, safeArea).allSatisfy { abs(Int($0) - Int($1)) <= 4 },
+          "Tab body and bottom safe area must use the same background layer: \(body) vs \(safeArea)"
         )
       }
     }

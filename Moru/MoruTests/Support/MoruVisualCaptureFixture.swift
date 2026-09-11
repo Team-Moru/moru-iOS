@@ -64,6 +64,11 @@ struct MoruVisualCaptureConfiguration {
 
 @MainActor
 enum MoruVisualCaptureFixture {
+  /// 첫 프레임 뒤 Liquid Glass·머티리얼이 자리를 잡을 때까지 기다리는 시간
+  static let settleDuration: TimeInterval = 0.6
+
+  /// 창을 실제로 띄운 뒤 `drawHierarchy`로 찍는다. `CALayer.render(in:)`는 Liquid Glass·
+  /// `UIVisualEffectView`를 그리지 못해 glass 요소가 빈 자리로 찍힌다(2026-09-10 스파이크).
   static func render<Content: View>(
     _ content: Content,
     filename: String,
@@ -78,6 +83,10 @@ enum MoruVisualCaptureFixture {
       .environment(\.calendar, configuration.calendar)
       .environment(\.timeZone, configuration.timeZone)
       .environment(\.onboardingCaptureStaticAnimations, true)
+      .transaction { transaction in
+        transaction.animation = nil
+        transaction.disablesAnimations = true
+      }
       .preferredColorScheme(configuration.colorScheme)
 
     let windowScene = try XCTUnwrap(
@@ -89,8 +98,6 @@ enum MoruVisualCaptureFixture {
     window.frame = bounds
     window.overrideUserInterfaceStyle = configuration.userInterfaceStyle
     window.rootViewController = hostingController
-    window.makeKeyAndVisible()
-    hostingController.additionalSafeAreaInsets = additionalSafeAreaInsets
 
     let animationsWereEnabled = UIView.areAnimationsEnabled
     UIView.setAnimationsEnabled(false)
@@ -99,8 +106,13 @@ enum MoruVisualCaptureFixture {
       window.isHidden = true
     }
 
+    window.makeKeyAndVisible()
+    hostingController.additionalSafeAreaInsets = additionalSafeAreaInsets
     hostingController.view.frame = bounds
     stabilizeLayout(of: hostingController.view)
+    RunLoop.main.run(until: Date().addingTimeInterval(settleDuration))
+    hostingController.view.layoutIfNeeded()
+    CATransaction.flush()
 
     let format = UIGraphicsImageRendererFormat()
     format.scale = configuration.scale
@@ -109,8 +121,8 @@ enum MoruVisualCaptureFixture {
       bounds: bounds,
       format: format
     )
-    let image = renderer.image { context in
-      hostingController.view.layer.render(in: context.cgContext)
+    let image = renderer.image { _ in
+      window.drawHierarchy(in: bounds, afterScreenUpdates: true)
     }
 
     try FileManager.default.createDirectory(
