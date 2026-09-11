@@ -13,7 +13,6 @@ import SwiftUI
 
 private struct MoruCommonComponentsPreviewHost: View {
   @State private var toggleOn = true
-  @State private var tab: MoruTabItem = .home
   @State private var morningRoutineOn = false
   @State private var energyRoutineOn = true
   @State private var voiceCardSelected = true
@@ -71,18 +70,8 @@ private struct MoruCommonComponentsPreviewHost: View {
             .font(AppFont.caption1Medium)
             .foregroundStyle(MoruColor.textSecondary)
         }
-        MoruDialog(
-          title: "이 항목을 건너뛸까요?",
-          message: "건너뛰면 현재 루틴은 미완료로 기록돼요.\n"
-            + "다음 루틴으로 넘어갈께요.",
-          primaryTitle: "계속하기",
-          secondaryTitle: "건너뛰기",
-          primaryAction: {},
-          secondaryAction: {}
-        )
-        MoruTabBar(selection: $tab)
       }
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.gray100)
   }

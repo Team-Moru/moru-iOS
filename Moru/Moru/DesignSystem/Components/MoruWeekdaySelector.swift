@@ -1,17 +1,12 @@
 //
-//  RoutineWeekdaySelector.swift
+//  MoruWeekdaySelector.swift
 //  Moru
-//
-//  Created by Codex on 7/9/26.
 //
 
 import SwiftUI
 
-struct RoutineWeekdaySelector: View {
-  private let weekdays: [Weekday] = [
-    .monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday,
-  ]
-
+/// 요일 선택기. 루틴 설정과 온보딩이 공유한다.
+struct MoruWeekdaySelector: View {
   @Binding var selectedWeekdays: Set<Weekday>
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -38,7 +33,7 @@ struct RoutineWeekdaySelector: View {
 
   @ViewBuilder
   private var weekdayButtons: some View {
-    ForEach(weekdays) { weekday in
+    ForEach(Weekday.displayOrder) { weekday in
       Button {
         toggle(weekday)
       } label: {
@@ -50,8 +45,8 @@ struct RoutineWeekdaySelector: View {
               : MoruColor.textPrimary
           )
           .frame(
-            width: dynamicTypeSize.isAccessibilitySize ? 52 : 40,
-            height: dynamicTypeSize.isAccessibilitySize ? 52 : 40
+            width: dynamicTypeSize.isAccessibilitySize ? 52 : 44,
+            height: dynamicTypeSize.isAccessibilitySize ? 52 : 44
           )
           .background(
             selectedWeekdays.contains(weekday)
@@ -80,7 +75,7 @@ struct RoutineWeekdaySelector: View {
 
 #if DEBUG
 #Preview {
-  RoutineWeekdaySelector(
+  MoruWeekdaySelector(
     selectedWeekdays: .constant([.monday, .wednesday, .friday])
   )
   .padding()

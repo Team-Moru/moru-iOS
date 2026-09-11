@@ -33,43 +33,85 @@ struct OnboardingFlowView: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      if viewModel.progressIndex != nil || viewModel.canCancel {
-        OnboardingHeaderView(viewModel: viewModel)
-      }
-
-      if viewModel.step == .completion || viewModel.step == .organizing {
-        stepContent
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else {
-        ScrollView(showsIndicators: false) {
+    NavigationStack {
+      Group {
+        if viewModel.step == .completion || viewModel.step == .organizing {
           stepContent
-            .padding(.horizontal, MoruSpacing.twenty)
-            .padding(.top, MoruSpacing.thirtyTwo)
-            .padding(.bottom, contentBottomSpacing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          ScrollView(showsIndicators: false) {
+            stepContent
+              .padding(.horizontal, MoruSpacing.gutter)
+              .padding(.top, MoruSpacing.thirtyTwo)
+              .padding(.bottom, contentBottomSpacing)
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .defaultScrollAnchor(.top)
+          .accessibilityIdentifier("onboarding.scroll.content")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .defaultScrollAnchor(.top)
-        .accessibilityIdentifier("onboarding.scroll.content")
       }
-
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .safeAreaInset(edge: .bottom, spacing: 0) {
-      if viewModel.step.showsFooter {
-        OnboardingFooterView(viewModel: viewModel)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .safeAreaBar(edge: .bottom) {
+        if viewModel.step.showsFooter {
+          OnboardingFooterView(viewModel: viewModel)
+        }
       }
+      .background(OnboardingBackgroundView())
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        if viewModel.canNavigateBack {
+          ToolbarItem(placement: .cancellationAction) {
+            Button(action: viewModel.backButtonDidTap) {
+              Image(systemName: "chevron.left")
+            }
+            .disabled(viewModel.isSaving)
+            .accessibilityLabel("이전 단계로 돌아가기")
+            .accessibilityIdentifier("onboarding.back")
+          }
+        }
+        if let progressIndex = viewModel.progressIndex {
+          ToolbarItem(placement: .principal) {
+            OnboardingProgressHeader(
+              current: progressIndex,
+              total: viewModel.progressTotal
+            )
+          }
+        }
+        if viewModel.canCancel {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("취소", action: viewModel.cancelButtonDidTap)
+              .accessibilityIdentifier(
+                OnboardingFlowView.cancelAccessibilityIdentifier
+              )
+          }
+        }
+      }
+      .toolbar(
+        viewModel.progressIndex != nil || viewModel.canCancel ? .automatic : .hidden,
+        for: .navigationBar
+      )
     }
-    .background(OnboardingBackgroundView())
     .accessibilityIdentifier(
       viewModel.flowMode == .recommendedAddition
         ? Self.recommendedRootAccessibilityIdentifier
         : ""
     )
-    .overlay {
-      if let activeRoutineConflict = viewModel.activeRoutineConflict {
-        activeRoutineConflictDialogOverlay(activeRoutineConflict)
-      }
+    .alert(
+      "다른 루틴을 끌까요?",
+      isPresented: Binding(
+        get: { viewModel.activeRoutineConflict != nil },
+        set: { isPresented in
+          if !isPresented {
+            viewModel.keepExistingActiveRoutineButtonDidTap()
+          }
+        }
+      ),
+      presenting: viewModel.activeRoutineConflict
+    ) { _ in
+      Button("취소", role: .cancel, action: viewModel.keepExistingActiveRoutineButtonDidTap)
+      Button("변경하기", action: viewModel.replaceActiveRoutineButtonDidTap)
+    } message: { conflict in
+      Text(RoutineManagementCopy.activeRoutineReplacementMessage(conflict))
     }
     .onDisappear(perform: viewModel.viewDidDisappear)
   }
@@ -110,85 +152,26 @@ struct OnboardingFlowView: View {
     }
   }
 
-  private func activeRoutineConflictDialogOverlay(
-    _ conflict: RoutineActivationConflictState
-  ) -> some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "다른 루틴을 끌까요?",
-        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
-        primaryTitle: "취소",
-        secondaryTitle: "변경하기",
-        primaryAction: viewModel.keepExistingActiveRoutineButtonDidTap,
-        secondaryAction: viewModel.replaceActiveRoutineButtonDidTap
-      )
-    }
-  }
 }
 
-private struct OnboardingHeaderView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+/// 툴바 principal에 얹는 진행바. 제목 대신 위젯을 넣는 경우라 navigationTitle을 쓰지 않는다.
+private struct OnboardingProgressHeader: View {
+  let current: Int
+  let total: Int
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
-      if viewModel.canCancel {
-        HStack {
-          Spacer()
+    HStack(spacing: MoruSpacing.twelve) {
+      MoruProgressBar(
+        current: current,
+        total: total,
+        showsLabel: false
+      )
+      .frame(width: 160)
 
-          Button("취소", action: viewModel.cancelButtonDidTap)
-            .moruTextStyle(.c1)
-            .foregroundStyle(MoruColor.textSecondary)
-            .accessibilityIdentifier(
-              OnboardingFlowView.cancelAccessibilityIdentifier
-            )
-        }
-      }
-
-      if let progressIndex = viewModel.progressIndex {
-        HStack(spacing: 0) {
-          backButton
-
-          MoruProgressBar(
-            current: progressIndex,
-            total: viewModel.progressTotal,
-            showsLabel: false
-          )
-          .frame(maxWidth: .infinity)
-
-          Text("\(progressIndex)/\(viewModel.progressTotal)")
-            .moruTextStyle(.c2)
-            .foregroundStyle(MoruColor.textPrimary)
-            .fixedSize()
-            .padding(.leading, MoruSpacing.twelve)
-        }
-      }
-    }
-    .padding(.horizontal, MoruSpacing.twenty)
-    .padding(.top, MoruSpacing.sixteen)
-  }
-
-  @ViewBuilder
-  private var backButton: some View {
-    if viewModel.canNavigateBack {
-      Button(action: viewModel.backButtonDidTap) {
-        Image(systemName: "chevron.left")
-          .font(.system(size: 24, weight: .regular))
-          .foregroundStyle(MoruColor.textSecondary)
-          .frame(width: 44, height: 44, alignment: .leading)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .disabled(viewModel.isSaving)
-      .accessibilityLabel("이전 단계로 돌아가기")
-      .accessibilityIdentifier("onboarding.back")
-    } else {
-      Color.clear
-        .frame(width: 44, height: 44)
-        .accessibilityHidden(true)
+      Text("\(current)/\(total)")
+        .moruTextStyle(.c2)
+        .foregroundStyle(MoruColor.textPrimary)
+        .fixedSize()
     }
   }
 }
@@ -205,48 +188,18 @@ private struct OnboardingFooterView: View {
           .multilineTextAlignment(.center)
       }
 
-      Button {
+      MoruButton(
+        viewModel.primaryButtonTitle,
+        isEnabled: viewModel.canAdvance,
+        isLoading: viewModel.isSaving || viewModel.isSuggesting
+      ) {
         viewModel.primaryButtonDidTap()
-      } label: {
-        HStack(spacing: AppSpacing.xs) {
-          if viewModel.isSaving || viewModel.isSuggesting {
-            ProgressView()
-              .tint(AppColor.grayWhite)
-          }
-
-          Text(viewModel.primaryButtonTitle)
-            .moruTextStyle(.b4.weight(.semiBold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-        }
-        .foregroundStyle(AppColor.grayWhite)
-        .frame(maxWidth: .infinity, minHeight: 54)
-        .background(
-          viewModel.canAdvance
-            ? MoruColor.ctaFill
-            : MoruColor.textTertiary
-        )
-        .clipShape(
-          RoundedRectangle(cornerRadius: MoruRadius.pill)
-        )
       }
-      .buttonStyle(.plain)
-      .disabled(!viewModel.canAdvance)
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, MoruSpacing.twenty)
     .padding(.top, MoruSpacing.sixteen)
     .padding(.bottom, viewModel.step == .completion ? 0 : MoruSpacing.eight)
-    .background(
-      LinearGradient(
-        colors: [
-          MoruColor.canvas.opacity(0),
-          MoruColor.canvas,
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-      )
-    )
   }
 }
 
@@ -276,16 +229,6 @@ enum OnboardingFigmaLayout {
   static let alarmTimeFontSize: CGFloat = 72
   static let alarmScrollBottomSpacing: CGFloat = 72
   static let alarmAccessibilityScrollBottomSpacing: CGFloat = 128
-  static let weekdayButtonSize: CGFloat = 44
-  static let maximumWeekdaySpacing: CGFloat = 7
-
-  static func weekdaySpacing(availableWidth: CGFloat) -> CGFloat {
-    let itemCount = CGFloat(Weekday.onboardingDisplayOrder.count)
-    let gapCount = max(itemCount - 1, 1)
-    let availableSpacing =
-      (availableWidth - weekdayButtonSize * itemCount) / gapCount
-    return min(maximumWeekdaySpacing, max(0, availableSpacing))
-  }
 }
 
 private struct OnboardingStepLayout<Content: View>: View {
@@ -704,7 +647,7 @@ private struct RoutineOrganizingContent: View {
       Spacer(minLength: MoruSpacing.twenty)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(.horizontal, MoruSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.gutter)
   }
 }
 
@@ -859,7 +802,7 @@ private struct OnboardingAlarmSettingView: View {
             .foregroundStyle(MoruColor.textSecondary)
             .frame(maxWidth: .infinity)
 
-          WeekdayCircleSelector(viewModel: viewModel)
+          MoruWeekdaySelector(selectedWeekdays: $viewModel.draft.selectedWeekdays)
             .frame(maxWidth: .infinity)
 
           Text(OnboardingCopy.alarmSoundGuidance)
@@ -1392,61 +1335,6 @@ private struct TimeWheelControl: View {
       hour: viewModel.draft.alarmHour,
       minute: viewModel.draft.alarmMinute
     )
-  }
-}
-
-private struct WeekdayCircleSelector: View {
-  @ObservedObject var viewModel: OnboardingViewModel
-
-  var body: some View {
-    GeometryReader { geometry in
-      HStack(
-        spacing: OnboardingFigmaLayout.weekdaySpacing(
-          availableWidth: geometry.size.width
-        )
-      ) {
-        ForEach(Weekday.onboardingDisplayOrder) { weekday in
-          Button {
-            viewModel.toggleWeekday(weekday)
-          } label: {
-            Text(weekday.shortKoreanTitle)
-              .font(
-                .custom(
-                  MoruTextWeight.semiBold.rawValue,
-                  fixedSize: 18
-                )
-              )
-              .foregroundStyle(
-                viewModel.draft.selectedWeekdays.contains(weekday)
-                  ? AppColor.grayWhite
-                  : MoruColor.textPrimary
-              )
-              .lineLimit(1)
-              .frame(width: 42, height: 42)
-              .background(
-                viewModel.draft.selectedWeekdays.contains(weekday)
-                  ? MoruColor.accent
-                  : MoruColor.progressTrack
-              )
-              .clipShape(Circle())
-          }
-          .buttonStyle(.plain)
-          .frame(
-            width: OnboardingFigmaLayout.weekdayButtonSize,
-            height: OnboardingFigmaLayout.weekdayButtonSize
-          )
-          .contentShape(Rectangle())
-          .accessibilityLabel("\(weekday.shortKoreanTitle)요일")
-          .accessibilityValue(
-            viewModel.draft.selectedWeekdays.contains(weekday)
-              ? "선택됨"
-              : "선택 안 됨"
-          )
-        }
-      }
-      .frame(maxWidth: .infinity)
-    }
-    .frame(height: OnboardingFigmaLayout.weekdayButtonSize)
   }
 }
 

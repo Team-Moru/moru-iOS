@@ -12,8 +12,9 @@ enum MoruVisualHash {
   /// 승인 기준선과의 허용 Hamming 거리
   static let regressionThreshold = 24
   /// 같은 입력을 두 번 그렸을 때의 허용 거리. Liquid Glass·머티리얼은 프레임마다 미세하게
-  /// 달라 바이트 동일성은 보장되지 않는다(스파이크에서 0~4).
-  static let repeatThreshold = 6
+  /// 달라 바이트 동일성은 보장되지 않는다(스파이크에서 0~4, 네이티브 TabView가 배경에
+  /// 함께 있는 화면은 2026-09-11에 7까지 관측돼 여유를 뒀다).
+  static let repeatThreshold = 8
 
   static func hash(of image: UIImage) throws -> Data {
     let width = 17

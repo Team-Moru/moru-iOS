@@ -10,7 +10,6 @@ import UIKit
 struct RoutinePlayerView: View {
     @State private var viewModel: RoutinePlayerViewModel
     @State private var speechInputController: SpeechInputController
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// 완료 화면과 오늘의 기록 화면 사이의 전환 상태
     @State private var isShowingTodayRecord = false
@@ -31,12 +30,58 @@ struct RoutinePlayerView: View {
                 backgroundView
                 contentView
                     .overlay(alignment: .bottom) {
-                        // 다이얼로그 스크림 아래에 두어 다이얼로그가 떠 있는 동안은 눌리지 않게 한다.
                         if let errorMessage = viewModel.errorMessage {
                             saveErrorBanner(message: errorMessage)
                         }
                     }
-                dialogView
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if showsProgressChrome {
+                    progressSection
+                        .padding(.top, viewModel.isTrialExecution ? 12 : 8)
+                        .padding(.bottom, 8)
+                }
+            }
+            .toolbar {
+                if !viewModel.isTrialExecution && showsProgressChrome {
+                    ToolbarItem(placement: .cancellationAction) {
+                        closeButton
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        endButton
+                    }
+                }
+            }
+            .toolbar(
+                viewModel.isTrialExecution ? .hidden : .automatic,
+                for: .navigationBar
+            )
+            .navigationTitle("오늘의 루틴")
+            .navigationBarTitleDisplayMode(.inline)
+            .alert(
+                activeDialogCopy?.title ?? "",
+                isPresented: Binding(
+                    get: { viewModel.dialogState != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            viewModel.cancelActiveDialog()
+                        }
+                    }
+                ),
+                presenting: activeDialogCopy
+            ) { copy in
+                Button(copy.cancelTitle, role: .cancel) {
+                    viewModel.cancelActiveDialog()
+                }
+                Button(
+                    copy.confirmTitle,
+                    role: isDiscardUnsavedRunDialog ? .destructive : nil
+                ) {
+                    speechInputController.cancel()
+                    viewModel.confirmActiveDialog()
+                }
+            } message: { copy in
+                Text(copy.message)
             }
             .interactiveDismissDisabled()
             .navigationBarBackButtonHidden(true)
@@ -71,6 +116,17 @@ struct RoutinePlayerView: View {
     }
 
     // MARK: - Content
+
+    /// 진행바(그리고 체험이 아닐 때는 닫기·종료)를 보여줄 상태인지.
+    /// viewModel.progressValue/currentStepNumberText와 같은 상태 집합이다.
+    private var showsProgressChrome: Bool {
+        switch viewModel.screenState {
+        case .preparingServerVoice, .running, .stepCompleted:
+            return true
+        case .resolving, .resolutionRetry, .terminalFailure, .summary:
+            return false
+        }
+    }
 
     @ViewBuilder
     private var contentView: some View {
@@ -157,16 +213,6 @@ struct RoutinePlayerView: View {
         GeometryReader { geometry in
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
-                    if !viewModel.isTrialExecution {
-                        topBar
-                    }
-
-                    progressSection
-                        .padding(
-                            .top,
-                            viewModel.isTrialExecution ? 28 : 32
-                        )
-
                     Spacer(minLength: 48)
 
                     VStack(spacing: 16) {
@@ -207,20 +253,8 @@ struct RoutinePlayerView: View {
         GeometryReader { geometry in
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
-                    if !viewModel.isTrialExecution {
-                        topBar
-                    }
-
-                    progressSection
-                        .padding(
-                            .top,
-                            viewModel.isTrialExecution ? 28 : 32
-                        )
-
                     Spacer()
-                        .frame(
-                            height: viewModel.isTrialExecution ? 70 : 20
-                        )
+                        .frame(height: 20)
 
                     // 단계 게이트는 단계 콘텐츠에만 건다. 상단바의 닫기·종료는
                     // 저장 실패 중에도 눌러서 나갈 수 있어야 한다.
@@ -243,27 +277,13 @@ struct RoutinePlayerView: View {
     private func stepCompletedView(
         step: RoutineStep
     ) -> some View {
-        ZStack(alignment: .top) {
-            RoutineStepCompletedView(
-                stepTitle: step.title,
-                isGuidancePlaying: viewModel.isGuidancePlaying
-            ) {
-                await viewModel.finishStepCompletedScreenAfterGuidance()
-            }
-            .offset(y: 12)
-
-            VStack(spacing: 0) {
-                if !viewModel.isTrialExecution {
-                    topBar
-                }
-
-                progressSection
-                    .padding(
-                        .top,
-                        viewModel.isTrialExecution ? 28 : 32
-                    )
-            }
+        RoutineStepCompletedView(
+            stepTitle: step.title,
+            isGuidancePlaying: viewModel.isGuidancePlaying
+        ) {
+            await viewModel.finishStepCompletedScreenAfterGuidance()
         }
+        .offset(y: 12)
     }
 
     @ViewBuilder
@@ -347,80 +367,29 @@ struct RoutinePlayerView: View {
 
     // MARK: - Dialog
 
-    @ViewBuilder
-    private var dialogView: some View {
+    /// 현재 dialogState에 맞는 문구. 네이티브 alert는 바깥을 탭해도 닫히지 않는다(시스템 규칙).
+    private var activeDialogCopy: RoutinePlayerDialogCopy? {
         switch viewModel.dialogState {
-        case .some(.skipStep):
-            SkipStepDialogView(
-                onCancel: {
-                    viewModel.cancelActiveDialog()
-                },
-                onConfirm: {
-                    speechInputController.cancel()
-                    viewModel.confirmActiveDialog()
-                }
-            )
-
-        case .some(.exit(let exit)):
-            ExitRoutineDialogView(
-                exit: exit,
-                onCancel: {
-                    viewModel.cancelActiveDialog()
-                },
-                onConfirm: {
-                    speechInputController.cancel()
-                    viewModel.confirmActiveDialog()
-                }
-            )
-
-        case .some(.discardUnsavedRun):
-            DiscardUnsavedRunDialogView(
-                onCancel: {
-                    viewModel.cancelActiveDialog()
-                },
-                onConfirm: {
-                    speechInputController.cancel()
-                    viewModel.confirmActiveDialog()
-                }
-            )
-
-        case .none:
-            EmptyView()
+        case .skipStep:
+            RoutinePlayerDialogCopy.skipStep
+        case .exit(let exit):
+            RoutinePlayerDialogCopy.exit(exit)
+        case .discardUnsavedRun:
+            RoutinePlayerDialogCopy.discardUnsavedRun
+        case nil:
+            nil
         }
+    }
+
+    /// 되돌릴 수 없는 동작만 destructive로 강조한다(삭제하기·기록 없이 나가기).
+    private var isDiscardUnsavedRunDialog: Bool {
+        if case .discardUnsavedRun = viewModel.dialogState {
+            return true
+        }
+        return false
     }
 
     // MARK: - Header
-
-    private var topBar: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: 8) {
-                    topBarTitle
-
-                    HStack {
-                        closeButton
-                        Spacer()
-                        endButton
-                    }
-                }
-                .padding(.vertical, 8)
-            } else {
-                HStack {
-                    closeButton
-
-                    Spacer()
-
-                    topBarTitle
-
-                    Spacer()
-
-                    endButton
-                }
-                .frame(height: 40)
-            }
-        }
-        .padding(.horizontal, 20)
-    }
 
     /// 닫기(X): 기록을 저장하고 요약 없이 홈으로. "종료"와 역할이 다르므로 아이콘으로 구분한다.
     private var closeButton: some View {
@@ -428,35 +397,15 @@ struct RoutinePlayerView: View {
             viewModel.requestCloseRoutine()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(AppColor.gray350)
-                .frame(minWidth: 44, minHeight: 40)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("닫기")
         .accessibilityHint("지금까지의 진행을 기록하고 홈으로 돌아갑니다")
     }
 
-    private var topBarTitle: some View {
-        Text("오늘의 루틴")
-            .font(AppFont.pretendardSemiBold(size: 18, relativeTo: .body))
-            .foregroundStyle(AppColor.gray600)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
     private var endButton: some View {
-        Button {
+        Button("종료") {
             viewModel.requestEndRoutine()
-        } label: {
-            Text("종료")
-                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-                .foregroundStyle(AppColor.gray350)
-                .frame(minWidth: 56, minHeight: 40)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityHint("지금까지의 결과를 저장하고 완료 화면으로 이동합니다")
     }
 
@@ -523,15 +472,11 @@ struct RoutinePlayerView: View {
                 ),
                 wakeUpTime: summary.startedAt,
                 results: viewModel.summaryStepResults,
-                onTapBack: {
-                    isShowingTodayRecord = false
-                },
                 onTapHome: {
                     speechInputController.cancel()
                     viewModel.requestSummaryExit()
                 }
             )
-            .navigationBarBackButtonHidden(true)
         }
     }
 

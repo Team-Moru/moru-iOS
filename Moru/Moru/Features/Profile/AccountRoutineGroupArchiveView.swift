@@ -57,7 +57,7 @@ struct AccountRoutineGroupListView: View {
     .fixedSize(horizontal: false, vertical: true)
     .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruRadius.card)
     .accessibilityIdentifier(
       "profile.account.routine-archive.read-only"
     )
@@ -206,7 +206,7 @@ private struct AccountRoutineGroupSummaryRow: View {
     }
     .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruRadius.card)
     .accessibilityElement(children: .combine)
   }
 
@@ -293,7 +293,7 @@ struct AccountRoutineGroupDetailView: View {
     .fixedSize(horizontal: false, vertical: true)
     .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruRadius.card)
   }
 
   @ViewBuilder
@@ -582,7 +582,7 @@ private extension View {
   func accountRoutineGroupSurface() -> some View {
     padding(MoruSpacing.sixteen)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
+      .homePilotSurface(cornerRadius: MoruRadius.card)
   }
 
   func accountRoutineGroupStepText() -> some View {

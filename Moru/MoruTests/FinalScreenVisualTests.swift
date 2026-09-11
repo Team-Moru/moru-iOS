@@ -153,13 +153,11 @@ final class FinalScreenVisualTests: XCTestCase {
       HistoryView.rootAccessibilityIdentifier,
       ProfileView.rootAccessibilityIdentifier,
     ]
-    let tabIdentifiers = MainTabState.availableTabs.map {
-      MoruTabBar.accessibilityIdentifier(for: $0)
-    }
+    let tabIdentifiers = MainTabState.availableTabs.map(\.accessibilityIdentifier)
 
     XCTAssertEqual(Set(rootIdentifiers).count, rootIdentifiers.count)
     XCTAssertEqual(Set(tabIdentifiers).count, tabIdentifiers.count)
-    XCTAssertFalse(MoruTabBar.accessibilityIdentifier.isEmpty)
+    XCTAssertFalse(MoruTabItem.containerAccessibilityIdentifier.isEmpty)
     XCTAssertTrue(rootIdentifiers.allSatisfy { !$0.isEmpty })
     XCTAssertTrue(tabIdentifiers.allSatisfy { $0.hasPrefix("app.tab.") })
     XCTAssertEqual(MainTabState.availableTabs.map(\.title), ["홈", "루틴", "이력", "마이"])
@@ -268,7 +266,7 @@ final class FinalScreenVisualTests: XCTestCase {
         onTap: {},
         onStart: {}
       )
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.babyBlue50)
   }
@@ -283,7 +281,7 @@ final class FinalScreenVisualTests: XCTestCase {
       completionRateChangePercentagePoints: 20,
       averageDurationText: "12:30"
     )
-    .padding(AppSpacing.screenHorizontal)
+    .padding(MoruSpacing.gutter)
     .background(AppColor.grayWhite)
   }
 
@@ -339,7 +337,7 @@ final class FinalScreenVisualTests: XCTestCase {
         onOpenSettings: { _ in },
         onStartRoutine: { _ in }
       )
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.babyBlue50)
   }
@@ -349,15 +347,13 @@ final class FinalScreenVisualTests: XCTestCase {
     _ content: Content,
     selection: MoruTabItem
   ) -> some View {
-    VStack(spacing: 0) {
-      content
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-      MoruTabBar(
-        selection: .constant(selection),
-        items: MainTabState.availableTabs
-      )
-    }
+    MainTabView(
+      home: AnyView(selection == .home ? AnyView(content) : AnyView(EmptyView())),
+      routineSetting: AnyView(selection == .routine ? AnyView(content) : AnyView(EmptyView())),
+      history: AnyView(selection == .record ? AnyView(content) : AnyView(EmptyView())),
+      profile: AnyView(selection == .my ? AnyView(content) : AnyView(EmptyView())),
+      selection: .constant(selection)
+    )
   }
 
   @MainActor
@@ -387,8 +383,6 @@ final class FinalScreenVisualTests: XCTestCase {
     )
   }
 
-
-
 }
 
 private enum VisualBaseline {
@@ -398,53 +392,53 @@ private enum VisualBaseline {
     "moru-pr32-final-current-routine-light-M.png":
       "AAAAAAAAoAhgBfKY8tj4GEAE0A1QBVANWQVZDVAN0A2EAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr32-final-history-light-AX3.png":
-      "AAAIAOAA5ADUAcpEwWTAJMAkwLTFVMBk0jTTNMjMyMzIzMjQyNDIzMiEyATIBMgEUIDKIsogaQCZZGTI5MgCAA==",
+      "AAAAAAAACADgAOQA1APYAMFkwSTANMC0xRTAdMIkwjTIzMjMyMzI0MjQyMzIxMgEyATIBOAAyiLOCmTLrcvZJA==",
     "moru-pr32-final-history-light-M.png":
-      "AAAAACAAwALAAMoUzBjdGMSEyACgAuKAKHAxcXFhOWFEUMAA4CAGAkcBAGlVVU9wz3D3MHc881Dz0GzIbMgECA==",
+      "AAAAAAAAIADAAMgCwADaFMwY3JjEBEgAoALiBDhwMXFxYTFhAgDAAKAgFwBGASFBVVVvcM9w9zD1GGTLpcvSFA==",
     "moru-pr32-final-home-light-AX3.png":
-      "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gAgiAZFCySZBJ2EmoSbJLYkuSQxAgAAHACMgoyCEIGTI5MgCIA==",
+      "AAAEAQcADwA8gDjg3mLGYfBx+eD5gO2A1oDWgAlgCYESyQZBR2UkoSbJLYEuSQxBgBADAAMgEyDkiuTL5NvsiA==",
     "moru-pr32-final-home-light-M.png":
-      "AAAEAAcAHwQcgDjgMOBw8HDgeOD8wMyAzwCWAAFKGTMwMTDxHMB58DFgggRkAOAJYQEUAGAM4ATJqOzI5MgESA==",
+      "AAAEAQcADwA8gDjgcOBw8HDxeOD8wMyAzwDWAAoIGTEwMTBxPMA58DFgCABkAmCBaQEGAEAE4yTkmuTb5NvSJA==",
     "moru-pr32-final-profile-light-AX3.png":
-      "AAAAAEAAxADBCB7SutJMQp1KgiDJANkA0ADohMiExgDIAMWA6kTqRBXA8yChGOIkxKTFwuWZ5Si0JGTY5MgCIA==",
+      "AAAAAAAACADgAOQAxAAqwJrS6MLNTrxCKBDZANEA7IToBBIAyADIgHpE6kTkQPMA4yjiIMIkxcCk0CTYpNjRIA==",
     "moru-pr32-final-profile-light-M.png":
-      "AAAAAGAAkACBAJoCakLIgjEAyADIAOQE4ASQAJAAYATABIgAwETCIOIg4JTpBJIAwACCAMkEwQSTMGzYbMgESA==",
+      "AAAAAAAAIADAAMgAwYA6QmpCyIIxAMgAgADgBOAEkACQAGAE4ASYAMACwiDCIOgE6QSWAMAAwgSsnGTYpNjBJA==",
     "moru-pr32-final-routine-light-AX3.png":
-      "AAAAACgAxADEAOSQykDKRMpg2RTZDNow2nDAYMBgwBCoAugArMBZAN0QXSBaZETwQHCESlMQ2RDZhGTI5MgAIA==",
+      "AAAAAAAACADAAMQA5AA4AAIAykTKYNkY2RTTMNpwxOTAYMAQFgHoAOyAWxLdEF2AGmRAcEBwkCCsimzbrEvTJA==",
     "moru-pr32-final-routine-light-M.png":
-      "AAAAACAAwADEAOAA4ADWDNkwwLDCDBAAyACCBFgYyDhCEIIEWBDYOEA4gAJHAE8AQBAAAAAAAACSImzIbMgESA==",
+      "AAAAAAAAIACAAMgAyAAUAOEA4ADZGMg0yDDxCMACyAAmBlg4SDhCBIICWDjIOEIQgARPAEUAQQAsymzbrFrSJA==",
     "moru-pr34-home-active-routines-light-AX3.png":
-      "AAAAAAaAyQDJAKVCSIVIjWMBYiFSgWmBaZEUgWkxajBoAUkHcyHjOHExtALBimyNZIVlYVqBWoFpkWmBYmlgGQ==",
+      "AAAAAAaAyQDJAKVCSIVIjWMBYiFSgWmBaZEUgWkxajBoQUkFfkHjOOE4fID4AIOKbI1khWdhUoFakWmRaZFCSQ==",
     "moru-pr34-home-active-routines-light-M.png":
-      "AAAAABgAwACBAnAFQAVkQUGNSAxiA2DJ5MhjAIQGUAVkAXQBSI1ABGIRYMlkyHIAAAQAAAAAAAAAAAAAAAAAAA==",
+      "AAAAABgAwACBAnAFQAVkQUGNQgxiA2DJ5MjiAIwGcAV0QXRBSI1ABGIhZMjkyPIQAAQAAAAAAAAAAAAAAAAAAA==",
     "moru-pr43-alarm-ring-light-AX3.png":
       "AAAAAAAAAEEAABM2K4sqmxY2KIhEDAAsAAAAAAAAQAAIaiaTLkspQ4BwIHAAIAQAAAAAAEAAGAceez5XkAYAAA==",
     "moru-pr43-alarm-ring-light-M.png":
       "AAAAAAAAIiEAABAABVglOAZYACASMAQAAAAAAAAAwIALIyYDBhPRdEDwAGAAAAAAAAAgAIACOoca4xAHwAQAAA==",
     "moru-pr44-bundled-voices-light-AX3.png":
-      "AAAAAEABsAywDAAL5eTlZOdAxUH1Yuaw2QDZRMyIlAAHADADUA16BQwDMANQDVoFOgMxA1gNUgfyAM08zRxQAQ==",
+      "AAAAAIAQmCDAAAiI5eTlZOVI1WL1cuYw2QDNQMyIhAAGAnAHUA06BwSDMAdQDXoHBgM5A3kB5qDNHM0c8oD4AA==",
     "moru-pr44-bundled-voices-light-M.png":
-      "AAAAAEABsAawBiIJxADUgNSA5ogIInAFUAwoAlANUA0oA1ANUAU0A1ANVAcqAAAAAAAAAAAAAAf2gMlkwWBCAQ==",
+      "AAAAAIAAmCCCAMwA1ADQoNSA5oAJIlAMUAwkAlAMUAU0A1ANWAcyh1ANGAcAAAAAAAAAAAAAAAPkAMFkyGBgAA==",
     "moru-pr50-session-empty-home-light-AX3.png":
-      "AAAEAAcAHwQcgDjg3mLGYfBw+eD5gO2A1oD2gCpCalFLAUOnakla0QJGBgAGAAaAOyA7ODCEOaCJPOTI5MgCIA==",
+      "AAAEAQcADwA8gDjg3mLGYfBx+eD5gO2A1oDWgApgalFLAUOnakla0SQiBoAGAAaAOyAzOTCEOaTkmuTb5NvpIA==",
     "moru-pr50-session-empty-home-light-M.png":
-      "AAAEAAcAHwQcgDjgMOBw8HDgeOD8wMyAzwDWAABCdIFgAWABAgAAAACAAwADMA1IPUAwsgaHBoOBJuTI5MgESA==",
+      "AAAEAQcADwA8gDjgcOBw8HDxeOD8wMyAzwDWAAEgdAFgAWADAAAAAACAAwADMA1IPcCxsgaXFoPkyuTb5MvJJA==",
     "moru-pr50-session-empty-routine-light-AX3.png":
-      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwIfAAAAAAAAAAAAAAAAAACSImzI5MgAIA==",
+      "AAAAAAAACADAAMQA5AA4AABABgAGAAaAOyA7ODKEMKZVGFWQe7B7sIU+Hscax4E+4AAAAAAAUSQsymzbrFrSJA==",
     "moru-pr50-session-empty-routine-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOIGiwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACSImzIbMgESA==",
+      "AAAAAAAAIACAAMgAyAAwAAAAAAAAAAMgDwANSBigGKImk4YCwAAAAAAAAAAAAAAAAAAAAAAAUSQsymzbrFrSJA==",
     "moru-pr52-history-streak-light-AX3.png":
-      "AAAIAOAA5ADUAcpEwWTAJMAkwLTFVMBk0jTTNMjMyMzIzMjQyNDIzMiEyATIBMgEUIDKIsogaQCZZGTI5MgCAA==",
+      "AAAAAAAACADgAOQA1APYAMFkwSTANMC0xRTAdMIkwjTIzMjMyMzI0MjQyMzIxMgEyATIBOAAyiLOCmTLrcvZJA==",
     "moru-pr52-history-streak-light-M.png":
-      "AAAAACAAwALAAMoUzBjdGMSEyACgAuKAKHAxcXFhOWFEUMAA4CAGAkcBAGlVVU9wz3D3MHc881Dz0GzIbMgECA==",
+      "AAAAAAAAIADAAMgCwADaFMwY3JjEBEgAoALiBDhwMXFxYTFhAgDAAKAgFwBGASFBVVVvcM9w9zD1GGTLpcvSFA==",
     "moru-pr52-regular-completion-light-AX3.png":
-      "AQAKAQ8EZghyKXKpclFzUPvg8PBw4HhBPQAtSg8iDgJOWHO4AAKRIASABogMiA6gjqIBUCJAKEA8AHxgNoBygA==",
+      "AQAKAQ8EZghyKXKpclFzUPvg8PBw4HhBPQAtSg8iDgJOWHO4AAKSIASALIiMjB6iOaMYs/ZA5ADJZMlk9oCyAg==",
     "moru-pr52-regular-completion-light-M.png":
-      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QHygPwA/AAMGf5ErUYAEAwAGghBAYMBxwHAgAAAAAABjBoMmicDAwMRjCA==",
+      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QHygPwA/AAMGf5ErUYAEAwAGghBAYMBxwHAgCADAIAaCBoPpaMDEwMggAw==",
     "moru-pr52-trial-completion-light-AX3.png":
-      "AQAKAR8EbwhiKXOpcrByMPWQ8PBwYHhBPQAtSg8iDgJOWHO4AAJEQBqAGgAfOB0gHSQUMQAAAAPhIMlk8WBmkQ==",
+      "AQAKAR8EbwhiKXOpcrByMPWQ8PBwYHhBPQAtSg8iDgJOWHO4AAJEQBqAGgAfOB0gHSQAF3AB5ADJZMls9oCgAg==",
     "moru-pr52-trial-completion-light-M.png":
-      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QH6APwA/AAMGf5Eq0QAAByAHAAOAAEAAAAAAAAAAAQAAAAJjAeDAwMRjCA==",
+      "AQAKAQ8AHgA8wHjgcPBw8PDw+UB9QH6APwA/AAMGf5Eq0QAAByAHAAOAAEAAAAAAAAAAAQAAAAPgAMTEwMggAw==",
     "moru-pr52-weekly-comparison-light-AX3.png":
       "AAAAAAAAAAAAAAAAAAAAAOAIxQTMFMxE2KTcpMBc3iTeZM1MzEzANMzMzozchNkk2STikAAAAAAAAAAAAAAAAA==",
     "moru-pr52-weekly-comparison-light-M.png":

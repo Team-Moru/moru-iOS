@@ -181,19 +181,9 @@ private struct HomeActiveRoutineCard: View {
   }
 
   private var startButton: some View {
-    Button(action: onStartRoutine) {
-      Text("루틴 시작")
-        .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(AppColor.grayWhite)
-        .padding(.horizontal, AppSpacing.buttonHorizontal)
-        .padding(.vertical, AppSpacing.buttonVertical)
-        .frame(maxWidth: .infinity)
-        .background(MoruColor.ctaFill)
-        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
-    }
-    .buttonStyle(.plain)
-    .accessibilityIdentifier("home.active-routine.\(routine.id.uuidString).start")
-    .accessibilityLabel("\(routine.title) 시작")
+    MoruButton("루틴 시작", action: onStartRoutine)
+      .accessibilityIdentifier("home.active-routine.\(routine.id.uuidString).start")
+      .accessibilityLabel("\(routine.title) 시작")
   }
 }
 

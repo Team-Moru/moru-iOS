@@ -60,8 +60,6 @@ struct RoutineEditorView: View {
     NavigationStack {
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 0) {
-          editorHeader
-
           titleSection
             .padding(.top, dynamicTypeSize.isAccessibilitySize ? 28 : 20)
 
@@ -79,50 +77,45 @@ struct RoutineEditorView: View {
               .padding(.top, MoruSpacing.sixteen)
           }
         }
-        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.gutter)
         .padding(.top, MoruSpacing.eight)
-        .padding(.bottom, 112)
       }
       .defaultScrollAnchor(.top)
       .background(MoruColor.canvas.ignoresSafeArea())
-      .toolbar(.hidden, for: .navigationBar)
-      .safeAreaInset(edge: .bottom) {
-        VStack(spacing: AppSpacing.none) {
-          Button {
-            guard draft.canSave else {
-              return
-            }
-
-            if let conflict = activeRoutineConflictState(draft) {
-              activeRoutineConflict = conflict
-              return
-            }
-
-            Task {
-              await saveAndDismissIfNeeded()
-            }
-          } label: {
-            Text(
-              draft.routineID == nil
-                ? RoutineManagementCopy.createCompletion
-                : RoutineManagementCopy.editCompletion
-            )
-              .moruTextStyle(.b4.weight(.semiBold))
-              .foregroundStyle(AppColor.grayWhite)
-              .frame(maxWidth: .infinity)
-              .frame(minHeight: 54)
-              .background(
-                draft.canSave ? MoruColor.ctaFill : MoruColor.disabled
-              )
-              .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
+      .navigationTitle(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          backButton
+        }
+        if draft.routineID != nil {
+          ToolbarItem(placement: .destructiveAction) {
+            deleteButton
           }
-          .disabled(!draft.canSave)
-          .buttonStyle(.plain)
+        }
+      }
+      .safeAreaBar(edge: .bottom) {
+        MoruButton(
+          draft.routineID == nil
+            ? RoutineManagementCopy.createCompletion
+            : RoutineManagementCopy.editCompletion,
+          isEnabled: draft.canSave
+        ) {
+          guard draft.canSave else {
+            return
+          }
+
+          if let conflict = activeRoutineConflictState(draft) {
+            activeRoutineConflict = conflict
+            return
+          }
+
+          Task {
+            await saveAndDismissIfNeeded()
+          }
         }
         .padding(.horizontal, MoruSpacing.twenty)
-        .padding(.top, MoruSpacing.eight)
-        .padding(.bottom, MoruSpacing.eight)
-        .background(MoruColor.canvas.opacity(0.94))
+        .padding(.vertical, MoruSpacing.eight)
       }
       .sheet(isPresented: $isStepAddSheetPresented) {
         RoutineStepAddSheet { step in
@@ -160,79 +153,74 @@ struct RoutineEditorView: View {
           .presentationCornerRadius(AppRadius.lg)
         }
       }
-      .overlay {
-        if isDeleteDialogPresented {
-          deleteDialogOverlay
-        }
-
-        if let activeRoutineConflict {
-          activeRoutineConflictDialogOverlay(activeRoutineConflict)
-        }
-      }
-    }
-  }
-
-  private var editorHeader: some View {
-    Group {
-      if dynamicTypeSize.isAccessibilitySize {
-        VStack(spacing: MoruSpacing.eight) {
-          HStack {
-            backButton
-            Spacer()
-            deleteButton
-          }
-
-          editorTitle
-        }
-      } else {
-        ZStack {
-          editorTitle
-
-          HStack {
-            backButton
-            Spacer()
-            deleteButton
+      .alert(
+        RoutineManagementCopy.deleteConfirmationTitle,
+        isPresented: $isDeleteDialogPresented
+      ) {
+        Button(RoutineManagementCopy.deleteConfirmationCancelTitle, role: .cancel) {}
+        Button(RoutineManagementCopy.deleteConfirmationDeleteTitle, role: .destructive) {
+          if let routineID = draft.routineID {
+            Task {
+              let didDelete = await onDelete?(routineID) ?? false
+              isDeleteDialogPresented = false
+              if didDelete {
+                dismiss()
+              } else {
+                saveErrorMessage =
+                  "알람 취소에 실패해 루틴을 삭제하지 않았어요."
+              }
+            }
+          } else {
+            isDeleteDialogPresented = false
+            dismiss()
           }
         }
+      } message: {
+        Text(RoutineManagementCopy.deleteConfirmationMessage)
+      }
+      .alert(
+        RoutineManagementCopy.activeRoutineReplacementTitle,
+        isPresented: Binding(
+          get: { activeRoutineConflict != nil },
+          set: { isPresented in
+            if !isPresented {
+              activeRoutineConflict = nil
+            }
+          }
+        ),
+        presenting: activeRoutineConflict
+      ) { _ in
+        Button("취소", role: .cancel) {
+          activeRoutineConflict = nil
+        }
+        Button("변경하기") {
+          Task {
+            await replaceActiveRoutineAndDismissIfNeeded()
+          }
+        }
+      } message: { conflict in
+        Text(RoutineManagementCopy.activeRoutineReplacementMessage(conflict))
       }
     }
-    .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 96 : 44)
-  }
-
-  private var editorTitle: some View {
-    Text(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
-      .moruTextStyle(.b3.weight(.semiBold))
-      .foregroundStyle(MoruColor.textStrong)
-      .frame(maxWidth: .infinity)
-      .fixedSize(horizontal: false, vertical: true)
-      .accessibilityAddTraits(.isHeader)
   }
 
   private var backButton: some View {
     Button {
       dismiss()
     } label: {
-      Text("뒤로")
-        .moruTextStyle(.b4)
-        .foregroundStyle(MoruColor.textSecondary)
-        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+      Image(systemName: "xmark")
     }
-    .buttonStyle(.plain)
+    .accessibilityLabel("닫기")
   }
 
   private var deleteButton: some View {
-    Button {
+    Button(role: .destructive) {
       isDeleteDialogPresented = true
     } label: {
       Text("삭제")
-        .moruTextStyle(.b4)
-        .foregroundStyle(MoruColor.textSecondary)
-        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
     }
-    .opacity(draft.routineID == nil ? 0 : 1)
-    .disabled(draft.routineID == nil)
-    .buttonStyle(.plain)
-    .accessibilityHidden(draft.routineID == nil)
+    // role: .destructive만으로는 이 툴바 자리에서 빨간 강조가 나오지 않아 직접 tint한다.
+    .tint(.red)
   }
 
   private var titleSection: some View {
@@ -394,66 +382,6 @@ struct RoutineEditorView: View {
     }
     .buttonStyle(.plain)
   }
-  private var deleteDialogOverlay: some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "이 루틴을 삭제할까요?",
-        message: "삭제한 루틴은\n되돌릴 수 없어요.",
-        primaryTitle: "뒤로가기",
-        secondaryTitle: "삭제하기",
-        primaryAction: {
-          isDeleteDialogPresented = false
-        },
-        secondaryAction: {
-          if let routineID = draft.routineID {
-            Task {
-              let didDelete = await onDelete?(routineID) ?? false
-              isDeleteDialogPresented = false
-              if didDelete {
-                dismiss()
-              } else {
-                saveErrorMessage =
-                  "알람 취소에 실패해 루틴을 삭제하지 않았어요."
-              }
-            }
-          } else {
-            isDeleteDialogPresented = false
-            dismiss()
-          }
-        }
-      )
-    }
-  }
-
-  private func activeRoutineConflictDialogOverlay(
-    _ conflict: RoutineActivationConflictState
-  ) -> some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "다른 루틴을 끌까요?",
-        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
-        primaryTitle: "취소",
-        secondaryTitle: "변경하기",
-        primaryAction: {
-          activeRoutineConflict = nil
-        },
-        secondaryAction: {
-          Task {
-            await replaceActiveRoutineAndDismissIfNeeded()
-          }
-        }
-      )
-    }
-  }
-
   private func saveAndDismissIfNeeded() async {
     saveErrorMessage = nil
 

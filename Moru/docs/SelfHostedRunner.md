@@ -91,7 +91,8 @@ MORU_SIMULATOR_UDID=<위에서 만든 UDID>
   `full-test-results`)로 올라갑니다. Xcode에서 열어 확인합니다.
 - 다음 테스트는 `MORU_CAPTURE_OUTPUT_DIR`를 따르지 않고 `/private/tmp` 또는 `/tmp`에
   직접 씁니다. 러너 계정이 해당 경로에 쓸 수 있어야 하고, 동시 실행 시 서로 덮어씁니다.
-  - `MoruTests/FinalScreenVisualTests.swift`
+  (`FinalScreenVisualTests.swift`는 2026-09-10에 공용 캡처 픽스처로 옮겨져
+  `MORU_CAPTURE_OUTPUT_DIR`를 따르므로 이 목록에서 뺐다.)
   - `MoruTests/HistoryRunReportingTests.swift`
   - `MoruTests/OnboardingFigmaVisualTests.swift`
   - `MoruTests/HomeProfileFigmaVisualTests.swift`

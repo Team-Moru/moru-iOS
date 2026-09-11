@@ -72,9 +72,15 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       ),
       "다른 사용 중인 루틴이 1개 있어요.\n이 루틴으로 바꾸면 기존 루틴과 알람이 꺼져요.\n기존 요일 설정은 그대로 남아요."
     )
+    XCTAssertEqual(RoutineManagementCopy.deleteConfirmationTitle, "이 루틴을 삭제할까요?")
+    XCTAssertEqual(
+      RoutineManagementCopy.deleteConfirmationMessage,
+      "삭제한 루틴은\n되돌릴 수 없어요."
+    )
+    XCTAssertEqual(RoutineManagementCopy.deleteConfirmationCancelTitle, "뒤로가기")
+    XCTAssertEqual(RoutineManagementCopy.deleteConfirmationDeleteTitle, "삭제하기")
+    XCTAssertEqual(RoutineManagementCopy.activeRoutineReplacementTitle, "다른 루틴을 끌까요?")
   }
-
-
 
   private func view(for state: RoutineManagementCaptureState) -> AnyView {
     switch state {
@@ -92,26 +98,6 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
             onDelete: {}
           ) { _ in }
         }
-      )
-    case .deleteDialog:
-      AnyView(
-        dialogStage(
-          title: "이 루틴을 삭제할까요?",
-          message: "삭제한 루틴은\n되돌릴 수 없어요.",
-          primaryTitle: "뒤로가기",
-          secondaryTitle: "삭제하기"
-        )
-      )
-    case .weekdayConflict:
-      AnyView(
-        dialogStage(
-          title: "다른 루틴을 끌까요?",
-          message: RoutineManagementCopy.activeRoutineReplacementMessage(
-            RoutineActivationConflictState(activeRoutineIDs: [UUID()])
-          ),
-          primaryTitle: "취소",
-          secondaryTitle: "변경하기"
-        )
       )
     case .creationChoice:
       AnyView(
@@ -141,8 +127,7 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       home: AnyView(EmptyView()),
       routineSetting: RoutineSettingView(dependencies: dependencies),
       history: AnyView(EmptyView()),
-      selection: .constant(.routine),
-      historyReloadToken: 0
+      selection: .constant(.routine)
     )
   }
 
@@ -168,31 +153,6 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       background: editor(draft: regularDraft),
       sheet: sheet()
     )
-  }
-
-  private func dialogStage(
-    title: String,
-    message: String,
-    primaryTitle: String,
-    secondaryTitle: String
-  ) -> some View {
-    ZStack {
-      editor(draft: regularDraft)
-        .blur(radius: 4)
-
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: title,
-        message: message,
-        primaryTitle: primaryTitle,
-        secondaryTitle: secondaryTitle,
-        primaryAction: {},
-        secondaryAction: {}
-      )
-    }
   }
 
   private var regularDraft: RoutineDraftState {
@@ -395,53 +355,45 @@ private struct RoutineManagementBottomSheetCaptureStage<
 private enum RoutineManagementVisualBaseline {
   static let hashes: [String: String] = [
     "create-empty-light-AX3.png":
-      "AAAAABAAyADIgBmEPYDAMMgALAJRA1gDJANMg2gDJgDZANmQpWLlZPIU8gDZSNl48GgEEz6jPKPiAMTExMAgAQ==",
+      "AAAAAAYAxpCGgIAAyADMAFEDUQMqA0yDaIMhAdAA2QD5QKVk82TwkiaE2XjReCUOPqM8oyUL4ADAwMDAwADgAA==",
     "create-empty-light-M.png":
-      "AAAAACBAlgCHAJBAgAFIAwADYAMwAsgAwQKuBJAEyADIACICDwMEA4AAAAAAAAAAAAAAAAAAAALhCMCEwAAgAQ==",
+      "AAAAAAAAxxDDAIAAkABAA0gDZANAA8AAyQCKBIgEAQLIAIAgDwMPA4AgAAAAAAAAAAAAAAAAAADAAMCAwATAAA==",
     "creation-choice-light-AX3.png":
-      "gACAAKACyAzETIzIzsgDMwyBDIAAEA2AHIAcAB4gTODMpsyGDcAMAA4ADwANAB2AHIAcAM4GzuZNwAzAGpC6gA==",
+      "gACAAIKSxpSCmoAMyABDMwyBDIAAEA2AHIAcAB4gTODMpsyGDcAMAA4ADwANAB2AHIAcAM4GzuZNwAzAWpD6gA==",
     "creation-choice-light-M.png":
-      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyACKBIQEyADIAHEG0AwgQwMBAwAcANoG2oYdQAAA2QDKBshAIADAAA==",
-    "delete-dialog-light-AX3.png":
-      "gACAAKACyAzETIzIjsjBMMgAgA4ABxtHD+ccAx5nHqccpznHmJcGB44HgCcPBwcH2WrQSDECMQfBDMjU4MhlAA==",
-    "delete-dialog-light-M.png":
-      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyACAFgyHHoeGhwaHEGcYZ5AP0Qy4BtANogLQBdANuAL5DMTEwIhAAA==",
+      "gACAAIIKwhSCGoAMkADAAsCC4gLiAoCAwQDIBIwEgQLIALkC0AwARwMBAwAcANoG2oYdQAAA2QDKBshAJCDQAA==",
     "editor-collapsed-light-AX3.png":
-      "AAAAABAByAzMTCzJLsjBMMgAIgLIg0yDIwP1Q3EDeyMNgdgA2YDtYKVk82TyggSC2WnQSDEDcUfBHMTExMAzAQ==",
+      "AAAAAAIQxpSCmoAIyADCAEiDyIMUI/VDdUNzI0kDJkDZANmQpWDhZPKUIoLZWdlJJoMxR3EB8RDExMTM8QD0AQ==",
     "editor-collapsed-light-M.png":
-      "AAAAACBBkgaCBpBAgAHEAxADZiNSAsgAwQKuBJAEyADIAHAHUA00AlANUAc8B1ANIgJQDVANOAP5DMDE4MBBAQ==",
+      "AAAAAAAKwhXDGoAMmABAA8DDZSNiI4CAyQCKBIgEAQLIADgDUA0CB1AHUA0sAlANUgc4B1ANAgP5BMDMwMBACQ==",
     "editor-long-korean-light-AX3.png":
-      "AAAAABAByAzMTCzJLsjBMMgAKoN3JEck7SdoM2yHTKPss+SDVudkZ2RjAgjZANlApZCXFJOQEofhAMTE0MAzgQ==",
+      "AAAAAAIQxpSCmoAIyADIinZ0dyTNJ2k3aIsHD8yz6JPG52RnZGcGmNkA2SClkuUUk5SThvkB8wDExMTE9QDxgA==",
     "editor-long-korean-light-M.png":
-      "AAAAACBBkgaCBpBAgIFUWRAD6sNQAsgAyIKTBJMEyADIMHEHUQ04ElANUCUjAw8DICNAAAAAAAfhAMDEwMBBAQ==",
+      "AAAAAAAKwhXDGoAMkAJUWVRZ6sNqg4AIyICTBJMEAILIIDEDUQ0Ad1EFUA2gog8DDgOAAAAAAAPhAMTMxMhgAA==",
     "editor-schedule-light-AX3.png":
-      "AAAAABAByAzMTCzJLsjBMMgAIgLIg0yDIwP1Q3EDeyMNgdgA2YDtYKVk80T8ygzIAzDMyMzIzMThMMTExMBuiQ==",
+      "AAAAAAIQxpSCmoAIyADCAEiDyIMUI/VDdUNzI0kDJkDZANmQpWDhZPjMTMgFEJEwzMjMzHEx8wDExMTM5ABkwQ==",
     "editor-schedule-light-M.png":
-      "AAAAACBBkgaCBpBAgAHEAxADZiNSAsgAwQKuBIIkBNDEwMTAxMAk0BEq1VTVVMgRyABwD1ANJAPwAMDEwMBBAQ==",
+      "AAAAAAAKwhXDGoAMmABAA8DDZSNiI4CAyQCKBIgEBMIE0MTAxMAEwCzK1UTVRNVAyKDIAlANUA/lAMDEwMBiCQ==",
     "list-empty-light-AX3.png":
-      "AAAAACgAxADEAOUAGkAGgAYABoA7IDM4MKQ5olUYXZB7sDE4HMcawwIfAAAAAAAAAAAAAAAAAACSImzIZMgAIA==",
+      "AAAAAAAACADAAMQA5AA4AABABgAGAAaAOyA7ODKEMKZVGFWQe7B7sIU+Hscax4E+4AAAAAAAUSQsymzbrFrSJA==",
     "list-empty-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAzANSBzAGOIGiwaDAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRImzIbMkgSA==",
+      "AAAAAAAAIACAAMgAyAAwAAAAAAAAAAMgDwANSFikGKYGk4MCwAAAAAAAAAAAAAAAAAAAAAAAUSQsymzbrFrSJA==",
     "list-error-light-AX3.png":
-      "AAAAACgAxADEAOSAGwADAAaQAxAZIBmkYsBo2RlECUAawAxiGwMbQwJXAAAAAAAAAAAAAAAAAACSImzIZMgAIA==",
+      "AAAAAAAACADAAMQA5AA4AAFAAwAGkAcQGSAZpGbAaNkJRAlAGsBa4ICeGwcbR4Ce4AAQAAAAUSQsymzbrFrSJA==",
     "list-error-light-M.png":
-      "AAAAACAAwADAACAAAAAAgAMAAxgeZBwABNIHAwcDAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACRImzIbMkgSA==",
+      "AAAAAAAAIACAAMgAyAAwAAAAAAAAAAMgEwAeZCyYBAIHA4MCwAAAAAAAAAAAAAAAAAAAAAAAUSQsymzbrFrSJA==",
     "routine-list-light-AX3.png":
-      "AAAAACgAxADEAOSQykDKRMpg2RTZDNow2nDAYMBgwBCoAugArMBZAN0QXSBaZETwQHCESlMQ2RDZkGTIbMiRMA==",
+      "AAAAAAAACADAAMQA5AA4AAIAykTKYNkY2RTTMNpwxOTAYMAQFgHoAOyAWxLdEF2AGmRAcEBwwCCsimzbrFrSZA==",
     "routine-list-light-M.png":
-      "AAAAACAAwADEAOAA4ADWDNkwwLDCDBAAyACCBFgYyDhCEIIEWBDYOEA4gAJHAE8AQBAAAAAAAACRImzIbMkgSA==",
+      "AAAAAAAAIACAAMgAyAAUAOEA4ADZGMg0yDDxCMACyAAmBlg4SDhCBIICWDjIOEIQgARPAEUAQQAsymzbrFrSJA==",
     "step-add-light-AX3.png":
-      "gACAAKACyAzETIzIzsgBMwUBDoAMgAAQwADQAFwg1IKgAOAE4VjSuMK00ELAAMAA4yDDLMMgwMDAxGIIAQK0AA==",
+      "gACAAIKSxpSCmoAMyABBAwUBDoAMgAAQwADQAFwg1IKgAOAE4VjSuMK00ELAAMAA4yDDLNMg4EDAxMDA4AD0AA==",
     "step-add-light-M.png":
-      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyAMTAwIAAADAAMAAwALQhOMY4RjhGJAEgADDBMME4MDAxMAAAAHAAA==",
+      "gACAAIIKwhSCGoAMkADAAsCC4gLiAoiAyAMDAwIAAADAAMAAwALQhOMY4RjhGJAEgADDBMMEwIDAhMAEwADQAA==",
     "step-edit-light-AX3.png":
-      "gACAAKACyAzETIzIzsgBMwRBDsAMwAAQwADQAHig+ILRkOBE4VjSuMK00ELAAMAA4yDDJOMAxMDExOMgjsK+wA==",
+      "gACAAIKSxpSCmoAMyABBAwRBDsAMwAAQwADQAHig+ILRkOBE4VjSuMK00ELAAMAA4yDDJPMA8gDEzMDE8gDwAA==",
     "step-edit-light-M.png":
-      "gACAAMBAggaCBpBAgALEAoAC5AIBAwMBAgAAAMAAwADoAtCE4xjhGOMYkACAgMMkwwTggMDE4IADAIMCKMjAAA==",
-    "weekday-conflict-light-AX3.png":
-      "gACAAKACyAzMTIzOAAedJ51nDAcNhx1nGUcxUzlTKXM2YzZjhocbQ5tHnKcUpwIHgweAJw8HBgfBPMDE4MhlAA==",
-    "weekday-conflict-light-M.png":
-      "gACAAMBAggaCBpBAgALEAoAC5CKgAsAAyASQNg5HHwe9IzrjBgcYZ5Fn0Ry4BtANogLQBdANuAL5DMTEwIhAAA==",
+      "gACAAIIKwhSCGoAMkADAAsCC5CJjAwMBAgAAAMAAwADoAtCE4xjhGOMYkACAgMMkwwTgwMDEwEADAoMi4MDgAA==",
   ]
 }
 
@@ -450,8 +402,6 @@ private enum RoutineManagementCaptureState: String, CaseIterable {
   case editorCollapsed = "editor-collapsed"
   case editorSchedule = "editor-schedule"
   case stepEdit = "step-edit"
-  case deleteDialog = "delete-dialog"
-  case weekdayConflict = "weekday-conflict"
   case creationChoice = "creation-choice"
   case createEmpty = "create-empty"
   case stepAdd = "step-add"

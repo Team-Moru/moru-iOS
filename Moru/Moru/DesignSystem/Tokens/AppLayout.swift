@@ -9,7 +9,6 @@ import SwiftUI
 
 enum AppSpacing {
   static let none: CGFloat = 0
-  static let xxxs: CGFloat = 2
   static let xxs: CGFloat = 4
   static let six: CGFloat = 6
   static let xs: CGFloat = 8
@@ -28,11 +27,7 @@ enum AppSpacing {
   static let seventyTwo: CGFloat = 72
 
   static let screenHorizontal: CGFloat = 20
-  static let bottomCTAHorizontal: CGFloat = 20
-  static let bottomCTAVertical: CGFloat = 16
-  static let buttonHorizontal: CGFloat = 36
   static let buttonVertical: CGFloat = 16
-  static let iconTextGap: CGFloat = 10
 }
 
 enum AppRadius {

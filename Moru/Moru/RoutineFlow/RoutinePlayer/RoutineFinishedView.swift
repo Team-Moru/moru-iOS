@@ -95,16 +95,18 @@ struct RoutineFinishedView: View {
             }
 
             stepResultsSection
-
-            Spacer(minLength: isTrial ? 32 : 25)
-
-            bottomButtonSection
           }
           .padding(.top, topContentPadding)
           .padding(.horizontal, 20)
+          .padding(.bottom, isTrial ? 32 : 25)
           .frame(minHeight: proxy.size.height, alignment: .top)
         }
       }
+    }
+    .safeAreaBar(edge: .bottom) {
+      bottomButtonSection
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
     }
     .onChange(of: normalizedCompletionRate) { _, newValue in
       withAnimation(.easeOut(duration: 0.8)) {
@@ -340,7 +342,6 @@ struct RoutineFinishedView: View {
       MoruButton("홈으로") {
         onTapHome()
       }
-      .padding(.horizontal, 2)
     } else {
       VStack(spacing: 10) {
         MoruButton("오늘의 기록 확인", style: .secondary) {

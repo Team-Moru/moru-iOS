@@ -36,8 +36,6 @@ struct RoutineSettingView: View {
     NavigationStack {
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 0) {
-          header
-
           if let errorMessage = viewModel.state.errorMessage,
              viewModel.state.routines.isEmpty {
             routineErrorState(message: errorMessage)
@@ -62,13 +60,13 @@ struct RoutineSettingView: View {
               .padding(.top, AppSpacing.sm)
           }
         }
-        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.gutter)
         .padding(.top, MoruSpacing.twenty)
-        .padding(.bottom, MoruSpacing.thirtySix)
       }
       .defaultScrollAnchor(.top)
       .background(MoruColor.canvas.ignoresSafeArea())
-      .navigationBarTitleDisplayMode(.inline)
+      .navigationTitle("루틴")
+      .navigationBarTitleDisplayMode(.large)
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
@@ -85,10 +83,37 @@ struct RoutineSettingView: View {
         presentCreationSheet()
       }
     }
-    .overlay {
-      if let activationConflict {
-        activationConflictDialogOverlay(activationConflict)
+    .alert(
+      "다른 루틴을 끌까요?",
+      isPresented: Binding(
+        get: { activationConflict != nil },
+        set: { isPresented in
+          if !isPresented {
+            activationConflict = nil
+            activationConflictRoutineID = nil
+          }
+        }
+      ),
+      presenting: activationConflict
+    ) { _ in
+      Button("취소", role: .cancel) {
+        activationConflict = nil
+        activationConflictRoutineID = nil
       }
+      Button("변경하기") {
+        if let activationConflictRoutineID {
+          Task {
+            await viewModel.activateRoutineReplacingActiveRoutine(
+              id: activationConflictRoutineID
+            )
+          }
+        }
+
+        activationConflict = nil
+        activationConflictRoutineID = nil
+      }
+    } message: { conflict in
+      Text(RoutineManagementCopy.activeRoutineReplacementMessage(conflict))
     }
     .sheet(item: $editorDraft) { draft in
       RoutineEditorView(draft: draft) { savedDraft in
@@ -116,13 +141,6 @@ struct RoutineSettingView: View {
         viewModel.activeRoutineConflict(for: draft)
       }
     }
-  }
-
-  private var header: some View {
-    Text("루틴")
-      .moruTextStyle(.h3)
-      .foregroundStyle(AppColor.gray550)
-      .fixedSize(horizontal: false, vertical: true)
   }
 
   private var activeRoutineSection: some View {
@@ -315,38 +333,6 @@ struct RoutineSettingView: View {
     }
   }
 
-  private func activationConflictDialogOverlay(
-    _ conflict: RoutineActivationConflictState
-  ) -> some View {
-    ZStack {
-      AppColor.grayBlack
-        .opacity(0.22)
-        .ignoresSafeArea()
-
-      MoruDialog(
-        title: "다른 루틴을 끌까요?",
-        message: RoutineManagementCopy.activeRoutineReplacementMessage(conflict),
-        primaryTitle: "취소",
-        secondaryTitle: "변경하기",
-        primaryAction: {
-          activationConflict = nil
-          activationConflictRoutineID = nil
-        },
-        secondaryAction: {
-          if let activationConflictRoutineID {
-            Task {
-              await viewModel.activateRoutineReplacingActiveRoutine(
-                id: activationConflictRoutineID
-              )
-            }
-          }
-
-          activationConflict = nil
-          activationConflictRoutineID = nil
-        }
-      )
-    }
-  }
 }
 
 #if DEBUG

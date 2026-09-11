@@ -36,23 +36,25 @@ AppFont        // 폰트. 본문 텍스트는 .moruTextStyle(_:)을 우선 사�
 | `MoruChip` | 키워드, 태그, 선택지 |
 | `MoruToggle` | on/off 설정 |
 | `MoruProgressBar` | 온보딩 단계, 루틴 진행 단계 |
-| `MoruTabBar` | 홈 / 루틴 / 이력 / 마이 탭 |
 | `MoruCheckBadge` | 완료, 진행중 같은 상태 표시 |
 | `MoruSelectControl` | 플러스 / 마이너스 버튼 |
 | `MoruRoutineCard` | 루틴 목록 카드 |
 | `MoruVoiceCard` | 음성 선택 카드 |
 | `MoruSoundModule` | 음성 안내 / 사운드 상태 |
-| `MoruDialog` | 확인 팝업 |
+| `MoruWeekdaySelector` | 반복 요일 선택 (루틴 알림, 온보딩) |
 | `MoruSocialLoginIconButton` | 계정 연결 시트의 소셜 로그인 버튼 |
+
+하단 탭은 네이티브 `TabView`/`Tab`을, 확인 팝업은 네이티브 `.alert`를 쓴다
+(`MoruTabBar`·`MoruDialog`는 삭제됨).
 
 ## 화면별로 먼저 볼 컴포넌트
 
 | 화면 | 먼저 볼 공용 컴포넌트 |
 | --- | --- |
 | 온보딩 | `MoruProgressBar`, `MoruVoiceCard`, `MoruButton` |
-| 루틴 설정 | `MoruRoutineCard`, `MoruSelectControl`, `MoruButton` |
+| 루틴 설정 | `MoruRoutineCard`, `MoruSelectControl`, `MoruWeekdaySelector`, `MoruButton` |
 | 알람 설정 | `MoruToggle`, `MoruButton` |
-| 루틴 실행 | `MoruProgressBar`, `MoruSoundModule`, `MoruDialog` |
+| 루틴 실행 | `MoruProgressBar`, `MoruSoundModule` |
 | 홈 | `MoruRoutineCard`, `MoruButton` |
 | 이력 | `MoruCheckBadge`, `MoruButton` |
 | 마이 / 설정 | `MoruToggle`, `MoruVoiceCard`, `MoruButton` |

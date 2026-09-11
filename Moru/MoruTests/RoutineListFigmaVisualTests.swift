@@ -50,8 +50,7 @@ final class RoutineListFigmaVisualTests: XCTestCase {
       home: AnyView(EmptyView()),
       routineSetting: RoutineSettingView(dependencies: dependencies(for: state)),
       history: AnyView(EmptyView()),
-      selection: .constant(.routine),
-      historyReloadToken: 0
+      selection: .constant(.routine)
     )
   }
 

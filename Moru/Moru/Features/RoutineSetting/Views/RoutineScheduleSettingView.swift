@@ -17,7 +17,7 @@ struct RoutineScheduleSettingView: View {
     VStack(spacing: dynamicTypeSize.isAccessibilitySize ? 28 : 24) {
       timeDragPicker
 
-      RoutineWeekdaySelector(selectedWeekdays: $selectedWeekdays)
+      MoruWeekdaySelector(selectedWeekdays: $selectedWeekdays)
     }
     .frame(maxWidth: .infinity)
     .accessibilityElement(children: .contain)

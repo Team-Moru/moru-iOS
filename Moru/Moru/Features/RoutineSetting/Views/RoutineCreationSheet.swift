@@ -148,7 +148,7 @@ struct RoutineCreationModeSelectionView: View {
             onSelect(.directAddition)
           }
         }
-        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.gutter)
         .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 12)
       }
     }

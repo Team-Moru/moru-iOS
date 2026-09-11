@@ -145,7 +145,7 @@ struct RoutineStepAddSheet: View {
   }
 
   private var saveButton: some View {
-    Button {
+    MoruButton("저장", isEnabled: canSave) {
       guard canSave else {
         return
       }
@@ -162,37 +162,14 @@ struct RoutineStepAddSheet: View {
         )
       )
       dismiss()
-    } label: {
-      Text("저장")
-        .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(AppColor.grayWhite)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 54)
-        .background(canSave ? MoruColor.ctaFill : MoruColor.disabled)
-        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
     }
-    .disabled(!canSave)
-    .buttonStyle(.plain)
   }
 
   private func deleteButton(_ action: @escaping () -> Void) -> some View {
-    Button {
+    MoruButton("항목 삭제", style: .secondary) {
       action()
       dismiss()
-    } label: {
-      Text("항목 삭제")
-        .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruColor.textStrong)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 54)
-        .background(AppColor.grayWhite)
-        .overlay(
-          RoundedRectangle(cornerRadius: MoruRadius.pill)
-            .stroke(MoruColor.border, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
     }
-    .buttonStyle(.plain)
   }
 
   private var stepTypes: [RoutineStepType] {

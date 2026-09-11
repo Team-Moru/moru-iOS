@@ -123,8 +123,6 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
     }
   }
 
-
-
   private func view(
     for state: RoutinePlayerCaptureState
   ) async throws -> AnyView {
@@ -174,16 +172,6 @@ final class RoutinePlayerFigmaVisualTests: XCTestCase {
       let viewModel = makeViewModel()
       viewModel.resolveRoutine()
       viewModel.completeCurrentStep(transcript: "완료했어요")
-      return AnyView(RoutinePlayerView(viewModel: viewModel))
-    case .skipDialog:
-      let viewModel = makeViewModel()
-      advance(viewModel, to: 3)
-      viewModel.requestSkipStep()
-      return AnyView(RoutinePlayerView(viewModel: viewModel))
-    case .endDialog:
-      let viewModel = makeViewModel()
-      advance(viewModel, to: 3)
-      viewModel.requestEndRoutine()
       return AnyView(RoutinePlayerView(viewModel: viewModel))
     case .resolutionRetry:
       let viewModel = makeViewModel(
@@ -416,8 +404,6 @@ private enum RoutinePlayerCaptureState: String, CaseIterable {
   case regularInput = "regular-input"
   case inputLongKorean = "input-long-korean"
   case stepCompleted = "step-completed"
-  case skipDialog = "skip-dialog"
-  case endDialog = "end-dialog"
   case resolutionRetry = "resolution-retry"
   case terminalFailure = "terminal-failure"
   case trialConfirm = "trial-confirm"
@@ -534,52 +520,44 @@ private final class RoutinePlayerCaptureGuidancePlayer: RoutineGuidancePlaying {
 private enum RoutinePlayerVisualBaseline {
   static let hashes: [String: String] = [
     "confirm-transcript-light-AX3.png":
-      "AAAAAAGQHUQcYcGc0AyAAcgAygZlaWkha1EdSg1gBhAeADjkMPBw8mDyMHIwYBhADgAEYmiIZIktSA1MDsgKyA==",
+      "AAAAAAGQxpyGHMgowAIhCW0haREJTg1IBhAeADjAMOBwcmDycPIw8BjAHAAMIAgEZIlsiQ1ODEgOyAAwCsgOQA==",
     "confirm-transcript-light-M.png":
-      "AAAAAAME1gxCAIAglIAtiAYAAgAOABxAMOAw8mDycPIwcDjgHAAMAADQGmQaIAMAAyJjCP8A/0BnAAMCAAAAAA==",
-    "end-dialog-light-AX3.png":
-      "AAAAAAEQHUQcYsKcQAyABoBvBocGxxeHFWcSZxjHGccVpzjjHkcPRwAHDgcOBwUHBAcMR0zMJwI3czDDJMsBPA==",
-    "end-dialog-light-M.png":
-      "AAAAAAIA1gwEAICAiIANgAYAAQACIC8ImOYSNw2HHYcaRw9HGGcZZwIXciMARgMGAgYDAAAAAAAAAAAAAAAAAA==",
+      "AAAAAAEKxpzGHIAYrIhNiAYQAiAOABzAMOAw8mDycPIwcDjgHAAMIADAGmQOAAMAAyLjAP0A/QBlCAMCAIAAAA==",
     "input-long-korean-light-AX3.png":
-      "AAAAAAGQHUQcYcGcxAzwAcgAzogZZB1kHGQNiA4oDkgJYACQAADqAHJA4gDywPLA8gD7AOsAdMj2yHYk81jpUA==",
+      "AAAAAAGQxpzCHMAozggZRB1kHGQNiAyoDkgJSACQAACMkGJA82DywPLA8gDyAOsE9Ih0yPYk9hj5UOsQ6hDl4A==",
     "input-long-korean-light-M.png":
-      "AAAAAAME1gxCAMAQnIAdhA4QAgAAAAwA4ATjIOsg5LDwiIIA4ABAAACAAyLrAP1A/wBjCAMCAIAAAAAAAAAAAA==",
+      "AAAAAAEKxpzCHIAIjoBdhAYYAAAAABgA4AThIOsw4LDwRIIAwABAAACAAyL/AP1C/gBjCAMEAIAAAAAAAAAAAA==",
     "regular-confirm-light-AX3.png":
-      "AAAAAAGQHUQcYcGc0AyAAcgAygZlaWkha1EdSg1AAjAOABzAOOQw8DDyMPAY4BwADgAA4A1ADUZkiWCJD04NSA==",
+      "AAAAAAGQxpyGHMgowAIhCW0haREJTg1IApAOEByAGOQw4DDwMPIY4ByADgAEYAQADUZsiGCJD0oNSA7ICMABEA==",
     "regular-confirm-light-M.png":
-      "AAAAAAME1gxCAIAglIAtiAYAAgAHEA4AGOQw5DDwMPIw4BjADAAEIACAGwAaJAYYAUADAAMAAwADAACAAAAAAA==",
+      "AAAAAAEKxpzGHIAYrIhNiAYQAEAHEB4AGOQw5DDwMPAw4BjADAAEIAIQGyAaJAYYAUADAAMAAwADAACAAAAAAA==",
     "regular-input-light-AX3.png":
-      "AAAAAAGQHUQcYcGcxAzwAcgAzogZZB1kHGQNiA4oDkgJYAYwDgAcwDjkMPAw8jDwGOAMAA4AAOANQA1IHOQc5A==",
+      "AAAAAAGQxpzCHMAozggZRB1kHGQNiAyoDkgJSAKwDhAcgBjkMOAw8DDwGOAcAA4AAOAFAA1IHuQc5B2EHoQMaA==",
     "regular-input-light-M.png":
-      "AAAAAAME1gxCAMAQnIAdhA4QAgAHEA4AGOQw5DDwMPIw4BjADAAEIACACwAaQA5IARADAAMAAwADAACAAAAAAA==",
+      "AAAAAAEKxpzCHIAIjoBdhAYYAEAHEB4AGOQw5DDwMPAw4BjADAAEIAIgCwAaQA4IATADAAMAAwADAACAAAAAAA==",
     "regular-structured-timer-light-AX3.png":
-      "AAAAAAGQHUQcYcGcwgzwAciAySA3QAdMH1I+gjkiG2QZIABQAZABwABkAzIHkgeSALAEZAzIJwI3c3DDJMsLPA==",
+      "AAAAAAGQxpzGHMgoyiAUSAdEH0A+AjmiG2QZJACYARABiABkAzADEgeSA5IAcAzAD4w3c3NDNM9mQI0OjU6NRg==",
     "regular-structured-timer-light-M.png":
-      "AAAAAAME1gxCAMAQmYAdhAYQAgAAIAGIAeQAsAMSB5IDkgBwDOQOCDIjeiMAzgMGAwYDAAEAAAAAAAAAAAAAAA==",
+      "AAAAAAEKxpzGHIQIjYBdhAYQAAAAIAGIAOQAMAMSB5IDkgBwDOQPCDIneiOBxoMGggRjIAAAAAAAAAAAAAAAAA==",
     "regular-timer-light-AX3.png":
-      "AAAAAAGQHUQcYcGc0AzgAcQAwJg9ZBlkGQQMiB4gGyQZIABQAZABwABkAzIHkgeSALAEZAzIHwIwh3RnMSMBnA==",
+      "AAAAAAGQxpzGHMAoyAgtBB1kGUQNiA6IGyQZJACYARABiABkAzADEgeSA5IAcAzADxgwp3TnOCdzII0OjU6NRg==",
     "regular-timer-light-M.png":
-      "AAAAAAME1gxCAMAQnEAchA4QAgAAIAGIAeQAsAMSB5IDkgBwDOQOCDojfiMAzgMGAwYDAAEAAAAAAAAAAAAAAA==",
+      "AAAAAAEKxpzGHIAIjkBchAYQAAAAIAGIAOQAMAMSB5IDkgBwDOQPCDondiOBxoMGggRjIAAAAAAAAAAAAAAAAA==",
     "resolution-retry-light-AX3.png":
-      "AAAAAAAAAAAAAAAAAACCAARgEYAxkDeYMqQypDKkNqQ24hbUMVI5wBrmckHjMOE4dIEABgAAAAAAAAAAAAAAAA==",
+      "AAAAAAGABpAGAABAAACCAABAEqAxkDWYFqQypDOkNiQ2oBbgORAx0hrEGuJ0keM44Tj0gPgAQAQAAAAAAAAAAA==",
     "resolution-retry-light-M.png":
-      "AAAAAAAAAAAAAAAAAACCAAAAAAAAAAAAAAACnGRgdWgapuiA4MjgCAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-    "skip-dialog-light-AX3.png":
-      "AAAAAAEQHUQcYsKcwAwAFwqHC4caRxoHE2caZxtHEacOhx8HHScNhw1HAAcOBwYHBQcFBwQGZwA3czDDJMsBPA==",
-    "skip-dialog-light-M.png":
-      "AAAAAAIA1gwEAICAiIANgAYAAQACIC8ImOYBNxzHHoccxwyHGGcZZwIPciMARgMGAgYDAAAAAAAAAAAAAAAAAA==",
+      "AAAAAAEABpACAAEAAACCAAAAAAAAAAAAAAAAAAMcZGB1aBqm6KjkyOAIAAYAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "step-completed-light-AX3.png":
-      "AAAAAAGQHUQcYcGc0AyAAckgzwA8wBjgEbATMBhkHMAPAAERiiqqKpJGaqFqsdFkyVRiFAAAAAAAAAAAAAAAAA==",
+      "AAAAAAGQxpyGHMgoyAAyAAAAAAAAQAcADMAY4BGwEzAaZBjgDgADAYpIqqqSZmqjarHxMMlUZFQACAAAAAAAAA==",
     "step-completed-light-M.png":
-      "AAAAAAME1gxCAIAAkAAiAAAAAAADAA4AGOAYoBOwE3AY5AzABwAAUBkkHQAMSAzIABAAAAAAAAAAAAAAAAAAAA==",
+      "AAAAAAEKxpzGHIgooABCAAAAAAAAAABABwAMwBhkELATsBpgGOQOgAcQGaAZBAxIDEgMwAAgAAAAAAAAAAAAAA==",
     "terminal-failure-light-AX3.png":
-      "AAAAAAAAAAAAAAAAAACCAAxgMSA1EDUYNCQ1JDOgMBAzkDJEMVI90g9OcgHgwOTIcyEABgAAAAAAAAAAAAAAAA==",
+      "AAAAAAGABpAGAABAAACCAABAEgA1ADWQFSA0JDOkMBgzEDOMOVIx0g8IHkJzIeTI5MjzIPgAAAQAAAAAAAAAAA==",
     "terminal-failure-light-M.png":
-      "AAAAAAAAAAAAAAAAAACCAAAAAAAAAAAAAAAEjDpiO2IaRuKA4MjgCAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "AAAAAAEABpACAAEAAACCAAAAAAAAAAAAAAAAAASMO2I7YhpG6AjgyOAIAAYAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "trial-confirm-light-AX3.png":
-      "AAAAAAAB8ADIAMACMACKFmUpaSErTA1IALAHEA4AGOQw5DDwMPIw4BjADAAEIBIWZIlgiQ9ODEgOyAjgDEAMQA==",
+      "AAAAAHAEwATIARJWbSlpIQtODUgAkAYQHAAY5DDkMPAw8jDgGMAOAAQgARZkiWCJDU4MSA7ICGAMQuxI/wD/Ag==",
     "trial-confirm-light-M.png":
-      "AAAAAAABwACQAAACADCNiA4IAgAGIA4AGMAw5DDwMPAw4BjgDAAGIAAYGGQaAAYYQyD+AP8C/AADIgEAAAAAAA==",
+      "AAAAAEAEgASAAU2IDgiCEAYQDgAYwDBkMPAw8DDgGMAMAAYgAJgaZBoAAwJjKP8A/wLrAAMiAAAAAAAAAAAAAA==",
   ]
 }

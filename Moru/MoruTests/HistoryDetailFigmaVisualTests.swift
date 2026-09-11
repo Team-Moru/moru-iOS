@@ -73,8 +73,7 @@ final class HistoryDetailFigmaVisualTests: XCTestCase {
           detailView(for: state)
         }
       ),
-      selection: .constant(.record),
-      historyReloadToken: 0
+      selection: .constant(.record)
     )
   }
 

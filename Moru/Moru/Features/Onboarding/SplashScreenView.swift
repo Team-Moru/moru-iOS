@@ -29,22 +29,6 @@ struct SplashScreenView: View {
         splashMessage
           .frame(maxWidth: proxy.size.width - AppSpacing.forty)
           .position(x: proxy.size.width / 2, y: 495)
-
-        if let onStart {
-          VStack {
-            Spacer()
-
-            MoruButton("시작하기", action: onStart)
-              .accessibilityIdentifier(
-                SplashScreenAccessibility.startIdentifier
-              )
-              .padding(.horizontal, AppSpacing.screenHorizontal)
-              .padding(
-                .bottom,
-                max(AppSpacing.xxl, proxy.safeAreaInsets.bottom)
-              )
-          }
-        }
       }
     }
     .background(
@@ -58,6 +42,16 @@ struct SplashScreenView: View {
       )
       .ignoresSafeArea()
     )
+    .safeAreaBar(edge: .bottom) {
+      if let onStart {
+        MoruButton("시작하기", action: onStart)
+          .accessibilityIdentifier(
+            SplashScreenAccessibility.startIdentifier
+          )
+          .padding(.horizontal, MoruSpacing.gutter)
+          .padding(.bottom, AppSpacing.xxl)
+      }
+    }
   }
 
   private var splashBrand: some View {

@@ -7,7 +7,6 @@ import Foundation
 import SwiftUI
 
 struct HistoryAccountDailyDetailView: View {
-  @Environment(\.dismiss) private var dismiss
   @State private var viewModel: HistoryAccountDailyViewModel
 
   init(viewModel: HistoryAccountDailyViewModel) {
@@ -16,8 +15,6 @@ struct HistoryAccountDailyDetailView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      header
-
       Group {
         switch viewModel.state {
         case .loading:
@@ -42,43 +39,13 @@ struct HistoryAccountDailyDetailView: View {
       }
     }
     .background(MoruColor.canvas.ignoresSafeArea())
-    .toolbar(.hidden, for: .navigationBar)
+    .navigationTitle(dateTitle)
+    .navigationBarTitleDisplayMode(.inline)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.accountDailyDetail")
     .task {
       await viewModel.load()
     }
-  }
-
-  private var header: some View {
-    HStack {
-      Button {
-        dismiss()
-      } label: {
-        Text("뒤로")
-          .moruTextStyle(.b4)
-      }
-      .foregroundStyle(MoruColor.textTertiary)
-      .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-      .accessibilityLabel("뒤로")
-
-      Spacer()
-
-      Color.clear
-        .frame(width: 44, height: 44)
-        .accessibilityHidden(true)
-    }
-    .overlay {
-      Text(dateTitle)
-        .moruTextStyle(.h3)
-        .foregroundStyle(MoruColor.textStrong)
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .accessibilityAddTraits(.isHeader)
-        .allowsHitTesting(false)
-    }
-    .padding(.horizontal, MoruSpacing.twenty)
-    .frame(height: 54)
   }
 
   private func content(
@@ -168,7 +135,7 @@ struct HistoryAccountDailyDetailView: View {
           }
         }
       }
-      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.gutter)
       .padding(.top, MoruSpacing.eight)
       .padding(.bottom, MoruSpacing.sixtyFour)
     }

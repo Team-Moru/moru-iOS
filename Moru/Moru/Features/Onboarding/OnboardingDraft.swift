@@ -16,7 +16,7 @@ struct OnboardingDraft: Equatable {
   var suggestionSource: RoutineSuggestionSource?
   var alarmHour: Int = 7
   var alarmMinute: Int = 0
-  var selectedWeekdays: Set<Weekday> = Set(Weekday.onboardingDisplayOrder.prefix(5))
+  var selectedWeekdays: Set<Weekday> = Set(Weekday.displayOrder.prefix(5))
   var includeWeather: Bool = false
   var includeFortune: Bool = false
   var selectedVoice: VoiceProfile = .aoede
@@ -32,7 +32,7 @@ struct OnboardingDraft: Equatable {
   }
 
   var orderedWeekdays: [Weekday] {
-    Weekday.onboardingDisplayOrder.filter(selectedWeekdays.contains)
+    Weekday.displayOrder.filter(selectedWeekdays.contains)
   }
 
   var suggestionInput: RoutineSuggestionInput {
@@ -103,36 +103,5 @@ struct OnboardingGoalOption: Identifiable, Equatable {
 
   var id: String {
     tag
-  }
-}
-
-extension Weekday {
-  static let onboardingDisplayOrder: [Weekday] = [
-    .monday,
-    .tuesday,
-    .wednesday,
-    .thursday,
-    .friday,
-    .saturday,
-    .sunday
-  ]
-
-  var shortKoreanTitle: String {
-    switch self {
-    case .monday:
-      return "월"
-    case .tuesday:
-      return "화"
-    case .wednesday:
-      return "수"
-    case .thursday:
-      return "목"
-    case .friday:
-      return "금"
-    case .saturday:
-      return "토"
-    case .sunday:
-      return "일"
-    }
   }
 }

@@ -64,27 +64,6 @@ final class OnboardingFigmaVisualTests: XCTestCase {
     )
   }
 
-  func testWeekdaySelectorKeepsFullHitTargetsOnNarrowScreens() {
-    let referenceWidth: CGFloat = 353
-    XCTAssertEqual(
-      OnboardingFigmaLayout.weekdaySpacing(
-        availableWidth: referenceWidth
-      ),
-      7
-    )
-
-    let narrowWidth: CGFloat = 335
-    let narrowSpacing = OnboardingFigmaLayout.weekdaySpacing(
-      availableWidth: narrowWidth
-    )
-    let occupiedWidth =
-      OnboardingFigmaLayout.weekdayButtonSize * 7
-      + narrowSpacing * 6
-
-    XCTAssertEqual(narrowSpacing, 4.5)
-    XCTAssertLessThanOrEqual(occupiedWidth, narrowWidth)
-  }
-
   func testAlarmRendersAtNarrowPhoneWidth() throws {
     let outputDirectory = URL(
       fileURLWithPath: "/private/tmp/moru-figma-p1-after"

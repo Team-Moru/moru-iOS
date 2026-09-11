@@ -20,8 +20,10 @@ enum MoruColor {
   static let accentSurface = AppColor.orange100
   static let summarySurface = AppColor.orange250
 
-  /// 주요 CTA 채움. 흰 글자 기준 대비 4.5:1 이상을 유지하기 위해 accent보다 진하다.
-  static let ctaFill = AppColor.orange550
+  /// 주요 CTA 채움. 브랜드 주황을 그대로 쓰기로 한 결정이라 accent와 같은 값이다.
+  /// 흰 글자(`onCTA`) 기준 대비는 2.13:1로 WCAG AA 큰 글자 기준(3:1)에도 미달한다 —
+  /// 대비보다 브랜드 색감을 우선한 의도된 선택이다.
+  static let ctaFill = AppColor.orange350
   /// ctaFill 위의 글자·아이콘 색.
   static let onCTA = AppColor.grayWhite
 
@@ -77,10 +79,15 @@ enum MoruSpacing {
   static let thirtySix = AppSpacing.thirtySix
   static let thirtyEight: CGFloat = 38
   static let sixtyFour = AppSpacing.sixtyFour
+
+  /// 화면·시트 루트의 좌우 거터. 값의 단일 출처는 `AppSpacing.screenHorizontal`이다.
+  static let gutter = AppSpacing.screenHorizontal
 }
 
 /// 모서리 토큰. 값은 `AppRadius`와 같은 출처를 쓴다.
 enum MoruRadius {
+  static let chip = AppRadius.xs
+  static let small: CGFloat = 12
   static let card = AppRadius.sm
   static let largeCard = AppRadius.lg
   static let pill = AppRadius.pill
