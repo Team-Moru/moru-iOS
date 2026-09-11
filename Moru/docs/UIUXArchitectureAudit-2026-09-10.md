@@ -162,7 +162,7 @@
 |---|---|---|---|---|---|
 | 1 | **CI가 빌드도 테스트도 안 함** — 1,027개 테스트가 자동 실행 0회 | 워크플로 전부 `ubuntu-latest`, `xcodebuild` 0건; `4192956`·`810a193`이 머지 후 stale 테스트 수습 | 모든 리스크 있는 리팩터링의 선행 조건. 11단계 수동 게이트가 리팩터링을 멈춘 유력 원인 | M | §3 전체를 unblock |
 | 2 | **AppRouter 832줄 God View** — 조립 + 탭 조립 + alarm ingress + 씬 팬아웃 + Platform 싱글턴 configure | `:151-189`, `:253-340`(훅 6개), `:680-815`, `:256`; 계획 문서가 변경빈도 1위(50/18)로 지목 | AlarmKit 직행 규칙(`launchTarget == .scheduledRoutine`)이 저장소 전체에서 View 한 줄(`:719`)에만 존재 ★. 알람 로직 수정=View 수정 | L | C7·C9·C10 |
-| 3 | **AVAudioSession을 4개 타입이 중재 없이 조작** | `RoutineAudioSessionCoordinator:292-313`, `LocalFileRoutineAudioPlayer:350-387`, `BundledRoutineGuidancePlayer:136-158`, `SystemRoutineSpeechAnnouncer:90-95`; `stopCurrentCue`가 스텝마다 **무조건** deactivate 2회 | 스텝 전환마다 세션 왕복 → 첫 음절 잘림·무음. 인스턴스 2개(`DependencyContainer:241`, `ServerVoicePreviewPlayer:50`)가 같은 전역 세션을 만짐. `LocalFileRoutineAudioPlayer`는 재진입 안전하지 않아 호출자 순서에만 의존(`:307-324`) | L | C2·C4·C5 |
+| 3 | **AVAudioSession을 4개 타입이 중재 없이 조작** | `RoutineAudioSessionCoordinator:292-313`, `LocalFileRoutineAudioPlayer:350-387`, `BundledRoutineGuidancePlayer:136-158`, `SystemRoutineSpeechAnnouncer:90-95`; `stopCurrentCue`가 스텝마다 **무조건** deactivate 2회 | 스텝 전환마다 세션 왕복. 인스턴스 2개(`DependencyContainer:241`, `ServerVoicePreviewPlayer:50`)가 같은 전역 세션을 만짐. `LocalFileRoutineAudioPlayer`는 재진입 안전하지 않아 호출자 순서에만 의존(`:307-324`). **소유권 부분은 `0c183a6`으로 해결**(자기가 켠 세션만 끈다). **"왕복 → 첫 음절 잘림"은 실기기 측정으로 반증됐다 — 아래 참고** | L→S | C2·C4·C5 |
 | 4 | **핵심 도메인 정책이 Data 리포지토리 안에 산다** | `SwiftDataRoutineRepository.swift:245`(165줄 intent 파생), `:434`(서버 atomicSingleActive 지식), `SwiftDataRoutineSyncRepository.swift:1029,1077,1133` | 정책 검증에 항상 ModelContext 필요. 단, `:140/:143`의 단일 트랜잭션 요구가 정당화 근거. **같은 불변식이 `RoutineSettingUseCase.swift:78-96`과 `SwiftDataRoutineRepository.swift:646-660`에 이중 구현 ★** — 갈라지면 UI는 통과시키는데 저장이 throw | L | B6 |
 | 5 | **의존 방향이 양쪽으로 뒤집혀 있다** | (a) Data/Domain → App: `TokenRefreshCoordinator.swift:31`, `OnboardingStatusRuntimeCoordinator.swift:108`이 `AccountSessionStore`(ObservableObject) 보유, 후자는 `:165`에서 `$state` Combine 구독 ★ (b) **Domain → Network ★**: `AccountAuthorizationContext`/`AccountSessionIdentity`가 `Network/Core/AuthenticationRequirement.swift:17,26`에 선언되고 Domain 12파일·Data 4파일이 참조 (c) **전송 아티팩트가 Domain에 ★**: `RoutineSyncModels.swift:430-442`의 HTTP 메서드 enum + `RoutineSyncWireRequest` | 401 재발급 단위 테스트에 SwiftUI 객체가 필요하고, "누가 로그인했나"라는 도메인 개념이 전송 계층에 산다 | M | — |
 | 6 | **관찰 모델 이원화 + 수동 objectWillChange** | `OnboardingViewModel.swift:35` + willSet 8개 → `draft` 한 글자 변경이 18개 `@ObservedObject` 뷰를 무효화 | 온보딩 입력 지연 = 첫 인상. `@Observable` 전환은 A1~A7 작업의 선행 | M | §3.1 전체 |
@@ -263,7 +263,7 @@
 
 **3층 — 관찰 모델 통일 → 온보딩 VM 분리.** `OnboardingViewModel`이 `ObservableObject` + 수동 발행인 한, VM을 쪼개도 무효화 범위는 그대로다. `@Observable` 전환이 §3.1 작업(A1·A4·A6·A7)의 전제. 루트 플래그 4개(A10) 승격도 같은 묶음에서 처리하는 게 싸다.
 
-**4층 — 오디오 세션 일원화 → 코칭 확장.** mid/wrap 큐(핸드오프 A안)를 얹으려면 (a) 타이머 시작 시점이 intro 종료로 정의돼야 하고(C5), (b) 카운트다운 시스템 음성이 진행 중 큐를 죽이지 않아야 하며 ★, (c) 세션 왕복이 줄어야 한다. 셋 다 §4-3의 하위 작업이고, `RoutinePlayerBuilder`가 구상 Platform 타입을 보유하는 문제(§4-12)와 같은 파일군을 건드린다.
+**4층 — 오디오 세션 일원화 → 코칭 확장.** mid/wrap 큐(핸드오프 A안)를 얹으려면 (a) 타이머 시작 시점이 intro 종료로 정의돼야 하고(C5), (b) 카운트다운 시스템 음성이 진행 중 큐를 죽이지 않아야 한다 ★. **(c)로 적었던 "세션 왕복 감소"는 취소한다** — 실기기 측정 결과 왕복은 병목이 아니고, 대안이 오히려 2.4배 느리다(아래 참고). (a)는 `83c62fb`, (b)는 `0c183a6`으로 처리됐다. 남은 것은 §4-3의 하위 작업이고, `RoutinePlayerBuilder`가 구상 Platform 타입을 보유하는 문제(§4-12)와 같은 파일군을 건드린다.
 
 **5층 — 계약 문서 정정 → 서버 협의.** `V2NetworkFoundation.md`·`RoutineSyncFoundation.md`·`ServerRoutineSyncContractRequest.md`가 코드와 모순인 채로 핸드오프 12.7의 5개 서버 협의를 시작하면, 서버 팀이 "지금 연결하면 안 되는 것" 목록을 잘못 읽는다.
 
@@ -410,3 +410,30 @@
 22. **`claimedNonces`가 반대 방향 위험을 동시에 만든다.** app-composition 검증은 "프로세스 내 재진입 전부 no-op"을, concurrency 검증은 "프로세스 재시작 후 재claim 가능"을 지적했다. 초판은 앞의 절반만 실었다. 둘 다 같은 in-memory 집합의 결과이므로 C7과 Q6에 나란히 실었다.
 23. **§2-1 강점의 한계** — FlowBuilder 5종 중 라우터에 주입 가능한 것은 3종뿐이라 메인 탭 조립은 계약 테스트 밖이다(★). "라우터 계약이 촘촘하다"를 근거로 탭 조립을 리팩터링하면 안전망이 없다.
 24. **§4-7 프레이밍** — "프리미티브 부재"가 아니라 "Data/Platform에 3벌 있는데 Features가 모른다". 신규 `SingleFlight` 작성이 아니라 기존 구현 승격이 정답이라 제안 방향이 바뀐다(초판 표에는 반영돼 있었으나 제목이 반대로 읽혀 제목을 고쳤다).
+## 부록 — 오디오 세션 전환 실측 (2026-09-12, iPhone 13 Pro / iOS 26.6.1)
+
+위 §4-3과 4층 계획은 "세션 왕복이 첫 음절을 자른다"를 전제로 "세션 일원화"를 L 규모
+작업으로 잡고 있었다. 전제를 실기기에서 재 봤다(`AudioSessionDeviceTransitionTests`,
+6회 반복 중앙값).
+
+| 경로 | 합계 | 내역 |
+|---|---|---|
+| 재생 세션 확보/해제 | **32ms** | `setCategory` 4.7 → `setActive(true)` **9.6** → `setActive(false)` 17.6 |
+| 재생 → 녹음 왕복 (**현재 코드**) | **66ms** | `setActive(false)` 18.5 → `setCategory` 12.1 → `setActive(true)` 34.2 |
+| 끄지 않고 카테고리만 전환 (**제안됐던 대안**) | **159ms** | 활성 상태 `setCategory(.playAndRecord)` **113.4** → 되돌리기 46.3 |
+
+읽는 법:
+
+1. **안내 재생을 시작하는 비용은 `setActive(true)` 9.6ms다.** 한국어 한 음절이
+   150~250ms인데 10ms는 들리지 않는다. 첫 음절이 잘린다면 원인은 세션이 아니다.
+   두 재생기 모두 `prepareToPlay()`를 이미 부르고 있으므로(`RemoteFirstRoutineGuidancePlayer:358`,
+   `BundledRoutineGuidancePlayer:95`) 버퍼 프라이밍도 아니다. 실제로 잘림이 재현되면
+   그때 원인을 새로 찾아야 하고, 세션 왕복을 지우는 것으로는 해결되지 않는다.
+2. **세션을 켠 채 카테고리만 바꾸는 방식은 대안이 아니다.** 살아 있는 세션의 카테고리
+   변경은 라우트 재구성을 동기로 끌고 와서 113ms가 걸린다. 지금의 끄고-바꾸고-켜기
+   (66ms)보다 2.4배 느리다.
+3. **마이크 권한이 있는 기기에서 `.playAndRecord` 활성화는 성공한다.** 스파이는 항상
+   성공하므로 이 경로의 실패 가능성을 감추고 있었는데, 실기기에서 확인됐다.
+
+결론: §4-3의 남은 값어치는 "왕복 줄이기"가 아니라 "재진입 안전성"과 "인스턴스 2개가
+같은 전역 세션을 만지는 문제"뿐이다. 코칭 확장(4층)의 선행 조건에서 (c)를 뺀다.

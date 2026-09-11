@@ -29,6 +29,9 @@ struct BootstrappedApp {
   let onboardingStatusRuntimeCoordinator:
     OnboardingStatusRuntimeCoordinator?
   let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
+  /// 탭 루트 조립. AppRouter는 struct View라 상태가 바뀔 때마다 다시 만들어지므로
+  /// 여기서 한 번만 만들어 넘긴다.
+  let mainTabComposition: MainTabComposition
 }
 
 struct AppBootstrapFailure: Equatable {
@@ -44,18 +47,29 @@ enum AppBootstrapState {
 
 @MainActor
 protocol AppBootstrapPreflightPreparing {
+  /// `.ready` 이전에 반드시 끝나야 하는 정리.
   func prepare(dependencies: DependencyContainer) async
+  /// `.ready` 이후로 미뤄도 안전한 정리.
+  func prepareDeferred(dependencies: DependencyContainer) async
 }
 
 @MainActor
 struct DefaultAppBootstrapPreflight: AppBootstrapPreflightPreparing {
+  /// 활성 루틴 중복 정리만 부팅을 막는다. 이 정리는 루틴을 비활성으로 바꿀 수
+  /// 있는데, 방금 울린 알람의 루틴이 그 대상이 되면 알람 해석이
+  /// `.routineInactive`로 걸러 버려 알람을 통째로 잃는다. 그래서 뒤로 못 미룬다.
   func prepare(dependencies: DependencyContainer) async {
     // Repair happens before account restoration. The repository therefore sees
     // no signed-in member and can only perform a local SwiftData batch save.
     _ = try? RoutineActivationBootstrapRepair.repairIfNeeded(
       in: dependencies.routineRepository
     )
+  }
 
+  /// 꺼진 알람의 플랫폼 기록 정리. 알람 콜드 런치에서 이 작업을 기다릴 이유가 없다.
+  /// 정리 전에 알람이 들어와도 `AlarmRuntimeCoordinator.resolve`가 비활성 루틴과
+  /// 꺼진 알람을 이미 걸러 낸다.
+  func prepareDeferred(dependencies: DependencyContainer) async {
     guard let alarmPlatformStateRepository =
             dependencies.alarmPlatformStateRepository,
           let alarmScheduleMutator = dependencies.alarmScheduleMutator else {
@@ -449,7 +463,11 @@ final class AppBootstrapper: ObservableObject {
         routinePlayerBuilder: routinePlayerBuilder,
         onboardingStatusRuntimeCoordinator:
           onboardingStatusRuntimeCoordinator,
-        routineSyncRuntimeCoordinator: routineSyncRuntimeCoordinator
+        routineSyncRuntimeCoordinator: routineSyncRuntimeCoordinator,
+        mainTabComposition: MainTabComposition(
+          dependencies: dependencies,
+          accountSessionStore: accountSessionStore
+        )
       )
 
       finishBootstrap(
@@ -500,6 +518,11 @@ final class AppBootstrapper: ObservableObject {
       }
       await preflight.prepare(dependencies: app.dependencies)
       state = .ready(app)
+
+      // 알람 콜드 런치가 이 정리를 기다리지 않게 화면을 먼저 띄운다.
+      Task { @MainActor [preflight] in
+        await preflight.prepareDeferred(dependencies: app.dependencies)
+      }
 
       guard shouldRestoreAccount else {
         return

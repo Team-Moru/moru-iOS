@@ -689,6 +689,8 @@ final class OnboardingRecommendationTests: XCTestCase {
     let freeformViewModel = OnboardingViewModel(
       draft: OnboardingDraft(
         experience: .hasRoutine,
+        // 첫 단계는 이제 고른 적이 있어야 다음으로 넘어간다.
+        didChooseExperience: true,
         selectedGoalTags: ["health"],
         freeformText: "물을 마시고 싶어요"
       ),

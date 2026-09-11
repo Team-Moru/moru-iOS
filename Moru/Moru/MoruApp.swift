@@ -79,7 +79,8 @@ struct MoruApp: App {
             onboardingStatusRuntimeCoordinator:
               app.onboardingStatusRuntimeCoordinator,
             routineSyncRuntimeCoordinator:
-              app.routineSyncRuntimeCoordinator
+              app.routineSyncRuntimeCoordinator,
+            composition: app.mainTabComposition
           )
           .onOpenURL { url in
             app.authCallbackRouter.route(url)

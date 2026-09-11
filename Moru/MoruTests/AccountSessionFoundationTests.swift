@@ -1055,6 +1055,8 @@ private final class BlockingBootstrapPreflight: AppBootstrapPreflightPreparing {
     events.append("finished")
   }
 
+  func prepareDeferred(dependencies: DependencyContainer) async {}
+
   func waitUntilStarted() async -> Bool {
     for _ in 0..<100 where continuation == nil {
       await Task.yield()
