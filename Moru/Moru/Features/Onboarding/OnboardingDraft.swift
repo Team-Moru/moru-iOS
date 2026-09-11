@@ -9,6 +9,9 @@ import Foundation
 
 struct OnboardingDraft: Equatable {
   var experience: RoutineExperience = .firstTime
+  /// 사용자가 실제로 고른 적이 있는지. experience에 기본값이 있어 이 값 없이는
+  /// 첫 진입에서 한 항목이 이미 선택된 것처럼 보인다.
+  var didChooseExperience = false
   var selectedGoalTags: Set<String> = []
   var selectedKeywords: Set<String> = []
   var freeformText: String = ""

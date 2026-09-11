@@ -122,15 +122,11 @@ final class OnboardingViewModel {
   }
 
   var progressTotal: Int {
-    flowMode == .onboarding ? onboardingProgressSteps.count : 8
+    progressSteps.count
   }
 
   var progressIndex: Int? {
-    guard flowMode == .onboarding else {
-      return step.progressIndex
-    }
-
-    return onboardingProgressSteps.firstIndex(of: step).map { $0 + 1 }
+    progressSteps.firstIndex(of: step).map { $0 + 1 }
   }
 
   var canCancel: Bool {
@@ -245,13 +241,38 @@ final class OnboardingViewModel {
         && VoiceProfile.localVoices.contains(draft.selectedVoice)
     case .completion:
       return !isSaving && !didComplete
-    case .experience, .freeform, .organizing:
+    case .experience:
+      return draft.didChooseExperience
+    case .freeform, .organizing:
       return true
+    }
+  }
+
+  /// 비활성 CTA가 이유를 말하지 않으면 사용자는 앱이 멈춘 것으로 읽는다.
+  var advanceBlockedReason: String? {
+    guard !canAdvance, !isSuggesting, !isSaving else {
+      return nil
+    }
+
+    switch step {
+    case .experience:
+      return "루틴 경험을 하나 골라 주세요."
+    case .goals:
+      return "목표를 하나 이상 선택해 주세요."
+    case .alarm:
+      return draft.selectedWeekdays.isEmpty
+        ? "알람이 울릴 요일을 하나 이상 선택해 주세요."
+        : nil
+    case .voice:
+      return "사용할 목소리를 선택해 주세요."
+    case .suggestedRoutine, .duration, .review, .freeform, .organizing, .completion:
+      return nil
     }
   }
 
   func selectExperience(_ experience: RoutineExperience) {
     draft.experience = experience
+    draft.didChooseExperience = true
   }
 
   func toggleGoal(tag: String) {
@@ -673,6 +694,17 @@ final class OnboardingViewModel {
       && routine.steps.allSatisfy {
         !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       }
+  }
+
+  /// 진행률은 이 흐름이 실제로 지나는 단계만 센다. 예전에는 추천 추가 모드가
+  /// 상수 8과 전역 단계 번호를 써서 5/8에서 시작해 7/8에서 끝났다.
+  private var progressSteps: [OnboardingStep] {
+    guard flowMode == .onboarding else {
+      // 추천 추가는 자연어 입력에서 시작해 알람에서 저장하고 끝난다.
+      return [.freeform, .organizing, .review, .alarm]
+    }
+
+    return onboardingProgressSteps
   }
 
   private var onboardingProgressSteps: [OnboardingStep] {

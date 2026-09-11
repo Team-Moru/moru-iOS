@@ -186,6 +186,12 @@ private struct OnboardingFooterView: View {
           .moruTextStyle(.c2)
           .foregroundStyle(AppColor.coral300)
           .multilineTextAlignment(.center)
+      } else if let blockedReason = viewModel.advanceBlockedReason {
+        Text(blockedReason)
+          .moruTextStyle(.c2)
+          .foregroundStyle(MoruColor.textTertiary)
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
       }
 
       MoruButton(
@@ -273,10 +279,10 @@ private struct RoutineExperienceQuestionView: View {
           OnboardingOptionButton(
             title: experience.title,
             subtitle: OnboardingCopy.experienceDescription(for: experience),
-            isSelected: false
+            isSelected: viewModel.draft.didChooseExperience
+              && viewModel.draft.experience == experience
           ) {
             viewModel.selectExperience(experience)
-            viewModel.primaryButtonDidTap()
           }
         }
       }
@@ -834,14 +840,10 @@ private struct OnboardingVoiceSelectionView: View {
           MoruVoiceCard(
             name: voice.displayName,
             description: OnboardingCopy.voiceDescription(for: voice),
-            isSelected: Binding {
-              viewModel.draft.selectedVoice == voice
-            } set: { isSelected in
-              if isSelected {
-                viewModel.selectVoice(voice)
-              }
-            }
-          )
+            isSelected: viewModel.draft.selectedVoice == voice
+          ) {
+            viewModel.selectVoice(voice)
+          }
         }
       }
     }
@@ -1514,9 +1516,10 @@ struct OnboardingAlarmTimePresentation: Equatable {
 private extension OnboardingStep {
   var showsFooter: Bool {
     switch self {
-    case .experience, .organizing:
+    case .organizing:
       return false
-    case .goals, .suggestedRoutine, .duration, .freeform, .review, .alarm, .voice, .completion:
+    case .experience, .goals, .suggestedRoutine, .duration, .freeform, .review,
+         .alarm, .voice, .completion:
       return true
     }
   }
