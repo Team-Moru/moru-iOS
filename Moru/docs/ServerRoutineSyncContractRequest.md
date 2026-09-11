@@ -9,9 +9,16 @@ iOS의 원본 데이터는 SwiftData입니다. 서버는 계정 백업·공유·
 projection이며, 서버가 표현하지 못하는 로컬 필드를 덮어쓰지 않습니다.
 
 이 문서는 iOS가 루틴 write sender를 안전하게 켜기 전에 필요한 서버 계약입니다.
-현재 앱은 로그인 중 CRUD intent를 영속 Outbox에 저장할 수 있지만, 모든 새
-항목을 `waitingForServerContract`로 보관하고 서버 write를 호출하지 않습니다.
-P0이 Swagger와 실서버에 배포되고 E2E로 검증되기 전까지 이 상태를 유지합니다.
+
+**2026-09-11 정정 — 앱은 이미 P0 범위의 write를 호출합니다.** "모든 새 항목을
+`waitingForServerContract`로 보관하고 서버 write를 호출하지 않습니다"는 더 이상
+사실이 아닙니다. `RoutineSyncSender`가 `contract: .productionP0`로 조립되어
+있고(`AppBootstrapper.swift:268-284`), 그 contract는 `isE2EVerified: true`를
+소스 상수로 선언합니다(`RoutineSyncModels.swift:190-193`). 아래 수용 기준 8개를
+서버가 모두 충족했는지와 무관하게, 코드는 이 상수만 보고 write를 내보냅니다.
+특히 5번(reconciliation API)은 서버·클라이언트 양쪽 모두 아직 없습니다.
+즉 이 문서의 게이트는 현재 **코드로 강제되지 않고 사람의 판단에 의존**합니다.
+남은 요청 항목은 그대로 유효하니, 서버 협의 때 이 상태를 전제로 읽어 주세요.
 
 용어는 반드시 아래처럼 구분합니다.
 
@@ -173,5 +180,6 @@ OpenAPI와 운영 정책에 명시합니다.
    응답이 변경된 ID를 모두 설명합니다.
 8. Swagger의 required schema와 실서버 응답이 일치함을 계약 테스트로 검증합니다.
 
-이 기준을 통과한 뒤에만 iOS sender를 제한적으로 활성화합니다. 그 전에는
-Outbox가 존재해도 서버 write 호출 수는 0이어야 합니다.
+이 기준을 통과한 뒤에만 iOS sender를 제한적으로 활성화한다는 것이 원래 계획이었습니다.
+**2026-09-11 현재 sender는 이미 활성이며, 5번(reconciliation)은 미충족입니다.**
+문서 앞머리의 정정을 함께 읽어 주세요.
