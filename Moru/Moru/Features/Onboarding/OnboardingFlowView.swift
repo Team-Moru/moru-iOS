@@ -51,7 +51,7 @@ struct OnboardingFlowView: View {
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .safeAreaInset(edge: .bottom, spacing: 0) {
+      .safeAreaBar(edge: .bottom) {
         if viewModel.step.showsFooter {
           OnboardingFooterView(viewModel: viewModel)
         }
@@ -206,16 +206,6 @@ private struct OnboardingFooterView: View {
     .padding(.horizontal, MoruSpacing.twenty)
     .padding(.top, MoruSpacing.sixteen)
     .padding(.bottom, viewModel.step == .completion ? 0 : MoruSpacing.eight)
-    .background(
-      LinearGradient(
-        colors: [
-          MoruColor.canvas.opacity(0),
-          MoruColor.canvas,
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-      )
-    )
   }
 }
 

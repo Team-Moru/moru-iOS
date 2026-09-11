@@ -79,7 +79,6 @@ struct RoutineEditorView: View {
         }
         .padding(.horizontal, MoruSpacing.twenty)
         .padding(.top, MoruSpacing.eight)
-        .padding(.bottom, 112)
       }
       .defaultScrollAnchor(.top)
       .background(MoruColor.canvas.ignoresSafeArea())
@@ -95,32 +94,28 @@ struct RoutineEditorView: View {
           }
         }
       }
-      .safeAreaInset(edge: .bottom) {
-        VStack(spacing: AppSpacing.none) {
-          MoruButton(
-            draft.routineID == nil
-              ? RoutineManagementCopy.createCompletion
-              : RoutineManagementCopy.editCompletion,
-            isEnabled: draft.canSave
-          ) {
-            guard draft.canSave else {
-              return
-            }
+      .safeAreaBar(edge: .bottom) {
+        MoruButton(
+          draft.routineID == nil
+            ? RoutineManagementCopy.createCompletion
+            : RoutineManagementCopy.editCompletion,
+          isEnabled: draft.canSave
+        ) {
+          guard draft.canSave else {
+            return
+          }
 
-            if let conflict = activeRoutineConflictState(draft) {
-              activeRoutineConflict = conflict
-              return
-            }
+          if let conflict = activeRoutineConflictState(draft) {
+            activeRoutineConflict = conflict
+            return
+          }
 
-            Task {
-              await saveAndDismissIfNeeded()
-            }
+          Task {
+            await saveAndDismissIfNeeded()
           }
         }
         .padding(.horizontal, MoruSpacing.twenty)
-        .padding(.top, MoruSpacing.eight)
-        .padding(.bottom, MoruSpacing.eight)
-        .background(MoruColor.canvas.opacity(0.94))
+        .padding(.vertical, MoruSpacing.eight)
       }
       .sheet(isPresented: $isStepAddSheetPresented) {
         RoutineStepAddSheet { step in

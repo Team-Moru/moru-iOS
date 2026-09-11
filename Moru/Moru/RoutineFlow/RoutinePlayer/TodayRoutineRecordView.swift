@@ -69,7 +69,7 @@ struct TodayRoutineRecordView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .safeAreaBar(edge: .bottom) {
             fixedHomeButton
         }
         .navigationTitle(formattedDate)
@@ -362,14 +362,11 @@ struct TodayRoutineRecordView: View {
 
     /// 홈으로 버튼
     private var fixedHomeButton: some View {
-        VStack(spacing: 0) {
-            MoruButton("홈으로") {
-                onTapHome()
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
+        MoruButton("홈으로") {
+            onTapHome()
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
     }
 
     // MARK: - Common Components
