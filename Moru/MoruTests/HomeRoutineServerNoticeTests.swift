@@ -168,7 +168,7 @@ final class HomeRoutineServerNoticeTests: XCTestCase {
       viewModel: viewModel,
       onStartRoutine: { _ in .started },
       refreshToken: 0,
-      routineSettingContent: AnyView(EmptyView()),
+      routineCreationContent: AnyView(EmptyView()),
       automaticallyLoads: false
     )
   }

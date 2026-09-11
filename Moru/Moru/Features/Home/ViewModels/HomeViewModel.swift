@@ -17,6 +17,7 @@ final class HomeViewModel {
     (any EnrichHomeRoutinesUseCaseProtocol)?
   private let weatherRepository: (any HomeWeatherRepository)?
   private let weatherService: (any HomeWeatherService)?
+  private let calendar: Calendar
   private let now: @Sendable () -> Date
   private var activeWeatherRequestID: UUID?
   private var weatherTask: Task<Void, Never>?
@@ -40,12 +41,14 @@ final class HomeViewModel {
     weatherRepository: (any HomeWeatherRepository)? = nil,
     weatherService: (any HomeWeatherService)? = nil,
     initialWeatherState: HomeWeatherState = .notRequested,
+    calendar: Calendar = .current,
     now: @escaping @Sendable () -> Date = Date.init
   ) {
     self.loadHomeRoutinesUseCase = loadHomeRoutinesUseCase
     self.enrichHomeRoutinesUseCase = enrichHomeRoutinesUseCase
     self.weatherRepository = weatherRepository
     self.weatherService = weatherService
+    self.calendar = calendar
     self.now = now
     self.state = .loading(previousContent: nil)
     self.weatherState = initialWeatherState
@@ -172,6 +175,16 @@ final class HomeViewModel {
     } else {
       routineServerState = .fallback(.activeGroupIdentityMismatch)
       return false
+    }
+
+    // 대표 카드는 오늘의 루틴과 같은 루틴일 수도, 내일 이후의 다른 루틴일 수도 있다.
+    // 같은 루틴이면 서버 보강 결과를 여기에도 반영해야 두 카드가 어긋나지 않는다.
+    if content.nextAlarmRoutine?.id == snapshot.localRoutineID,
+       let nextAlarmRoutine = content.nextAlarmRoutine {
+      var applied = applying(snapshot, to: nextAlarmRoutine)
+      applied.nextAlarmText = nextAlarmRoutine.nextAlarmText
+      applied.alarmDelivery = nextAlarmRoutine.alarmDelivery
+      content.nextAlarmRoutine = applied
     }
 
     let localTodayCompletedCount = mergedRoutine.steps
@@ -625,20 +638,6 @@ final class HomeViewModel {
     }
 
     self.weatherState = weatherState
-    switch state {
-    case .loading(var previousContent):
-      previousContent?.weather = weatherState
-      state = .loading(previousContent: previousContent)
-    case .content(var content):
-      content.weather = weatherState
-      state = .content(content)
-    case .empty(var content):
-      content.weather = weatherState
-      state = .empty(content)
-    case .failed(let failure, var previousContent):
-      previousContent?.weather = weatherState
-      state = .failed(failure, previousContent: previousContent)
-    }
   }
 
   private func makeViewState(from result: HomeRoutineLoadResult) -> HomeViewState {
@@ -659,9 +658,18 @@ final class HomeViewModel {
     let todayRun = result.todayRoutine.flatMap {
       result.todayRunsByRoutineID[$0.id]
     }
+    let nextAlarmRoutineState = result.nextAlarm.map { nextAlarm in
+      makeRoutineState(
+        routine: nextAlarm.routine,
+        todayRun: result.todayRunsByRoutineID[nextAlarm.routine.id],
+        nextAlarm: nextAlarm,
+        referenceDate: result.loadedAt
+      )
+    }
     let content = HomeContentState(
       userName: result.profile?.displayName ?? "",
       todayRoutine: todayRoutineState,
+      nextAlarmRoutine: nextAlarmRoutineState,
       activeRoutines: activeRoutines,
       todayProgress: makeProgressState(
         routine: result.todayRoutine,
@@ -673,8 +681,7 @@ final class HomeViewModel {
         weekdays: makeWeekdayStates(
           completedWeekdays: result.streak.completedWeekdays
         )
-      ),
-      weather: weatherState
+      )
     )
 
     return result.manualRoutines.isEmpty ? .empty(content) : .content(content)
@@ -725,7 +732,9 @@ final class HomeViewModel {
 
   private func makeRoutineState(
     routine: Routine,
-    todayRun: RoutineRun?
+    todayRun: RoutineRun?,
+    nextAlarm: HomeNextAlarm? = nil,
+    referenceDate: Date? = nil
   ) -> HomeRoutineState {
     let steps = plannedSteps(for: routine, todayRun: todayRun)
     let completedStepIDs = Set(todayRun?.results.filter(\.isCompleted).map(\.stepID) ?? [])
@@ -760,8 +769,61 @@ final class HomeViewModel {
           detail: stepDurationText(step),
           status: status
         )
+      },
+      nextAlarmText: nextAlarm.map { alarm in
+        nextAlarmText(for: alarm.fireDate, referenceDate: referenceDate ?? now())
+      },
+      alarmDelivery: nextAlarm.flatMap { alarm in
+        alarm.delivery.map(HomeAlarmDeliveryState.init)
       }
     )
+  }
+
+  /// "오늘 오전 7:00" / "내일 오전 7:00" / "금요일 오전 7:00".
+  /// 시각은 사용자의 12·24시간 설정을 따른다(화면 전반의 `HH:mm` 하드코딩과 다른 점).
+  private func nextAlarmText(for fireDate: Date, referenceDate: Date) -> String {
+    let time = fireDate.formatted(localized(.dateTime.hour().minute()))
+    let startOfReference = calendar.startOfDay(for: referenceDate)
+    let startOfFire = calendar.startOfDay(for: fireDate)
+    let dayDifference = calendar.dateComponents(
+      [.day],
+      from: startOfReference,
+      to: startOfFire
+    ).day
+
+    switch dayDifference {
+    case 0:
+      return "오늘 \(time)"
+    case 1:
+      return "내일 \(time)"
+    default:
+      let weekday = fireDate.formatted(localized(.dateTime.weekday(.wide)))
+      return "\(weekday) \(time)"
+    }
+  }
+
+  /// 캘린더가 정한 시간대로 포맷한다. 기본 포맷터는 기기 설정을 따라가므로
+  /// 고정 시간대로 도는 테스트와 캡처가 흔들린다.
+  private func localized(_ style: Date.FormatStyle) -> Date.FormatStyle {
+    var style = style
+    style.calendar = calendar
+    style.timeZone = calendar.timeZone
+    style.locale = formattingLocale
+    return style
+  }
+
+  /// 앱은 한국어 한 벌만 제공하는데(기능 게이트) 날짜 포맷터만 기기 언어를 따라가면
+  /// 한국어 화면에 "Monday 7:00 AM"이 섞인다. 언어만 한국어로 맞추고 12·24시간 같은
+  /// 지역 설정은 그대로 둔다.
+  private var formattingLocale: Locale {
+    let base = calendar.locale ?? .current
+    guard base.language.languageCode != .korean else {
+      return base
+    }
+
+    var components = Locale.Components(locale: base)
+    components.languageComponents.languageCode = .korean
+    return Locale(components: components)
   }
 
   private func statusText(completed: Int, total: Int) -> String {

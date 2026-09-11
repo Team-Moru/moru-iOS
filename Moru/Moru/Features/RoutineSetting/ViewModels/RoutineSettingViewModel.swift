@@ -60,6 +60,8 @@ final class RoutineSettingViewModel {
       nil
     case .newRoutine:
       makeNewDraft()
+    case .editRoutine(let routineID):
+      makeDraft(for: routineID)
     }
   }
 

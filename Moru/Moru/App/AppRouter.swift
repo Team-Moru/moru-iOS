@@ -45,6 +45,12 @@ final class AppRouterState: ObservableObject {
     mainTabState = nextState
   }
 
+  func showRoutineEditor(_ routineID: UUID) {
+    var nextState = mainTabState
+    nextState.showRoutineEditor(routineID)
+    mainTabState = nextState
+  }
+
   func setHistoryDestination(_ destination: HistoryDestination?) {
     var nextState = mainTabState
     nextState.setHistoryDestination(destination)
@@ -220,15 +226,13 @@ struct AppRouter: View {
         loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
           routineRepository: dependencies.routineRepository,
           routineRunRepository: dependencies.routineRunRepository,
-          localProfileRepository: dependencies.localProfileRepository
+          localProfileRepository: dependencies.localProfileRepository,
+          alarmPlatformStateRepository: dependencies.alarmPlatformStateRepository
         ),
         enrichHomeRoutinesUseCase: enrichHomeRoutinesUseCase,
         weatherRepository: dependencies.homeWeatherRepository,
         weatherService: dependencies.homeWeatherService,
         sessionIdentityProvider: accountSessionStore,
-        routineSettingContentFactory: {
-          AnyView(RoutineSettingView(dependencies: dependencies))
-        },
         routineCreationContentFactory: {
           AnyView(
             RoutineSettingView(
@@ -585,9 +589,23 @@ struct AppRouter: View {
     MainTabView(
       home: homeBuilder.make(
         onStartRoutine: handleRegularRoutineLaunch,
+        onOpenRoutineSettings: { routineID in
+          guard let routineID else {
+            state.selectMainTab(.routine)
+            return
+          }
+
+          state.showRoutineEditor(routineID)
+        },
         refreshToken: state.homeRefreshToken
       ),
-      routineSetting: RoutineSettingView(dependencies: dependencies),
+      // 홈에서 편집 요청이 오면 루트의 정체성을 바꿔 해당 루틴의 편집기를 한 번 연다.
+      routineSetting: RoutineSettingView(
+        dependencies: dependencies,
+        entryPoint: state.mainTabState.routineEditRequest
+          .map(RoutineSettingEntryPoint.editRoutine) ?? .list
+      )
+      .id(state.mainTabState.routineEditRequest),
       history: historyBuilder.make(
         destination: historyDestinationBinding,
         reloadToken: state.mainTabState.historyReloadToken

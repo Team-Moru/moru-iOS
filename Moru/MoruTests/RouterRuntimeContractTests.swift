@@ -154,6 +154,68 @@ final class RouterRuntimeContractTests: XCTestCase {
   }
 
   @MainActor
+  func testRoutineEditRequestSwitchesToTheRoutineTabAndClearsOnNextNavigation() {
+    var state = MainTabState()
+    let routineID = UUID()
+
+    XCTAssertNil(state.routineEditRequest)
+
+    state.showRoutineEditor(routineID)
+
+    XCTAssertEqual(state.selection, .routine)
+    XCTAssertEqual(state.routineEditRequest, routineID)
+    XCTAssertNil(state.historyDestination)
+
+    // 사용자가 탭을 직접 고르면 편집 요청은 사라져 다시 열리지 않는다.
+    state.select(.routine)
+
+    XCTAssertNil(state.routineEditRequest)
+
+    state.showRoutineEditor(routineID)
+    state.showHome()
+
+    XCTAssertEqual(state.selection, .home)
+    XCTAssertNil(state.routineEditRequest)
+
+    state.showRoutineEditor(routineID)
+    state.showRunDetail(UUID())
+
+    XCTAssertEqual(state.selection, .record)
+    XCTAssertNil(state.routineEditRequest)
+  }
+
+  @MainActor
+  func testHomeSettingsEntryReachesTheRoutineTabInsteadOfASheet() {
+    let builder = CapturingHomeFlowBuilder()
+    let state = AppRouterState()
+    // 라우터가 홈 빌더에 넘기는 배선과 같은 형태다.
+    let openRoutineSettings: (UUID?) -> Void = { routineID in
+      guard let routineID else {
+        state.selectMainTab(.routine)
+        return
+      }
+
+      state.showRoutineEditor(routineID)
+    }
+    _ = builder.make(
+      onStartRoutine: { _ in .started },
+      onOpenRoutineSettings: openRoutineSettings,
+      refreshToken: 0
+    )
+
+    let routineID = UUID()
+    builder.onOpenRoutineSettings?(routineID)
+
+    XCTAssertEqual(state.mainTabState.selection, .routine)
+    XCTAssertEqual(state.mainTabState.routineEditRequest, routineID)
+
+    builder.onOpenRoutineSettings?(nil)
+
+    XCTAssertEqual(state.mainTabState.selection, .routine)
+    XCTAssertNil(state.mainTabState.routineEditRequest)
+  }
+
+  @MainActor
   func testMainTabStateMakesHistoryReachableAndReloadsItForEachSelection() {
     var state = MainTabState()
 
@@ -1647,12 +1709,15 @@ private final class RoutinePlayerEventRecorder {
 private final class CapturingHomeFlowBuilder: HomeFlowBuilding {
   private(set) var refreshTokens: [Int] = []
   private(set) var onStartRoutine: RoutineLaunchHandler?
+  private(set) var onOpenRoutineSettings: ((UUID?) -> Void)?
 
   func make(
     onStartRoutine: @escaping RoutineLaunchHandler,
+    onOpenRoutineSettings: @escaping (UUID?) -> Void,
     refreshToken: Int
   ) -> AnyView {
     self.onStartRoutine = onStartRoutine
+    self.onOpenRoutineSettings = onOpenRoutineSettings
     refreshTokens.append(refreshToken)
     return AnyView(EmptyView())
   }

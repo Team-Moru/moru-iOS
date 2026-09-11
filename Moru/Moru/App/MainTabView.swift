@@ -61,15 +61,26 @@ struct MainTabState: Equatable {
   private(set) var selection: MoruTabItem
   private(set) var historyReloadToken: Int
   private(set) var historyDestination: HistoryDestination?
+  /// 홈에서 넘어온 편집 요청. 루틴 탭 루트의 정체성을 바꿔 편집기를 한 번 열게 한다.
+  private(set) var routineEditRequest: UUID?
 
   init(
     selection: MoruTabItem = .home,
     historyReloadToken: Int = 0,
-    historyDestination: HistoryDestination? = nil
+    historyDestination: HistoryDestination? = nil,
+    routineEditRequest: UUID? = nil
   ) {
     self.selection = selection
     self.historyReloadToken = historyReloadToken
     self.historyDestination = historyDestination
+    self.routineEditRequest = routineEditRequest
+  }
+
+  /// 홈 대표 카드가 "이 루틴을 편집" 의도를 보낼 때 쓴다. 시트를 띄우지 않고 루틴 탭으로 간다.
+  mutating func showRoutineEditor(_ routineID: UUID) {
+    selection = .routine
+    historyDestination = nil
+    routineEditRequest = routineID
   }
 
   mutating func select(_ tab: MoruTabItem) {
@@ -79,6 +90,8 @@ struct MainTabState: Equatable {
 
     selection = tab
     historyDestination = nil
+    // 사용자가 직접 탭을 고르면 이전 편집 요청은 더 이상 유효하지 않다.
+    routineEditRequest = nil
 
     guard tab == .record else {
       return
@@ -90,12 +103,14 @@ struct MainTabState: Equatable {
   mutating func showHome() {
     selection = .home
     historyDestination = nil
+    routineEditRequest = nil
   }
 
   mutating func showRunDetail(_ runID: UUID) {
     selection = .record
     historyDestination = .runDetail(runID)
     historyReloadToken += 1
+    routineEditRequest = nil
   }
 
   mutating func setHistoryDestination(_ destination: HistoryDestination?) {

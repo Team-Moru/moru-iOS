@@ -51,6 +51,8 @@ enum RoutineCreationCompletionDestination: Equatable {
 enum RoutineSettingEntryPoint: Equatable {
   case list
   case newRoutine
+  /// 홈 대표 카드에서 특정 루틴을 편집하러 넘어온 경우.
+  case editRoutine(UUID)
 }
 
 struct RoutineSettingViewState: Equatable {
