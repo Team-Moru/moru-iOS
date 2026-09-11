@@ -366,8 +366,10 @@ private struct SuggestedRoutinePreviewView: View {
 
   var body: some View {
     OnboardingStepLayout(
-      title: "모루가 추천하는\n나만의 루틴이에요",
-      subtitle: "",
+      // 이 초안은 선택한 목표에 맞춘 로컬 템플릿이다. 입력한 문장을 분석해
+      // 만든 것이 아니므로 "나만의"라고 말하지 않는다.
+      title: "이렇게 시작해\n볼까요?",
+      subtitle: OnboardingCopy.suggestedRoutineSubtitle,
       titleSpacing: AppSpacing.seventyTwo
     ) {
       if let routine = viewModel.validatedPreviewRoutine {

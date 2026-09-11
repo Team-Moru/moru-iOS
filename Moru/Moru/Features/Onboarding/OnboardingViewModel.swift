@@ -18,8 +18,11 @@ enum RoutineOrganizingPresentationPhase: Int, CaseIterable, Equatable {
 
 enum RoutineOrganizingPresentationTiming {
   static let statusAnimationDuration = 0.28
-  static let phaseDwell: Duration = .seconds(1)
-  static let completedDwell: Duration = .seconds(1)
+  /// 루틴은 로컬 템플릿에서 즉시 만들어진다. 이 대기는 분석 시간이 아니라
+  /// 단계 문구가 읽히도록 두는 최소 표시 시간이라 짧게 잡는다.
+  /// 예전에는 1초씩 3단계 + 1초로 약 4초를 "분석 중"인 척 채웠다.
+  static let phaseDwell: Duration = .milliseconds(320)
+  static let completedDwell: Duration = .milliseconds(320)
 }
 
 @MainActor
