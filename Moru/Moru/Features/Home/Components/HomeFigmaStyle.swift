@@ -8,11 +8,11 @@
 import SwiftUI
 
 enum HomeCopy {
+  /// 루틴을 막 끝낸 새벽 사용자에게 밤 인사를 하지 않기 위한 구간이다.
+  static let dawnGreeting = "이른 아침이에요"
   static let morningGreeting = "좋은 아침이에요"
   static let afternoonGreeting = "오늘 하루도 힘내봐요"
   static let eveningGreeting = "편안한 밤 되세요!"
-  static let greeting = "\(morningGreeting),"
-  static let greetingWithoutName = morningGreeting
   static let skipped = "건너뜀"
   static let encouragement = "오늘도 작은 루틴이 큰 변화를 만들어요."
   static let todayRoutine = "오늘의 루틴"

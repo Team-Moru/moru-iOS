@@ -15,7 +15,10 @@ import XCTest
 @MainActor
 final class HomeProfileFigmaVisualTests: XCTestCase {
   func testFigmaCopyContract() {
-    XCTAssertEqual(HomeCopy.greeting, "좋은 아침이에요,")
+    XCTAssertEqual(HomeCopy.dawnGreeting, "이른 아침이에요")
+    XCTAssertEqual(HomeCopy.morningGreeting, "좋은 아침이에요")
+    XCTAssertEqual(HomeCopy.afternoonGreeting, "오늘 하루도 힘내봐요")
+    XCTAssertEqual(HomeCopy.eveningGreeting, "편안한 밤 되세요!")
     XCTAssertEqual(
       HomeCopy.encouragement,
       "오늘도 작은 루틴이 큰 변화를 만들어요."
@@ -41,12 +44,14 @@ final class HomeProfileFigmaVisualTests: XCTestCase {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = TimeZone(secondsFromGMT: 0)!
     let cases: [(Int, Int, HomeGreetingPeriod, String)] = [
-      (5, 59, .evening, "편안한 밤 되세요!"),
+      (0, 0, .dawn, "이른 아침이에요"),
+      (5, 59, .dawn, "이른 아침이에요"),
       (6, 0, .morning, "좋은 아침이에요"),
       (11, 59, .morning, "좋은 아침이에요"),
       (12, 0, .afternoon, "오늘 하루도 힘내봐요"),
       (17, 59, .afternoon, "오늘 하루도 힘내봐요"),
       (18, 0, .evening, "편안한 밤 되세요!"),
+      (23, 59, .evening, "편안한 밤 되세요!"),
     ]
 
     for (hour, minute, expectedPeriod, expectedText) in cases {

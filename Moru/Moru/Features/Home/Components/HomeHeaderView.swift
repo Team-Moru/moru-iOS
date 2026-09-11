@@ -77,12 +77,15 @@ struct HomeHeaderView: View {
 }
 
 enum HomeGreetingPeriod: Equatable {
+  case dawn
   case morning
   case afternoon
   case evening
 
   init(date: Date, calendar: Calendar = .current) {
     switch calendar.component(.hour, from: date) {
+    case 0..<6:
+      self = .dawn
     case 6..<12:
       self = .morning
     case 12..<18:
@@ -94,6 +97,8 @@ enum HomeGreetingPeriod: Equatable {
 
   var text: String {
     switch self {
+    case .dawn:
+      HomeCopy.dawnGreeting
     case .morning:
       HomeCopy.morningGreeting
     case .afternoon:
@@ -112,6 +117,11 @@ enum HomeGreetingPeriod: Equatable {
     let separator = text.hasSuffix("!") ? "\n" : ",\n"
     return "\(text)\(separator)\(trimmedName)님"
   }
+}
+
+#Preview("홈 헤더 · 새벽") {
+  HomeHeaderView(userName: "다인", date: homePreviewDate(hour: 5))
+    .background(AppColor.babyBlue50)
 }
 
 #Preview("홈 헤더 · 아침") {
