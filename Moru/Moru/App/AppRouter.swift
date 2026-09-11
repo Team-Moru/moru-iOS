@@ -220,7 +220,8 @@ struct AppRouter: View {
         loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
           routineRepository: dependencies.routineRepository,
           routineRunRepository: dependencies.routineRunRepository,
-          localProfileRepository: dependencies.localProfileRepository
+          localProfileRepository: dependencies.localProfileRepository,
+          alarmPlatformStateRepository: dependencies.alarmPlatformStateRepository
         ),
         enrichHomeRoutinesUseCase: enrichHomeRoutinesUseCase,
         weatherRepository: dependencies.homeWeatherRepository,

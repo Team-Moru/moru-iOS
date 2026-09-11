@@ -25,6 +25,100 @@ final class HomeRoutineIntegrationTests: XCTestCase {
   }
 
   @MainActor
+  func testNextAlarmCardKeepsShowingTodayUntilTheAlarmFires() {
+    let now = fixtureDate("2026-07-13T06:00:00Z")
+    let routine = makeRoutine(name: "월요일", weekdays: [.monday])
+    let viewModel = makeViewModel(routines: [routine], now: now)
+
+    viewModel.load()
+
+    XCTAssertEqual(viewModel.state.nextAlarmRoutine?.id, routine.id)
+    XCTAssertEqual(viewModel.state.nextAlarmRoutine?.nextAlarmText, "오늘 오전 7:00")
+  }
+
+  @MainActor
+  func testNextAlarmCardMovesToTomorrowOnceTodayAlarmHasPassed() {
+    let now = fixtureDate("2026-07-13T08:00:00Z")
+    let mondayRoutine = makeRoutine(name: "월요일", weekdays: [.monday])
+    let tuesdayRoutine = makeRoutine(
+      name: "화요일",
+      weekdays: [.tuesday],
+      hour: 6
+    )
+    let viewModel = makeViewModel(
+      routines: [mondayRoutine, tuesdayRoutine],
+      now: now
+    )
+
+    viewModel.load()
+
+    // 진행률 카드는 오늘 기준을 유지하고, 대표 카드만 다음 알람으로 넘어간다.
+    XCTAssertEqual(viewModel.state.todayRoutine?.id, mondayRoutine.id)
+    XCTAssertEqual(viewModel.state.nextAlarmRoutine?.id, tuesdayRoutine.id)
+    XCTAssertEqual(viewModel.state.nextAlarmRoutine?.nextAlarmText, "내일 오전 6:00")
+  }
+
+  @MainActor
+  func testNextAlarmFurtherOutIsLabelledWithItsWeekday() {
+    let now = fixtureDate("2026-07-13T08:00:00Z")
+    let fridayRoutine = makeRoutine(name: "금요일", weekdays: [.friday])
+    let viewModel = makeViewModel(routines: [fridayRoutine], now: now)
+
+    viewModel.load()
+
+    XCTAssertNil(viewModel.state.todayRoutine)
+    XCTAssertEqual(
+      viewModel.state.nextAlarmRoutine?.nextAlarmText,
+      "금요일 오전 7:00"
+    )
+  }
+
+  @MainActor
+  func testNextAlarmBadgeReportsPlatformDeliveryState() throws {
+    let now = fixtureDate("2026-07-13T06:00:00Z")
+    let routine = makeRoutine(name: "월요일", weekdays: [.monday])
+    let request = try XCTUnwrap(AlarmScheduleRequest(routine: routine))
+    let record = AlarmDeliveryRecord(
+      request: request,
+      backend: nil,
+      state: .authorizationRequired,
+      platformIdentifiers: [],
+      lastErrorMessage: "authorization-required",
+      updatedAt: now
+    )
+    let viewModel = makeViewModel(
+      routines: [routine],
+      alarmStateRepository: HomeAlarmStateRepository(
+        records: [record.scheduleID: record]
+      ),
+      now: now
+    )
+
+    viewModel.load()
+
+    XCTAssertEqual(
+      viewModel.state.nextAlarmRoutine?.alarmDelivery,
+      .authorizationRequired
+    )
+    XCTAssertEqual(
+      viewModel.state.nextAlarmRoutine?.alarmDelivery?.text,
+      "알람 권한 필요"
+    )
+  }
+
+  @MainActor
+  func testNextAlarmBadgeIsHiddenWithoutAPlatformRecord() {
+    let now = fixtureDate("2026-07-13T06:00:00Z")
+    let routine = makeRoutine(name: "월요일", weekdays: [.monday])
+    let viewModel = makeViewModel(routines: [routine], now: now)
+
+    viewModel.load()
+
+    XCTAssertNotNil(viewModel.state.nextAlarmRoutine)
+    XCTAssertNil(viewModel.state.nextAlarmRoutine?.alarmDelivery)
+  }
+
+  @MainActor
   func testDisabledAlarmAndEmptyStepsAreNotScheduled() {
     let now = fixtureDate("2026-07-13T08:00:00Z")
     let disabledRoutine = makeRoutine(
@@ -666,6 +760,7 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     runs: [RoutineRun] = [],
     profile: LocalProfile? = LocalProfile(displayName: "모루"),
     calendar: Calendar = makeUTCGregorianCalendar(),
+    alarmStateRepository: (any AlarmPlatformStateRepository)? = nil,
     now: Date
   ) -> HomeViewModel {
     HomeViewModel(
@@ -674,8 +769,11 @@ final class HomeRoutineIntegrationTests: XCTestCase {
         runs: runs,
         profile: profile,
         calendar: calendar,
+        alarmStateRepository: alarmStateRepository,
         now: now
-      )
+      ),
+      calendar: calendar,
+      now: { now }
     )
   }
 
@@ -685,12 +783,14 @@ final class HomeRoutineIntegrationTests: XCTestCase {
     runs: [RoutineRun] = [],
     profile: LocalProfile? = LocalProfile(displayName: "모루"),
     calendar: Calendar = makeUTCGregorianCalendar(),
+    alarmStateRepository: (any AlarmPlatformStateRepository)? = nil,
     now: Date
   ) -> LoadHomeRoutinesUseCase {
     LoadHomeRoutinesUseCase(
       routineRepository: TestRoutineRepository(routines: routines),
       routineRunRepository: TestRoutineRunRepository(runs: runs),
       localProfileRepository: TestProfileRepository(profile: profile),
+      alarmPlatformStateRepository: alarmStateRepository,
       calendar: calendar,
       now: { now }
     )
@@ -793,7 +893,63 @@ final class HomeRoutineIntegrationTests: XCTestCase {
 private func makeUTCGregorianCalendar() -> Calendar {
   var calendar = Calendar(identifier: .gregorian)
   calendar.timeZone = TimeZone(identifier: "UTC")!
+  // 다음 알람 문구가 기기 로케일에 흔들리지 않도록 고정한다.
+  calendar.locale = Locale(identifier: "ko_KR")
   return calendar
+}
+
+@MainActor
+private final class HomeAlarmStateRepository: AlarmPlatformStateRepository {
+  private var records: [UUID: AlarmDeliveryRecord]
+  private var snoozedAlarms: [UUID: SnoozedAlarmRecord] = [:]
+
+  init(records: [UUID: AlarmDeliveryRecord]) {
+    self.records = records
+  }
+
+  func fetchRecords() throws -> [AlarmDeliveryRecord] {
+    Array(records.values)
+  }
+
+  func record(scheduleID: UUID) throws -> AlarmDeliveryRecord? {
+    records[scheduleID]
+  }
+
+  func saveRecord(_ record: AlarmDeliveryRecord) throws {
+    records[record.scheduleID] = record
+  }
+
+  func deleteRecord(scheduleID: UUID) throws {
+    records[scheduleID] = nil
+  }
+
+  func deleteAllRecords() throws {
+    records.removeAll()
+  }
+
+  func fetchSnoozedAlarms() throws -> [SnoozedAlarmRecord] {
+    Array(snoozedAlarms.values)
+  }
+
+  func saveSnoozedAlarm(_ record: SnoozedAlarmRecord) throws {
+    snoozedAlarms[record.id] = record
+  }
+
+  func replaceSnoozedAlarm(
+    scheduleID: UUID,
+    with record: SnoozedAlarmRecord
+  ) throws {
+    snoozedAlarms = snoozedAlarms.filter { $0.value.scheduleID != scheduleID }
+    snoozedAlarms[record.id] = record
+  }
+
+  func deleteSnoozedAlarm(id: UUID) throws {
+    snoozedAlarms[id] = nil
+  }
+
+  func deleteAllSnoozedAlarms() throws {
+    snoozedAlarms.removeAll()
+  }
 }
 
 @MainActor

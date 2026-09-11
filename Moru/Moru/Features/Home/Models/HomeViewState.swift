@@ -149,6 +149,10 @@ enum HomeViewState: Equatable {
     contentState?.todayRoutine
   }
 
+  var nextAlarmRoutine: HomeRoutineState? {
+    contentState?.nextAlarmRoutine
+  }
+
   var activeRoutines: [HomeRoutineState] {
     contentState?.activeRoutines ?? []
   }
@@ -192,7 +196,10 @@ enum HomeViewState: Equatable {
 
 struct HomeContentState: Equatable {
   var userName: String
+  /// 오늘 요일에 예약된 루틴. 진행률 카드가 "오늘"을 말하려면 이 선택이 필요하다.
   var todayRoutine: HomeRoutineState?
+  /// 대표 카드의 주인공. 오늘 알람이 지났으면 내일 이후의 루틴이라 todayRoutine과 다를 수 있다.
+  var nextAlarmRoutine: HomeRoutineState?
   var activeRoutines: [HomeRoutineState]
   var todayProgress: HomeProgressState
   var streak: HomeStreakState
@@ -262,6 +269,49 @@ struct HomeWeekdayState: Equatable, Identifiable {
   }
 }
 
+/// 홈 대표 카드가 보여 주는 알람 예약 상태. `AlarmDeliveryRecord`를 화면 문구로 좁힌 것이고,
+/// 재시도·권한 요청 같은 조치는 루틴 탭 카드가 담당한다.
+enum HomeAlarmDeliveryState: Equatable {
+  case scheduled(AlarmDeliveryBackend)
+  case authorizationRequired
+  case repairRequired
+
+  var text: String {
+    switch self {
+    case .scheduled(.alarmKit):
+      "알람 예약됨"
+    case .scheduled:
+      "일반 알림으로 예약됨"
+    case .authorizationRequired:
+      "알람 권한 필요"
+    case .repairRequired:
+      "알람 예약 필요"
+    }
+  }
+
+  var needsAttention: Bool {
+    switch self {
+    case .scheduled:
+      false
+    case .authorizationRequired, .repairRequired:
+      true
+    }
+  }
+
+  init(_ record: AlarmDeliveryRecord) {
+    switch record.state {
+    case .scheduled:
+      // 예약에 성공했는데 backend가 비어 있는 기록은 관측된 적이 없지만,
+      // 값이 없다고 배지를 감추기보다 보수적으로 일반 알림으로 표시한다.
+      self = .scheduled(record.backend ?? .localNotification)
+    case .authorizationRequired:
+      self = .authorizationRequired
+    case .repairRequired:
+      self = .repairRequired
+    }
+  }
+}
+
 struct HomeRoutineState: Equatable, Identifiable {
   var id: UUID
   var title: String
@@ -274,6 +324,9 @@ struct HomeRoutineState: Equatable, Identifiable {
   var progress: Double
   var isActive: Bool
   var steps: [HomeRoutineStepState]
+  /// 다음 알람 시각 문구. 대표 카드로 뽑힌 루틴에만 채워진다.
+  var nextAlarmText: String?
+  var alarmDelivery: HomeAlarmDeliveryState?
 
   static let placeholder = HomeRoutineState(
     id: UUID(),
