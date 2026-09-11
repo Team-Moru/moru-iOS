@@ -770,116 +770,36 @@ struct AppRouter: View {
     }
   }
 
+  /// 알람 진입·정지는 AlarmIngressDriver가 맡는다. 라우터는 씬·세션 훅에서
+  /// 드라이버를 부르고, 알람이 없을 때의 다음 후보(온보딩 체험 복원)만 안다.
+  @MainActor
+  private var alarmIngressDriver: AlarmIngressDriver {
+    AlarmIngressDriver(
+      alarmRuntimeHandler: dependencies.alarmRuntimeHandler,
+      coordinator: coordinator,
+      alarmStopMonitor: alarmStopMonitor
+    )
+  }
+
   @MainActor
   private func consumePendingAlarmIngress() async {
-    if case .restoring = accountSessionStore.state {
-      return
-    }
-    await consumePendingAlarmIngressAfterAccountRestoration()
+    await alarmIngressDriver.consumePendingIngress(
+      sessionPhase: sessionStore.phase,
+      accountState: accountSessionStore.state
+    )
   }
 
   @MainActor
   private func consumePendingAlarmIngressAfterAccountRestoration() async {
-    guard sessionStore.phase == .ready,
-          dependencies.alarmRuntimeHandler != nil,
-          let envelope = AlarmIngressOccurrenceStore.shared
-            .claimPendingEnvelope() else {
-      return
-    }
-
-    await handleAlarmIngress(envelope)
-  }
-
-  @MainActor
-  private func handleAlarmIngress(_ envelope: AlarmIngressEnvelope) async {
-    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
-      AlarmIngressOccurrenceStore.shared.release(envelope)
-      return
-    }
-
-    switch await alarmRuntimeHandler.resolve(envelope) {
-    case .route(let context):
-      await presentResolvedAlarm(context)
-    case .ignored:
-      AlarmIngressOccurrenceStore.shared.complete(envelope)
-    case .temporarilyUnavailable:
-      AlarmIngressOccurrenceStore.shared.release(envelope)
-    }
-  }
-
-  @MainActor
-  private func presentResolvedAlarm(_ context: AlarmRingContext) async {
-    guard context.ingress.launchTarget == .scheduledRoutine else {
-      switch coordinator.presentAlarmRing(context: context) {
-      case .presented, .alreadyPresented:
-        AlarmIngressOccurrenceStore.shared.complete(context.ingress)
-      case .deferredBusy:
-        break
-      }
-      return
-    }
-
-    let attempt = coordinator.presentScheduledRoutine(context: context)
-
-    // 알람은 플레이어 표시가 승인된 뒤에만 끈다. 미뤄진 경우는 부활 경로가 다시 들어온다.
-    switch ScheduledAlarmStopPolicy.action(for: attempt) {
-    case .defer:
-      Self.alarmLogger.info("scheduled_player_deferred_busy")
-    case .completeAndStop(let presentationToken):
-      if case .alreadyPresented = attempt {
-        Self.alarmLogger.info("scheduled_player_already_presented")
-      } else {
-        Self.alarmLogger.info("scheduled_player_presented")
-      }
-      AlarmIngressOccurrenceStore.shared.complete(context.ingress)
-      stopScheduledAlarmWithoutBlockingRoutinePresentation(
-        context,
-        presentationToken: presentationToken
+    await alarmIngressDriver
+      .consumePendingIngressAfterAccountRestoration(
+        sessionPhase: sessionStore.phase
       )
-    }
   }
 
-  @MainActor
-  private func stopScheduledAlarmWithoutBlockingRoutinePresentation(
-    _ context: AlarmRingContext,
-    presentationToken: UUID
-  ) {
-    guard dependencies.alarmRuntimeHandler != nil else {
-      return
-    }
-
-    alarmStopMonitor.begin(context: context, presentationToken: presentationToken)
-    performScheduledAlarmStop(context)
-  }
-
-  /// 플레이어 상단 배너의 재시도. 정지 실패는 로그로 끝나지 않고 사용자에게 돌아온다.
   @MainActor
   private func retryScheduledAlarmStop() {
-    guard let context = alarmStopMonitor.beginRetry() else {
-      return
-    }
-
-    performScheduledAlarmStop(context)
-  }
-
-  @MainActor
-  private func performScheduledAlarmStop(_ context: AlarmRingContext) {
-    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
-      alarmStopMonitor.markFailed()
-      return
-    }
-
-    let monitor = alarmStopMonitor
-    Task { @MainActor in
-      do {
-        try await alarmRuntimeHandler.stopAlarm(for: context)
-        monitor.markStopped()
-        Self.alarmLogger.info("scheduled_player_alarm_stop_succeeded")
-      } catch {
-        monitor.markFailed()
-        Self.alarmLogger.error("scheduled_player_alarm_stop_failed")
-      }
-    }
+    alarmIngressDriver.retryStop()
   }
 
   @MainActor
@@ -887,17 +807,10 @@ struct AppRouter: View {
     from context: AlarmRingContext,
     presentationToken: UUID
   ) async throws {
-    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
-      throw AlarmRuntimeError.routeNoLongerAvailable
-    }
-
-    try await alarmRuntimeHandler.stopAlarm(for: context)
-    guard coordinator.startScheduledRoutine(
-      routineID: context.ingress.routineID,
-      alarmPresentationToken: presentationToken
-    ) else {
-      throw AlarmRuntimeError.routeNoLongerAvailable
-    }
+    try await alarmIngressDriver.startScheduledRoutine(
+      from: context,
+      presentationToken: presentationToken
+    )
   }
 
   @MainActor
@@ -906,16 +819,10 @@ struct AppRouter: View {
     minutes: Int,
     presentationToken: UUID
   ) async throws {
-    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
-      throw AlarmRuntimeError.routeNoLongerAvailable
-    }
-
-    _ = try await alarmRuntimeHandler.snooze(
-      context: context,
-      minutes: minutes
-    )
     execute(
-      coordinator.dismissAlarmRing(
+      try await alarmIngressDriver.snooze(
+        context: context,
+        minutes: minutes,
         presentationToken: presentationToken
       )
     )
@@ -923,15 +830,11 @@ struct AppRouter: View {
 
   @MainActor
   private func retryDeferredAlarmIngressOrOnboarding() {
-    guard let context = coordinator.takeDeferredAlarmContext() else {
-      retryDeferredOnboardingTrial()
-      return
-    }
-
+    let driver = alarmIngressDriver
     Task {
-      await handleAlarmIngress(context.ingress)
-      if coordinator.presentation == nil {
+      guard await driver.retryDeferredIngress() else {
         retryDeferredOnboardingTrial()
+        return
       }
     }
   }
