@@ -288,7 +288,6 @@ final class AccountServerRemoteContractTests: XCTestCase {
     let invalidProfiles = [
       accountProfileDTO(memberId: 99),
       accountProfileDTO(memberId: -1),
-      accountProfileDTO(nickname: "  "),
       accountProfileDTO(loginType: "\n"),
       accountProfileDTO(profileImageKey: " "),
     ]
@@ -300,6 +299,24 @@ final class AccountServerRemoteContractTests: XCTestCase {
       await assertRemoteError(.invalidResponse) {
         _ = try await service.fetchProfile(memberID: 98)
       }
+    }
+  }
+
+  /// 닉네임이 비어 있는 것은 "아직 안 정함"이지 잘못된 응답이 아니다.
+  /// 닉네임 scope를 안 준 카카오 가입이 여기 해당하고, 예전에는 이걸 오류로
+  /// 막는 바람에 로그인 직후 음성 자동 선택을 포함한 프로필 의존 흐름이
+  /// 전부 멈췄다. 다시 조이지 않도록 의도를 테스트로 박아 둔다.
+  func testProfileTreatsMissingNicknameAsNotSetYet() async throws {
+    for unsetNickname: String? in [nil, "", "  "] {
+      let service = DefaultAccountServerRemoteService(
+        apiClient: AccountServerPayloadAPIClient(
+          profile: accountProfileDTO(nickname: unsetNickname)
+        )
+      )
+      let profile = try await service.fetchProfile(memberID: 98)
+
+      XCTAssertEqual(profile.nickname, "")
+      XCTAssertEqual(profile.memberID, 98)
     }
   }
 
