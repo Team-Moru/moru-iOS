@@ -388,9 +388,9 @@ final class FinalScreenVisualTests: XCTestCase {
 private enum VisualBaseline {
   static let hashes: [String: String] = [
     "moru-pr32-final-current-routine-light-AX3.png":
-      "AAAAAAAAgoJlZWUk8kj6QMpA2kDyyPLAyWjAYMBowFB0oXSFeAF5mW9hf2F9YVwZVZF5kXjROAlpQXlBXUFYkQ==",
+      "AAAAAAAAgoJlZUUk9iD2pPRQtUDyQPpAykDaQPLI8tDFaMBgwGjgaGQhdIVwgXkRbSF+YVlhVJlFAXmReZEoCQ==",
     "moru-pr32-final-current-routine-light-M.png":
-      "AAAAAAAAoAhgBfKY8tj4GEAE0A1QBVANWQVZDVAN0A2EAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+      "AAAAAAAAoAhyDWgQ6BDy2PCYRgjRDUAF0AxIBdANQgXQDWUA5MjgwKAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr32-final-history-light-AX3.png":
       "AAAAAAAACADgAOQA1APYAMFkwSTANMC0xRTAdMIkwjTIzMjMyMzI0MjQyMzIxMgEyATIBOAAyiLOCmTLrcvZJA==",
     "moru-pr32-final-history-light-M.png":

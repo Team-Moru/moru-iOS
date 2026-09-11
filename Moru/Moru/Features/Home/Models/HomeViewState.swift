@@ -344,7 +344,9 @@ struct HomeRoutineState: Equatable, Identifiable {
       HomeRoutineStepState(title: "스트레칭 10분", detail: "11:19", isCompleted: true),
       HomeRoutineStepState(title: "오늘의 기록 한 줄", detail: "2:35", isCompleted: true),
       HomeRoutineStepState(title: "햇빛 5분 쬐기", detail: "5:02", isCompleted: true),
-    ]
+    ],
+    nextAlarmText: "내일 오전 6:15",
+    alarmDelivery: .scheduled(.alarmKit)
   )
 }
 

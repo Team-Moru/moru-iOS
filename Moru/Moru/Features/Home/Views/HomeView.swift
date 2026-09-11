@@ -238,12 +238,12 @@ struct HomeView: View {
       .padding(.top, MoruSpacing.twenty)
 
     CurrentRoutineCard(
-      routine: content.todayRoutine,
+      routine: content.nextAlarmRoutine,
       onTap: {
         presentedRoutineSheet = .settings
       },
       onStart: {
-        guard let routineID = content.todayRoutine?.id else {
+        guard let routineID = content.nextAlarmRoutine?.id else {
           return
         }
 
