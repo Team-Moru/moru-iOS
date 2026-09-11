@@ -117,4 +117,115 @@ enum ConfirmTranscriptMatcher {
   private static func hasNegativeIntent(in normalizedTranscript: String) -> Bool {
     negativeExpressions.contains(where: normalizedTranscript.contains)
   }
+
+  // MARK: - 과거형 판별
+
+  /// 긴 것부터 떼야 "마셨어요"에서 "요"만 떼는 일이 없다.
+  private static let sentenceEndings = [
+    "습니다", "거든요",
+    "네요", "지요", "어요", "거든",
+    "죠", "네", "지", "어", "다", "음", "요"
+  ]
+
+  /// 받침 ㅆ이지만 시제가 아닌 것. "있어"는 상태, "겠어"는 의지다.
+  private static let nonTenseDoubleSiotSyllables: Set<Character> = ["있", "겠"]
+
+  /// 순수 시제 접미사. "먹었"의 었은 동사가 아니라 시제라 대조 후보에서 뺀다.
+  /// "마셨"의 셨은 "마시+었"이 줄어든 것이라 어간의 일부로 남긴다.
+  private static let pureTenseSuffixSyllables: Set<Character> = ["었", "았", "였", "했"]
+
+  /// 문장 끝을 떼고 남은 마지막 음절에 받침 ㅆ이 있으면 과거형이다. "마셨어",
+  /// "씻었어요", "폈다"처럼 동사가 무엇이든 받침이 시제를 말한다.
+  ///
+  /// 돌려주는 값은 어간으로 보이는 마지막 두 음절이다. 형태소 분석 없이는 어간이
+  /// 어디서 시작하는지 알 수 없으므로, 호출자가 단계 텍스트와 대조할 후보로 쓴다.
+  /// "안"·"못"이 어디에든 있으면 빈 배열이다 — "안 먹었어"를 놓치는 쪽이
+  /// 완료로 잘못 넘기는 쪽보다 싸다.
+  static func pastTenseVerbSyllables(in normalizedTranscript: String) -> [Character] {
+    guard !normalizedTranscript.contains("안"),
+          !normalizedTranscript.contains("못") else {
+      return []
+    }
+
+    var stem = Substring(normalizedTranscript.precomposedStringWithCanonicalMapping)
+    if let ending = sentenceEndings.first(where: { stem.hasSuffix($0) }) {
+      stem = stem.dropLast(ending.count)
+    }
+
+    guard let last = stem.last,
+          hasDoubleSiotFinal(last),
+          !nonTenseDoubleSiotSyllables.contains(last) else {
+      return []
+    }
+
+    var candidates = Array(stem.suffix(3))
+    if pureTenseSuffixSyllables.contains(last) {
+      candidates.removeLast()
+    }
+    return Array(candidates.suffix(2))
+  }
+
+  /// 받침을 뗀 초성+중성. "마셨"의 마와 "마시기"의 마가 같은 음절이 된다.
+  static func syllableIgnoringFinal(_ character: Character) -> Character? {
+    guard let scalar = hangulSyllableScalar(character) else {
+      return nil
+    }
+
+    let withoutFinal = (scalar.value - hangulSyllableBase) / 28 * 28 + hangulSyllableBase
+    return Unicode.Scalar(withoutFinal).map(Character.init)
+  }
+
+  /// 과거형 음절이 사전형에서 어떻게 생겼을지. "썼"은 "쓰"에서, "봤"은 "보"에서,
+  /// "줬"은 "주"에서, "폈"은 "피"에서 왔다. 어미 "-어/-아"가 어간 모음과 줄어들며
+  /// 모음이 바뀐 경우라, 모음만 되돌리면 단계 제목의 사전형과 만난다.
+  ///
+  /// ㄷ·ㅂ·ㅅ 불규칙(걷→걸었, 굽→구웠, 짓→지었)과 르 불규칙(부르→불렀)은
+  /// 받침을 뗀 비교나 앞 음절 대조로 이미 통하므로 여기 없다.
+  static func dictionaryFormCandidates(for character: Character) -> [Character] {
+    guard let scalar = hangulSyllableScalar(character),
+          let ignoringFinal = syllableIgnoringFinal(character) else {
+      return []
+    }
+
+    let offset = scalar.value - hangulSyllableBase
+    let initial = offset / (21 * 28)
+    let vowel = (offset % (21 * 28)) / 28
+    let restored = contractedVowelOrigins[vowel, default: []].compactMap { origin in
+      Unicode.Scalar(hangulSyllableBase + (initial * 21 + origin) * 28).map(Character.init)
+    }
+    return [ignoringFinal] + restored
+  }
+
+  /// 줄어든 모음 → 사전형 모음 (중성 인덱스). ㅓ·ㅏ→ㅡ(쓰→썼, 잠그→잠갔),
+  /// ㅘ→ㅗ(보→봤), ㅝ→ㅜ(주→줬), ㅕ→ㅣ(피→폈).
+  private static let contractedVowelOrigins: [UInt32: [UInt32]] = [
+    4: [18],   // ㅓ → ㅡ
+    0: [18],   // ㅏ → ㅡ
+    9: [8],    // ㅘ → ㅗ
+    14: [13],  // ㅝ → ㅜ
+    6: [20],   // ㅕ → ㅣ
+  ]
+
+  private static let hangulSyllableBase: UInt32 = 0xAC00
+  private static let hangulSyllableRange: ClosedRange<UInt32> = 0xAC00...0xD7A3
+  private static let doubleSiotFinalIndex: UInt32 = 20
+
+  private static func hasDoubleSiotFinal(_ character: Character) -> Bool {
+    guard let scalar = hangulSyllableScalar(character) else {
+      return false
+    }
+
+    return (scalar.value - hangulSyllableBase) % 28 == doubleSiotFinalIndex
+  }
+
+  private static func hangulSyllableScalar(_ character: Character) -> Unicode.Scalar? {
+    let scalars = character.unicodeScalars
+    guard scalars.count == 1,
+          let scalar = scalars.first,
+          hangulSyllableRange.contains(scalar.value) else {
+      return nil
+    }
+
+    return scalar
+  }
 }
