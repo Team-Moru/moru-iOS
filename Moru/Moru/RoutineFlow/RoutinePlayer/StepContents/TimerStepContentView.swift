@@ -122,6 +122,9 @@ struct TimerStepContentView: View {
     private var captureActiveTimerSegmentIndex
     let step: RoutineStep
     let isGuidancePlaying: Bool
+    /// 안내 음성이 끝날 때까지 기다린다. 확인형·입력형은 이미 이렇게 하고 있었고
+    /// 타이머만 곧바로 흘러 안내를 듣는 동안 시간이 깎였다.
+    let waitUntilGuidanceFinishes: () async -> Bool
     let onComplete: () -> Void
     let onCountdown: (Int) -> Void
     let onSkip: () -> Void
@@ -139,6 +142,7 @@ struct TimerStepContentView: View {
     init(
         step: RoutineStep,
         isGuidancePlaying: Bool,
+        waitUntilGuidanceFinishes: @escaping () async -> Bool = { true },
         onComplete: @escaping () -> Void,
         onCountdown: @escaping (Int) -> Void = { _ in },
         onSkip: @escaping () -> Void
@@ -147,6 +151,7 @@ struct TimerStepContentView: View {
 
         self.step = step
         self.isGuidancePlaying = isGuidancePlaying
+        self.waitUntilGuidanceFinishes = waitUntilGuidanceFinishes
         self.onComplete = onComplete
         self.onCountdown = onCountdown
         self.onSkip = onSkip
@@ -197,7 +202,13 @@ struct TimerStepContentView: View {
         .onReceive(timer) { _ in
             updateTimer()
         }
-        .onAppear {
+        .task {
+            // 안내가 끝난 뒤에 시작한다. 중간에 취소되면(단계 이탈·백그라운드)
+            // 타이머를 시작하지 않는다.
+            guard await waitUntilGuidanceFinishes() else {
+                return
+            }
+
             handleTimerActions(timerState.start())
         }
         .onReceive(

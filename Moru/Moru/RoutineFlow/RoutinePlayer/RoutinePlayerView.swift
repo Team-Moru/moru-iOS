@@ -321,6 +321,9 @@ struct RoutinePlayerView: View {
             TimerStepContentView(
                 step: step,
                 isGuidancePlaying: viewModel.isGuidancePlaying,
+                waitUntilGuidanceFinishes: {
+                    await viewModel.waitUntilIntroFinishes(for: step.id)
+                },
                 onComplete: {
                     viewModel.completeCurrentStep()
                 },
