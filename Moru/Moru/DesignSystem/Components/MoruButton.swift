@@ -18,10 +18,15 @@ enum MoruButtonMetric {
   static let minimumHeight: CGFloat = 54
 }
 
+/// Liquid Glass 버튼. primary는 `.glassProminent` + CTA 틴트, secondary는 `.glass`,
+/// text는 `.plain`이다. 셋 다 서로 다른 `PrimitiveButtonStyle` 타입이라 하나의 modifier로
+/// 전환할 수 없으므로 분기별로 완결된 버튼을 그린다.
 struct MoruButton: View {
   let title: String
   let style: MoruButtonStyle
   let isEnabled: Bool
+  /// 저장·전송처럼 결과를 기다리는 동안 스피너를 보여주고 입력을 막는다.
+  let isLoading: Bool
   let action: () -> Void
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -29,32 +34,66 @@ struct MoruButton: View {
     _ title: String,
     style: MoruButtonStyle = .primary,
     isEnabled: Bool = true,
+    isLoading: Bool = false,
     action: @escaping () -> Void
   ) {
     self.title = title
     self.style = style
     self.isEnabled = isEnabled
+    self.isLoading = isLoading
     self.action = action
   }
 
   var body: some View {
-    Button(action: action) {
+    switch style {
+    case .primary:
+      Button(action: action) {
+        label
+      }
+      .buttonStyle(.glassProminent)
+      .tint(MoruColor.ctaFill)
+      .buttonBorderShape(.capsule)
+      .controlSize(.extraLarge)
+      .buttonSizing(.flexible)
+      .frame(maxWidth: .infinity)
+      .frame(minHeight: MoruButtonMetric.minimumHeight)
+      .disabled(!isEnabled || isLoading)
+
+    case .secondary:
+      Button(action: action) {
+        label
+      }
+      .buttonStyle(.glass)
+      .buttonBorderShape(.capsule)
+      .controlSize(.extraLarge)
+      .buttonSizing(.flexible)
+      .frame(maxWidth: .infinity)
+      .frame(minHeight: MoruButtonMetric.minimumHeight)
+      .disabled(!isEnabled || isLoading)
+
+    case .text:
+      Button(action: action) {
+        label
+      }
+      .buttonStyle(.plain)
+      .disabled(!isEnabled || isLoading)
+    }
+  }
+
+  private var label: some View {
+    HStack(spacing: MoruSpacing.eight) {
+      if isLoading {
+        ProgressView()
+          .tint(foregroundColor)
+      }
+
       Text(title)
         .moruTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(foregroundColor)
-        .padding(.horizontal, MoruSpacing.twenty)
-        .padding(.vertical, verticalPadding)
-        .frame(maxWidth: style == .text ? nil : .infinity)
-        .frame(minHeight: MoruButtonMetric.minimumHeight)
-        .background(backgroundColor)
-        .overlay(
-          RoundedRectangle(cornerRadius: AppRadius.pill)
-            .stroke(borderColor, lineWidth: style == .secondary ? 1 : 0)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppRadius.pill))
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
     }
-    .disabled(!isEnabled)
-    .opacity(isEnabled ? 1 : 0.45)
+    .foregroundStyle(foregroundColor)
+    .padding(.vertical, verticalPadding)
   }
 
   private var foregroundColor: Color {
@@ -66,21 +105,6 @@ struct MoruButton: View {
     case .text:
       AppColor.gray550
     }
-  }
-
-  private var backgroundColor: Color {
-    switch style {
-    case .primary:
-      MoruColor.ctaFill
-    case .secondary:
-      AppColor.grayWhite
-    case .text:
-      Color.clear
-    }
-  }
-
-  private var borderColor: Color {
-    style == .secondary ? MoruColor.border : Color.clear
   }
 
   private var verticalPadding: CGFloat {

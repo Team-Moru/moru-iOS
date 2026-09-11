@@ -205,33 +205,13 @@ private struct OnboardingFooterView: View {
           .multilineTextAlignment(.center)
       }
 
-      Button {
+      MoruButton(
+        viewModel.primaryButtonTitle,
+        isEnabled: viewModel.canAdvance,
+        isLoading: viewModel.isSaving || viewModel.isSuggesting
+      ) {
         viewModel.primaryButtonDidTap()
-      } label: {
-        HStack(spacing: AppSpacing.xs) {
-          if viewModel.isSaving || viewModel.isSuggesting {
-            ProgressView()
-              .tint(AppColor.grayWhite)
-          }
-
-          Text(viewModel.primaryButtonTitle)
-            .moruTextStyle(.b4.weight(.semiBold))
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-        }
-        .foregroundStyle(AppColor.grayWhite)
-        .frame(maxWidth: .infinity, minHeight: 54)
-        .background(
-          viewModel.canAdvance
-            ? MoruColor.ctaFill
-            : MoruColor.textTertiary
-        )
-        .clipShape(
-          RoundedRectangle(cornerRadius: MoruRadius.pill)
-        )
       }
-      .buttonStyle(.plain)
-      .disabled(!viewModel.canAdvance)
     }
     .frame(maxWidth: .infinity)
     .padding(.horizontal, MoruSpacing.twenty)

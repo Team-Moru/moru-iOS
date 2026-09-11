@@ -88,7 +88,12 @@ struct RoutineEditorView: View {
       .toolbar(.hidden, for: .navigationBar)
       .safeAreaInset(edge: .bottom) {
         VStack(spacing: AppSpacing.none) {
-          Button {
+          MoruButton(
+            draft.routineID == nil
+              ? RoutineManagementCopy.createCompletion
+              : RoutineManagementCopy.editCompletion,
+            isEnabled: draft.canSave
+          ) {
             guard draft.canSave else {
               return
             }
@@ -101,23 +106,7 @@ struct RoutineEditorView: View {
             Task {
               await saveAndDismissIfNeeded()
             }
-          } label: {
-            Text(
-              draft.routineID == nil
-                ? RoutineManagementCopy.createCompletion
-                : RoutineManagementCopy.editCompletion
-            )
-              .moruTextStyle(.b4.weight(.semiBold))
-              .foregroundStyle(AppColor.grayWhite)
-              .frame(maxWidth: .infinity)
-              .frame(minHeight: 54)
-              .background(
-                draft.canSave ? MoruColor.ctaFill : MoruColor.disabled
-              )
-              .clipShape(RoundedRectangle(cornerRadius: MoruRadius.pill))
           }
-          .disabled(!draft.canSave)
-          .buttonStyle(.plain)
         }
         .padding(.horizontal, MoruSpacing.twenty)
         .padding(.top, MoruSpacing.eight)
