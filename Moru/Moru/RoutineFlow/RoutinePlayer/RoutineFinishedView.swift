@@ -118,7 +118,7 @@ struct RoutineFinishedView: View {
       LinearGradient(
         colors: [
           Color(red: 230 / 255, green: 237 / 255, blue: 255 / 255),
-          MoruPilotColor.canvas,
+          MoruColor.canvas,
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -138,7 +138,7 @@ struct RoutineFinishedView: View {
   private var titleSection: some View {
     VStack(spacing: 4) {
       Text(isTrial ? "루틴 체험 완료!" : "오늘 루틴 완료!")
-        .routineFinishedTextStyle(.h2)
+        .moruTextStyle(.h2)
         .foregroundStyle(AppColor.gray600)
         .lineLimit(nil)
         .fixedSize(horizontal: false, vertical: true)
@@ -148,7 +148,7 @@ struct RoutineFinishedView: View {
           ? "내일 아침부터 함께 해 봐요!"
           : "오늘도 해냈어요! 멋진 하루 시작이에요"
       )
-      .routineFinishedTextStyle(.b4)
+      .moruTextStyle(.b4)
       .foregroundStyle(AppColor.gray400)
       .lineLimit(nil)
       .fixedSize(horizontal: false, vertical: true)
@@ -161,7 +161,7 @@ struct RoutineFinishedView: View {
   private var completionCard: some View {
     VStack(spacing: 4) {
       Text("오늘 완수율")
-        .routineFinishedTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(AppColor.gray350)
 
       if dynamicTypeSize.isAccessibilitySize {
@@ -187,7 +187,7 @@ struct RoutineFinishedView: View {
   @ViewBuilder
   private var completionPercentageView: some View {
     let percentage = Text("\(completionPercentage)%")
-      .routineFinishedTextStyle(.h3)
+      .moruTextStyle(.h3)
       .foregroundStyle(AppColor.gray450)
       .monospacedDigit()
       .fixedSize()
@@ -227,7 +227,7 @@ struct RoutineFinishedView: View {
             LinearGradient(
               colors: [
                 AppColor.orange150,
-                MoruPilotColor.accent,
+                MoruColor.accent,
               ],
               startPoint: .leading,
               endPoint: .trailing
@@ -244,11 +244,11 @@ struct RoutineFinishedView: View {
   ) -> some View {
     VStack(spacing: 0) {
       Text("연속 달성")
-        .routineFinishedTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(AppColor.gray350)
 
       Text("\(streak.currentDays)일 연속")
-        .routineFinishedTextStyle(.h3)
+        .moruTextStyle(.h3)
         .foregroundStyle(AppColor.gray450)
         .monospacedDigit()
         .fixedSize(horizontal: false, vertical: true)
@@ -269,7 +269,7 @@ struct RoutineFinishedView: View {
   private var stepResultsSection: some View {
     if displayedStepResults.isEmpty {
       Text("완료하거나 건너뛴 루틴이 없습니다.")
-        .routineFinishedTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(AppColor.gray350)
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.vertical, 16)
@@ -308,7 +308,7 @@ struct RoutineFinishedView: View {
         .accessibilityHidden(true)
 
       Text(result.stepTitle)
-        .routineFinishedTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(AppColor.gray350)
         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
         .fixedSize(horizontal: false, vertical: true)
@@ -324,59 +324,32 @@ struct RoutineFinishedView: View {
   @ViewBuilder
   private var bottomButtonSection: some View {
     if isTrial {
-      finishedButton(
-        title: "홈으로",
-        foregroundColor: AppColor.grayWhite,
-        backgroundColor: MoruPilotColor.accent,
-        action: onTapHome
-      )
+      MoruButton("홈으로") {
+        onTapHome()
+      }
       .padding(.horizontal, 2)
     } else {
       VStack(spacing: 10) {
-        finishedButton(
-          title: "오늘의 기록 확인",
-          foregroundColor: AppColor.gray600,
-          backgroundColor: AppColor.grayWhite,
-          action: onTapTodayRecord
-        )
+        MoruButton("오늘의 기록 확인", style: .secondary) {
+          onTapTodayRecord()
+        }
 
-        finishedButton(
-          title: "홈으로",
-          foregroundColor: AppColor.grayWhite,
-          backgroundColor: MoruPilotColor.accent,
-          action: onTapHome
-        )
+        MoruButton("홈으로") {
+          onTapHome()
+        }
       }
     }
   }
 
-  private func finishedButton(
-    title: String,
-    foregroundColor: Color,
-    backgroundColor: Color,
-    action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      Text(title)
-        .routineFinishedTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(foregroundColor)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 54)
-        .background(backgroundColor)
-        .clipShape(Capsule())
-    }
-    .buttonStyle(.plain)
-  }
-
   private var cardBackground: some View {
     RoundedRectangle(
-      cornerRadius: MoruPilotRadius.largeCard,
+      cornerRadius: MoruRadius.largeCard,
       style: .continuous
     )
     .fill(AppColor.grayWhite.opacity(0.2))
     .overlay {
       RoundedRectangle(
-        cornerRadius: MoruPilotRadius.largeCard,
+        cornerRadius: MoruRadius.largeCard,
         style: .continuous
       )
       .stroke(
@@ -393,46 +366,9 @@ struct RoutineFinishedView: View {
       )
     }
     .shadow(
-      color: MoruPilotColor.shadow,
+      color: MoruColor.shadow,
       radius: 7.5
     )
-  }
-}
-
-private struct RoutineFinishedTextStyleModifier: ViewModifier {
-  let style: MoruTextStyle
-
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @ScaledMetric private var scaledLineHeight: CGFloat
-
-  init(style: MoruTextStyle) {
-    self.style = style
-    _scaledLineHeight = ScaledMetric(
-      wrappedValue: style.lineHeight,
-      relativeTo: style.relativeTextStyle
-    )
-  }
-
-  @ViewBuilder
-  func body(content: Content) -> some View {
-    if dynamicTypeSize.isAccessibilitySize {
-      content.font(
-        .custom(
-          style.weight.rawValue,
-          size: style.fontSize,
-          relativeTo: style.relativeTextStyle
-        )
-      )
-      .lineHeight(.exact(points: scaledLineHeight.rounded()))
-    } else {
-      content.moruTextStyle(style)
-    }
-  }
-}
-
-private extension View {
-  func routineFinishedTextStyle(_ style: MoruTextStyle) -> some View {
-    modifier(RoutineFinishedTextStyleModifier(style: style))
   }
 }
 

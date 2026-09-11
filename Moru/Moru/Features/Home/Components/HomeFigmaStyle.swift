@@ -32,43 +32,15 @@ struct HomePilotSurfaceModifier: ViewModifier {
     content
       .background(AppColor.grayWhite.opacity(0.2))
       .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-      .shadow(color: MoruPilotColor.shadow, radius: 15)
-  }
-}
-
-struct MoruPilotTextStyleModifier: ViewModifier {
-  let style: MoruTextStyle
-
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-  @ViewBuilder
-  func body(content: Content) -> some View {
-    if dynamicTypeSize.isAccessibilitySize {
-      content.font(
-        .custom(
-          style.weight.rawValue,
-          size: style.fontSize,
-          relativeTo: style.relativeTextStyle
-        )
-      )
-    } else {
-      content.moruTextStyle(style)
-    }
+      .shadow(color: MoruColor.shadow, radius: 15)
   }
 }
 
 extension View {
   func homePilotSurface(
-    cornerRadius: CGFloat = MoruPilotRadius.largeCard
+    cornerRadius: CGFloat = MoruRadius.largeCard
   ) -> some View {
     modifier(HomePilotSurfaceModifier(cornerRadius: cornerRadius))
   }
 
-  func homeFigmaTextStyle(_ style: MoruTextStyle) -> some View {
-    moruPilotTextStyle(style)
-  }
-
-  func moruPilotTextStyle(_ style: MoruTextStyle) -> some View {
-    modifier(MoruPilotTextStyleModifier(style: style))
-  }
 }

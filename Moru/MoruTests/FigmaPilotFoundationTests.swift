@@ -14,18 +14,25 @@ import XCTest
 final class FigmaPilotFoundationTests: XCTestCase {
   func testPilotColorAliasesMatchApprovedHexValues() {
     let colors: [(Color, UInt32)] = [
-      (MoruPilotColor.canvas, 0xF3F6FC),
-      (MoruPilotColor.accent, 0xFF9861),
-      (MoruPilotColor.accentSoft, 0xFFAC80),
-      (MoruPilotColor.accentTint, 0xFFDFCE),
-      (MoruPilotColor.accentSurface, 0xFFEBE0),
-      (MoruPilotColor.progressTrack, 0xF6F8FA),
-      (MoruPilotColor.border, 0xE3E6EE),
-      (MoruPilotColor.textStrong, 0x3C3D5E),
-      (MoruPilotColor.textPrimary, 0x515574),
-      (MoruPilotColor.textSecondary, 0x80889E),
-      (MoruPilotColor.textTertiary, 0x999FB3),
-      (MoruPilotColor.shadow, 0xD8E3FF),
+      (MoruColor.canvas, 0xF3F6FC),
+      (MoruColor.accent, 0xFF9861),
+      (MoruColor.accentSoft, 0xFFAC80),
+      (MoruColor.accentTint, 0xFFDFCE),
+      (MoruColor.accentSurface, 0xFFEBE0),
+      (MoruColor.progressTrack, 0xF6F8FA),
+      (MoruColor.border, 0xE3E6EE),
+      (MoruColor.textStrong, 0x3C3D5E),
+      (MoruColor.textPrimary, 0x515574),
+      (MoruColor.textSecondary, 0x80889E),
+      (MoruColor.textTertiary, 0x999FB3),
+      (MoruColor.shadow, 0xD8E3FF),
+      (MoruColor.ctaFill, 0xE84000),
+      (MoruColor.onCTA, 0xFFFFFF),
+      (MoruColor.summarySurface, 0xFFC09E),
+      (MoruColor.surfaceMuted, 0xF2F4F9),
+      (MoruColor.disabled, 0xB3B7C9),
+      (MoruColor.link, 0x427DFF),
+      (MoruColor.linkDisabled, 0xADC7FF),
     ]
 
     for (color, expectedHex) in colors {
@@ -36,23 +43,23 @@ final class FigmaPilotFoundationTests: XCTestCase {
   func testPilotSpacingAndRadiusAliasesMatchApprovedValues() {
     XCTAssertEqual(
       [
-        MoruPilotSpacing.four,
-        MoruPilotSpacing.eight,
-        MoruPilotSpacing.ten,
-        MoruPilotSpacing.twelve,
-        MoruPilotSpacing.sixteen,
-        MoruPilotSpacing.twenty,
-        MoruPilotSpacing.thirtyTwo,
-        MoruPilotSpacing.thirtySix,
-        MoruPilotSpacing.sixtyFour,
+        MoruSpacing.four,
+        MoruSpacing.eight,
+        MoruSpacing.ten,
+        MoruSpacing.twelve,
+        MoruSpacing.sixteen,
+        MoruSpacing.twenty,
+        MoruSpacing.thirtyTwo,
+        MoruSpacing.thirtySix,
+        MoruSpacing.sixtyFour,
       ],
       [4, 8, 10, 12, 16, 20, 32, 36, 64]
     )
     XCTAssertEqual(
       [
-        MoruPilotRadius.card,
-        MoruPilotRadius.largeCard,
-        MoruPilotRadius.pill,
+        MoruRadius.card,
+        MoruRadius.largeCard,
+        MoruRadius.pill,
       ],
       [16, 24, 100]
     )
@@ -92,7 +99,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
     XCTAssertEqual(MoruTextStyle.b3.weight(.semiBold).weight, .semiBold)
   }
 
-  func testLegacyCommonComponentInitializersRemainSourceCompatible() {
+  func testDefaultCommonComponentInitializersCompile() {
     _ = MoruProgressBar(current: 1, total: 9)
     _ = MoruToggle(isOn: .constant(true))
     _ = MoruTabBar(selection: .constant(.routine))
@@ -120,20 +127,14 @@ final class FigmaPilotFoundationTests: XCTestCase {
 
     for variant in MoruVisualCaptureVariant.allCases {
       let first = try MoruVisualCaptureFixture.render(
-        componentBoard(componentStyle: .figmaPilot),
+        componentBoard(),
         filename: "after-\(variant.rawValue).png",
         variant: variant,
         outputDirectory: outputDirectory
       )
       let second = try MoruVisualCaptureFixture.render(
-        componentBoard(componentStyle: .figmaPilot),
+        componentBoard(),
         filename: "after-repeat-\(variant.rawValue).png",
-        variant: variant,
-        outputDirectory: outputDirectory
-      )
-      _ = try MoruVisualCaptureFixture.render(
-        componentBoard(componentStyle: .legacy),
-        filename: "before-\(variant.rawValue).png",
         variant: variant,
         outputDirectory: outputDirectory
       )
@@ -208,69 +209,59 @@ final class FigmaPilotFoundationTests: XCTestCase {
       | UInt32(round(blue * 255))
   }
 
-  private func componentBoard(
-    componentStyle: MoruPilotComponentStyle
-  ) -> some View {
+  private func componentBoard() -> some View {
     VStack(spacing: 0) {
       ScrollView {
-        VStack(spacing: MoruPilotSpacing.twenty) {
+        VStack(spacing: MoruSpacing.twenty) {
           Text("공통 기준")
             .moruTextStyle(.h3)
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .foregroundStyle(MoruColor.textStrong)
             .fixedSize(horizontal: false, vertical: true)
 
           MoruProgressBar(
             current: 5,
-            total: 9,
-            componentStyle: componentStyle
+            total: 9
           )
 
-          HStack(spacing: MoruPilotSpacing.twenty) {
+          HStack(spacing: MoruSpacing.twenty) {
             MoruToggle(
-              isOn: .constant(true),
-              componentStyle: componentStyle
+              isOn: .constant(true)
             )
             MoruToggle(
-              isOn: .constant(false),
-              componentStyle: componentStyle
+              isOn: .constant(false)
             )
           }
 
           MoruRoutineCard(
             title: "활력 루틴",
             description: "6개 항목 ・15분",
-            isActive: true,
-            componentStyle: componentStyle
+            isActive: true
           )
           MoruRoutineCard(
             title: "새 루틴 추가하기",
-            isAddCard: true,
-            componentStyle: componentStyle
+            isAddCard: true
           )
           MoruButton(
-            "루틴 시작하기",
-            componentStyle: componentStyle
+            "루틴 시작하기"
           ) {}
         }
-        .padding(.vertical, MoruPilotSpacing.thirtySix)
-        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.vertical, MoruSpacing.thirtySix)
+        .padding(.horizontal, MoruSpacing.twenty)
       }
 
       MoruTabBar(
-        selection: .constant(.routine),
-        componentStyle: componentStyle
+        selection: .constant(.routine)
       )
     }
-    .background(MoruPilotColor.canvas)
+    .background(MoruColor.canvas)
   }
 
   private func tabBarSafeAreaScreen(selection: MoruTabItem) -> some View {
-    MoruPilotColor.accent
+    MoruColor.accent
       .ignoresSafeArea()
       .safeAreaInset(edge: .bottom, spacing: 0) {
         MoruTabBar(
-          selection: .constant(selection),
-          componentStyle: .figmaPilot
+          selection: .constant(selection)
         )
       }
   }

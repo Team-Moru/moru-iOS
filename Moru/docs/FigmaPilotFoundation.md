@@ -1,21 +1,30 @@
 # Figma 파일럿 공통 기반
 
-이 문서는 Figma 세부 보정 파일럿에서만 선택적으로 쓰는 token, typography,
-공용 컴포넌트 스타일, 캡처 fixture와 비교 도구를 설명합니다.
+이 문서는 앱이 쓰는 시맨틱 토큰, typography, 공용 컴포넌트 스타일, 캡처 fixture와
+비교 도구를 설명합니다.
 
 기준 Figma file version은 `2379679754802507594`입니다.
 
-## Opt-in token
+## 시맨틱 토큰
 
-기존 화면은 `AppColor`, `AppSpacing`, `AppRadius`, `AppFont`를 계속 사용합니다.
-파일럿 화면만 아래 API를 명시적으로 선택합니다.
+화면은 팔레트(`AppColor.gray500` 같은 값 이름) 대신 시맨틱 토큰을 씁니다. 값의 단일
+출처는 `AppColor` 팔레트이고, 간격·모서리는 `AppSpacing`·`AppRadius`를 alias합니다.
 
 ```swift
-MoruPilotColor.canvas
-MoruPilotColor.accent
-MoruPilotSpacing.twenty
-MoruPilotRadius.largeCard
+MoruColor.canvas        // 화면 배경
+MoruColor.accent        // 브랜드 강조 (탭 선택, 진행 바, 활성 카드 틴트)
+MoruColor.ctaFill       // 주요 CTA 채움 (흰 글자 대비 4.5:1 이상)
+MoruColor.textStrong    // 제목
+MoruColor.textPrimary   // 본문
+MoruColor.textSecondary // 보조 텍스트
+MoruColor.disabled      // 비활성 채움
+MoruColor.link          // 링크·시스템 파란 액션
+MoruSpacing.twenty
+MoruRadius.largeCard
 ```
+
+예전 `AppColor.moruText*`, `moruBorder`, `moruDisabled`, `moruSurfaceMuted`, `moruBlue`
+시맨틱 이름은 제거되었습니다. 같은 값이 위 토큰에 있습니다.
 
 ## Typography
 
@@ -31,25 +40,17 @@ Text("활력 루틴")
 
 ## 공용 컴포넌트
 
-기존 initializer의 기본값은 `.legacy`입니다. 파일럿에서만
-`componentStyle: .figmaPilot`을 전달합니다.
+공용 컴포넌트(`MoruButton`, `MoruProgressBar`, `MoruToggle`, `MoruTabBar`,
+`MoruRoutineCard`)는 Figma 파일럿 외형을 기본값으로 사용합니다. 예전의
+`componentStyle: .legacy / .figmaPilot` opt-in 파라미터는 제거되었습니다.
 
 ```swift
 MoruRoutineCard(
   title: "활력 루틴",
   description: "6개 항목 ・15분",
-  isActive: $isActive,
-  componentStyle: .figmaPilot
+  isActive: $isActive
 )
 ```
-
-같은 opt-in parameter를 다음 컴포넌트에서 사용할 수 있습니다.
-
-- `MoruProgressBar`
-- `MoruToggle`
-- `MoruTabBar`
-- `MoruButton`
-- `MoruRoutineCard`
 
 ## 결정적 캡처 fixture
 

@@ -56,28 +56,42 @@ struct MoruTextStyle: Equatable, Sendable {
   }
 }
 
+/// Figma 타이포 스케일을 적용하는 단일 모디파이어.
+///
+/// 정책: xxxLarge까지는 Figma의 140% 행간을 정확히 적용하고, 접근성 글자 크기
+/// (AX1~AX5)에서는 시스템 자연 행간으로 돌아가 긴 한국어 줄바꿈이 잘리지 않게 한다.
 private struct MoruTextStyleModifier: ViewModifier {
   let style: MoruTextStyle
 
-  @ScaledMetric private var scaledFontSize: CGFloat
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @ScaledMetric private var scaledLineHeight: CGFloat
 
   init(style: MoruTextStyle) {
     self.style = style
-    _scaledFontSize = ScaledMetric(
-      wrappedValue: style.fontSize,
-      relativeTo: style.relativeTextStyle
-    )
     _scaledLineHeight = ScaledMetric(
       wrappedValue: style.lineHeight,
       relativeTo: style.relativeTextStyle
     )
   }
 
+  private var lineHeight: AttributedString.LineHeight? {
+    guard !dynamicTypeSize.isAccessibilitySize else {
+      return nil
+    }
+
+    return .exact(points: scaledLineHeight)
+  }
+
   func body(content: Content) -> some View {
     content
-      .font(.custom(style.weight.rawValue, size: scaledFontSize))
-      .lineHeight(.exact(points: scaledLineHeight))
+      .font(
+        .custom(
+          style.weight.rawValue,
+          size: style.fontSize,
+          relativeTo: style.relativeTextStyle
+        )
+      )
+      .lineHeight(lineHeight)
   }
 }
 

@@ -16,10 +16,10 @@ struct TodayRoutineProgressCard: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    VStack(spacing: MoruPilotSpacing.eight) {
+    VStack(spacing: MoruSpacing.eight) {
       ZStack {
         Circle()
-          .stroke(MoruPilotColor.progressTrack, lineWidth: ringLineWidth)
+          .stroke(MoruColor.progressTrack, lineWidth: ringLineWidth)
           .frame(width: progressRingSize, height: progressRingSize)
 
         Circle()
@@ -38,8 +38,8 @@ struct TodayRoutineProgressCard: View {
             Text(percentValueText)
             Text(percentSymbolText)
           }
-            .homeFigmaTextStyle(.h2)
-            .foregroundStyle(MoruPilotColor.textPrimary)
+            .moruTextStyle(.h2)
+            .foregroundStyle(MoruColor.textPrimary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, alignment: .center)
             .lineLimit(1)
@@ -47,8 +47,8 @@ struct TodayRoutineProgressCard: View {
             .offset(x: Metric.percentAlignmentOffset)
 
           Text(progress.completedText)
-            .homeFigmaTextStyle(.c2.weight(.regular))
-            .foregroundStyle(MoruPilotColor.textTertiary)
+            .moruTextStyle(.c2.weight(.regular))
+            .foregroundStyle(MoruColor.textTertiary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, alignment: .center)
             .lineLimit(1)
@@ -61,11 +61,11 @@ struct TodayRoutineProgressCard: View {
       .accessibilityValue("\(progress.percentText), \(progress.completedText)")
 
       Text(HomeCopy.todayRoutine)
-        .homeFigmaTextStyle(.c1.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c1.weight(.semiBold))
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 20 : 22)
-    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .padding(.horizontal, MoruSpacing.sixteen)
     .frame(maxWidth: .infinity)
     .frame(minHeight: cardMinimumHeight)
     .homePilotSurface()

@@ -17,12 +17,3 @@ struct MoruCheckIcon: View {
     .frame(width: 24, height: 24)
   }
 }
-
-struct MoruSmallCheckIcon: View {
-  var body: some View {
-    Image(AppIcon.moruSmallCheck)
-      .resizable()
-      .scaledToFit()
-      .frame(width: 16, height: 16)
-  }
-}

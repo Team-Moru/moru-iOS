@@ -149,7 +149,7 @@ struct HistoryReportSummaryCard: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: MoruPilotSpacing.twenty) {
+                VStack(spacing: MoruSpacing.twenty) {
                     ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
                         metricView(metric)
 
@@ -159,7 +159,7 @@ struct HistoryReportSummaryCard: View {
                         }
                     }
                 }
-                .padding(MoruPilotSpacing.twenty)
+                .padding(MoruSpacing.twenty)
             } else {
                 HStack(spacing: 0) {
                     ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
@@ -172,14 +172,14 @@ struct HistoryReportSummaryCard: View {
                         }
                     }
                 }
-                .padding(.horizontal, MoruPilotSpacing.twenty)
+                .padding(.horizontal, MoruSpacing.twenty)
                 .frame(minHeight: 110)
             }
         }
         .frame(maxWidth: .infinity)
-        .background(MoruPilotColor.summarySurface)
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-        .shadow(color: MoruPilotColor.shadow, radius: 15, x: 0, y: 0)
+        .background(MoruColor.summarySurface)
+        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
+        .shadow(color: MoruColor.shadow, radius: 15, x: 0, y: 0)
     }
 
     private func metricView(_ metric: HistoryReportMetric) -> some View {
@@ -187,7 +187,7 @@ struct HistoryReportSummaryCard: View {
             if let systemImage = metric.systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(MoruPilotColor.accentSurface)
+                    .foregroundStyle(MoruColor.accentSurface)
                     .accessibilityHidden(true)
             }
 
@@ -205,16 +205,16 @@ struct HistoryReportSummaryCard: View {
 
     private func metricTitle(_ metric: HistoryReportMetric) -> some View {
         Text(metric.title)
-            .historyOverviewTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textPrimary)
+            .moruTextStyle(.c1)
+            .foregroundStyle(MoruColor.textPrimary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private func metricValue(_ metric: HistoryReportMetric) -> some View {
         Text(metric.value)
-            .historyOverviewTextStyle(.h1.weight(.bold))
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .moruTextStyle(.h1.weight(.bold))
+            .foregroundStyle(MoruColor.textStrong)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
             .minimumScaleFactor(0.62)
             .fixedSize(horizontal: false, vertical: true)
@@ -232,39 +232,39 @@ struct HistoryWakeMetricsView: View {
 
             Group {
                 if dynamicTypeSize.isAccessibilitySize {
-                    VStack(spacing: MoruPilotSpacing.twenty) {
+                    VStack(spacing: MoruSpacing.twenty) {
                         averageWakeMetric
 
                         Divider()
-                            .overlay(MoruPilotColor.border)
+                            .overlay(MoruColor.border)
 
                         regularityMetric
                     }
-                    .padding(MoruPilotSpacing.twenty)
+                    .padding(MoruSpacing.twenty)
                 } else {
-                    HStack(spacing: MoruPilotSpacing.sixteen) {
+                    HStack(spacing: MoruSpacing.sixteen) {
                         averageWakeMetric
 
                         Rectangle()
-                            .fill(MoruPilotColor.border)
+                            .fill(MoruColor.border)
                             .frame(width: 1, height: 74)
 
                         regularityMetric
                     }
-                    .padding(.horizontal, MoruPilotSpacing.twenty)
+                    .padding(.horizontal, MoruSpacing.twenty)
                     .frame(height: 111)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(historyPilotSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
             .shadow(
-                color: MoruPilotColor.shadow,
+                color: MoruColor.shadow,
                 radius: 15,
                 x: 0,
                 y: 0
             )
-            .padding(.vertical, MoruPilotSpacing.eight)
+            .padding(.vertical, MoruSpacing.eight)
         }
     }
 
@@ -357,18 +357,18 @@ private struct HistoryMetricBlock: View {
     var body: some View {
         VStack(spacing: 0) {
             Text(title)
-                .historyOverviewTextStyle(.c2)
-                .foregroundStyle(MoruPilotColor.textTertiary)
+                .moruTextStyle(.c2)
+                .foregroundStyle(MoruColor.textTertiary)
 
             Text(value)
-                .historyOverviewTextStyle(.h1.weight(.bold))
-                .foregroundStyle(MoruPilotColor.accent)
+                .moruTextStyle(.h1.weight(.bold))
+                .foregroundStyle(MoruColor.accent)
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
 
             Text(detail)
-                .historyOverviewTextStyle(.c2)
-                .foregroundStyle(MoruPilotColor.textSecondary)
+                .moruTextStyle(.c2)
+                .foregroundStyle(MoruColor.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -382,7 +382,7 @@ private struct HistoryPilotSectionHeader: View {
 
     var body: some View {
         Text(title)
-            .historyOverviewTextStyle(.b4.weight(.semiBold))
+            .moruTextStyle(.b4.weight(.semiBold))
             .foregroundStyle(AppColor.gray400)
             .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
     }
@@ -401,7 +401,7 @@ struct HistoryWeeklyCompletionChart: View {
         VStack(alignment: .leading, spacing: 0) {
             HistoryPilotSectionHeader(title: HistoryCopy.weekdayCompletionRate)
 
-            VStack(spacing: MoruPilotSpacing.twelve) {
+            VStack(spacing: MoruSpacing.twelve) {
                 HStack(alignment: .bottom, spacing: AppSpacing.sm) {
                     ForEach(completions, id: \.date) { completion in
                         HistoryWeekBar(
@@ -415,12 +415,12 @@ struct HistoryWeeklyCompletionChart: View {
                 }
                 .frame(height: 112)
             }
-            .padding(.horizontal, MoruPilotSpacing.twenty)
-            .padding(.vertical, MoruPilotSpacing.twenty)
+            .padding(.horizontal, MoruSpacing.twenty)
+            .padding(.vertical, MoruSpacing.twenty)
             .background(historyPilotSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
-            .shadow(color: MoruPilotColor.shadow, radius: 15, x: 0, y: 0)
-            .padding(.vertical, MoruPilotSpacing.eight)
+            .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.twelve))
+            .shadow(color: MoruColor.shadow, radius: 15, x: 0, y: 0)
+            .padding(.vertical, MoruSpacing.eight)
         }
     }
 }
@@ -465,7 +465,7 @@ struct HistoryWeeklyStepAnalysisView: View {
         VStack(alignment: .leading, spacing: 0) {
             HistoryPilotSectionHeader(title: HistoryCopy.itemAnalysis)
 
-            VStack(spacing: MoruPilotSpacing.eight) {
+            VStack(spacing: MoruSpacing.eight) {
                 if items.isEmpty {
                     HistoryInlineEmptyCard(
                         message: "이번 주 항목별 기록이 없어요."
@@ -476,7 +476,7 @@ struct HistoryWeeklyStepAnalysisView: View {
                     }
                 }
             }
-            .padding(.vertical, MoruPilotSpacing.eight)
+            .padding(.vertical, MoruSpacing.eight)
         }
     }
 }
@@ -485,32 +485,32 @@ private struct HistoryStepAnalysisRow: View {
     let item: HistoryStepAnalysisItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+        VStack(alignment: .leading, spacing: MoruSpacing.eight) {
             HStack(alignment: .firstTextBaseline) {
                 Text(item.title)
-                    .historyOverviewTextStyle(.b4.weight(.semiBold))
-                    .foregroundStyle(MoruPilotColor.textStrong)
+                    .moruTextStyle(.b4.weight(.semiBold))
+                    .foregroundStyle(MoruColor.textStrong)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Spacer()
 
                 Text("완수율 \(Int((item.completionRate * 100).rounded()))%")
-                    .historyOverviewTextStyle(.c1)
-                    .foregroundStyle(MoruPilotColor.textSecondary)
+                    .moruTextStyle(.c1)
+                    .foregroundStyle(MoruColor.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
 
             HistoryCompletionRateBar(
                 completionRate: item.completionRate,
-                fillColor: MoruPilotColor.accent
+                fillColor: MoruColor.accent
             )
         }
-        .padding(MoruPilotSpacing.sixteen)
+        .padding(MoruSpacing.sixteen)
         .frame(maxWidth: .infinity, minHeight: 75, alignment: .leading)
         .background(AppColor.grayWhite)
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(item.title), 완수율 "
@@ -536,12 +536,12 @@ private struct HistoryWeekBar: View {
             VStack(spacing: AppSpacing.xxs) {
                 Spacer(minLength: 0)
 
-                RoundedRectangle(cornerRadius: MoruPilotSpacing.four)
+                RoundedRectangle(cornerRadius: MoruSpacing.four)
                     .fill(
                         LinearGradient(
                             colors: [
-                                MoruPilotColor.accent,
-                                MoruPilotColor.accent.opacity(0),
+                                MoruColor.accent,
+                                MoruColor.accent.opacity(0),
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -551,16 +551,16 @@ private struct HistoryWeekBar: View {
                     .opacity(completion.hasData ? 1 : 0)
 
                 Text(historyWeekdayText(completion.date, calendar: calendar))
-                    .historyOverviewTextStyle(.c1)
-                    .foregroundStyle(MoruPilotColor.textTertiary)
+                    .moruTextStyle(.c1)
+                    .foregroundStyle(MoruColor.textTertiary)
 
                 Text(
                     completion.hasData
                         ? "\(Int((completion.completionRate * 100).rounded()))%"
                         : "-"
                 )
-                    .historyOverviewTextStyle(.c1)
-                    .foregroundStyle(MoruPilotColor.textPrimary)
+                    .moruTextStyle(.c1)
+                    .foregroundStyle(MoruColor.textPrimary)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
@@ -595,15 +595,15 @@ struct HistoryInlineEmptyCard: View {
 
     var body: some View {
         Text(message)
-            .historyOverviewTextStyle(.b4)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .moruTextStyle(.b4)
+            .foregroundStyle(MoruColor.textSecondary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, minHeight: 76)
-            .padding(.horizontal, MoruPilotSpacing.sixteen)
+            .padding(.horizontal, MoruSpacing.sixteen)
             .background(AppColor.grayWhite.opacity(0.35))
-            .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-            .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
+            .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
     }
 }
 
@@ -655,7 +655,7 @@ struct HistoryMonthlyHeatmapView: View {
     }
 
     private let columns = Array(
-        repeating: GridItem(.flexible(), spacing: MoruPilotSpacing.four),
+        repeating: GridItem(.flexible(), spacing: MoruSpacing.four),
         count: 7
     )
 
@@ -665,7 +665,7 @@ struct HistoryMonthlyHeatmapView: View {
 
             VStack(spacing: 0) {
                 Text(monthText)
-                    .historyOverviewTextStyle(.b4)
+                    .moruTextStyle(.b4)
                     .foregroundStyle(AppColor.gray400)
                     .frame(maxWidth: .infinity, minHeight: 40)
 
@@ -676,7 +676,7 @@ struct HistoryMonthlyHeatmapView: View {
                         id: \.self
                     ) { weekday in
                         Text(weekday)
-                            .historyOverviewTextStyle(.c1)
+                            .moruTextStyle(.c1)
                             .foregroundStyle(AppColor.gray400)
                             .lineLimit(1)
                             .minimumScaleFactor(0.45)
@@ -722,20 +722,20 @@ struct HistoryMonthlyHeatmapView: View {
                         }
                     }
                 }
-                .padding(.horizontal, MoruPilotSpacing.twenty)
+                .padding(.horizontal, MoruSpacing.twenty)
                 .padding(.top, dynamicTypeSize.isAccessibilitySize ? 20 : 24)
-                .padding(.bottom, MoruPilotSpacing.eight)
+                .padding(.bottom, MoruSpacing.eight)
                 .frame(maxWidth: .infinity, minHeight: 212, alignment: .top)
                 .background(historyPilotSurface)
-                .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.twelve))
+                .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.twelve))
             }
-            .padding(.top, MoruPilotSpacing.eight)
-            .padding(.bottom, MoruPilotSpacing.twenty)
+            .padding(.top, MoruSpacing.eight)
+            .padding(.bottom, MoruSpacing.twenty)
             .frame(maxWidth: .infinity, minHeight: 284, alignment: .top)
             .background(historyPilotSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
             .shadow(
-                color: MoruPilotColor.shadow,
+                color: MoruColor.shadow,
                 radius: 15,
                 x: 0,
                 y: 0
@@ -763,12 +763,12 @@ struct HistoryMonthlyHeatmapView: View {
 
     private func heatmapCell(_ day: HistoryHeatmapDay) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: MoruPilotSpacing.eight)
+            RoundedRectangle(cornerRadius: MoruSpacing.eight)
                 .fill(fillColor(for: day.bucket))
 
             if let date = day.date {
                 Text("\(calendar.component(.day, from: date))")
-                    .historyOverviewTextStyle(.c2)
+                    .moruTextStyle(.c2)
                     .foregroundStyle(AppColor.gray500)
                     .lineLimit(1)
                     .minimumScaleFactor(0.45)
@@ -855,7 +855,7 @@ struct HistoryRunRow: View {
         .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
         .overlay {
             RoundedRectangle(cornerRadius: AppRadius.xs)
-                .stroke(AppColor.moruBorder, lineWidth: 1)
+                .stroke(MoruColor.border, lineWidth: 1)
         }
     }
 }
@@ -871,8 +871,8 @@ struct HistoryStepResultRow: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
-                    HStack(alignment: .top, spacing: MoruPilotSpacing.twelve) {
+                VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
+                    HStack(alignment: .top, spacing: MoruSpacing.twelve) {
                         completionIcon
                         titleText
                     }
@@ -881,20 +881,20 @@ struct HistoryStepResultRow: View {
                         .padding(.leading, 30)
                 }
             } else {
-                HStack(spacing: MoruPilotSpacing.eight) {
+                HStack(spacing: MoruSpacing.eight) {
                     completionIcon
                     titleText
-                    Spacer(minLength: MoruPilotSpacing.eight)
+                    Spacer(minLength: MoruSpacing.eight)
                     resultBadge
                 }
             }
         }
-        .padding(.horizontal, MoruPilotSpacing.sixteen)
-        .padding(.vertical, MoruPilotSpacing.twelve)
+        .padding(.horizontal, MoruSpacing.sixteen)
+        .padding(.vertical, MoruSpacing.twelve)
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
         .background(historyPilotSurface)
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-        .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
+        .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(index)번째, \(title), \(resultText)")
     }
@@ -905,7 +905,7 @@ struct HistoryStepResultRow: View {
                 .stroke(
                     isCompleted
                         ? Color(red: 117 / 255, green: 161 / 255, blue: 1)
-                        : MoruPilotColor.textTertiary,
+                        : MoruColor.textTertiary,
                     lineWidth: 1
                 )
                 .frame(width: 18, height: 18)
@@ -915,7 +915,7 @@ struct HistoryStepResultRow: View {
                 .foregroundStyle(
                     isCompleted
                         ? Color(red: 117 / 255, green: 161 / 255, blue: 1)
-                        : MoruPilotColor.textTertiary
+                        : MoruColor.textTertiary
                 )
         }
         .accessibilityHidden(true)
@@ -923,19 +923,19 @@ struct HistoryStepResultRow: View {
 
     private var titleText: some View {
         Text(title)
-            .historyOverviewTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .moruTextStyle(.b4.weight(.semiBold))
+            .foregroundStyle(MoruColor.textStrong)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private var resultBadge: some View {
         Text(resultText)
-            .historyOverviewTextStyle(.c1)
+            .moruTextStyle(.c1)
             .foregroundStyle(
                 isCompleted
-                    ? MoruPilotColor.textPrimary
-                    : MoruPilotColor.textSecondary
+                    ? MoruColor.textPrimary
+                    : MoruColor.textSecondary
             )
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -946,21 +946,21 @@ struct HistoryLoadingView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("이력")
-                    .historyOverviewTextStyle(.h3)
+                    .moruTextStyle(.h3)
                     .foregroundStyle(AppColor.gray550)
                     .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
 
-                VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
-                    HistorySkeletonBlock(cornerRadius: MoruPilotRadius.largeCard)
+                VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
+                    HistorySkeletonBlock(cornerRadius: MoruRadius.largeCard)
                         .frame(height: 114)
-                        .padding(.vertical, MoruPilotSpacing.eight)
+                        .padding(.vertical, MoruSpacing.eight)
 
                     skeletonSection(cardHeight: 111)
                     heatmapSkeleton
                 }
             }
-            .padding(.horizontal, MoruPilotSpacing.twenty)
-            .padding(.bottom, MoruPilotSpacing.sixtyFour)
+            .padding(.horizontal, MoruSpacing.twenty)
+            .padding(.bottom, MoruSpacing.sixtyFour)
         }
         .accessibilityLabel(HistoryCopy.loadingAccessibilityLabel)
         .accessibilityAddTraits(.updatesFrequently)
@@ -968,32 +968,32 @@ struct HistoryLoadingView: View {
 
     private func skeletonSection(cardHeight: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HistorySkeletonBlock(cornerRadius: MoruPilotRadius.card)
+            HistorySkeletonBlock(cornerRadius: MoruRadius.card)
                 .frame(width: 90, height: 22)
                 .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
 
-            HistorySkeletonBlock(cornerRadius: MoruPilotRadius.largeCard)
+            HistorySkeletonBlock(cornerRadius: MoruRadius.largeCard)
                 .frame(height: cardHeight)
-                .padding(.vertical, MoruPilotSpacing.eight)
+                .padding(.vertical, MoruSpacing.eight)
         }
     }
 
     private var heatmapSkeleton: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HistorySkeletonBlock(cornerRadius: MoruPilotRadius.card)
+            HistorySkeletonBlock(cornerRadius: MoruRadius.card)
                 .frame(width: 90, height: 22)
                 .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
 
             VStack(spacing: 0) {
-                HistorySkeletonBlock(cornerRadius: MoruPilotRadius.card)
+                HistorySkeletonBlock(cornerRadius: MoruRadius.card)
                     .frame(width: 160, height: 24)
                     .frame(maxWidth: .infinity, minHeight: 40)
 
-                HistorySkeletonBlock(cornerRadius: MoruPilotSpacing.twelve)
+                HistorySkeletonBlock(cornerRadius: MoruSpacing.twelve)
                     .frame(height: 212)
             }
-            .padding(.top, MoruPilotSpacing.eight)
-            .padding(.bottom, MoruPilotSpacing.twenty)
+            .padding(.top, MoruSpacing.eight)
+            .padding(.bottom, MoruSpacing.twenty)
             .frame(maxWidth: .infinity, minHeight: 284, alignment: .top)
         }
     }
@@ -1041,53 +1041,36 @@ struct HistoryStatusView: View {
     var body: some View {
         GeometryReader { proxy in
             ScrollView {
-                VStack(spacing: MoruPilotSpacing.sixteen) {
+                VStack(spacing: MoruSpacing.sixteen) {
                     Image(systemName: systemImage)
                         .font(AppFont.title1SemiBold)
-                        .foregroundStyle(MoruPilotColor.accent)
+                        .foregroundStyle(MoruColor.accent)
                         .accessibilityHidden(true)
 
                     Text(title)
-                        .historyOverviewTextStyle(.h3)
-                        .foregroundStyle(MoruPilotColor.textStrong)
+                        .moruTextStyle(.h3)
+                        .foregroundStyle(MoruColor.textStrong)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(message)
-                        .historyOverviewTextStyle(.b4)
-                        .foregroundStyle(MoruPilotColor.textSecondary)
+                        .moruTextStyle(.b4)
+                        .foregroundStyle(MoruColor.textSecondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
                     if let primaryActionTitle, let primaryAction {
-                        if dynamicTypeSize.isAccessibilitySize {
-                            Button(action: primaryAction) {
-                                Text(primaryActionTitle)
-                                    .historyOverviewTextStyle(.b4.weight(.semiBold))
-                                    .foregroundStyle(MoruPilotColor.textStrong)
-                                    .multilineTextAlignment(.center)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .padding(.horizontal, MoruPilotSpacing.twenty)
-                                    .padding(.vertical, MoruPilotSpacing.sixteen)
-                                    .frame(maxWidth: .infinity, minHeight: 54)
-                                    .background(AppColor.grayWhite)
-                                    .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            MoruButton(
-                                primaryActionTitle,
-                                style: .secondary,
-                                componentStyle: .figmaPilot,
-                                action: primaryAction
-                            )
-                        }
+                        MoruButton(
+                            primaryActionTitle,
+                            style: .secondary,
+                            action: primaryAction
+                        )
                     }
 
                     if let secondaryActionTitle, let secondaryAction {
                         Button(secondaryActionTitle, action: secondaryAction)
-                            .historyOverviewTextStyle(.b4.weight(.semiBold))
-                            .foregroundStyle(MoruPilotColor.textPrimary)
+                            .moruTextStyle(.b4.weight(.semiBold))
+                            .foregroundStyle(MoruColor.textPrimary)
                             .buttonStyle(.plain)
                             .frame(minHeight: 44)
                     }
@@ -1097,8 +1080,8 @@ struct HistoryStatusView: View {
                     minHeight: proxy.size.height,
                     alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center
                 )
-                .padding(.horizontal, MoruPilotSpacing.twenty)
-                .padding(.vertical, MoruPilotSpacing.thirtyTwo)
+                .padding(.horizontal, MoruSpacing.twenty)
+                .padding(.vertical, MoruSpacing.thirtyTwo)
             }
         }
     }
@@ -1120,33 +1103,6 @@ private struct HistorySkeletonBlock: View {
                 )
             )
             .accessibilityHidden(true)
-    }
-}
-
-private struct HistoryOverviewTextStyleModifier: ViewModifier {
-    let style: MoruTextStyle
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            content.font(
-                .custom(
-                    style.weight.rawValue,
-                    size: style.fontSize,
-                    relativeTo: style.relativeTextStyle
-                )
-            )
-        } else {
-            content.moruTextStyle(style)
-        }
-    }
-}
-
-extension View {
-    func historyOverviewTextStyle(_ style: MoruTextStyle) -> some View {
-        modifier(HistoryOverviewTextStyleModifier(style: style))
     }
 }
 

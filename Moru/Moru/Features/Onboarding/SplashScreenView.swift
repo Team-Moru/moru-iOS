@@ -38,6 +38,7 @@ struct SplashScreenView: View {
               .accessibilityIdentifier(
                 SplashScreenAccessibility.startIdentifier
               )
+              .padding(.horizontal, AppSpacing.screenHorizontal)
               .padding(
                 .bottom,
                 max(AppSpacing.xxl, proxy.safeAreaInsets.bottom)
@@ -50,7 +51,7 @@ struct SplashScreenView: View {
       LinearGradient(
         colors: [
           AppColor.grayWhite,
-          MoruPilotColor.canvas,
+          MoruColor.canvas,
         ],
         startPoint: .top,
         endPoint: .bottom

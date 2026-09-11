@@ -14,17 +14,17 @@ struct CurrentRoutineCard: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       Button(action: onTap) {
         HStack {
           Text(HomeCopy.currentRoutine)
-            .homeFigmaTextStyle(.c1.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textPrimary)
+            .moruTextStyle(.c1.weight(.semiBold))
+            .foregroundStyle(MoruColor.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
 
           Spacer()
 
-          MoruChevron(color: MoruPilotColor.textPrimary)
+          MoruChevron(color: MoruColor.textPrimary)
         }
         .frame(minHeight: 22)
       }
@@ -45,8 +45,8 @@ struct CurrentRoutineCard: View {
         emptyState
       }
     }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
-    .padding(.vertical, MoruPilotSpacing.sixteen)
+    .padding(.horizontal, MoruSpacing.twenty)
+    .padding(.vertical, MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, alignment: .leading)
     .homePilotSurface()
   }
@@ -72,11 +72,11 @@ struct CurrentRoutineCard: View {
         }
       }
     }
-    .padding(.horizontal, MoruPilotSpacing.sixteen)
-    .padding(.vertical, MoruPilotSpacing.twelve)
+    .padding(.horizontal, MoruSpacing.sixteen)
+    .padding(.vertical, MoruSpacing.twelve)
     .frame(minHeight: 72)
-    .background(MoruPilotColor.accentSurface)
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotSpacing.sixteen))
+    .background(MoruColor.accentSurface)
+    .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.sixteen))
   }
 
   private var summaryIndicator: some View {
@@ -105,23 +105,23 @@ struct CurrentRoutineCard: View {
       }
 
       Text(routine.estimatedDurationText)
-        .homeFigmaTextStyle(.c2)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c2)
+        .foregroundStyle(MoruColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
   }
 
   private func routineTitle(_ routine: HomeRoutineState) -> some View {
     Text(routine.title)
-      .homeFigmaTextStyle(.b4.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textPrimary)
+      .moruTextStyle(.b4.weight(.semiBold))
+      .foregroundStyle(MoruColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private func routineStatus(_ routine: HomeRoutineState) -> some View {
     Text(routine.statusText)
-      .homeFigmaTextStyle(.c2)
-      .foregroundStyle(MoruPilotColor.accent)
+      .moruTextStyle(.c2)
+      .foregroundStyle(MoruColor.accent)
       .fixedSize(horizontal: false, vertical: true)
       .padding(.horizontal, AppSpacing.sm)
       .padding(.vertical, AppSpacing.xxs)
@@ -152,8 +152,8 @@ struct CurrentRoutineCard: View {
         .frame(width: progressRingSize, height: progressRingSize)
 
       Text(routine.progressText)
-        .homeFigmaTextStyle(.c1.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.accent)
+        .moruTextStyle(.c1.weight(.semiBold))
+        .foregroundStyle(MoruColor.accent)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
@@ -188,10 +188,10 @@ struct CurrentRoutineCard: View {
         }
       }
     }
-    .padding(.vertical, MoruPilotSpacing.twelve)
+    .padding(.vertical, MoruSpacing.twelve)
     .overlay(alignment: .bottom) {
       Rectangle()
-        .fill(AppColor.moruBorder)
+        .fill(MoruColor.border)
         .frame(height: 1)
     }
     .accessibilityElement(children: .ignore)
@@ -201,27 +201,27 @@ struct CurrentRoutineCard: View {
 
   private func stepTitle(_ step: HomeRoutineStepState) -> some View {
     Text(step.title)
-      .homeFigmaTextStyle(.c1)
-      .foregroundStyle(MoruPilotColor.textPrimary)
+      .moruTextStyle(.c1)
+      .foregroundStyle(MoruColor.textPrimary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private func stepDetail(_ step: HomeRoutineStepState) -> some View {
     Text(step.displayDetail)
-      .homeFigmaTextStyle(.c2)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .moruTextStyle(.c2)
+      .foregroundStyle(MoruColor.textSecondary)
       .fixedSize(horizontal: false, vertical: true)
   }
 
   private var emptyState: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.twelve) {
+    VStack(alignment: .leading, spacing: MoruSpacing.twelve) {
       Text("오늘 사용할 루틴이 아직 없어요.")
-        .homeFigmaTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .moruTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruColor.textPrimary)
 
       Text("루틴 탭에서 아침 루틴을 설정해보세요.")
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }

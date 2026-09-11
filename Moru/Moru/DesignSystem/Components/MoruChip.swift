@@ -14,10 +14,10 @@ struct MoruChip: View {
   var body: some View {
     Text(title)
       .font(AppFont.pretendardMedium(size: 14))
-      .foregroundStyle(isSelected ? AppColor.grayWhite : AppColor.moruTextSecondary)
+      .foregroundStyle(isSelected ? AppColor.grayWhite : MoruColor.textSecondary)
       .padding(.horizontal, AppSpacing.md)
       .frame(height: 28)
-      .background(isSelected ? AppColor.orange350 : AppColor.moruSurfaceMuted)
+      .background(isSelected ? AppColor.orange350 : MoruColor.surfaceMuted)
       .clipShape(Capsule())
   }
 }

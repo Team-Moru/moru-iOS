@@ -20,10 +20,10 @@ struct RoutineWeekdaySelector: View {
       if dynamicTypeSize.isAccessibilitySize {
         LazyVGrid(
           columns: Array(
-            repeating: GridItem(.flexible(), spacing: MoruPilotSpacing.twelve),
+            repeating: GridItem(.flexible(), spacing: MoruSpacing.twelve),
             count: 4
           ),
-          spacing: MoruPilotSpacing.twelve
+          spacing: MoruSpacing.twelve
         ) {
           weekdayButtons
         }
@@ -43,11 +43,11 @@ struct RoutineWeekdaySelector: View {
         toggle(weekday)
       } label: {
         Text(weekday.shortTitle)
-          .routineManagementTextStyle(.b4.weight(.semiBold))
+          .moruTextStyle(.b4.weight(.semiBold))
           .foregroundStyle(
             selectedWeekdays.contains(weekday)
               ? AppColor.grayWhite
-              : AppColor.moruDisabled
+              : MoruColor.textPrimary
           )
           .frame(
             width: dynamicTypeSize.isAccessibilitySize ? 52 : 40,
@@ -55,8 +55,8 @@ struct RoutineWeekdaySelector: View {
           )
           .background(
             selectedWeekdays.contains(weekday)
-              ? MoruPilotColor.accent
-              : AppColor.gray150.opacity(0.55)
+              ? MoruColor.accent
+              : MoruColor.border
           )
           .clipShape(Circle())
       }

@@ -55,7 +55,7 @@ struct MoruApp: App {
             .overlay(alignment: .bottom) {
               ProgressView()
                 .controlSize(.small)
-                .tint(MoruPilotColor.accent)
+                .tint(MoruColor.accent)
                 .padding(.bottom, 96)
                 .accessibilityLabel("앱을 준비하고 있어요")
             }

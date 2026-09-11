@@ -23,18 +23,18 @@ struct HomeHeaderView: View {
   }
 
   private func headerContent(at date: Date) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+    VStack(alignment: .leading, spacing: MoruSpacing.four) {
       Text(greeting(at: date))
-        .homeFigmaTextStyle(.h3)
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .moruTextStyle(.h3)
+        .foregroundStyle(MoruColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
 
       Text(HomeCopy.encouragement)
-        .homeFigmaTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textTertiary)
+        .moruTextStyle(.b4)
+        .foregroundStyle(MoruColor.textTertiary)
         .fixedSize(horizontal: false, vertical: true)
     }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.twenty)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     .background(alignment: .bottom) {
       Image(AppImage.moruGradientGlow)

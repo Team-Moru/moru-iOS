@@ -41,19 +41,19 @@ struct RoutineSettingView: View {
           if let errorMessage = viewModel.state.errorMessage,
              viewModel.state.routines.isEmpty {
             routineErrorState(message: errorMessage)
-              .padding(.top, MoruPilotSpacing.thirtyTwo)
+              .padding(.top, MoruSpacing.thirtyTwo)
           } else if viewModel.state.routines.isEmpty {
             emptyRoutineState
-              .padding(.top, MoruPilotSpacing.thirtyTwo)
+              .padding(.top, MoruSpacing.thirtyTwo)
           } else {
             activeRoutineSection
-              .padding(.top, MoruPilotSpacing.thirtyTwo)
+              .padding(.top, MoruSpacing.thirtyTwo)
 
             inactiveRoutineSection
               .padding(.top, AppSpacing.forty)
 
             addRoutineButton
-              .padding(.top, MoruPilotSpacing.sixteen)
+              .padding(.top, MoruSpacing.sixteen)
           }
 
           if let errorMessage = viewModel.state.errorMessage,
@@ -62,12 +62,12 @@ struct RoutineSettingView: View {
               .padding(.top, AppSpacing.sm)
           }
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.twenty)
-        .padding(.bottom, MoruPilotSpacing.thirtySix)
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.twenty)
+        .padding(.bottom, MoruSpacing.thirtySix)
       }
       .defaultScrollAnchor(.top)
-      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .background(MoruColor.canvas.ignoresSafeArea())
       .navigationBarTitleDisplayMode(.inline)
     }
     .accessibilityElement(children: .contain)
@@ -120,7 +120,7 @@ struct RoutineSettingView: View {
 
   private var header: some View {
     Text("루틴")
-      .routineListTextStyle(.h3)
+      .moruTextStyle(.h3)
       .foregroundStyle(AppColor.gray550)
       .fixedSize(horizontal: false, vertical: true)
   }
@@ -145,21 +145,20 @@ struct RoutineSettingView: View {
     VStack(spacing: AppSpacing.md) {
       Image(systemName: "checklist")
         .font(AppFont.title1SemiBold)
-        .foregroundStyle(MoruPilotColor.accentSoft)
+        .foregroundStyle(MoruColor.accentSoft)
 
       Text("아직 만든 루틴이 없어요.")
-        .routineListTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .moruTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruColor.textStrong)
 
       Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
-        .routineListTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textSecondary)
         .multilineTextAlignment(.center)
 
       MoruButton(
         "새 루틴 만들기",
-        style: .secondary,
-        componentStyle: .figmaPilot
+        style: .secondary
       ) {
         presentCreationSheet()
       }
@@ -174,25 +173,24 @@ struct RoutineSettingView: View {
     VStack(spacing: AppSpacing.md) {
       Image(systemName: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
         .font(AppFont.title1SemiBold)
-        .foregroundStyle(MoruPilotColor.accentSoft)
+        .foregroundStyle(MoruColor.accentSoft)
         .accessibilityHidden(true)
 
       Text(message)
-        .routineListTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .moruTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruColor.textStrong)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
 
       Text("잠시 후 다시 시도해 주세요.")
-        .routineListTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textSecondary)
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)
 
       MoruButton(
         "다시 불러오기",
-        style: .secondary,
-        componentStyle: .figmaPilot
+        style: .secondary
       ) {
         viewModel.load()
       }
@@ -201,17 +199,17 @@ struct RoutineSettingView: View {
   }
 
   private func retainedRoutineErrorState(message: String) -> some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       Text(message)
-        .routineListTextStyle(.c1)
+        .moruTextStyle(.c1)
         .foregroundStyle(AppColor.orange500)
         .fixedSize(horizontal: false, vertical: true)
 
       Button("다시 불러오기") {
         viewModel.load()
       }
-      .routineListTextStyle(.c1.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.accent)
+      .moruTextStyle(.c1.weight(.semiBold))
+      .foregroundStyle(MoruColor.accent)
       .buttonStyle(.plain)
       .accessibilityHint("루틴 목록을 다시 불러옵니다.")
     }
@@ -224,20 +222,19 @@ struct RoutineSettingView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(title)
-        .routineListTextStyle(.b4.weight(.semiBold))
+        .moruTextStyle(.b4.weight(.semiBold))
         .foregroundStyle(AppColor.gray400)
         .fixedSize(horizontal: false, vertical: true)
 
       if routines.isEmpty {
         emptySectionCard(title: emptyTitle)
-          .padding(.top, MoruPilotSpacing.sixteen)
+          .padding(.top, MoruSpacing.sixteen)
       } else {
-        VStack(spacing: MoruPilotSpacing.sixteen) {
+        VStack(spacing: MoruSpacing.sixteen) {
           ForEach(routines) { routine in
             RoutineSettingCard(
               routine: routine,
               isActive: activationBinding(for: routine),
-              componentStyle: .figmaPilot,
               onTap: {
                 editorDraft = viewModel.makeDraft(for: routine.id)
               },
@@ -249,7 +246,7 @@ struct RoutineSettingView: View {
             )
           }
         }
-        .padding(.top, MoruPilotSpacing.sixteen)
+        .padding(.top, MoruSpacing.sixteen)
       }
     }
   }
@@ -260,8 +257,7 @@ struct RoutineSettingView: View {
     } label: {
       MoruRoutineCard(
         title: RoutineManagementCopy.addRoutine,
-        isAddCard: true,
-        componentStyle: .figmaPilot
+        isAddCard: true
       )
     }
     .buttonStyle(.plain)
@@ -279,15 +275,15 @@ struct RoutineSettingView: View {
   private func emptySectionCard(title: String) -> some View {
     VStack(spacing: AppSpacing.md) {
       Text(title)
-        .routineListTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .frame(maxWidth: .infinity)
     .frame(minHeight: 76)
     .padding(.vertical, AppSpacing.sm)
     .background(AppColor.grayWhite.opacity(0.35))
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-    .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
+    .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
   }
 
   private func activationBinding(for routine: RoutineSettingItemState) -> Binding<Bool> {
@@ -350,12 +346,6 @@ struct RoutineSettingView: View {
         }
       )
     }
-  }
-}
-
-extension View {
-  func routineListTextStyle(_ style: MoruTextStyle) -> some View {
-    moruPilotTextStyle(style)
   }
 }
 

@@ -126,12 +126,12 @@ struct HomeView: View {
           if let previousContent {
             homeContent(previousContent, showsRoutineServerNotice: false)
             HomeRefreshIndicator()
-              .padding(.top, MoruPilotSpacing.twenty)
+              .padding(.top, MoruSpacing.twenty)
           } else {
             HomeHeaderView(userName: "")
             HomeLoadingSkeleton()
               .padding(.top, 24)
-              .padding(.horizontal, MoruPilotSpacing.twenty)
+              .padding(.horizontal, MoruSpacing.twenty)
           }
         case .content(let content):
           homeContent(content)
@@ -143,22 +143,22 @@ struct HomeView: View {
           HomeEmptyView(onCreateRoutine: {
             presentedRoutineSheet = .create
           })
-          .padding(.top, MoruPilotSpacing.twenty)
+          .padding(.top, MoruSpacing.twenty)
         case .failed(let failure, let previousContent):
           if let previousContent {
             homeContent(previousContent, showsRoutineServerNotice: false)
             HomeFailureBanner(failure: failure, retryAction: viewModel.retry)
-              .padding(.top, MoruPilotSpacing.twenty)
+              .padding(.top, MoruSpacing.twenty)
           } else {
             HomeHeaderView(userName: "")
             weatherCard
               .padding(.top, 24)
             HomeFailureView(failure: failure, retryAction: viewModel.retry)
-              .padding(.top, MoruPilotSpacing.twenty)
+              .padding(.top, MoruSpacing.twenty)
           }
         }
       }
-      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      .padding(.bottom, MoruSpacing.sixtyFour)
     }
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier(Self.rootAccessibilityIdentifier)
@@ -215,8 +215,8 @@ struct HomeView: View {
         notice: notice,
         retryAction: viewModel.retry
       )
-      .padding(.top, MoruPilotSpacing.twelve)
-      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.top, MoruSpacing.twelve)
+      .padding(.horizontal, MoruSpacing.twenty)
     }
   }
 
@@ -233,10 +233,10 @@ struct HomeView: View {
 
     routineProgressCards(content)
       .padding(.top, 24)
-      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.twenty)
 
     weatherCard
-      .padding(.top, MoruPilotSpacing.twenty)
+      .padding(.top, MoruSpacing.twenty)
 
     CurrentRoutineCard(
       routine: content.todayRoutine,
@@ -251,8 +251,8 @@ struct HomeView: View {
         startRoutine(routineID)
       }
     )
-    .padding(.top, MoruPilotSpacing.twenty)
-    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.top, MoruSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.twenty)
 
     HomeActiveRoutineSection(
       routines: content.activeRoutines,
@@ -261,15 +261,15 @@ struct HomeView: View {
       },
       onStartRoutine: startRoutine
     )
-    .padding(.top, MoruPilotSpacing.thirtyTwo)
-    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.top, MoruSpacing.thirtyTwo)
+    .padding(.horizontal, MoruSpacing.twenty)
 
     if let routineLaunchMessage {
       Text(routineLaunchMessage)
         .font(AppFont.caption1Medium)
         .foregroundStyle(AppColor.orange500)
-        .padding(.top, MoruPilotSpacing.sixteen)
-        .padding(.horizontal, MoruPilotSpacing.twenty)
+        .padding(.top, MoruSpacing.sixteen)
+        .padding(.horizontal, MoruSpacing.twenty)
     }
   }
 
@@ -286,7 +286,7 @@ struct HomeView: View {
         HomeStreakCard(streak: content.streak)
       }
     } else {
-      HStack(spacing: MoruPilotSpacing.twenty) {
+      HStack(spacing: MoruSpacing.twenty) {
         TodayRoutineProgressCard(progress: content.todayProgress)
         HomeStreakCard(streak: content.streak)
       }
@@ -322,8 +322,8 @@ struct HomeWeatherCard: View {
 
   var body: some View {
     weatherContent
-    .padding(.horizontal, MoruPilotSpacing.twenty)
-    .padding(.vertical, MoruPilotSpacing.twelve)
+    .padding(.horizontal, MoruSpacing.twenty)
+    .padding(.vertical, MoruSpacing.twelve)
     .frame(
       maxWidth: .infinity,
       minHeight: minimumCardHeight,
@@ -385,8 +385,8 @@ struct HomeWeatherCard: View {
         .tint(AppColor.orange400)
         .accessibilityHidden(true)
       Text("날씨를 불러오는 중이에요")
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .accessibilityElement(children: .combine)
   }
@@ -394,8 +394,8 @@ struct HomeWeatherCard: View {
   private var weatherRequestButton: some View {
     Button(action: requestWeather) {
       Label("현재 위치 날씨 보기", systemImage: "location.fill")
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textPrimary)
     }
     .accessibilityHint("현재 위치의 날씨를 요청합니다.")
   }
@@ -407,8 +407,8 @@ struct HomeWeatherCard: View {
       }
     } label: {
       Label("설정에서 위치 권한 켜기", systemImage: "gearshape.fill")
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textPrimary)
     }
     .accessibilityHint("MORU의 위치 권한을 변경할 수 있는 설정을 엽니다.")
   }
@@ -425,19 +425,19 @@ struct HomeWeatherCard: View {
             temperatureRange(for: content.snapshot)
           }
 
-        HStack(spacing: -MoruPilotSpacing.sixteen) {
+        HStack(spacing: -MoruSpacing.sixteen) {
           weatherAttributionLink(
             content.attribution,
             markImage: markImage
           )
-          .offset(x: -1, y: MoruPilotSpacing.four)
+          .offset(x: -1, y: MoruSpacing.four)
           refreshButton
-            .offset(x: 7, y: MoruPilotSpacing.four)
+            .offset(x: 7, y: MoruSpacing.four)
         }
-        .offset(y: -MoruPilotSpacing.eight)
+        .offset(y: -MoruSpacing.eight)
       }
     } else {
-      VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+      VStack(alignment: .leading, spacing: MoruSpacing.eight) {
         weatherMessage("날씨 출처 정보를 불러오지 못했어요")
         weatherRequestButton
       }
@@ -452,8 +452,8 @@ struct HomeWeatherCard: View {
         "최고 \(temperatureText(for: dailyHighCelsius)) · "
           + "최저 \(temperatureText(for: dailyLowCelsius))"
       )
-      .homeFigmaTextStyle(.c2.weight(.regular))
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .moruTextStyle(.c2.weight(.regular))
+      .foregroundStyle(MoruColor.textSecondary)
       .lineLimit(1)
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(
@@ -504,13 +504,13 @@ struct HomeWeatherCard: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text(temperatureText(for: snapshot))
-        .homeFigmaTextStyle(.h2)
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .moruTextStyle(.h2)
+        .foregroundStyle(MoruColor.textPrimary)
         .lineLimit(1)
 
       Text("\(conditionLabel(for: snapshot.condition)) · 현재 위치")
-      .homeFigmaTextStyle(.c2.weight(.regular))
-      .foregroundStyle(MoruPilotColor.textTertiary)
+      .moruTextStyle(.c2.weight(.regular))
+      .foregroundStyle(MoruColor.textTertiary)
       .lineLimit(1)
     }
     .accessibilityElement(children: .combine)
@@ -522,7 +522,7 @@ struct HomeWeatherCard: View {
     Button(action: requestWeather) {
       Image(systemName: "arrow.clockwise")
         .font(.system(size: 16, weight: .medium))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
     }
@@ -532,8 +532,8 @@ struct HomeWeatherCard: View {
 
   private func weatherMessage(_ message: String) -> some View {
     Text(message)
-      .homeFigmaTextStyle(.c1)
-      .foregroundStyle(MoruPilotColor.textSecondary)
+      .moruTextStyle(.c1)
+      .foregroundStyle(MoruColor.textSecondary)
   }
 
   private func weatherSnapshotAccessibilityLabel(
@@ -602,8 +602,8 @@ struct HomeWeatherCard: View {
 
 private struct HomeLoadingSkeleton: View {
   var body: some View {
-    VStack(spacing: MoruPilotSpacing.twenty) {
-      HStack(spacing: MoruPilotSpacing.twenty) {
+    VStack(spacing: MoruSpacing.twenty) {
+      HStack(spacing: MoruSpacing.twenty) {
         HomeSkeletonBlock()
           .frame(height: 184)
         HomeSkeletonBlock()
@@ -624,7 +624,7 @@ private struct HomeLoadingSkeleton: View {
 
 private struct HomeSkeletonBlock: View {
   var body: some View {
-    RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+    RoundedRectangle(cornerRadius: MoruRadius.largeCard)
       .fill(
         LinearGradient(
           colors: [
@@ -646,7 +646,7 @@ private struct HomeRefreshIndicator: View {
         .tint(AppColor.orange400)
       Text("홈 정보를 새로 불러오는 중이에요.")
         .font(AppFont.caption1Medium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .padding(.horizontal, AppSpacing.screenHorizontal)
     .accessibilityElement(children: .combine)
@@ -660,13 +660,13 @@ private struct HomeRoutineServerNoticeView: View {
   var body: some View {
     switch notice {
     case .syncing:
-      HStack(spacing: MoruPilotSpacing.eight) {
+      HStack(spacing: MoruSpacing.eight) {
         ProgressView()
           .tint(AppColor.orange400)
           .accessibilityHidden(true)
         Text(notice.message)
-          .homeFigmaTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .moruTextStyle(.c1)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
       .homeRoutineServerNoticeSurface()
@@ -679,13 +679,13 @@ private struct HomeRoutineServerNoticeView: View {
       VStack(spacing: 0) {
         Button(action: retryAction) {
           ViewThatFits(in: .horizontal) {
-            HStack(spacing: MoruPilotSpacing.eight) {
+            HStack(spacing: MoruSpacing.eight) {
               savedRoutineNoticeLabel
-              Spacer(minLength: MoruPilotSpacing.eight)
+              Spacer(minLength: MoruSpacing.eight)
               retryLabel
             }
 
-            VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+            VStack(alignment: .leading, spacing: MoruSpacing.four) {
               savedRoutineNoticeLabel
               retryLabel
             }
@@ -709,13 +709,13 @@ private struct HomeRoutineServerNoticeView: View {
   }
 
   private var savedRoutineNoticeLabel: some View {
-    HStack(spacing: MoruPilotSpacing.eight) {
+    HStack(spacing: MoruSpacing.eight) {
       Image(systemName: "exclamationmark.triangle.fill")
         .foregroundStyle(AppColor.orange500)
         .accessibilityHidden(true)
       Text(notice.message)
-        .homeFigmaTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
     }
     .accessibilityElement(children: .combine)
@@ -723,24 +723,24 @@ private struct HomeRoutineServerNoticeView: View {
 
   private var retryLabel: some View {
     Text("다시 시도")
-      .homeFigmaTextStyle(.c1.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.accent)
+      .moruTextStyle(.c1.weight(.semiBold))
+      .foregroundStyle(MoruColor.accent)
       .fixedSize(horizontal: true, vertical: false)
   }
 }
 
 private extension View {
   func homeRoutineServerNoticeSurface(
-    verticalPadding: CGFloat = MoruPilotSpacing.twelve
+    verticalPadding: CGFloat = MoruSpacing.twelve
   ) -> some View {
-    padding(.horizontal, MoruPilotSpacing.sixteen)
+    padding(.horizontal, MoruSpacing.sixteen)
       .padding(.vertical, verticalPadding)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(AppColor.grayWhite.opacity(0.45))
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
       .overlay {
-        RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-          .stroke(MoruPilotColor.border.opacity(0.5), lineWidth: 1)
+        RoundedRectangle(cornerRadius: MoruRadius.card)
+          .stroke(MoruColor.border.opacity(0.5), lineWidth: 1)
       }
   }
 }
@@ -756,11 +756,11 @@ private struct HomeEmptyView: View {
 
       Text("아직 만든 루틴이 없어요.")
         .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruColor.textStrong)
 
       Text("새 루틴을 만들어 나만의 아침을 시작해 보세요.")
         .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .multilineTextAlignment(.center)
 
       MoruButton("새 루틴 만들기", style: .secondary, action: onCreateRoutine)
@@ -785,7 +785,7 @@ private struct HomeFailureView: View {
 
       Text(failure.userMessage)
         .font(AppFont.heading3SemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruColor.textStrong)
         .multilineTextAlignment(.center)
 
       MoruButton("다시 시도", style: .secondary, action: retryAction)
@@ -803,7 +803,7 @@ private struct HomeFailureBanner: View {
     VStack(spacing: AppSpacing.sm) {
       Text(failure.userMessage)
         .font(AppFont.label1NormalMedium)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruColor.textStrong)
         .multilineTextAlignment(.center)
 
       MoruButton("다시 시도", style: .secondary, action: retryAction)

@@ -14,7 +14,6 @@ struct MoruDialog: View {
   let secondaryTitle: String
   let primaryAction: () -> Void
   let secondaryAction: () -> Void
-  let adaptsForAccessibility: Bool
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   init(
@@ -23,8 +22,7 @@ struct MoruDialog: View {
     primaryTitle: String,
     secondaryTitle: String,
     primaryAction: @escaping () -> Void,
-    secondaryAction: @escaping () -> Void,
-    adaptsForAccessibility: Bool = false
+    secondaryAction: @escaping () -> Void
   ) {
     self.title = title
     self.message = message
@@ -32,72 +30,21 @@ struct MoruDialog: View {
     self.secondaryTitle = secondaryTitle
     self.primaryAction = primaryAction
     self.secondaryAction = secondaryAction
-    self.adaptsForAccessibility = adaptsForAccessibility
   }
 
   var body: some View {
-    Group {
-      if adaptsForAccessibility {
-        adaptiveDialog
-      } else {
-        legacyDialog
-      }
-    }
-  }
-
-  private var legacyDialog: some View {
-    VStack(spacing: AppSpacing.lg) {
-      VStack(spacing: AppSpacing.md) {
-        Text(title)
-          .font(AppFont.pretendardSemiBold(size: 22))
-          .foregroundStyle(AppColor.moruTextStrong)
-          .multilineTextAlignment(.center)
-          .frame(width: 320)
-
-        Text(message)
-          .font(AppFont.pretendardMedium(size: 16))
-          .foregroundStyle(AppColor.moruTextSecondary)
-          .multilineTextAlignment(.center)
-          .frame(width: 320)
-      }
-      .frame(width: 320)
-      .padding(.top, AppSpacing.thirtySix)
-
-      HStack(spacing: 0) {
-        legacyDialogActionButton(
-          action: primaryAction,
-          title: primaryTitle,
-          color: AppColor.moruTextSecondary
-        )
-        Rectangle()
-          .fill(AppColor.moruBorder)
-          .frame(width: 1, height: 54)
-        legacyDialogActionButton(
-          action: secondaryAction,
-          title: secondaryTitle,
-          color: AppColor.moruTextStrong
-        )
-      }
-      .frame(width: 320, height: 54)
-    }
-    .frame(width: 320)
-    .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
-  }
-
-  private var adaptiveDialog: some View {
     VStack(spacing: AppSpacing.lg) {
       VStack(spacing: AppSpacing.md) {
         Text(title)
           .font(AppFont.pretendardSemiBold(size: 22, relativeTo: .title3))
-          .foregroundStyle(AppColor.moruTextStrong)
+          .foregroundStyle(MoruColor.textStrong)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .fixedSize(horizontal: false, vertical: true)
 
         Text(message)
           .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-          .foregroundStyle(AppColor.moruTextSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .multilineTextAlignment(.center)
           .frame(maxWidth: .infinity)
           .fixedSize(horizontal: false, vertical: true)
@@ -107,76 +54,58 @@ struct MoruDialog: View {
 
       if dynamicTypeSize.isAccessibilitySize {
         VStack(spacing: 0) {
-          adaptiveDialogActionButton(
+          actionButton(
             action: primaryAction,
             title: primaryTitle,
-            color: AppColor.moruTextSecondary,
-            width: 320
+            color: MoruColor.textSecondary
           )
           Rectangle()
-            .fill(AppColor.moruBorder)
-            .frame(width: 320, height: 1)
-          adaptiveDialogActionButton(
+            .fill(MoruColor.border)
+            .frame(height: 1)
+          actionButton(
             action: secondaryAction,
             title: secondaryTitle,
-            color: AppColor.moruTextStrong,
-            width: 320
+            color: MoruColor.textStrong
           )
         }
       } else {
         HStack(spacing: 0) {
-          adaptiveDialogActionButton(
+          actionButton(
             action: primaryAction,
             title: primaryTitle,
-            color: AppColor.moruTextSecondary,
-            width: 159.5
+            color: MoruColor.textSecondary
           )
           Rectangle()
-            .fill(AppColor.moruBorder)
+            .fill(MoruColor.border)
             .frame(width: 1, height: 54)
-          adaptiveDialogActionButton(
+          actionButton(
             action: secondaryAction,
             title: secondaryTitle,
-            color: AppColor.moruTextStrong,
-            width: 159.5
+            color: MoruColor.textStrong
           )
         }
-        .frame(width: 320)
         .frame(minHeight: 54)
       }
     }
-    .frame(width: 320)
+    .frame(maxWidth: .infinity)
     .background(AppColor.grayWhite)
     .clipShape(RoundedRectangle(cornerRadius: AppRadius.lg))
+    .padding(.horizontal, MoruSpacing.thirtySix)
   }
 
-  private func legacyDialogActionButton(
+  private func actionButton(
     action: @escaping () -> Void,
     title: String,
     color: Color
   ) -> some View {
     SwiftUI.Button(action: action) {
       Text(title)
-        .font(AppFont.pretendardSemiBold(size: 16))
-        .foregroundStyle(color)
-        .frame(width: 159.5, height: 54)
-    }
-    .buttonStyle(.plain)
-  }
-
-  private func adaptiveDialogActionButton(
-    action: @escaping () -> Void,
-    title: String,
-    color: Color,
-    width: CGFloat
-  ) -> some View {
-    SwiftUI.Button(action: action) {
-      Text(title)
         .font(AppFont.pretendardSemiBold(size: 16, relativeTo: .body))
         .foregroundStyle(color)
-        .frame(width: width)
+        .frame(maxWidth: .infinity)
         .frame(minHeight: 54)
         .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 8 : 0)
+        .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
   }

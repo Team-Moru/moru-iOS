@@ -8,24 +8,17 @@
 import SwiftUI
 
 struct MoruProgressBar: View {
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
   let current: Int
   let total: Int
-  let componentStyle: MoruPilotComponentStyle
   let showsLabel: Bool
-
-  private let figmaGaugeWidth: CGFloat = 352
 
   init(
     current: Int,
     total: Int,
-    componentStyle: MoruPilotComponentStyle = .legacy,
     showsLabel: Bool = true
   ) {
     self.current = current
     self.total = total
-    self.componentStyle = componentStyle
     self.showsLabel = showsLabel
   }
 
@@ -39,15 +32,15 @@ struct MoruProgressBar: View {
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule()
-            .fill(trackColor)
+            .fill(MoruColor.progressTrack)
 
           Capsule()
-            .fill(progressColor)
+            .fill(MoruColor.accent)
             .frame(width: proxy.size.width * progress)
         }
       }
       .frame(height: 5)
-      .frame(maxWidth: figmaGaugeWidth)
+      .frame(maxWidth: .infinity)
 
       if showsLabel {
         progressLabel
@@ -55,40 +48,10 @@ struct MoruProgressBar: View {
     }
   }
 
-  @ViewBuilder
   private var progressLabel: some View {
-    let label = Text("\(current)/\(total)")
-      .foregroundStyle(labelColor)
-      .frame(maxWidth: figmaGaugeWidth, alignment: .leading)
-
-    if componentStyle == .figmaPilot {
-      if dynamicTypeSize.isAccessibilitySize {
-        label.font(
-          .custom(
-            MoruTextWeight.regular.rawValue,
-            size: MoruTextStyle.c2.fontSize,
-            relativeTo: MoruTextStyle.c2.relativeTextStyle
-          )
-        )
-      } else {
-        label.moruTextStyle(.c2.weight(.regular))
-      }
-    } else {
-      label.font(AppFont.pretendardRegular(size: 12))
-    }
-  }
-
-  private var trackColor: Color {
-    componentStyle == .figmaPilot
-      ? MoruPilotColor.progressTrack
-      : AppColor.moruSurfaceMuted
-  }
-
-  private var progressColor: Color {
-    componentStyle == .figmaPilot ? MoruPilotColor.accent : AppColor.orange350
-  }
-
-  private var labelColor: Color {
-    componentStyle == .figmaPilot ? MoruPilotColor.textPrimary : AppColor.moruTextBody
+    Text("\(current)/\(total)")
+      .moruTextStyle(.c2.weight(.regular))
+      .foregroundStyle(MoruColor.textPrimary)
+      .frame(maxWidth: .infinity, alignment: .leading)
   }
 }

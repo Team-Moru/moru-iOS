@@ -58,33 +58,3 @@ enum RoutineManagementCopy {
   }
 }
 
-private struct RoutineManagementTextStyleModifier: ViewModifier {
-  let style: MoruTextStyle
-
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @ScaledMetric private var scaledFontSize: CGFloat
-
-  init(style: MoruTextStyle) {
-    self.style = style
-    _scaledFontSize = ScaledMetric(
-      wrappedValue: style.fontSize,
-      relativeTo: style.relativeTextStyle
-    )
-  }
-
-  @ViewBuilder
-  func body(content: Content) -> some View {
-    if dynamicTypeSize.isAccessibilitySize {
-      content
-        .font(.custom(style.weight.rawValue, size: scaledFontSize))
-    } else {
-      content.moruTextStyle(style)
-    }
-  }
-}
-
-extension View {
-  func routineManagementTextStyle(_ style: MoruTextStyle) -> some View {
-    modifier(RoutineManagementTextStyleModifier(style: style))
-  }
-}

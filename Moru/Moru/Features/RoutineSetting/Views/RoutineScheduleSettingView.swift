@@ -26,7 +26,7 @@ struct RoutineScheduleSettingView: View {
 
   private var timeDragPicker: some View {
     ZStack {
-      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+      RoundedRectangle(cornerRadius: MoruRadius.card)
         .fill(AppColor.gray150.opacity(0.65))
         .frame(height: dynamicTypeSize.isAccessibilitySize ? 60 : 48)
 

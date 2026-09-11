@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MoruChevron: View {
-  var color: Color = AppColor.moruTextPrimary
+  var color: Color = MoruColor.textStrong
   var direction: MoruChevronDirection = .right
 
   var body: some View {

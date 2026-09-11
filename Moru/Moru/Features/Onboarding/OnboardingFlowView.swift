@@ -44,8 +44,8 @@ struct OnboardingFlowView: View {
       } else {
         ScrollView(showsIndicators: false) {
           stepContent
-            .padding(.horizontal, MoruPilotSpacing.twenty)
-            .padding(.top, MoruPilotSpacing.thirtyTwo)
+            .padding(.horizontal, MoruSpacing.twenty)
+            .padding(.top, MoruSpacing.thirtyTwo)
             .padding(.bottom, contentBottomSpacing)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -134,14 +134,14 @@ private struct OnboardingHeaderView: View {
   @ObservedObject var viewModel: OnboardingViewModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
       if viewModel.canCancel {
         HStack {
           Spacer()
 
           Button("취소", action: viewModel.cancelButtonDidTap)
-            .onboardingTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .moruTextStyle(.c1)
+            .foregroundStyle(MoruColor.textSecondary)
             .accessibilityIdentifier(
               OnboardingFlowView.cancelAccessibilityIdentifier
             )
@@ -155,21 +155,20 @@ private struct OnboardingHeaderView: View {
           MoruProgressBar(
             current: progressIndex,
             total: viewModel.progressTotal,
-            componentStyle: .figmaPilot,
             showsLabel: false
           )
           .frame(maxWidth: .infinity)
 
           Text("\(progressIndex)/\(viewModel.progressTotal)")
-            .onboardingTextStyle(.c2)
-            .foregroundStyle(MoruPilotColor.textPrimary)
+            .moruTextStyle(.c2)
+            .foregroundStyle(MoruColor.textPrimary)
             .fixedSize()
-            .padding(.leading, MoruPilotSpacing.twelve)
+            .padding(.leading, MoruSpacing.twelve)
         }
       }
     }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
-    .padding(.top, MoruPilotSpacing.sixteen)
+    .padding(.horizontal, MoruSpacing.twenty)
+    .padding(.top, MoruSpacing.sixteen)
   }
 
   @ViewBuilder
@@ -178,7 +177,7 @@ private struct OnboardingHeaderView: View {
       Button(action: viewModel.backButtonDidTap) {
         Image(systemName: "chevron.left")
           .font(.system(size: 24, weight: .regular))
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .frame(width: 44, height: 44, alignment: .leading)
           .contentShape(Rectangle())
       }
@@ -198,10 +197,10 @@ private struct OnboardingFooterView: View {
   @ObservedObject var viewModel: OnboardingViewModel
 
   var body: some View {
-    VStack(spacing: MoruPilotSpacing.eight) {
+    VStack(spacing: MoruSpacing.eight) {
       if let errorMessage = viewModel.errorMessage {
         Text(errorMessage)
-          .onboardingTextStyle(.c2)
+          .moruTextStyle(.c2)
           .foregroundStyle(AppColor.coral300)
           .multilineTextAlignment(.center)
       }
@@ -216,7 +215,7 @@ private struct OnboardingFooterView: View {
           }
 
           Text(viewModel.primaryButtonTitle)
-            .onboardingTextStyle(.b4.weight(.semiBold))
+            .moruTextStyle(.b4.weight(.semiBold))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
         }
@@ -224,25 +223,25 @@ private struct OnboardingFooterView: View {
         .frame(maxWidth: .infinity, minHeight: 54)
         .background(
           viewModel.canAdvance
-            ? MoruPilotColor.accent
-            : MoruPilotColor.textTertiary
+            ? MoruColor.ctaFill
+            : MoruColor.textTertiary
         )
         .clipShape(
-          RoundedRectangle(cornerRadius: MoruPilotRadius.pill)
+          RoundedRectangle(cornerRadius: MoruRadius.pill)
         )
       }
       .buttonStyle(.plain)
       .disabled(!viewModel.canAdvance)
     }
     .frame(maxWidth: .infinity)
-    .padding(.horizontal, MoruPilotSpacing.twenty)
-    .padding(.top, MoruPilotSpacing.sixteen)
-    .padding(.bottom, viewModel.step == .completion ? 0 : MoruPilotSpacing.eight)
+    .padding(.horizontal, MoruSpacing.twenty)
+    .padding(.top, MoruSpacing.sixteen)
+    .padding(.bottom, viewModel.step == .completion ? 0 : MoruSpacing.eight)
     .background(
       LinearGradient(
         colors: [
-          MoruPilotColor.canvas.opacity(0),
-          MoruPilotColor.canvas,
+          MoruColor.canvas.opacity(0),
+          MoruColor.canvas,
         ],
         startPoint: .top,
         endPoint: .bottom
@@ -256,7 +255,7 @@ private struct OnboardingBackgroundView: View {
     LinearGradient(
       colors: [
         AppColor.grayWhite,
-        MoruPilotColor.canvas,
+        MoruColor.canvas,
       ],
       startPoint: .top,
       endPoint: .bottom
@@ -299,14 +298,14 @@ private struct OnboardingStepLayout<Content: View>: View {
     VStack(alignment: .leading, spacing: titleSpacing) {
       VStack(alignment: .leading, spacing: AppSpacing.xs) {
         Text(title)
-          .onboardingTextStyle(.h2.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .moruTextStyle(.h2.weight(.semiBold))
+          .foregroundStyle(MoruColor.textStrong)
           .fixedSize(horizontal: false, vertical: true)
 
         if !subtitle.isEmpty {
           Text(subtitle)
-            .onboardingTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textPrimary)
+            .moruTextStyle(.c1)
+            .foregroundStyle(MoruColor.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
         }
       }
@@ -326,7 +325,7 @@ private struct RoutineExperienceQuestionView: View {
       subtitle: OnboardingCopy.experienceSubtitle,
       titleSpacing: 68
     ) {
-      VStack(spacing: MoruPilotSpacing.twelve) {
+      VStack(spacing: MoruSpacing.twelve) {
         ForEach(RoutineExperience.allCases) { experience in
           OnboardingOptionButton(
             title: experience.title,
@@ -352,25 +351,25 @@ private struct RoutineGoalSelectionView: View {
       subtitle: "",
       titleSpacing: OnboardingFigmaLayout.goalTitleContentSpacing
     ) {
-      LazyVGrid(columns: columns, spacing: MoruPilotSpacing.twelve) {
+      LazyVGrid(columns: columns, spacing: MoruSpacing.twelve) {
         ForEach(OnboardingDraft.goalOptions) { option in
           Button {
             viewModel.toggleGoal(tag: option.tag)
           } label: {
-            HStack(spacing: MoruPilotSpacing.twelve) {
+            HStack(spacing: MoruSpacing.twelve) {
               MoruSelectionIcon(icon: option.icon)
                 .frame(width: 32, height: 32)
 
-              VStack(alignment: .leading, spacing: MoruPilotSpacing.four) {
+              VStack(alignment: .leading, spacing: MoruSpacing.four) {
                 Text(option.title)
-                  .onboardingTextStyle(.b2.weight(.semiBold))
-                  .foregroundStyle(MoruPilotColor.textStrong)
+                  .moruTextStyle(.b2.weight(.semiBold))
+                  .foregroundStyle(MoruColor.textStrong)
                   .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                   .minimumScaleFactor(0.8)
 
                 Text(option.subtitle)
-                  .onboardingTextStyle(.c1.weight(.semiBold))
-                  .foregroundStyle(MoruPilotColor.textSecondary)
+                  .moruTextStyle(.c1.weight(.semiBold))
+                  .foregroundStyle(MoruColor.textSecondary)
                   .fixedSize(horizontal: false, vertical: true)
               }
             }
@@ -379,19 +378,19 @@ private struct RoutineGoalSelectionView: View {
               minHeight: dynamicTypeSize.isAccessibilitySize ? 132 : 104,
               alignment: .leading
             )
-            .padding(.horizontal, MoruPilotSpacing.sixteen)
+            .padding(.horizontal, MoruSpacing.sixteen)
             .background(OnboardingSurface.card)
             .overlay(
-              RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+              RoundedRectangle(cornerRadius: MoruRadius.largeCard)
                 .stroke(
                   viewModel.draft.selectedGoalTags.contains(option.tag)
-                    ? MoruPilotColor.accent
-                    : MoruPilotColor.border,
+                    ? MoruColor.accent
+                    : MoruColor.border,
                   lineWidth: 1.5
                 )
             )
             .clipShape(
-              RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+              RoundedRectangle(cornerRadius: MoruRadius.largeCard)
             )
           }
           .buttonStyle(.plain)
@@ -407,7 +406,7 @@ private struct RoutineGoalSelectionView: View {
     }
 
     return [
-      GridItem(.flexible(), spacing: MoruPilotSpacing.twelve),
+      GridItem(.flexible(), spacing: MoruSpacing.twelve),
       GridItem(.flexible()),
     ]
   }
@@ -460,10 +459,10 @@ private struct RoutineDurationPreviewView: View {
 
       VStack(alignment: .leading, spacing: AppSpacing.xl) {
         Text(
-          "예상 루틴 시간은\n\(Text("\(totalMinutes)분").foregroundColor(MoruPilotColor.accent))이에요"
+          "예상 루틴 시간은\n\(Text("\(totalMinutes)분").foregroundColor(MoruColor.accent))이에요"
         )
-        .onboardingTextStyle(.h2.weight(.semiBold))
-        .foregroundColor(MoruPilotColor.textStrong)
+        .moruTextStyle(.h2.weight(.semiBold))
+        .foregroundColor(MoruColor.textStrong)
         .fixedSize(horizontal: false, vertical: true)
 
         RoutineDurationClockView(totalMinutes: totalMinutes)
@@ -497,7 +496,7 @@ private struct RoutineDurationClockView: View {
       Circle()
         .trim(from: 0, to: displayedProgress)
         .stroke(
-          MoruPilotColor.accent.opacity(0.42),
+          MoruColor.accent.opacity(0.42),
           style: StrokeStyle(lineWidth: 28, lineCap: .butt)
         )
         .rotationEffect(.degrees(-90))
@@ -516,7 +515,7 @@ private struct RoutineDurationClockView: View {
           )
         )
         .frame(width: 208, height: 208)
-        .shadow(color: MoruPilotColor.shadow.opacity(0.34), radius: 14)
+        .shadow(color: MoruColor.shadow.opacity(0.34), radius: 14)
 
       ClockDurationSector(progress: displayedProgress)
         .fill(AppColor.grayWhite.opacity(0.54))
@@ -542,9 +541,9 @@ private struct RoutineDurationClockView: View {
         .rotationEffect(.degrees(Double(displayedProgress) * 360))
 
       Circle()
-        .fill(MoruPilotColor.accentSoft)
+        .fill(MoruColor.accentSoft)
         .frame(width: 16, height: 16)
-        .shadow(color: MoruPilotColor.accent.opacity(0.38), radius: 4)
+        .shadow(color: MoruColor.accent.opacity(0.38), radius: 4)
     }
     .frame(width: 240, height: 240)
     .accessibilityElement(children: .ignore)
@@ -605,8 +604,8 @@ private struct RoutineFreeformInputView: View {
         ZStack(alignment: .topLeading) {
           if viewModel.freeformText.isEmpty {
             Text("예) 일어나면 물 마시고, 스트레칭 하고, 일기 쓰고,\n오늘 할 일 미리 확인하기")
-              .onboardingTextStyle(.c1)
-              .foregroundStyle(MoruPilotColor.textTertiary)
+              .moruTextStyle(.c1)
+              .foregroundStyle(MoruColor.textTertiary)
               .padding(AppSpacing.md)
           }
 
@@ -625,7 +624,7 @@ private struct RoutineFreeformInputView: View {
                 relativeTo: MoruTextStyle.c1.relativeTextStyle
               )
             )
-            .foregroundStyle(MoruPilotColor.textPrimary)
+            .foregroundStyle(MoruColor.textPrimary)
             .frame(minHeight: 200)
             .padding(AppSpacing.sm)
             .scrollContentBackground(.hidden)
@@ -635,18 +634,18 @@ private struct RoutineFreeformInputView: View {
             "\(viewModel.freeformText.count)/"
               + "\(OnboardingViewModel.freeformTextCharacterLimit)"
           )
-            .onboardingTextStyle(.c2)
-            .foregroundStyle(MoruPilotColor.textTertiary)
+            .moruTextStyle(.c2)
+            .foregroundStyle(MoruColor.textTertiary)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(AppSpacing.md)
             .allowsHitTesting(false)
         }
         .background(OnboardingSurface.input)
         .overlay(
-          RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-            .stroke(MoruPilotColor.border, lineWidth: 1)
+          RoundedRectangle(cornerRadius: MoruRadius.card)
+            .stroke(MoruColor.border, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
 
         FlowLayout(spacing: AppSpacing.xs) {
           ForEach(OnboardingDraft.keywordOptions, id: \.self) { keyword in
@@ -663,8 +662,8 @@ private struct RoutineFreeformInputView: View {
         }
 
         Text("* 위 키워드를 탭해서 빠르게 추가해보세요")
-          .onboardingTextStyle(.c2.weight(.regular))
-          .foregroundStyle(MoruPilotColor.textTertiary)
+          .moruTextStyle(.c2.weight(.regular))
+          .foregroundStyle(MoruColor.textTertiary)
       }
     }
   }
@@ -689,23 +688,23 @@ private struct RoutineOrganizingContent: View {
         .padding(.top, 104)
 
       Text(OnboardingCopy.organizingTitle)
-        .onboardingTextStyle(.h2.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .moruTextStyle(.h2.weight(.semiBold))
+        .foregroundStyle(MoruColor.textStrong)
         .multilineTextAlignment(.center)
-        .padding(.top, MoruPilotSpacing.twelve)
+        .padding(.top, MoruSpacing.twelve)
 
       Text(OnboardingCopy.organizingSubtitle)
-        .onboardingTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textTertiary)
-        .padding(.top, MoruPilotSpacing.twelve)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textTertiary)
+        .padding(.top, MoruSpacing.twelve)
 
       RoutineOrganizingChecklist(progress: progress)
         .padding(.top, AppSpacing.fortyEight)
 
-      Spacer(minLength: MoruPilotSpacing.twenty)
+      Spacer(minLength: MoruSpacing.twenty)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.twenty)
   }
 }
 
@@ -719,7 +718,7 @@ private struct RoutineOrganizingChecklist: View {
   ]
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+    VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
       ForEach(Array(items.enumerated()), id: \.offset) { index, title in
         OnboardingChecklistRow(
           title: title,
@@ -751,7 +750,7 @@ private struct OrganizingRoutineOrbView: View {
     colors: [
       AppColor.babyBlue200,
       AppColor.purple350.opacity(0.48),
-      MoruPilotColor.accentTint,
+      MoruColor.accentTint,
       AppColor.babyBlue150,
     ],
     center: .center
@@ -835,37 +834,37 @@ private struct OnboardingAlarmSettingView: View {
       title: "아침에 일어날\n시간을 설정해 주세요",
       subtitle: "",
       titleSpacing: dynamicTypeSize.isAccessibilitySize
-        ? MoruPilotSpacing.thirtyTwo
+        ? MoruSpacing.thirtyTwo
         : OnboardingFigmaLayout.alarmTitleContentSpacing
     ) {
       if viewModel.validatedPreviewRoutine != nil {
         VStack(
           spacing: dynamicTypeSize.isAccessibilitySize
-            ? MoruPilotSpacing.twelve
-            : MoruPilotSpacing.twenty
+            ? MoruSpacing.twelve
+            : MoruSpacing.twenty
         ) {
           Text("기상 시간")
-            .onboardingTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .moruTextStyle(.b4.weight(.semiBold))
+            .foregroundStyle(MoruColor.textSecondary)
             .frame(maxWidth: .infinity)
 
           TimeWheelControl(viewModel: viewModel)
 
           Rectangle()
-            .fill(MoruPilotColor.accentTint)
+            .fill(MoruColor.accentTint)
             .frame(height: 1)
 
           Text("반복 요일")
-            .onboardingTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .moruTextStyle(.b4.weight(.semiBold))
+            .foregroundStyle(MoruColor.textSecondary)
             .frame(maxWidth: .infinity)
 
           WeekdayCircleSelector(viewModel: viewModel)
             .frame(maxWidth: .infinity)
 
           Text(OnboardingCopy.alarmSoundGuidance)
-            .onboardingTextStyle(.c1)
-            .foregroundStyle(MoruPilotColor.textTertiary)
+            .moruTextStyle(.c1)
+            .foregroundStyle(MoruColor.textTertiary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity)
@@ -886,7 +885,7 @@ private struct OnboardingVoiceSelectionView: View {
       subtitle: OnboardingCopy.voiceSubtitle,
       titleSpacing: AppSpacing.forty
     ) {
-      VStack(spacing: MoruPilotSpacing.twelve) {
+      VStack(spacing: MoruSpacing.twelve) {
         ForEach(VoiceProfile.localVoices) { voice in
           MoruVoiceCard(
             name: voice.displayName,
@@ -919,13 +918,13 @@ private struct OnboardingCompletionView: View {
 
       VStack(spacing: AppSpacing.md) {
         Text("루틴 설정이\n완료되었어요")
-          .onboardingTextStyle(.h2.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .moruTextStyle(.h2.weight(.semiBold))
+          .foregroundStyle(MoruColor.textStrong)
           .multilineTextAlignment(.center)
 
         Text("모루와 모닝 루틴 하러\n가볼까요?")
-          .onboardingTextStyle(.c1.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textTertiary)
+          .moruTextStyle(.c1.weight(.semiBold))
+          .foregroundStyle(MoruColor.textTertiary)
           .multilineTextAlignment(.center)
       }
       .padding(.top, AppSpacing.fortyEight)
@@ -964,21 +963,21 @@ private struct PreviewUnavailableState: View {
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
       Text("루틴 미리보기를 사용할 수 없어요")
-        .onboardingTextStyle(.b3.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .moruTextStyle(.b3.weight(.semiBold))
+        .foregroundStyle(MoruColor.textStrong)
 
       Text(errorMessage ?? "이전 단계에서 다시 시도해 주세요.")
-        .onboardingTextStyle(.c1)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.c1)
+        .foregroundStyle(MoruColor.textSecondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(MoruPilotSpacing.sixteen)
+    .padding(MoruSpacing.sixteen)
     .background(OnboardingSurface.card)
     .overlay(
-      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-        .stroke(MoruPilotColor.border, lineWidth: 1)
+      RoundedRectangle(cornerRadius: MoruRadius.card)
+        .stroke(MoruColor.border, lineWidth: 1)
     )
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
   }
 }
 
@@ -990,14 +989,14 @@ private struct RoutineMetaPill: View {
   var body: some View {
     HStack {
       Text(goalTitle.map { "\($0) 목표" } ?? "맞춤 루틴")
-        .onboardingTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruColor.textSecondary)
 
       Spacer()
 
       Text("\(stepCount)개 / 총 \(durationMinutes)분")
-        .onboardingTextStyle(.c2.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textTertiary)
+        .moruTextStyle(.c2.weight(.semiBold))
+        .foregroundStyle(MoruColor.textTertiary)
     }
     .frame(minHeight: 28)
   }
@@ -1007,7 +1006,7 @@ private struct RoutineStepListCard: View {
   let routine: Routine
 
   var body: some View {
-    VStack(spacing: MoruPilotSpacing.eight) {
+    VStack(spacing: MoruSpacing.eight) {
       ForEach(Array(orderedSteps.enumerated()), id: \.element.id) { index, step in
         RoutineStepPreviewRow(index: index + 1, step: step)
       }
@@ -1024,7 +1023,7 @@ private struct RecommendedRoutineStepCandidateList: View {
   let candidates: [RoutineStep]
 
   var body: some View {
-    VStack(spacing: MoruPilotSpacing.eight) {
+    VStack(spacing: MoruSpacing.eight) {
       ForEach(Array(candidates.enumerated()), id: \.element.id) { index, step in
         let isSelected = viewModel.isRecommendedRoutineStepSelected(step)
 
@@ -1068,36 +1067,36 @@ private struct RoutineStepPreviewRow: View {
   }
 
   var body: some View {
-    HStack(spacing: MoruPilotSpacing.twelve) {
+    HStack(spacing: MoruSpacing.twelve) {
       ZStack {
         Circle()
           .fill(indexCircleColor)
           .frame(width: 20, height: 20)
 
         Text("\(index)")
-          .onboardingTextStyle(.c2.weight(.semiBold))
+          .moruTextStyle(.c2.weight(.semiBold))
           .foregroundStyle(indexTextColor)
       }
 
       VStack(alignment: .leading, spacing: AppSpacing.xxs) {
         Text(step.title)
-          .onboardingTextStyle(
+          .moruTextStyle(
             showsSelectionControl ? .b3.weight(.semiBold) : .c1.weight(.semiBold)
           )
           .foregroundStyle(
             isSelectableAndExcluded
-              ? MoruPilotColor.textTertiary
-              : MoruPilotColor.textPrimary
+              ? MoruColor.textTertiary
+              : MoruColor.textPrimary
           )
           .lineLimit(1)
           .minimumScaleFactor(0.82)
 
         Text("\(step.type.displayTitle) - \(step.durationTitle)")
-          .onboardingTextStyle(showsSelectionControl ? .b4 : .c2)
+          .moruTextStyle(showsSelectionControl ? .b4 : .c2)
           .foregroundStyle(
             isSelectableAndExcluded
-              ? MoruPilotColor.textTertiary
-              : MoruPilotColor.textSecondary
+              ? MoruColor.textTertiary
+              : MoruColor.textSecondary
           )
       }
 
@@ -1110,18 +1109,18 @@ private struct RoutineStepPreviewRow: View {
           .accessibilityLabel(selectionAccessibilityLabel)
       }
     }
-    .padding(.horizontal, MoruPilotSpacing.sixteen)
+    .padding(.horizontal, MoruSpacing.sixteen)
     .frame(minHeight: 62)
     .background(
       isSelectableAndExcluded
-        ? AppColor.moruSurfaceMuted
+        ? MoruColor.surfaceMuted
         : OnboardingSurface.listRow
     )
     .overlay(
-      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
-        .stroke(MoruPilotColor.border, lineWidth: 1)
+      RoundedRectangle(cornerRadius: MoruRadius.card)
+        .stroke(MoruColor.border, lineWidth: 1)
     )
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.card))
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
   }
 
   private var showsSelectionControl: Bool {
@@ -1134,22 +1133,22 @@ private struct RoutineStepPreviewRow: View {
 
   private var indexCircleColor: Color {
     guard showsSelectionControl else {
-      return MoruPilotColor.accentSurface
+      return MoruColor.accentSurface
     }
 
     return isIncluded == true
-      ? MoruPilotColor.accentSoft
-      : MoruPilotColor.accentTint
+      ? MoruColor.accentSoft
+      : MoruColor.accentTint
   }
 
   private var indexTextColor: Color {
     guard showsSelectionControl else {
-      return MoruPilotColor.accent
+      return MoruColor.accent
     }
 
     return isIncluded == true
       ? AppColor.grayWhite
-      : MoruPilotColor.textTertiary
+      : MoruColor.textTertiary
   }
 
   private var selectionAccessibilityLabel: String {
@@ -1190,12 +1189,12 @@ private struct RoutineCountSummary: View {
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
       Text("루틴 항목")
-        .onboardingTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruColor.textSecondary)
 
       Text("\(routine.steps.count)개 - 총 \(OnboardingDuration.totalMinutes(for: routine))분")
-        .onboardingTextStyle(.b4.weight(.semiBold))
-        .foregroundStyle(MoruPilotColor.textPrimary)
+        .moruTextStyle(.b4.weight(.semiBold))
+        .foregroundStyle(MoruColor.textPrimary)
     }
   }
 }
@@ -1218,11 +1217,11 @@ private struct OnboardingChecklistRow: View {
         .frame(width: 20, height: 20)
 
       Text(status == .active ? "\(title) 중" : title)
-        .onboardingTextStyle(.c1.weight(.semiBold))
+        .moruTextStyle(.c1.weight(.semiBold))
         .foregroundStyle(
           status == .completed
-            ? MoruPilotColor.textPrimary
-            : MoruPilotColor.textSecondary
+            ? MoruColor.textPrimary
+            : MoruColor.textSecondary
         )
         .contentTransition(.opacity)
     }
@@ -1245,23 +1244,23 @@ private struct OnboardingChecklistRow: View {
     case .pending:
       Image(systemName: "circle")
         .font(.system(size: 18, weight: .semibold))
-        .foregroundStyle(MoruPilotColor.textTertiary)
+        .foregroundStyle(MoruColor.textTertiary)
         .transition(.opacity.combined(with: .scale(scale: 0.72)))
     case .active:
       if reduceMotion {
         Image(systemName: "circle.fill")
           .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(MoruPilotColor.accent)
+          .foregroundStyle(MoruColor.accent)
       } else {
         ProgressView()
           .controlSize(.small)
-          .tint(MoruPilotColor.accent)
+          .tint(MoruColor.accent)
           .transition(.opacity.combined(with: .scale(scale: 0.72)))
       }
     case .completed:
       Image(systemName: "checkmark.circle.fill")
         .font(.system(size: 18, weight: .semibold))
-        .foregroundStyle(MoruPilotColor.accent)
+        .foregroundStyle(MoruColor.accent)
         .transition(.opacity.combined(with: .scale(scale: 0.55)))
     }
   }
@@ -1284,7 +1283,7 @@ private struct TimeWheelControl: View {
   @State private var isEditing = true
 
   var body: some View {
-    VStack(spacing: MoruPilotSpacing.sixteen) {
+    VStack(spacing: MoruSpacing.sixteen) {
       Button {
         isEditing.toggle()
       } label: {
@@ -1296,13 +1295,13 @@ private struct TimeWheelControl: View {
                 fixedSize: OnboardingFigmaLayout.alarmTimeFontSize
               )
             )
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .foregroundStyle(MoruColor.textStrong)
             .lineLimit(1)
             .frame(maxWidth: .infinity, minHeight: 82)
 
           Text(timePresentation.period)
-            .onboardingTextStyle(.b2.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .moruTextStyle(.b2.weight(.semiBold))
+            .foregroundStyle(MoruColor.textSecondary)
             .frame(minHeight: 24)
         }
       }
@@ -1332,13 +1331,13 @@ private struct TimeWheelControl: View {
           .transition(.opacity.combined(with: .move(edge: .top)))
       }
     }
-    .padding(.bottom, isEditing ? 0 : MoruPilotSpacing.twenty)
+    .padding(.bottom, isEditing ? 0 : MoruSpacing.twenty)
     .animation(.easeInOut(duration: 0.2), value: isEditing)
   }
 
   private var wheelEditor: some View {
     ZStack {
-      RoundedRectangle(cornerRadius: MoruPilotRadius.card)
+      RoundedRectangle(cornerRadius: MoruRadius.card)
         .fill(AppColor.gray150.opacity(0.65))
         .frame(height: dynamicTypeSize.isAccessibilitySize ? 60 : 48)
 
@@ -1420,14 +1419,14 @@ private struct WeekdayCircleSelector: View {
               .foregroundStyle(
                 viewModel.draft.selectedWeekdays.contains(weekday)
                   ? AppColor.grayWhite
-                  : MoruPilotColor.textTertiary
+                  : MoruColor.textPrimary
               )
               .lineLimit(1)
               .frame(width: 42, height: 42)
               .background(
                 viewModel.draft.selectedWeekdays.contains(weekday)
-                  ? MoruPilotColor.accent
-                  : MoruPilotColor.progressTrack
+                  ? MoruColor.accent
+                  : MoruColor.progressTrack
               )
               .clipShape(Circle())
           }
@@ -1462,12 +1461,12 @@ private struct OnboardingOptionButton: View {
       HStack(spacing: AppSpacing.md) {
         VStack(alignment: .leading, spacing: AppSpacing.xxs) {
           Text(title)
-            .onboardingTextStyle(.b2.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .moruTextStyle(.b2.weight(.semiBold))
+            .foregroundStyle(MoruColor.textStrong)
 
           Text(subtitle)
-            .onboardingTextStyle(.c1.weight(.semiBold))
-            .foregroundStyle(MoruPilotColor.textSecondary)
+            .moruTextStyle(.c1.weight(.semiBold))
+            .foregroundStyle(MoruColor.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
         }
 
@@ -1475,19 +1474,19 @@ private struct OnboardingOptionButton: View {
 
         Image(systemName: "chevron.right")
           .font(.system(size: 20, weight: .medium))
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.twenty)
       .frame(maxWidth: .infinity, minHeight: 84)
       .background(OnboardingSurface.card)
       .overlay(
-        RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard)
+        RoundedRectangle(cornerRadius: MoruRadius.largeCard)
           .stroke(
-            isSelected ? MoruPilotColor.accent : MoruPilotColor.border,
+            isSelected ? MoruColor.accent : MoruColor.border,
             lineWidth: 1.5
           )
       )
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
     }
     .buttonStyle(.plain)
   }
@@ -1696,32 +1695,6 @@ private extension RoutineStepType {
 private extension RoutineStep {
   var durationTitle: String {
     "\(OnboardingDuration.roundedMinutes(for: estimatedSeconds))분"
-  }
-}
-
-struct OnboardingTextStyleModifier: ViewModifier {
-  let style: MoruTextStyle
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-  @ViewBuilder
-  func body(content: Content) -> some View {
-    if dynamicTypeSize.isAccessibilitySize {
-      content.font(
-        .custom(
-          style.weight.rawValue,
-          size: style.fontSize,
-          relativeTo: style.relativeTextStyle
-        )
-      )
-    } else {
-      content.moruTextStyle(style)
-    }
-  }
-}
-
-extension View {
-  func onboardingTextStyle(_ style: MoruTextStyle) -> some View {
-    modifier(OnboardingTextStyleModifier(style: style))
   }
 }
 

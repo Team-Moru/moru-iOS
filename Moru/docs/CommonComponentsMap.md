@@ -16,53 +16,46 @@
 4. 같은 UI가 여러 화면에서 반복되면 공용 컴포넌트로 옮깁니다.
 
 색상, 폰트, 간격, radius는 직접 만들지 말고 아래 값을 사용합니다.
+색은 팔레트(`AppColor.gray500`)보다 시맨틱 토큰(`MoruColor.textStrong`)을 먼저 씁니다.
 
 ```swift
-AppColor
-AppFont
-AppSpacing
-AppRadius
+MoruColor      // 시맨틱 색 (canvas, accent, ctaFill, textStrong, border, ...)
+MoruSpacing    // 간격 (AppSpacing alias)
+MoruRadius     // 모서리 (AppRadius alias)
+AppFont        // 폰트. 본문 텍스트는 .moruTextStyle(_:)을 우선 사용
 ```
 
-Figma 세부 보정 파일럿에서는 기존 화면을 전역 변경하지 않고
-opt-in API를 사용합니다.
-사용법과 캡처·비교 기준은 `docs/FigmaPilotFoundation.md`를 참고합니다.
+토큰과 컴포넌트의 시각 기준, 캡처·비교 방법은 `docs/FigmaPilotFoundation.md`를
+참고합니다.
 
 ## 현재 공용 컴포넌트
 
 | SwiftUI 이름 | 주로 쓰는 곳 |
 | --- | --- |
 | `MoruButton` | 다음, 저장, 시작하기 같은 주요 버튼 |
-| `MoruBottomCTA` | 화면 하단에 고정되는 버튼 영역 |
-| `MoruCard` | 흰색 카드 박스 |
 | `MoruChip` | 키워드, 태그, 선택지 |
 | `MoruToggle` | on/off 설정 |
 | `MoruProgressBar` | 온보딩 단계, 루틴 진행 단계 |
-| `MoruWeekdaySelector` | 알람 반복 요일 선택 |
 | `MoruTabBar` | 홈 / 루틴 / 이력 / 마이 탭 |
 | `MoruCheckBadge` | 완료, 진행중 같은 상태 표시 |
 | `MoruSelectControl` | 플러스 / 마이너스 버튼 |
-| `MoruSelectionCard` | 온보딩 선택 카드 |
 | `MoruRoutineCard` | 루틴 목록 카드 |
-| `MoruRoutineStepRow` | 루틴 항목 row |
 | `MoruVoiceCard` | 음성 선택 카드 |
-| `MoruTimeSettingCard` | 알람 시간 표시 카드 |
-| `MoruTimerStatus` | 남은 시간 표시 |
 | `MoruSoundModule` | 음성 안내 / 사운드 상태 |
-| `MoruRecordingStatus` | 녹음 상태 |
 | `MoruDialog` | 확인 팝업 |
+| `MoruSocialLoginIconButton` | 계정 연결 시트의 소셜 로그인 버튼 |
 
 ## 화면별로 먼저 볼 컴포넌트
 
 | 화면 | 먼저 볼 공용 컴포넌트 |
 | --- | --- |
-| 온보딩 | `MoruProgressBar`, `MoruSelectionCard`, `MoruButton`, `MoruBottomCTA` |
-| 루틴 설정 | `MoruRoutineCard`, `MoruRoutineStepRow`, `MoruSelectControl`, `MoruButton` |
-| 알람 설정 | `MoruTimeSettingCard`, `MoruWeekdaySelector`, `MoruToggle`, `MoruButton` |
-| 루틴 실행 | `MoruProgressBar`, `MoruTimerStatus`, `MoruSoundModule`, `MoruRecordingStatus`, `MoruDialog` |
-| 홈 | `MoruRoutineCard`, `MoruCard`, `MoruButton` |
-| 이력 | `MoruCard`, `MoruCheckBadge`, `MoruRoutineStepRow` |
-| 마이 / 설정 | `MoruToggle`, `MoruVoiceCard`, `MoruButton`, `MoruCard` |
+| 온보딩 | `MoruProgressBar`, `MoruVoiceCard`, `MoruButton` |
+| 루틴 설정 | `MoruRoutineCard`, `MoruSelectControl`, `MoruButton` |
+| 알람 설정 | `MoruToggle`, `MoruButton` |
+| 루틴 실행 | `MoruProgressBar`, `MoruSoundModule`, `MoruDialog` |
+| 홈 | `MoruRoutineCard`, `MoruButton` |
+| 이력 | `MoruCheckBadge`, `MoruButton` |
+| 마이 / 설정 | `MoruToggle`, `MoruVoiceCard`, `MoruButton` |
 
 ## 사용 예시
 
@@ -77,15 +70,6 @@ MoruRoutineCard(
   title: "활력 루틴",
   description: "6개 항목 · 15분",
   isActive: true
-)
-```
-
-```swift
-MoruRoutineStepRow(
-  index: 1,
-  title: "잠자리 정리하기",
-  subtitle: "확인형 - 1분",
-  isCompleted: false
 )
 ```
 

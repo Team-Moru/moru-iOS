@@ -12,15 +12,15 @@ struct GeminiDataConsentView: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.twenty) {
+        VStack(alignment: .leading, spacing: MoruSpacing.twenty) {
           Image(systemName: "sparkles")
             .font(.system(size: 32, weight: .semibold))
-            .foregroundStyle(MoruPilotColor.accent)
+            .foregroundStyle(MoruColor.accent)
             .accessibilityHidden(true)
 
           Text("AI 데이터 처리 동의")
             .font(AppFont.pretendardBold(size: 24, relativeTo: .title2))
-            .foregroundStyle(MoruPilotColor.textStrong)
+            .foregroundStyle(MoruColor.textStrong)
 
           Text(
             "AI 맞춤 루틴 기능을 사용하면 입력한 사용자 답변, "
@@ -31,7 +31,7 @@ struct GeminiDataConsentView: View {
               + "원본 음성 파일은 Gemini에 보내지 않아요."
           )
           .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-          .foregroundStyle(MoruPilotColor.textPrimary)
+          .foregroundStyle(MoruColor.textPrimary)
           .fixedSize(horizontal: false, vertical: true)
 
           Text(
@@ -41,7 +41,7 @@ struct GeminiDataConsentView: View {
               + "Google은 남용 탐지 로그를 최대 55일 보관할 수 있어요."
           )
           .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
 
           Text(
@@ -53,7 +53,7 @@ struct GeminiDataConsentView: View {
               + "별도 기록하거나 재사용하지 않아요."
           )
           .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
 
           Text(
@@ -63,16 +63,16 @@ struct GeminiDataConsentView: View {
               + "별개로 사용할 수 있어요."
           )
           .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
 
-          VStack(spacing: MoruPilotSpacing.twelve) {
+          VStack(spacing: MoruSpacing.twelve) {
             Button("동의하고 AI 기능 사용") {
               consentStore.grant()
               dismiss()
             }
             .buttonStyle(.borderedProminent)
-            .tint(MoruPilotColor.accent)
+            .tint(MoruColor.accent)
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("gemini-consent.grant")
 
@@ -84,9 +84,9 @@ struct GeminiDataConsentView: View {
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("gemini-consent.decline")
           }
-          .padding(.top, MoruPilotSpacing.eight)
+          .padding(.top, MoruSpacing.eight)
         }
-        .padding(MoruPilotSpacing.twenty)
+        .padding(MoruSpacing.twenty)
       }
       .navigationTitle("AI 데이터 처리")
       .navigationBarTitleDisplayMode(.inline)

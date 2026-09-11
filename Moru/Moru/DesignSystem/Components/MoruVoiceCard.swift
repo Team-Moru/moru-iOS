@@ -35,11 +35,11 @@ struct MoruVoiceCard: View {
           VStack(alignment: .leading, spacing: AppSpacing.xxs) {
             Text(name)
               .font(AppFont.pretendardSemiBold(size: 16))
-              .foregroundStyle(AppColor.moruTextPrimary)
+              .foregroundStyle(MoruColor.textStrong)
 
             Text(description)
               .font(AppFont.pretendardMedium(size: 12))
-              .foregroundStyle(AppColor.moruTextSecondary)
+              .foregroundStyle(MoruColor.textSecondary)
           }
         }
 
@@ -53,7 +53,7 @@ struct MoruVoiceCard: View {
       .background(AppColor.grayWhite)
       .overlay(
         RoundedRectangle(cornerRadius: AppRadius.sm)
-          .stroke(AppColor.moruBorder, lineWidth: 1)
+          .stroke(MoruColor.border, lineWidth: 1)
       )
       .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
     }

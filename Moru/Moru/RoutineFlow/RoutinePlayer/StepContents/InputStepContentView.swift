@@ -136,7 +136,7 @@ struct InputStepContentView: View {
         .stroke(AppColor.grayWhite.opacity(0.90), lineWidth: 1)
     }
     .shadow(
-      color: MoruPilotColor.shadow.opacity(0.42),
+      color: MoruColor.shadow.opacity(0.42),
       radius: 22,
       y: 10
     )

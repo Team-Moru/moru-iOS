@@ -34,8 +34,9 @@ struct MoruSoundModule: View {
   var body: some View {
     ZStack {
       RoundedRectangle(cornerRadius: AppRadius.pill)
-        .fill(AppColor.moruOrangePale)
-        .frame(width: 353, height: 76)
+        .fill(MoruColor.accentTint)
+        .frame(maxWidth: .infinity)
+        .frame(height: 76)
 
       Ellipse()
         .fill(AppColor.orange300)
@@ -64,8 +65,9 @@ struct MoruSoundModule: View {
         .accessibilityLabel("음성 입력 종료")
         .accessibilityHint("현재 인식 결과를 저장합니다")
       }
-      .frame(width: 330, height: 52)
+      .frame(height: 52)
     }
-    .frame(width: 353, height: 76)
+    .frame(maxWidth: .infinity)
+    .frame(height: 76)
   }
 }

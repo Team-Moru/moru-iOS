@@ -120,7 +120,7 @@ struct HistoryView: View {
           )
         }
       }
-      .background(MoruPilotColor.canvas.ignoresSafeArea())
+      .background(MoruColor.canvas.ignoresSafeArea())
       .navigationBarTitleDisplayMode(.inline)
       .navigationDestination(isPresented: $isWeeklyReportPresented) {
         if case .content(let overview) = viewModel.state {
@@ -177,11 +177,11 @@ struct HistoryView: View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 0) {
         Text(HistoryCopy.overviewTitle)
-          .historyOverviewTextStyle(.h3)
+          .moruTextStyle(.h3)
           .foregroundStyle(AppColor.gray550)
           .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
 
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+        VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryStreakWeeklyCard(
             streak: overview.streak,
             action: { isWeeklyReportPresented = true }
@@ -211,7 +211,7 @@ struct HistoryView: View {
             }
           )
 
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.sixteen) {
+          VStack(alignment: .leading, spacing: MoruSpacing.sixteen) {
             HistorySectionHeader(title: "최근 기록", actionTitle: nil, action: nil)
 
             if overview.recentDays.isEmpty {
@@ -233,8 +233,8 @@ struct HistoryView: View {
           }
         }
       }
-      .padding(.horizontal, MoruPilotSpacing.twenty)
-      .padding(.bottom, MoruPilotSpacing.sixtyFour)
+      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.bottom, MoruSpacing.sixtyFour)
     }
   }
 
@@ -514,15 +514,15 @@ private struct HistoryStreakWeeklyCard: View {
     Button(action: action) {
       Group {
         if dynamicTypeSize.isAccessibilitySize {
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.twenty) {
+          VStack(alignment: .leading, spacing: MoruSpacing.twenty) {
             streakSummary
             Divider()
               .overlay(AppColor.orange150)
             weeklySummary
           }
-          .padding(MoruPilotSpacing.twenty)
+          .padding(MoruSpacing.twenty)
         } else {
-          HStack(spacing: MoruPilotSpacing.sixteen) {
+          HStack(spacing: MoruSpacing.sixteen) {
             streakSummary
               .frame(width: 91)
 
@@ -532,16 +532,16 @@ private struct HistoryStreakWeeklyCard: View {
 
             weeklySummary
           }
-          .padding(.horizontal, MoruPilotSpacing.twenty)
+          .padding(.horizontal, MoruSpacing.twenty)
           .frame(height: 114)
         }
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(historyStreakBackground)
-      .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
+      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
     }
     .buttonStyle(.plain)
-    .padding(.vertical, MoruPilotSpacing.eight)
+    .padding(.vertical, MoruSpacing.eight)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(
       "연속 달성 \(streak.currentDays)일째, "
@@ -554,23 +554,23 @@ private struct HistoryStreakWeeklyCard: View {
   private var streakSummary: some View {
     VStack(spacing: 0) {
       Text("연속 달성")
-        .historyOverviewTextStyle(.c2)
-        .foregroundStyle(MoruPilotColor.accentSurface)
+        .moruTextStyle(.c2)
+        .foregroundStyle(MoruColor.accentSurface)
 
       Text("\(streak.currentDays)일째")
-        .historyOverviewTextStyle(.h1.weight(.bold))
+        .moruTextStyle(.h1.weight(.bold))
         .foregroundStyle(AppColor.grayWhite)
 
       Text("최고 기록 \(max(streak.bestDays, streak.currentDays))일")
         .font(AppFont.pretendardMedium(size: 10))
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         .minimumScaleFactor(0.75)
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, MoruPilotSpacing.sixteen)
+        .padding(.horizontal, MoruSpacing.sixteen)
         .padding(.vertical, dynamicTypeSize.isAccessibilitySize ? 6 : 0)
-        .frame(minHeight: MoruPilotSpacing.twenty)
-        .background(MoruPilotColor.accentTint)
+        .frame(minHeight: MoruSpacing.twenty)
+        .background(MoruColor.accentTint)
         .clipShape(Capsule())
     }
     .frame(maxWidth: .infinity)
@@ -579,8 +579,8 @@ private struct HistoryStreakWeeklyCard: View {
   private var weeklySummary: some View {
     VStack(spacing: 0) {
       Text(HistoryCopy.weeklyReportTitle)
-        .historyOverviewTextStyle(.c2)
-        .foregroundStyle(MoruPilotColor.accentSurface)
+        .moruTextStyle(.c2)
+        .foregroundStyle(MoruColor.accentSurface)
 
       Group {
         if dynamicTypeSize.isAccessibilitySize {
@@ -588,10 +588,10 @@ private struct HistoryStreakWeeklyCard: View {
             columns: [
               GridItem(
                 .adaptive(minimum: 88),
-                spacing: MoruPilotSpacing.twelve
+                spacing: MoruSpacing.twelve
               ),
             ],
-            spacing: MoruPilotSpacing.twelve
+            spacing: MoruSpacing.twelve
           ) {
             ForEach(weekdays, id: \.weekday) { item in
               weekdayStatus(
@@ -602,7 +602,7 @@ private struct HistoryStreakWeeklyCard: View {
             }
           }
         } else {
-          HStack(spacing: MoruPilotSpacing.eight) {
+          HStack(spacing: MoruSpacing.eight) {
             ForEach(weekdays, id: \.weekday) { item in
               weekdayStatus(
                 weekday: item.weekday,
@@ -613,7 +613,7 @@ private struct HistoryStreakWeeklyCard: View {
           }
         }
       }
-      .padding(.top, MoruPilotSpacing.twelve)
+      .padding(.top, MoruSpacing.twelve)
     }
     .frame(maxWidth: .infinity)
   }
@@ -625,13 +625,13 @@ private struct HistoryStreakWeeklyCard: View {
   ) -> some View {
     let isCompleted = streak.completedWeekdays.contains(weekday)
 
-    return VStack(spacing: MoruPilotSpacing.four) {
+    return VStack(spacing: MoruSpacing.four) {
       ZStack {
         Circle()
           .fill(
             isCompleted
-              ? MoruPilotColor.accent
-              : MoruPilotColor.shadow
+              ? MoruColor.accent
+              : MoruColor.shadow
           )
 
         if isCompleted {
@@ -644,22 +644,22 @@ private struct HistoryStreakWeeklyCard: View {
         }
       }
       .frame(
-        width: isAccessibilityLayout ? 32 : MoruPilotSpacing.twenty,
-        height: isAccessibilityLayout ? 32 : MoruPilotSpacing.twenty
+        width: isAccessibilityLayout ? 32 : MoruSpacing.twenty,
+        height: isAccessibilityLayout ? 32 : MoruSpacing.twenty
       )
 
       Text(label)
-        .historyOverviewTextStyle(.c2.weight(.regular))
-        .foregroundStyle(MoruPilotColor.accentSurface)
+        .moruTextStyle(.c2.weight(.regular))
+        .foregroundStyle(MoruColor.accentSurface)
         .fixedSize(horizontal: false, vertical: true)
     }
     .frame(
-      width: isAccessibilityLayout ? nil : MoruPilotSpacing.twenty
+      width: isAccessibilityLayout ? nil : MoruSpacing.twenty
     )
   }
 
   private var historyStreakBackground: Color {
-    MoruPilotColor.summarySurface
+    MoruColor.summarySurface
   }
 }
 
@@ -761,7 +761,7 @@ struct HistoryRecordCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(alignment: .top, spacing: MoruPilotSpacing.eight) {
+      HStack(alignment: .top, spacing: MoruSpacing.eight) {
         ZStack {
           Circle()
             .stroke(
@@ -779,32 +779,32 @@ struct HistoryRecordCard: View {
         .accessibilityHidden(true)
 
         Text(result.stepTitle)
-          .historyOverviewTextStyle(.b4.weight(.semiBold))
-          .foregroundStyle(MoruPilotColor.textStrong)
+          .moruTextStyle(.b4.weight(.semiBold))
+          .foregroundStyle(MoruColor.textStrong)
           .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
           .fixedSize(horizontal: false, vertical: true)
 
-        Spacer(minLength: MoruPilotSpacing.eight)
+        Spacer(minLength: MoruSpacing.eight)
 
         Text(result.displayText)
-          .historyOverviewTextStyle(.c1)
-          .foregroundStyle(MoruPilotColor.textSecondary)
+          .moruTextStyle(.c1)
+          .foregroundStyle(MoruColor.textSecondary)
           .fixedSize(horizontal: false, vertical: true)
       }
-      .padding(MoruPilotSpacing.twenty)
+      .padding(MoruSpacing.twenty)
 
       Text(recordText)
-        .historyOverviewTextStyle(.b4)
-        .foregroundStyle(MoruPilotColor.textSecondary)
+        .moruTextStyle(.b4)
+        .foregroundStyle(MoruColor.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(MoruPilotSpacing.twenty)
+        .padding(MoruSpacing.twenty)
         .background(AppColor.grayWhite.opacity(0.2))
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(historyPilotSurface)
-    .clipShape(RoundedRectangle(cornerRadius: MoruPilotRadius.largeCard))
-    .shadow(color: MoruPilotColor.shadow, radius: 7.5, x: 0, y: 0)
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
+    .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
     .accessibilityElement(children: .combine)
   }
 
@@ -852,7 +852,7 @@ private struct HistoryDaySummaryRow: View {
     .clipShape(RoundedRectangle(cornerRadius: AppRadius.xs))
     .overlay {
       RoundedRectangle(cornerRadius: AppRadius.xs)
-        .stroke(AppColor.moruBorder, lineWidth: 1)
+        .stroke(MoruColor.border, lineWidth: 1)
     }
   }
 }
@@ -862,8 +862,8 @@ private struct HistoryDetailSectionTitle: View {
 
   var body: some View {
     Text(title)
-      .historyOverviewTextStyle(.b3.weight(.semiBold))
-      .foregroundStyle(MoruPilotColor.textPrimary)
+      .moruTextStyle(.b3.weight(.semiBold))
+      .foregroundStyle(MoruColor.textPrimary)
       .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
       .fixedSize(horizontal: false, vertical: true)
       .accessibilityAddTraits(.isHeader)
@@ -886,10 +886,10 @@ private struct HistoryDetailHeader: View {
             .font(.system(size: 20, weight: .semibold))
         } else {
           Text("뒤로")
-            .historyOverviewTextStyle(.b4)
+            .moruTextStyle(.b4)
         }
       }
-      .foregroundStyle(MoruPilotColor.textTertiary)
+      .foregroundStyle(MoruColor.textTertiary)
       .frame(minWidth: 44, minHeight: 44, alignment: .leading)
       .accessibilityLabel("뒤로")
       .accessibilityHint("이전 화면으로 돌아갑니다.")
@@ -902,14 +902,14 @@ private struct HistoryDetailHeader: View {
     }
     .overlay {
       Text(title)
-        .historyOverviewTextStyle(.h3)
-        .foregroundStyle(MoruPilotColor.textStrong)
+        .moruTextStyle(.h3)
+        .foregroundStyle(MoruColor.textStrong)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
         .accessibilityAddTraits(.isHeader)
         .allowsHitTesting(false)
     }
-    .padding(.horizontal, MoruPilotSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.twenty)
     .frame(height: 54)
   }
 }
@@ -923,16 +923,16 @@ struct HistoryDailyDetailView: View {
       HistoryDetailHeader(title: HistoryCopy.dailyReportTitle)
 
       ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+        VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryDailySummaryCard(day: day, calendar: calendar)
 
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+          VStack(alignment: .leading, spacing: MoruSpacing.eight) {
             HistoryDetailSectionTitle(title: HistoryCopy.todayRecords)
 
             if day.recordedStepResults.isEmpty {
               HistoryInlineEmptyCard(message: HistoryCopy.noTranscripts)
             } else {
-              VStack(spacing: MoruPilotSpacing.twelve) {
+              VStack(spacing: MoruSpacing.twelve) {
                 ForEach(day.recordedStepResults, id: \.stepID) { result in
                   HistoryRecordCard(result: result)
                 }
@@ -940,13 +940,13 @@ struct HistoryDailyDetailView: View {
             }
           }
 
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+          VStack(alignment: .leading, spacing: MoruSpacing.eight) {
             HistoryDetailSectionTitle(title: HistoryCopy.itemResults)
 
             if day.stepResults.isEmpty {
               HistoryInlineEmptyCard(message: HistoryCopy.noStepResults)
             } else {
-              LazyVStack(spacing: MoruPilotSpacing.twelve) {
+              LazyVStack(spacing: MoruSpacing.twelve) {
                 ForEach(
                   Array(day.stepResults.enumerated()),
                   id: \.element.stepID
@@ -962,12 +962,12 @@ struct HistoryDailyDetailView: View {
             }
           }
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.eight)
-        .padding(.bottom, MoruPilotSpacing.sixtyFour)
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.eight)
+        .padding(.bottom, MoruSpacing.sixtyFour)
       }
     }
-    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .background(MoruColor.canvas.ignoresSafeArea())
     .toolbar(.hidden, for: .navigationBar)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.dailyDetail")
@@ -983,7 +983,7 @@ struct HistoryRunDetailView: View {
       HistoryDetailHeader(title: dateTitle)
 
       ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+        VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryReportSummaryCard(
             metrics: [
               HistoryReportMetric(
@@ -1004,13 +1004,13 @@ struct HistoryRunDetailView: View {
             ]
           )
 
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+          VStack(alignment: .leading, spacing: MoruSpacing.eight) {
             HistoryDetailSectionTitle(title: HistoryCopy.todayRecords)
 
             if run.recordedStepResults.isEmpty {
               HistoryInlineEmptyCard(message: HistoryCopy.noTranscripts)
             } else {
-              VStack(spacing: MoruPilotSpacing.twelve) {
+              VStack(spacing: MoruSpacing.twelve) {
                 ForEach(run.recordedStepResults, id: \.stepID) { result in
                   HistoryRecordCard(result: result)
                 }
@@ -1018,13 +1018,13 @@ struct HistoryRunDetailView: View {
             }
           }
 
-          VStack(alignment: .leading, spacing: MoruPilotSpacing.eight) {
+          VStack(alignment: .leading, spacing: MoruSpacing.eight) {
             HistoryDetailSectionTitle(title: HistoryCopy.itemResults)
 
             if run.stepResults.isEmpty {
               HistoryInlineEmptyCard(message: HistoryCopy.noStepResults)
             } else {
-              LazyVStack(spacing: MoruPilotSpacing.twelve) {
+              LazyVStack(spacing: MoruSpacing.twelve) {
                 ForEach(
                   Array(run.stepResults.enumerated()),
                   id: \.element.stepID
@@ -1040,12 +1040,12 @@ struct HistoryRunDetailView: View {
             }
           }
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.eight)
-        .padding(.bottom, MoruPilotSpacing.sixtyFour)
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.eight)
+        .padding(.bottom, MoruSpacing.sixtyFour)
       }
     }
-    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .background(MoruColor.canvas.ignoresSafeArea())
     .toolbar(.hidden, for: .navigationBar)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.runDetail")
@@ -1104,7 +1104,7 @@ struct HistoryWeeklyReportView: View {
       HistoryDetailHeader(title: HistoryCopy.weeklyReportTitle)
 
       ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: MoruPilotSpacing.thirtyTwo) {
+        VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryWeeklySummaryCard(
             title: weekRangeText,
             completedRuns: report.completedRunCount,
@@ -1129,12 +1129,12 @@ struct HistoryWeeklyReportView: View {
 
           HistoryWeeklyStepAnalysisView(items: overview.weeklyStepAnalysisItems)
         }
-        .padding(.horizontal, MoruPilotSpacing.twenty)
-        .padding(.top, MoruPilotSpacing.eight)
-        .padding(.bottom, MoruPilotSpacing.sixtyFour)
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.top, MoruSpacing.eight)
+        .padding(.bottom, MoruSpacing.sixtyFour)
       }
     }
-    .background(MoruPilotColor.canvas.ignoresSafeArea())
+    .background(MoruColor.canvas.ignoresSafeArea())
     .toolbar(.hidden, for: .navigationBar)
     .navigationDestination(isPresented: isDayDetailPresented) {
       if let selectedDay {
@@ -1176,13 +1176,13 @@ private struct HistoryWeeklyDailyRateRow: View {
         format: .dateTime.weekday(.abbreviated)
       ))
         .font(AppFont.label1NormalSemiBold)
-        .foregroundStyle(AppColor.moruTextPrimary)
+        .foregroundStyle(MoruColor.textStrong)
         .frame(width: 28, alignment: .leading)
 
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
           Capsule()
-            .fill(AppColor.moruSurfaceMuted)
+            .fill(MoruColor.surfaceMuted)
 
           Capsule()
             .fill(AppColor.orange350)
@@ -1198,16 +1198,16 @@ private struct HistoryWeeklyDailyRateRow: View {
           : "-"
       )
         .font(AppFont.caption1SemiBold)
-        .foregroundStyle(AppColor.moruTextSecondary)
+        .foregroundStyle(MoruColor.textSecondary)
         .frame(width: 36, alignment: .trailing)
     }
     .padding(AppSpacing.md)
     .frame(maxWidth: .infinity)
     .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: AppRadius.md))
+    .clipShape(RoundedRectangle(cornerRadius: AppRadius.sm))
     .overlay {
-      RoundedRectangle(cornerRadius: AppRadius.md)
-        .stroke(AppColor.moruBorder, lineWidth: 1)
+      RoundedRectangle(cornerRadius: AppRadius.sm)
+        .stroke(MoruColor.border, lineWidth: 1)
     }
   }
 }
