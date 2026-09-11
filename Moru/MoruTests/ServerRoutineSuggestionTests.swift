@@ -13,15 +13,21 @@ import Moya
 
 @MainActor
 final class ServerRoutineSuggestionTests: XCTestCase {
-  func testOrganizingPresentationUsesOneSecondIntervals() {
+  func testOrganizingPresentationIsAMinimumReadTimeNotAFakeAnalysis() {
+    // 루틴은 로컬 템플릿에서 즉시 만들어진다. 단계 문구가 읽힐 만큼만 머문다.
     XCTAssertEqual(
       RoutineOrganizingPresentationTiming.phaseDwell,
-      .seconds(1)
+      .milliseconds(320)
     )
     XCTAssertEqual(
       RoutineOrganizingPresentationTiming.completedDwell,
-      .seconds(1)
+      .milliseconds(320)
     )
+
+    let total =
+      RoutineOrganizingPresentationTiming.phaseDwell * 3
+      + RoutineOrganizingPresentationTiming.completedDwell
+    XCTAssertLessThan(total, .seconds(2))
   }
 
   func testSuggestionSourceHasNonSensitiveDiagnosticLabel() {

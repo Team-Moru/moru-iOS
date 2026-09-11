@@ -5,7 +5,6 @@
 //  Created by Codex on 7/6/26.
 //
 
-import Combine
 import Foundation
 import OSLog
 
@@ -19,12 +18,16 @@ enum RoutineOrganizingPresentationPhase: Int, CaseIterable, Equatable {
 
 enum RoutineOrganizingPresentationTiming {
   static let statusAnimationDuration = 0.28
-  static let phaseDwell: Duration = .seconds(1)
-  static let completedDwell: Duration = .seconds(1)
+  /// 루틴은 로컬 템플릿에서 즉시 만들어진다. 이 대기는 분석 시간이 아니라
+  /// 단계 문구가 읽히도록 두는 최소 표시 시간이라 짧게 잡는다.
+  /// 예전에는 1초씩 3단계 + 1초로 약 4초를 "분석 중"인 척 채웠다.
+  static let phaseDwell: Duration = .milliseconds(320)
+  static let completedDwell: Duration = .milliseconds(320)
 }
 
 @MainActor
-final class OnboardingViewModel: ObservableObject {
+@Observable
+final class OnboardingViewModel {
   static let freeformTextCharacterLimit = 200
   private static let minimumRecommendedRoutineStepCount = 1
   private static let saveErrorLogger = Logger(
@@ -32,60 +35,27 @@ final class OnboardingViewModel: ObservableObject {
     category: "OnboardingSave"
   )
 
-  let objectWillChange = ObservableObjectPublisher()
   let flowMode: RoutineCreationFlowMode
 
-  var draft: OnboardingDraft {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  var draft: OnboardingDraft
 
-  private(set) var step: OnboardingStep {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var step: OnboardingStep
 
-  private(set) var isSaving: Bool = false {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var isSaving: Bool = false
 
-  private(set) var isSuggesting: Bool = false {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var isSuggesting: Bool = false
 
   private(set) var organizingProgress: RoutineOrganizingPresentationPhase =
-    .preparingRoutine {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+    .preparingRoutine
 
-  private(set) var errorMessage: String? {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var errorMessage: String?
 
-  private(set) var activeRoutineConflict: RoutineActivationConflictState? {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var activeRoutineConflict: RoutineActivationConflictState?
 
   /// The goal-specific cards shown while a user adjusts either a Moru
   /// recommendation or an analyzed existing routine. Their selected subset
   /// is persisted in `draft.previewRoutine.steps` in every guided creation flow.
-  private(set) var recommendedRoutineStepCandidates: [RoutineStep] = [] {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var recommendedRoutineStepCandidates: [RoutineStep] = []
 
   private let routineSuggestionService: any RoutineSuggestionService
   private let routineSuggestionCoordinator:
@@ -155,15 +125,11 @@ final class OnboardingViewModel: ObservableObject {
   }
 
   var progressTotal: Int {
-    flowMode == .onboarding ? onboardingProgressSteps.count : 8
+    progressSteps.count
   }
 
   var progressIndex: Int? {
-    guard flowMode == .onboarding else {
-      return step.progressIndex
-    }
-
-    return onboardingProgressSteps.firstIndex(of: step).map { $0 + 1 }
+    progressSteps.firstIndex(of: step).map { $0 + 1 }
   }
 
   var canCancel: Bool {
@@ -278,13 +244,38 @@ final class OnboardingViewModel: ObservableObject {
         && VoiceProfile.localVoices.contains(draft.selectedVoice)
     case .completion:
       return !isSaving && !didComplete
-    case .experience, .freeform, .organizing:
+    case .experience:
+      return draft.didChooseExperience
+    case .freeform, .organizing:
       return true
+    }
+  }
+
+  /// 비활성 CTA가 이유를 말하지 않으면 사용자는 앱이 멈춘 것으로 읽는다.
+  var advanceBlockedReason: String? {
+    guard !canAdvance, !isSuggesting, !isSaving else {
+      return nil
+    }
+
+    switch step {
+    case .experience:
+      return "루틴 경험을 하나 골라 주세요."
+    case .goals:
+      return "목표를 하나 이상 선택해 주세요."
+    case .alarm:
+      return draft.selectedWeekdays.isEmpty
+        ? "알람이 울릴 요일을 하나 이상 선택해 주세요."
+        : nil
+    case .voice:
+      return "사용할 목소리를 선택해 주세요."
+    case .suggestedRoutine, .duration, .review, .freeform, .organizing, .completion:
+      return nil
     }
   }
 
   func selectExperience(_ experience: RoutineExperience) {
     draft.experience = experience
+    draft.didChooseExperience = true
   }
 
   func toggleGoal(tag: String) {
@@ -706,6 +697,17 @@ final class OnboardingViewModel: ObservableObject {
       && routine.steps.allSatisfy {
         !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
       }
+  }
+
+  /// 진행률은 이 흐름이 실제로 지나는 단계만 센다. 예전에는 추천 추가 모드가
+  /// 상수 8과 전역 단계 번호를 써서 5/8에서 시작해 7/8에서 끝났다.
+  private var progressSteps: [OnboardingStep] {
+    guard flowMode == .onboarding else {
+      // 추천 추가는 자연어 입력에서 시작해 알람에서 저장하고 끝난다.
+      return [.freeform, .organizing, .review, .alarm]
+    }
+
+    return onboardingProgressSteps
   }
 
   private var onboardingProgressSteps: [OnboardingStep] {

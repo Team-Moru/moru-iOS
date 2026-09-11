@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct EditableRoutineReviewForm: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
   let routine: Routine
 
   var body: some View {
@@ -118,7 +118,7 @@ struct EditableRoutineReviewForm: View {
 }
 
 struct EditableRoutineIdentityFields: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     VStack(alignment: .leading, spacing: AppSpacing.sm) {
