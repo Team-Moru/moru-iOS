@@ -84,4 +84,73 @@ final class RoutineStepCompletionMatcherTests: XCTestCase {
       RoutineStepCompletionMatcher.isCompleted("물 한잔 마셨어", for: otherStep)
     )
   }
+
+  // MARK: - 과거형 답변
+
+  func testPastTenseAnswerAboutThisStepsActionIsContextual() {
+    // 실기기에서 "마셨어"라고 답했는데 "물"이 없어서 넘어가지 않았다.
+    let transcripts = ["마셨어", "마셨어요", "다 마셨습니다", "마셨다", "마셨네"]
+
+    for transcript in transcripts {
+      XCTAssertEqual(
+        RoutineStepCompletionMatcher.match(transcript, for: waterStep),
+        .contextual,
+        transcript
+      )
+    }
+  }
+
+  func testPastTenseAnswerAboutAnotherActionDoesNotCompleteTheStep() {
+    let transcripts = ["씻었어", "읽었어요", "쭉 폈다"]
+
+    for transcript in transcripts {
+      XCTAssertEqual(
+        RoutineStepCompletionMatcher.match(transcript, for: waterStep),
+        .none,
+        transcript
+      )
+    }
+  }
+
+  func testEachStepRecognisesItsOwnVerb() {
+    let washStep = RoutineStep(
+      type: .input,
+      title: "세수하기",
+      instruction: "얼굴을 씻고 말해주세요.",
+      order: 0
+    )
+
+    XCTAssertEqual(
+      RoutineStepCompletionMatcher.match("씻었어", for: washStep),
+      .contextual
+    )
+    XCTAssertEqual(
+      RoutineStepCompletionMatcher.match("마셨어", for: washStep),
+      .none
+    )
+  }
+
+  func testStativeFutureAndOngoingFormsAreNotCompletedActions() {
+    let transcripts = ["물 있어", "마시겠어", "마시는 중", "마실게", "마셔"]
+
+    for transcript in transcripts {
+      XCTAssertEqual(
+        RoutineStepCompletionMatcher.match(transcript, for: waterStep),
+        .none,
+        transcript
+      )
+    }
+  }
+
+  func testPastTenseWithNegationParticleIsNotCompleted() {
+    let transcripts = ["안 마셨어", "못 마셨어요", "아직 안 마셨다", "물 안 마셨는데"]
+
+    for transcript in transcripts {
+      XCTAssertEqual(
+        RoutineStepCompletionMatcher.match(transcript, for: waterStep),
+        .none,
+        transcript
+      )
+    }
+  }
 }
