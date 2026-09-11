@@ -20,8 +20,10 @@ enum MoruColor {
   static let accentSurface = AppColor.orange100
   static let summarySurface = AppColor.orange250
 
-  /// 주요 CTA 채움. 흰 글자 기준 대비 3:1(큰 글자 AA)을 넘기기 위해 accent보다 진하다.
-  static let ctaFill = AppColor.orange500
+  /// 주요 CTA 채움. 브랜드 주황을 그대로 쓰기로 한 결정이라 accent와 같은 값이다.
+  /// 흰 글자(`onCTA`) 기준 대비는 2.13:1로 WCAG AA 큰 글자 기준(3:1)에도 미달한다 —
+  /// 대비보다 브랜드 색감을 우선한 의도된 선택이다.
+  static let ctaFill = AppColor.orange350
   /// ctaFill 위의 글자·아이콘 색.
   static let onCTA = AppColor.grayWhite
 

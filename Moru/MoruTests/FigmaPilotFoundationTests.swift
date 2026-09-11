@@ -26,7 +26,7 @@ final class FigmaPilotFoundationTests: XCTestCase {
       (MoruColor.textSecondary, 0x80889E),
       (MoruColor.textTertiary, 0x999FB3),
       (MoruColor.shadow, 0xD8E3FF),
-      (MoruColor.ctaFill, 0xFF5C1D),
+      (MoruColor.ctaFill, 0xFF9861),
       (MoruColor.onCTA, 0xFFFFFF),
       (MoruColor.summarySurface, 0xFFC09E),
       (MoruColor.surfaceMuted, 0xF2F4F9),
