@@ -284,7 +284,7 @@ final class RemoteFirstRoutineGuidancePlayer:
 @MainActor
 final class LocalFileRoutineAudioPlayer: NSObject, RoutineLocalAudioSequencePlaying {
   private let playbackState: RoutineGuidancePlaybackState
-  private let audioSession: AVAudioSession
+  private let audioSession: any AudioSessionControlling
   private var audioPlayer: AVAudioPlayer?
   private var continuation: CheckedContinuation<Bool, Never>?
   private var isSuspendedForSpeechInput = false
@@ -295,7 +295,7 @@ final class LocalFileRoutineAudioPlayer: NSObject, RoutineLocalAudioSequencePlay
 
   init(
     playbackState: RoutineGuidancePlaybackState,
-    audioSession: AVAudioSession = .sharedInstance(),
+    audioSession: any AudioSessionControlling = AVAudioSession.sharedInstance(),
     notificationCenter: NotificationCenter = .default
   ) {
     self.playbackState = playbackState

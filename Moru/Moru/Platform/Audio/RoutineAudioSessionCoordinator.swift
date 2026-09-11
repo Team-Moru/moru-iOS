@@ -25,12 +25,12 @@ final class SystemRoutineSpeechAnnouncer:
   }
 
   private let synthesizer: AVSpeechSynthesizer
-  private let audioSession: AVAudioSession
+  private let audioSession: any AudioSessionControlling
   private var pendingReminder: PendingReminder?
 
   init(
     synthesizer: AVSpeechSynthesizer = AVSpeechSynthesizer(),
-    audioSession: AVAudioSession = .sharedInstance()
+    audioSession: any AudioSessionControlling = AVAudioSession.sharedInstance()
   ) {
     self.synthesizer = synthesizer
     self.audioSession = audioSession
@@ -274,12 +274,12 @@ final class NoopRoutineGuidancePlayer: RoutineGuidancePlaying {
 @MainActor
 final class RoutineAudioSessionCoordinator {
   private let guidancePlayback: any GuidancePlaybackControlling
-  private let audioSession: AVAudioSession
+  private let audioSession: any AudioSessionControlling
   private var isSpeechInputActive = false
 
   init(
     guidancePlayback: any GuidancePlaybackControlling = NoopRoutineGuidancePlayer(),
-    audioSession: AVAudioSession = .sharedInstance()
+    audioSession: any AudioSessionControlling = AVAudioSession.sharedInstance()
   ) {
     self.guidancePlayback = guidancePlayback
     self.audioSession = audioSession

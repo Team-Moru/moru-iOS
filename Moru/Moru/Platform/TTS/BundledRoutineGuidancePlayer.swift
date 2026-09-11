@@ -45,7 +45,7 @@ nonisolated private final class RoutineAudioNotificationObservation:
 final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
   private let resourceLoader: RoutineAudioResourceLoader
   private let playbackState: RoutineGuidancePlaybackState
-  private let audioSession: AVAudioSession
+  private let audioSession: any AudioSessionControlling
 
   private var audioPlayer: AVAudioPlayer?
   private var playbackContinuation: CheckedContinuation<GuidancePlaybackResult, Never>?
@@ -57,7 +57,7 @@ final class BundledRoutineGuidancePlayer: NSObject, RoutineGuidancePlaying {
   init(
     resourceLoader: RoutineAudioResourceLoader,
     playbackState: RoutineGuidancePlaybackState,
-    audioSession: AVAudioSession = .sharedInstance(),
+    audioSession: any AudioSessionControlling = AVAudioSession.sharedInstance(),
     notificationCenter: NotificationCenter = .default
   ) {
     self.resourceLoader = resourceLoader
