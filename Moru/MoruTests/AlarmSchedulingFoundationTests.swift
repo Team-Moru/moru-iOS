@@ -246,6 +246,16 @@ final class AlarmSchedulingFoundationTests: XCTestCase {
     guard case .ready = bootstrapper.state else {
       return XCTFail("Cancellation repair must not block app readiness.")
     }
+
+    // 꺼진 알람 정리는 ready 이후로 미뤄졌다. 준비 상태를 막지 않는 것이 요점이므로
+    // 단언 전에 그 뒷정리가 끝나기를 기다린다.
+    for _ in 0..<100 {
+      if fixture.stateRepository.records[schedule.id]?.state == .repairRequired {
+        break
+      }
+      await Task.yield()
+    }
+
     XCTAssertEqual(
       fixture.stateRepository.records[schedule.id]?.state,
       .repairRequired
@@ -952,7 +962,9 @@ private final class AlarmCancellationFailureBootstrapPreflight:
     self.alarmMutator = alarmMutator
   }
 
-  func prepare(dependencies: DependencyContainer) async {
+  func prepare(dependencies: DependencyContainer) async {}
+
+  func prepareDeferred(dependencies: DependencyContainer) async {
     await DefaultAppBootstrapPreflight.cancelDisabledAlarmRecordsIfNeeded(
       routineRepository: routineRepository,
       alarmPlatformStateRepository: stateRepository,
