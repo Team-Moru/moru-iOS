@@ -23,6 +23,7 @@ struct RoutineEditorView: View {
   @State private var isStepAddSheetPresented = false
   @State private var isScheduleExpanded: Bool
   @State private var isDeleteDialogPresented = false
+  @State private var isDiscardChangesDialogPresented = false
   @State private var activeRoutineConflict: RoutineActivationConflictState?
   @State private var selectedEditStepIndex: Int? = nil
   @State private var isStepEditSheetPresented = false
@@ -32,6 +33,9 @@ struct RoutineEditorView: View {
   @State private var dragTranslation: CGFloat = 0
   @State private var dragTouchYOffsetFromCenter: CGFloat = 0
   @State private var stepFrames: [UUID: CGRect] = [:]
+
+  /// 저장하지 않고 나가려 할 때 물어볼지 판단하는 기준값이다.
+  private let initialDraft: RoutineDraftState
 
   let onSave: (RoutineDraftState) async -> Bool
   let onReplaceActiveRoutine: (RoutineDraftState) async -> Bool
@@ -49,6 +53,7 @@ struct RoutineEditorView: View {
       @escaping (RoutineDraftState) -> RoutineActivationConflictState? = { _ in nil }
   ) {
     self._draft = State(initialValue: draft)
+    self.initialDraft = draft
     self._isScheduleExpanded = State(initialValue: initialScheduleExpanded)
     self.onSave = onSave
     self.onReplaceActiveRoutine = onReplaceActiveRoutine
@@ -153,6 +158,22 @@ struct RoutineEditorView: View {
           .presentationCornerRadius(AppRadius.lg)
         }
       }
+      // 저장하지 않은 편집이 있으면 스와이프로도 조용히 사라지지 않게 한다.
+      .interactiveDismissDisabled(hasUnsavedChanges)
+      .alert(
+        RoutineManagementCopy.discardChangesTitle,
+        isPresented: $isDiscardChangesDialogPresented
+      ) {
+        Button(RoutineManagementCopy.discardChangesCancelTitle, role: .cancel) {}
+        Button(
+          RoutineManagementCopy.discardChangesConfirmTitle,
+          role: .destructive
+        ) {
+          dismiss()
+        }
+      } message: {
+        Text(RoutineManagementCopy.discardChangesMessage)
+      }
       .alert(
         RoutineManagementCopy.deleteConfirmationTitle,
         isPresented: $isDeleteDialogPresented
@@ -206,11 +227,20 @@ struct RoutineEditorView: View {
 
   private var backButton: some View {
     Button {
-      dismiss()
+      guard hasUnsavedChanges else {
+        dismiss()
+        return
+      }
+
+      isDiscardChangesDialogPresented = true
     } label: {
       Image(systemName: "xmark")
     }
     .accessibilityLabel("닫기")
+  }
+
+  private var hasUnsavedChanges: Bool {
+    draft != initialDraft
   }
 
   private var deleteButton: some View {

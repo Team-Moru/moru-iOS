@@ -72,6 +72,13 @@ final class RoutineManagementFigmaVisualTests: XCTestCase {
       ),
       "다른 사용 중인 루틴이 1개 있어요.\n이 루틴으로 바꾸면 기존 루틴과 알람이 꺼져요.\n기존 요일 설정은 그대로 남아요."
     )
+    XCTAssertEqual(RoutineManagementCopy.discardChangesTitle, "변경 사항을 버릴까요?")
+    XCTAssertEqual(
+      RoutineManagementCopy.discardChangesMessage,
+      "저장하지 않은 수정 내용이 사라져요."
+    )
+    XCTAssertEqual(RoutineManagementCopy.discardChangesCancelTitle, "계속 편집")
+    XCTAssertEqual(RoutineManagementCopy.discardChangesConfirmTitle, "버리기")
     XCTAssertEqual(RoutineManagementCopy.deleteConfirmationTitle, "이 루틴을 삭제할까요?")
     XCTAssertEqual(
       RoutineManagementCopy.deleteConfirmationMessage,
