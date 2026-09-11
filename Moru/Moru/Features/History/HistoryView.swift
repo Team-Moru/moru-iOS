@@ -869,58 +869,12 @@ private struct HistoryDetailSectionTitle: View {
   }
 }
 
-private struct HistoryDetailHeader: View {
-  @Environment(\.dismiss) private var dismiss
-  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-  let title: String
-
-  var body: some View {
-    HStack {
-      Button {
-        dismiss()
-      } label: {
-        if dynamicTypeSize.isAccessibilitySize {
-          Image(systemName: "chevron.backward")
-            .font(.system(size: 20, weight: .semibold))
-        } else {
-          Text("뒤로")
-            .moruTextStyle(.b4)
-        }
-      }
-      .foregroundStyle(MoruColor.textTertiary)
-      .frame(minWidth: 44, minHeight: 44, alignment: .leading)
-      .accessibilityLabel("뒤로")
-      .accessibilityHint("이전 화면으로 돌아갑니다.")
-
-      Spacer()
-
-      Color.clear
-        .frame(width: 44, height: 44)
-        .accessibilityHidden(true)
-    }
-    .overlay {
-      Text(title)
-        .moruTextStyle(.h3)
-        .foregroundStyle(MoruColor.textStrong)
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .accessibilityAddTraits(.isHeader)
-        .allowsHitTesting(false)
-    }
-    .padding(.horizontal, MoruSpacing.twenty)
-    .frame(height: 54)
-  }
-}
-
 struct HistoryDailyDetailView: View {
   let day: HistoryDaySummary
   let calendar: Calendar
 
   var body: some View {
     VStack(spacing: 0) {
-      HistoryDetailHeader(title: HistoryCopy.dailyReportTitle)
-
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryDailySummaryCard(day: day, calendar: calendar)
@@ -967,7 +921,8 @@ struct HistoryDailyDetailView: View {
       }
     }
     .background(MoruColor.canvas.ignoresSafeArea())
-    .toolbar(.hidden, for: .navigationBar)
+    .navigationTitle(HistoryCopy.dailyReportTitle)
+    .navigationBarTitleDisplayMode(.inline)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.dailyDetail")
   }
@@ -979,8 +934,6 @@ struct HistoryRunDetailView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      HistoryDetailHeader(title: dateTitle)
-
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryReportSummaryCard(
@@ -1045,7 +998,8 @@ struct HistoryRunDetailView: View {
       }
     }
     .background(MoruColor.canvas.ignoresSafeArea())
-    .toolbar(.hidden, for: .navigationBar)
+    .navigationTitle(dateTitle)
+    .navigationBarTitleDisplayMode(.inline)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("history.runDetail")
   }
@@ -1100,8 +1054,6 @@ struct HistoryWeeklyReportView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      HistoryDetailHeader(title: HistoryCopy.weeklyReportTitle)
-
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: MoruSpacing.thirtyTwo) {
           HistoryWeeklySummaryCard(
@@ -1134,7 +1086,8 @@ struct HistoryWeeklyReportView: View {
       }
     }
     .background(MoruColor.canvas.ignoresSafeArea())
-    .toolbar(.hidden, for: .navigationBar)
+    .navigationTitle(HistoryCopy.weeklyReportTitle)
+    .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(isPresented: isDayDetailPresented) {
       if let selectedDay {
         HistoryDailyDetailView(day: selectedDay, calendar: calendar)

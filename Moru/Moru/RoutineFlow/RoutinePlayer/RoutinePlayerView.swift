@@ -10,7 +10,6 @@ import UIKit
 struct RoutinePlayerView: View {
     @State private var viewModel: RoutinePlayerViewModel
     @State private var speechInputController: SpeechInputController
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// 완료 화면과 오늘의 기록 화면 사이의 전환 상태
     @State private var isShowingTodayRecord = false
@@ -38,6 +37,29 @@ struct RoutinePlayerView: View {
                     }
                 dialogView
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if showsProgressChrome {
+                    progressSection
+                        .padding(.top, viewModel.isTrialExecution ? 12 : 8)
+                        .padding(.bottom, 8)
+                }
+            }
+            .toolbar {
+                if !viewModel.isTrialExecution && showsProgressChrome {
+                    ToolbarItem(placement: .cancellationAction) {
+                        closeButton
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        endButton
+                    }
+                }
+            }
+            .toolbar(
+                viewModel.isTrialExecution ? .hidden : .automatic,
+                for: .navigationBar
+            )
+            .navigationTitle("오늘의 루틴")
+            .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled()
             .navigationBarBackButtonHidden(true)
             .task {
@@ -71,6 +93,17 @@ struct RoutinePlayerView: View {
     }
 
     // MARK: - Content
+
+    /// 진행바(그리고 체험이 아닐 때는 닫기·종료)를 보여줄 상태인지.
+    /// viewModel.progressValue/currentStepNumberText와 같은 상태 집합이다.
+    private var showsProgressChrome: Bool {
+        switch viewModel.screenState {
+        case .preparingServerVoice, .running, .stepCompleted:
+            return true
+        case .resolving, .resolutionRetry, .terminalFailure, .summary:
+            return false
+        }
+    }
 
     @ViewBuilder
     private var contentView: some View {
@@ -157,16 +190,6 @@ struct RoutinePlayerView: View {
         GeometryReader { geometry in
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
-                    if !viewModel.isTrialExecution {
-                        topBar
-                    }
-
-                    progressSection
-                        .padding(
-                            .top,
-                            viewModel.isTrialExecution ? 28 : 32
-                        )
-
                     Spacer(minLength: 48)
 
                     VStack(spacing: 16) {
@@ -207,20 +230,8 @@ struct RoutinePlayerView: View {
         GeometryReader { geometry in
             ScrollView(.vertical) {
                 VStack(spacing: 0) {
-                    if !viewModel.isTrialExecution {
-                        topBar
-                    }
-
-                    progressSection
-                        .padding(
-                            .top,
-                            viewModel.isTrialExecution ? 28 : 32
-                        )
-
                     Spacer()
-                        .frame(
-                            height: viewModel.isTrialExecution ? 70 : 20
-                        )
+                        .frame(height: 20)
 
                     // 단계 게이트는 단계 콘텐츠에만 건다. 상단바의 닫기·종료는
                     // 저장 실패 중에도 눌러서 나갈 수 있어야 한다.
@@ -243,27 +254,13 @@ struct RoutinePlayerView: View {
     private func stepCompletedView(
         step: RoutineStep
     ) -> some View {
-        ZStack(alignment: .top) {
-            RoutineStepCompletedView(
-                stepTitle: step.title,
-                isGuidancePlaying: viewModel.isGuidancePlaying
-            ) {
-                await viewModel.finishStepCompletedScreenAfterGuidance()
-            }
-            .offset(y: 12)
-
-            VStack(spacing: 0) {
-                if !viewModel.isTrialExecution {
-                    topBar
-                }
-
-                progressSection
-                    .padding(
-                        .top,
-                        viewModel.isTrialExecution ? 28 : 32
-                    )
-            }
+        RoutineStepCompletedView(
+            stepTitle: step.title,
+            isGuidancePlaying: viewModel.isGuidancePlaying
+        ) {
+            await viewModel.finishStepCompletedScreenAfterGuidance()
         }
+        .offset(y: 12)
     }
 
     @ViewBuilder
@@ -391,72 +388,21 @@ struct RoutinePlayerView: View {
 
     // MARK: - Header
 
-    private var topBar: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: 8) {
-                    topBarTitle
-
-                    HStack {
-                        closeButton
-                        Spacer()
-                        endButton
-                    }
-                }
-                .padding(.vertical, 8)
-            } else {
-                HStack {
-                    closeButton
-
-                    Spacer()
-
-                    topBarTitle
-
-                    Spacer()
-
-                    endButton
-                }
-                .frame(height: 40)
-            }
-        }
-        .padding(.horizontal, 20)
-    }
-
     /// 닫기(X): 기록을 저장하고 요약 없이 홈으로. "종료"와 역할이 다르므로 아이콘으로 구분한다.
     private var closeButton: some View {
         Button {
             viewModel.requestCloseRoutine()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(AppColor.gray350)
-                .frame(minWidth: 44, minHeight: 40)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("닫기")
         .accessibilityHint("지금까지의 진행을 기록하고 홈으로 돌아갑니다")
     }
 
-    private var topBarTitle: some View {
-        Text("오늘의 루틴")
-            .font(AppFont.pretendardSemiBold(size: 18, relativeTo: .body))
-            .foregroundStyle(AppColor.gray600)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
     private var endButton: some View {
-        Button {
+        Button("종료") {
             viewModel.requestEndRoutine()
-        } label: {
-            Text("종료")
-                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-                .foregroundStyle(AppColor.gray350)
-                .frame(minWidth: 56, minHeight: 40)
-                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .accessibilityHint("지금까지의 결과를 저장하고 완료 화면으로 이동합니다")
     }
 
@@ -523,15 +469,11 @@ struct RoutinePlayerView: View {
                 ),
                 wakeUpTime: summary.startedAt,
                 results: viewModel.summaryStepResults,
-                onTapBack: {
-                    isShowingTodayRecord = false
-                },
                 onTapHome: {
                     speechInputController.cancel()
                     viewModel.requestSummaryExit()
                 }
             )
-            .navigationBarBackButtonHidden(true)
         }
     }
 

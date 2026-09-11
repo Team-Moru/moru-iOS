@@ -60,8 +60,6 @@ struct RoutineEditorView: View {
     NavigationStack {
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 0) {
-          editorHeader
-
           titleSection
             .padding(.top, dynamicTypeSize.isAccessibilitySize ? 28 : 20)
 
@@ -85,7 +83,18 @@ struct RoutineEditorView: View {
       }
       .defaultScrollAnchor(.top)
       .background(MoruColor.canvas.ignoresSafeArea())
-      .toolbar(.hidden, for: .navigationBar)
+      .navigationTitle(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          backButton
+        }
+        if draft.routineID != nil {
+          ToolbarItem(placement: .destructiveAction) {
+            deleteButton
+          }
+        }
+      }
       .safeAreaInset(edge: .bottom) {
         VStack(spacing: AppSpacing.none) {
           MoruButton(
@@ -161,67 +170,23 @@ struct RoutineEditorView: View {
     }
   }
 
-  private var editorHeader: some View {
-    Group {
-      if dynamicTypeSize.isAccessibilitySize {
-        VStack(spacing: MoruSpacing.eight) {
-          HStack {
-            backButton
-            Spacer()
-            deleteButton
-          }
-
-          editorTitle
-        }
-      } else {
-        ZStack {
-          editorTitle
-
-          HStack {
-            backButton
-            Spacer()
-            deleteButton
-          }
-        }
-      }
-    }
-    .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 96 : 44)
-  }
-
-  private var editorTitle: some View {
-    Text(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
-      .moruTextStyle(.b3.weight(.semiBold))
-      .foregroundStyle(MoruColor.textStrong)
-      .frame(maxWidth: .infinity)
-      .fixedSize(horizontal: false, vertical: true)
-      .accessibilityAddTraits(.isHeader)
-  }
-
   private var backButton: some View {
     Button {
       dismiss()
     } label: {
-      Text("뒤로")
-        .moruTextStyle(.b4)
-        .foregroundStyle(MoruColor.textSecondary)
-        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+      Image(systemName: "xmark")
     }
-    .buttonStyle(.plain)
+    .accessibilityLabel("닫기")
   }
 
   private var deleteButton: some View {
-    Button {
+    Button(role: .destructive) {
       isDeleteDialogPresented = true
     } label: {
       Text("삭제")
-        .moruTextStyle(.b4)
-        .foregroundStyle(MoruColor.textSecondary)
-        .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
     }
-    .opacity(draft.routineID == nil ? 0 : 1)
-    .disabled(draft.routineID == nil)
-    .buttonStyle(.plain)
-    .accessibilityHidden(draft.routineID == nil)
+    // role: .destructive만으로는 이 툴바 자리에서 빨간 강조가 나오지 않아 직접 tint한다.
+    .tint(.red)
   }
 
   private var titleSection: some View {

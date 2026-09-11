@@ -33,34 +33,64 @@ struct OnboardingFlowView: View {
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      if viewModel.progressIndex != nil || viewModel.canCancel {
-        OnboardingHeaderView(viewModel: viewModel)
-      }
-
-      if viewModel.step == .completion || viewModel.step == .organizing {
-        stepContent
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else {
-        ScrollView(showsIndicators: false) {
+    NavigationStack {
+      Group {
+        if viewModel.step == .completion || viewModel.step == .organizing {
           stepContent
-            .padding(.horizontal, MoruSpacing.twenty)
-            .padding(.top, MoruSpacing.thirtyTwo)
-            .padding(.bottom, contentBottomSpacing)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          ScrollView(showsIndicators: false) {
+            stepContent
+              .padding(.horizontal, MoruSpacing.twenty)
+              .padding(.top, MoruSpacing.thirtyTwo)
+              .padding(.bottom, contentBottomSpacing)
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .defaultScrollAnchor(.top)
+          .accessibilityIdentifier("onboarding.scroll.content")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .defaultScrollAnchor(.top)
-        .accessibilityIdentifier("onboarding.scroll.content")
       }
-
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .safeAreaInset(edge: .bottom, spacing: 0) {
-      if viewModel.step.showsFooter {
-        OnboardingFooterView(viewModel: viewModel)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        if viewModel.step.showsFooter {
+          OnboardingFooterView(viewModel: viewModel)
+        }
       }
+      .background(OnboardingBackgroundView())
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        if viewModel.canNavigateBack {
+          ToolbarItem(placement: .cancellationAction) {
+            Button(action: viewModel.backButtonDidTap) {
+              Image(systemName: "chevron.left")
+            }
+            .disabled(viewModel.isSaving)
+            .accessibilityLabel("이전 단계로 돌아가기")
+            .accessibilityIdentifier("onboarding.back")
+          }
+        }
+        if let progressIndex = viewModel.progressIndex {
+          ToolbarItem(placement: .principal) {
+            OnboardingProgressHeader(
+              current: progressIndex,
+              total: viewModel.progressTotal
+            )
+          }
+        }
+        if viewModel.canCancel {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("취소", action: viewModel.cancelButtonDidTap)
+              .accessibilityIdentifier(
+                OnboardingFlowView.cancelAccessibilityIdentifier
+              )
+          }
+        }
+      }
+      .toolbar(
+        viewModel.progressIndex != nil || viewModel.canCancel ? .automatic : .hidden,
+        for: .navigationBar
+      )
     }
-    .background(OnboardingBackgroundView())
     .accessibilityIdentifier(
       viewModel.flowMode == .recommendedAddition
         ? Self.recommendedRootAccessibilityIdentifier
@@ -130,65 +160,24 @@ struct OnboardingFlowView: View {
   }
 }
 
-private struct OnboardingHeaderView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+/// 툴바 principal에 얹는 진행바. 제목 대신 위젯을 넣는 경우라 navigationTitle을 쓰지 않는다.
+private struct OnboardingProgressHeader: View {
+  let current: Int
+  let total: Int
 
   var body: some View {
-    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
-      if viewModel.canCancel {
-        HStack {
-          Spacer()
+    HStack(spacing: MoruSpacing.twelve) {
+      MoruProgressBar(
+        current: current,
+        total: total,
+        showsLabel: false
+      )
+      .frame(width: 160)
 
-          Button("취소", action: viewModel.cancelButtonDidTap)
-            .moruTextStyle(.c1)
-            .foregroundStyle(MoruColor.textSecondary)
-            .accessibilityIdentifier(
-              OnboardingFlowView.cancelAccessibilityIdentifier
-            )
-        }
-      }
-
-      if let progressIndex = viewModel.progressIndex {
-        HStack(spacing: 0) {
-          backButton
-
-          MoruProgressBar(
-            current: progressIndex,
-            total: viewModel.progressTotal,
-            showsLabel: false
-          )
-          .frame(maxWidth: .infinity)
-
-          Text("\(progressIndex)/\(viewModel.progressTotal)")
-            .moruTextStyle(.c2)
-            .foregroundStyle(MoruColor.textPrimary)
-            .fixedSize()
-            .padding(.leading, MoruSpacing.twelve)
-        }
-      }
-    }
-    .padding(.horizontal, MoruSpacing.twenty)
-    .padding(.top, MoruSpacing.sixteen)
-  }
-
-  @ViewBuilder
-  private var backButton: some View {
-    if viewModel.canNavigateBack {
-      Button(action: viewModel.backButtonDidTap) {
-        Image(systemName: "chevron.left")
-          .font(.system(size: 24, weight: .regular))
-          .foregroundStyle(MoruColor.textSecondary)
-          .frame(width: 44, height: 44, alignment: .leading)
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .disabled(viewModel.isSaving)
-      .accessibilityLabel("이전 단계로 돌아가기")
-      .accessibilityIdentifier("onboarding.back")
-    } else {
-      Color.clear
-        .frame(width: 44, height: 44)
-        .accessibilityHidden(true)
+      Text("\(current)/\(total)")
+        .moruTextStyle(.c2)
+        .foregroundStyle(MoruColor.textPrimary)
+        .fixedSize()
     }
   }
 }

@@ -33,10 +33,6 @@ struct TodayRoutineRecordView: View {
 
     // MARK: - Navigation Actions
 
-    /// 뒤로 버튼을 눌렀을 때 호출
-    /// 상위 화면에서 RoutineFinishedView로 전환하도록 처리
-    let onTapBack: () -> Void
-
     /// 홈으로 버튼을 눌렀을 때 호출
     let onTapHome: () -> Void
 
@@ -59,10 +55,8 @@ struct TodayRoutineRecordView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    navigationHeader
-                        .padding(.bottom, 20)
-
                     summaryCard
+                        .padding(.top, 20)
                         .padding(.bottom, 40)
 
                     todayRecordSection
@@ -78,34 +72,8 @@ struct TodayRoutineRecordView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             fixedHomeButton
         }
-    }
-
-    // MARK: - Navigation Header
-
-    /// 화면 상단의 내비게이션 영역
-    private var navigationHeader: some View {
-        ZStack {
-            // 가운데 날짜 표시
-            Text(formattedDate)
-                .font(AppFont.body1NormalSemiBold)
-                .foregroundStyle(AppColor.gray600)
-
-            // 왼쪽 뒤로 버튼
-            HStack {
-                Button {
-                    onTapBack()
-                } label: {
-                    Text("뒤로")
-                        .font(AppFont.body1NormalMedium)
-                        .foregroundStyle(AppColor.gray350)
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-            }
-        }
-        .frame(height: 44)
-        .padding(.top, 12)
+        .navigationTitle(formattedDate)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Routine Summary
@@ -683,9 +651,6 @@ struct TodayRoutineRecordView: View {
                 durationSeconds: nil
             )
         ],
-        onTapBack: {
-            print("RoutineFinishedView로 돌아가기")
-        },
         onTapHome: {
             print("홈 화면으로 이동")
         }
