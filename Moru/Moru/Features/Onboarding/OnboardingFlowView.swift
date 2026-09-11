@@ -25,11 +25,11 @@ struct OnboardingFlowView: View {
   static let cancelAccessibilityIdentifier =
     "routine.creation.recommended.cancel"
 
-  @StateObject private var viewModel: OnboardingViewModel
+  @State private var viewModel: OnboardingViewModel
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   init(viewModel: OnboardingViewModel) {
-    _viewModel = StateObject(wrappedValue: viewModel)
+    _viewModel = State(initialValue: viewModel)
   }
 
   var body: some View {
@@ -177,7 +177,7 @@ private struct OnboardingProgressHeader: View {
 }
 
 private struct OnboardingFooterView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     VStack(spacing: MoruSpacing.eight) {
@@ -260,7 +260,7 @@ private struct OnboardingStepLayout<Content: View>: View {
 }
 
 private struct RoutineExperienceQuestionView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     OnboardingStepLayout(
@@ -285,7 +285,7 @@ private struct RoutineExperienceQuestionView: View {
 }
 
 private struct RoutineGoalSelectionView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
@@ -356,7 +356,7 @@ private struct RoutineGoalSelectionView: View {
 }
 
 private struct SuggestedRoutinePreviewView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     OnboardingStepLayout(
@@ -394,7 +394,7 @@ private struct SuggestedRoutinePreviewView: View {
 }
 
 private struct RoutineDurationPreviewView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     if let routine = viewModel.validatedPreviewRoutine {
@@ -535,7 +535,7 @@ private struct ClockDurationSector: Shape {
 }
 
 private struct RoutineFreeformInputView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     OnboardingStepLayout(
@@ -614,7 +614,7 @@ private struct RoutineFreeformInputView: View {
 
 @MainActor
 private struct RoutineOrganizingView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     RoutineOrganizingContent(progress: viewModel.organizingProgress)
@@ -738,7 +738,7 @@ private struct OrganizingRoutineOrbView: View {
 }
 
 private struct RoutineReviewView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     OnboardingStepLayout(
@@ -769,7 +769,8 @@ private struct RoutineReviewView: View {
 }
 
 private struct OnboardingAlarmSettingView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  /// 요일 선택기에 쓰기 바인딩을 넘겨야 해서 이 화면만 @Bindable을 쓴다.
+  @Bindable var viewModel: OnboardingViewModel
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var body: some View {
@@ -820,7 +821,7 @@ private struct OnboardingAlarmSettingView: View {
 }
 
 private struct OnboardingVoiceSelectionView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     OnboardingStepLayout(
@@ -849,7 +850,7 @@ private struct OnboardingVoiceSelectionView: View {
 }
 
 private struct OnboardingCompletionView: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
 
   var body: some View {
     VStack(spacing: 0) {
@@ -962,7 +963,7 @@ private struct RoutineStepListCard: View {
 }
 
 private struct RecommendedRoutineStepCandidateList: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
   let candidates: [RoutineStep]
 
   var body: some View {
@@ -1107,7 +1108,7 @@ private struct RoutineStepPreviewRow: View {
 }
 
 private struct RoutineReviewForm: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
   let routine: Routine
 
   var body: some View {
@@ -1221,7 +1222,7 @@ private struct OnboardingChecklistRow: View {
 }
 
 private struct TimeWheelControl: View {
-  @ObservedObject var viewModel: OnboardingViewModel
+  let viewModel: OnboardingViewModel
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var isEditing = true
 

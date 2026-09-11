@@ -5,7 +5,6 @@
 //  Created by Codex on 7/6/26.
 //
 
-import Combine
 import Foundation
 import OSLog
 
@@ -24,7 +23,8 @@ enum RoutineOrganizingPresentationTiming {
 }
 
 @MainActor
-final class OnboardingViewModel: ObservableObject {
+@Observable
+final class OnboardingViewModel {
   static let freeformTextCharacterLimit = 200
   private static let minimumRecommendedRoutineStepCount = 1
   private static let saveErrorLogger = Logger(
@@ -32,60 +32,27 @@ final class OnboardingViewModel: ObservableObject {
     category: "OnboardingSave"
   )
 
-  let objectWillChange = ObservableObjectPublisher()
   let flowMode: RoutineCreationFlowMode
 
-  var draft: OnboardingDraft {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  var draft: OnboardingDraft
 
-  private(set) var step: OnboardingStep {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var step: OnboardingStep
 
-  private(set) var isSaving: Bool = false {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var isSaving: Bool = false
 
-  private(set) var isSuggesting: Bool = false {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var isSuggesting: Bool = false
 
   private(set) var organizingProgress: RoutineOrganizingPresentationPhase =
-    .preparingRoutine {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+    .preparingRoutine
 
-  private(set) var errorMessage: String? {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var errorMessage: String?
 
-  private(set) var activeRoutineConflict: RoutineActivationConflictState? {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var activeRoutineConflict: RoutineActivationConflictState?
 
   /// The goal-specific cards shown while a user adjusts either a Moru
   /// recommendation or an analyzed existing routine. Their selected subset
   /// is persisted in `draft.previewRoutine.steps` in every guided creation flow.
-  private(set) var recommendedRoutineStepCandidates: [RoutineStep] = [] {
-    willSet {
-      objectWillChange.send()
-    }
-  }
+  private(set) var recommendedRoutineStepCandidates: [RoutineStep] = []
 
   private let routineSuggestionService: any RoutineSuggestionService
   private let routineSuggestionCoordinator:
