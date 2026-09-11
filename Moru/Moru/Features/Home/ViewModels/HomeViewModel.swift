@@ -802,14 +802,28 @@ final class HomeViewModel {
     }
   }
 
-  /// 캘린더가 정한 시간대·로케일로 포맷한다. 기본 포맷터는 기기 설정을 따라가므로
+  /// 캘린더가 정한 시간대로 포맷한다. 기본 포맷터는 기기 설정을 따라가므로
   /// 고정 시간대로 도는 테스트와 캡처가 흔들린다.
   private func localized(_ style: Date.FormatStyle) -> Date.FormatStyle {
     var style = style
     style.calendar = calendar
     style.timeZone = calendar.timeZone
-    style.locale = calendar.locale ?? .autoupdatingCurrent
+    style.locale = formattingLocale
     return style
+  }
+
+  /// 앱은 한국어 한 벌만 제공하는데(기능 게이트) 날짜 포맷터만 기기 언어를 따라가면
+  /// 한국어 화면에 "Monday 7:00 AM"이 섞인다. 언어만 한국어로 맞추고 12·24시간 같은
+  /// 지역 설정은 그대로 둔다.
+  private var formattingLocale: Locale {
+    let base = calendar.locale ?? .current
+    guard base.language.languageCode != .korean else {
+      return base
+    }
+
+    var components = Locale.Components(locale: base)
+    components.languageComponents.languageCode = .korean
+    return Locale(components: components)
   }
 
   private func statusText(completed: Int, total: Int) -> String {
