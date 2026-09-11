@@ -29,6 +29,9 @@ struct BootstrappedApp {
   let onboardingStatusRuntimeCoordinator:
     OnboardingStatusRuntimeCoordinator?
   let routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator?
+  /// 탭 루트 조립. AppRouter는 struct View라 상태가 바뀔 때마다 다시 만들어지므로
+  /// 여기서 한 번만 만들어 넘긴다.
+  let mainTabComposition: MainTabComposition
 }
 
 struct AppBootstrapFailure: Equatable {
@@ -460,7 +463,11 @@ final class AppBootstrapper: ObservableObject {
         routinePlayerBuilder: routinePlayerBuilder,
         onboardingStatusRuntimeCoordinator:
           onboardingStatusRuntimeCoordinator,
-        routineSyncRuntimeCoordinator: routineSyncRuntimeCoordinator
+        routineSyncRuntimeCoordinator: routineSyncRuntimeCoordinator,
+        mainTabComposition: MainTabComposition(
+          dependencies: dependencies,
+          accountSessionStore: accountSessionStore
+        )
       )
 
       finishBootstrap(

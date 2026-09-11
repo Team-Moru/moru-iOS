@@ -165,6 +165,7 @@ struct AppRouter: View {
     onboardingStatusRuntimeCoordinator:
       OnboardingStatusRuntimeCoordinator? = nil,
     routineSyncRuntimeCoordinator: RoutineSyncRuntimeCoordinator? = nil,
+    composition: MainTabComposition? = nil,
     state: AppRouterState? = nil
   ) {
     _sessionStore = ObservedObject(wrappedValue: sessionStore)
@@ -212,85 +213,19 @@ struct AppRouter: View {
         onboardingProgressStore: UserDefaultsOnboardingProgressStore()
       )
     )
-    if let historyBuilder {
-      self.historyBuilder = historyBuilder
-    } else {
-      self.historyBuilder = DefaultHistoryFlowBuilder(
-        loadHistoryUseCase: LoadHistoryUseCase(
-          routineRepository: dependencies.routineRepository,
-          routineRunRepository: dependencies.routineRunRepository
-        ),
-        summaryEnricher: dependencies.accountHistoryRemoteService.map {
-          AccountHistorySummaryEnricher(
-            remoteService: $0,
-            signedInMemberProvider: accountSessionStore
-          )
-        },
-        accountDailyReportLoader: dependencies.accountHistoryRemoteService.map {
-          LoadAccountHistoryDailyReportUseCase(
-            remoteService: $0,
-            signedInMemberProvider: accountSessionStore
-          )
-        },
-        signedInMemberProvider: accountSessionStore
-      )
-    }
-    self.injectedProfileBuilder = profileBuilder
-    self.profileSettingsUseCase = ProfileSettingsUseCase(
-      localProfileRepository: dependencies.localProfileRepository,
-      voiceAvailabilityProbe: dependencies.voiceAvailabilityProbe
+    let composition = composition ?? MainTabComposition(
+      dependencies: dependencies,
+      accountSessionStore: accountSessionStore,
+      homeBuilder: homeBuilder,
+      historyBuilder: historyBuilder
     )
-    let profileAlarmService = dependencies.profileAlarmService
-      ?? UnavailableProfileAlarmService()
-    self.profileAlarmService = profileAlarmService
-    self.profileResetUseCase = dependencies.localDataResetRepository.map {
-      ResetLocalDataUseCase(
-        localDataResetRepository: $0,
-        alarmService: profileAlarmService,
-        routineTTSAudioCacheCleaner:
-          dependencies.routineTTSAudioCache.map {
-            RoutineTTSAudioCacheCleaner(cache: $0)
-          }
-      )
-    }
-    self.profileVoicePreviewPlayer = dependencies.makeVoicePreviewPlayer()
-    if let homeBuilder {
-      self.homeBuilder = homeBuilder
-    } else {
-      let enrichHomeRoutinesUseCase: (any EnrichHomeRoutinesUseCaseProtocol)?
-      if let remoteService = dependencies.accountRoutineGroupRemoteService,
-         let syncRepository = dependencies.routineSyncRepository {
-        enrichHomeRoutinesUseCase = EnrichHomeRoutinesUseCase(
-          remoteService: remoteService,
-          sessionIdentityProvider: accountSessionStore,
-          syncStateReader: DefaultHomeRoutineSyncStateReader(
-            repository: syncRepository
-          )
-        )
-      } else {
-        enrichHomeRoutinesUseCase = nil
-      }
-      self.homeBuilder = DefaultHomeFlowBuilder(
-        loadHomeRoutinesUseCase: LoadHomeRoutinesUseCase(
-          routineRepository: dependencies.routineRepository,
-          routineRunRepository: dependencies.routineRunRepository,
-          localProfileRepository: dependencies.localProfileRepository,
-          alarmPlatformStateRepository: dependencies.alarmPlatformStateRepository
-        ),
-        enrichHomeRoutinesUseCase: enrichHomeRoutinesUseCase,
-        weatherRepository: dependencies.homeWeatherRepository,
-        weatherService: dependencies.homeWeatherService,
-        sessionIdentityProvider: accountSessionStore,
-        routineCreationContentFactory: {
-          AnyView(
-            RoutineSettingView(
-              dependencies: dependencies,
-              entryPoint: .newRoutine
-            )
-          )
-        }
-      )
-    }
+    self.injectedProfileBuilder = profileBuilder
+    self.historyBuilder = composition.historyBuilder
+    self.homeBuilder = composition.homeBuilder
+    self.profileSettingsUseCase = composition.profileSettingsUseCase
+    self.profileAlarmService = composition.profileAlarmService
+    self.profileResetUseCase = composition.profileResetUseCase
+    self.profileVoicePreviewPlayer = composition.profileVoicePreviewPlayer
   }
 
   var body: some View {
