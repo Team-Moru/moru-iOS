@@ -150,6 +150,11 @@ nonisolated struct AccountEntryProviderAvailability: Equatable, Sendable {
 }
 
 nonisolated struct AccountEntryCopy: Equatable, Sendable {
+  /// 정책 URL이 준비되지 않아 소셜 버튼 3개가 모두 비활성일 때의 사유.
+  static let providersDisabledReason =
+    "약관·개인정보처리방침 주소가 준비되지 않아 지금은 계정 연결을 할 수 없어요. "
+      + "로그인 없이 계속 사용할 수 있어요."
+
   let title: String
   let subtitle: String
   let localFirstGuidance: String
@@ -316,47 +321,6 @@ struct AccountEntryView: View {
     .ignoresSafeArea()
   }
 
-  private var header: some View {
-    VStack(alignment: .leading, spacing: MoruSpacing.eight) {
-      Text(copy.title)
-        .font(AppFont.pretendardBold(size: 28, relativeTo: .title))
-        .foregroundStyle(MoruColor.textStrong)
-        .fixedSize(horizontal: false, vertical: true)
-        .accessibilityIdentifier(AccountEntryAccessibility.titleIdentifier)
-
-      Text(copy.subtitle)
-        .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
-        .foregroundStyle(MoruColor.textSecondary)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-  }
-
-  private var localFirstCard: some View {
-    HStack(alignment: .top, spacing: MoruSpacing.twelve) {
-      Image(systemName: "iphone.gen3")
-        .font(.system(size: 20, weight: .semibold))
-        .foregroundStyle(MoruColor.accent)
-        .accessibilityHidden(true)
-
-      Text(copy.localFirstGuidance)
-        .font(AppFont.pretendardMedium(size: 14, relativeTo: .callout))
-        .foregroundStyle(MoruColor.textPrimary)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-    .padding(MoruSpacing.sixteen)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(AppColor.grayWhite.opacity(0.9))
-    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
-    .overlay {
-      RoundedRectangle(cornerRadius: MoruRadius.card)
-        .stroke(MoruColor.border, lineWidth: 1)
-    }
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel("로컬 우선 안내")
-    .accessibilityValue(copy.localFirstGuidance)
-    .accessibilityIdentifier(AccountEntryAccessibility.guidanceIdentifier)
-  }
-
   private var statusView: some View {
     HStack(alignment: .top, spacing: MoruSpacing.ten) {
       if viewModel.status == .loading {
@@ -384,12 +348,25 @@ struct AccountEntryView: View {
   }
 
   private var providerButtons: some View {
-    HStack(spacing: MoruSpacing.twenty) {
-      googleButton
-      kakaoButton
-      appleButton
+    VStack(spacing: MoruSpacing.eight) {
+      HStack(spacing: MoruSpacing.twenty) {
+        googleButton
+        kakaoButton
+        appleButton
+      }
+      .frame(maxWidth: .infinity)
+
+      // 정책 URL이 없으면 버튼 3개가 전부 비활성이 된다. 이유를 말하지 않으면
+      // 사용자는 로그인이 고장 난 것으로 읽는다.
+      if !policyConfiguration.isReady {
+        Text(AccountEntryCopy.providersDisabledReason)
+          .font(AppFont.pretendardMedium(size: 12, relativeTo: .caption))
+          .foregroundStyle(MoruColor.textTertiary)
+          .multilineTextAlignment(.center)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity)
+      }
     }
-    .frame(maxWidth: .infinity)
     .accessibilityElement(children: .contain)
     .accessibilitySortPriority(5)
   }
