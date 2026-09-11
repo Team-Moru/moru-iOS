@@ -23,6 +23,54 @@ final class AppRouterState: ObservableObject {
   @Published private(set) var homeRefreshToken = 0
   @Published private(set) var mainTabState = MainTabState()
 
+  /// 루트 전이 입력. 예전에는 AppRouter의 View-local @State라 프로세스가 죽으면
+  /// 전부 리셋됐다. 그중 계정 진입 대기만 저장소에 남긴다.
+  @Published private(set) var deferredOnboardingTrialRoutineID: UUID?
+  @Published private(set) var didStartOnboarding = false
+  @Published private(set) var didCompleteOnboardingTrial = false
+  @Published private(set) var didCompleteAccountEntry = false
+
+  private let onboardingProgressStore: (any OnboardingProgressStoring)?
+
+  init(onboardingProgressStore: (any OnboardingProgressStoring)? = nil) {
+    self.onboardingProgressStore = onboardingProgressStore
+  }
+
+  /// 체험을 마쳤는데 계정 연결을 아직 못 본 상태. 이전 실행에서 남은 값도 포함한다.
+  var isAccountEntryPending: Bool {
+    if didCompleteOnboardingTrial, !didCompleteAccountEntry {
+      return true
+    }
+
+    return onboardingProgressStore?.isAccountEntryPending ?? false
+  }
+
+  func markOnboardingStarted() {
+    didStartOnboarding = true
+  }
+
+  func markOnboardingTrialCompleted() {
+    didCompleteOnboardingTrial = true
+    onboardingProgressStore?.setAccountEntryPending(true)
+  }
+
+  func markAccountEntryCompleted() {
+    didCompleteAccountEntry = true
+    onboardingProgressStore?.setAccountEntryPending(false)
+  }
+
+  func setDeferredOnboardingTrialRoutineID(_ routineID: UUID?) {
+    deferredOnboardingTrialRoutineID = routineID
+  }
+
+  func resetOnboardingFlags() {
+    deferredOnboardingTrialRoutineID = nil
+    didStartOnboarding = false
+    didCompleteOnboardingTrial = false
+    didCompleteAccountEntry = false
+    onboardingProgressStore?.setAccountEntryPending(false)
+  }
+
   func refreshHome() {
     homeRefreshToken += 1
   }
@@ -70,11 +118,7 @@ struct AppRouter: View {
   @ObservedObject private var geminiDataConsentStore: GeminiDataConsentStore
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
-  @State private var deferredOnboardingTrialRoutineID: UUID?
   @State private var alarmStopMonitor = ScheduledAlarmStopMonitor()
-  @State private var didStartOnboarding = false
-  @State private var didCompleteOnboardingTrial = false
-  @State private var didCompleteAccountEntry = false
   @State private var accountServerViewModel: AccountServerSettingsViewModel
   @StateObject private var state: AppRouterState
 
@@ -163,7 +207,11 @@ struct AppRouter: View {
         }
       )
     )
-    _state = StateObject(wrappedValue: state ?? AppRouterState())
+    _state = StateObject(
+      wrappedValue: state ?? AppRouterState(
+        onboardingProgressStore: UserDefaultsOnboardingProgressStore()
+      )
+    )
     if let historyBuilder {
       self.historyBuilder = historyBuilder
     } else {
@@ -252,9 +300,10 @@ struct AppRouter: View {
         hasLocalProfile: sessionStore.profile != nil,
         accountState: accountSessionStore.state,
         accountFeaturesEnabled: appCapabilities.shouldShowAccountUI,
-        didStartOnboarding: didStartOnboarding,
-        didCompleteOnboardingTrial: didCompleteOnboardingTrial,
-        didCompleteAccountEntry: didCompleteAccountEntry
+        didStartOnboarding: state.didStartOnboarding,
+        didCompleteOnboardingTrial: state.didCompleteOnboardingTrial,
+        didCompleteAccountEntry: state.didCompleteAccountEntry,
+        isAccountEntryPending: state.isAccountEntryPending
       ) {
       case .splash(let showStartCTA):
         SplashScreenView(
@@ -270,7 +319,7 @@ struct AppRouter: View {
           kakaoAuthorizationSession: kakaoAuthorizationSession,
           restorationFailure: restorationFailure,
           onContinueWithoutLogin: {
-            didCompleteAccountEntry = true
+            state.markAccountEntryCompleted()
           }
         )
 
@@ -357,9 +406,9 @@ struct AppRouter: View {
       // Establish loading/barrier state before AccountEntry marks the login as
       // complete, otherwise a provisional profile can route to Home first.
       onboardingStatusRuntimeCoordinator?.accountSessionDidChange()
-      if didCompleteOnboardingTrial,
+      if state.didCompleteOnboardingTrial,
          case .signedIn = newState {
-        didCompleteAccountEntry = true
+        state.markAccountEntryCompleted()
       }
       if case .signedIn = newState {
         // Ask right after login instead of waiting for the user to opt into
@@ -420,7 +469,8 @@ struct AppRouter: View {
     accountFeaturesEnabled: Bool,
     didStartOnboarding: Bool,
     didCompleteOnboardingTrial: Bool,
-    didCompleteAccountEntry: Bool
+    didCompleteAccountEntry: Bool,
+    isAccountEntryPending: Bool = false
   ) -> AppRootDestination {
     switch sessionPhase {
     case .loading:
@@ -434,7 +484,9 @@ struct AppRouter: View {
       break
     }
 
-    if didCompleteOnboardingTrial {
+    // 체험 직후이거나, 이전 실행에서 체험만 끝내고 죽은 경우를 같은 길로 보낸다.
+    // 후자를 빠뜨리면 프로필이 이미 있어 곧장 홈으로 가고 계정 연결 화면을 영영 못 본다.
+    if didCompleteOnboardingTrial || isAccountEntryPending {
       guard hasLocalProfile else {
         return .sessionFailure(
           title: "프로필 정보를 확인할 수 없어요",
@@ -485,7 +537,7 @@ struct AppRouter: View {
 
   @MainActor
   private func handleOnboardingStarted() {
-    didStartOnboarding = true
+    state.markOnboardingStarted()
   }
 
   @MainActor
@@ -494,10 +546,7 @@ struct AppRouter: View {
       await dependencies.routineTTSBackgroundTransferManager?
         .discardAllTransfers()
     }
-    deferredOnboardingTrialRoutineID = nil
-    didStartOnboarding = false
-    didCompleteOnboardingTrial = false
-    didCompleteAccountEntry = false
+    state.resetOnboardingFlags()
     sessionStore.load()
   }
 
@@ -556,9 +605,9 @@ struct AppRouter: View {
   private func handleOnboardingCompleted(routineID: UUID) {
     switch coordinator.presentOnboardingTrial(routineID: routineID) {
     case .presented, .alreadyPresented:
-      deferredOnboardingTrialRoutineID = nil
+      state.setDeferredOnboardingTrialRoutineID(nil)
     case .deferredBusy:
-      deferredOnboardingTrialRoutineID = routineID
+      state.setDeferredOnboardingTrialRoutineID(routineID)
     }
   }
 
@@ -684,9 +733,9 @@ struct AppRouter: View {
     case .dismiss(_):
       presentationBinding.wrappedValue = nil
     case .enterAccountEntry:
-      didCompleteOnboardingTrial = true
+      state.markOnboardingTrialCompleted()
       if case .signedIn = accountSessionStore.state {
-        didCompleteAccountEntry = true
+        state.markAccountEntryCompleted()
       }
       sessionStore.load()
     case .showHome:
@@ -711,13 +760,13 @@ struct AppRouter: View {
 
   @MainActor
   private func retryDeferredOnboardingTrial() {
-    guard let routineID = deferredOnboardingTrialRoutineID else {
+    guard let routineID = state.deferredOnboardingTrialRoutineID else {
       return
     }
 
     switch coordinator.presentOnboardingTrial(routineID: routineID) {
     case .presented, .alreadyPresented:
-      deferredOnboardingTrialRoutineID = nil
+      state.setDeferredOnboardingTrialRoutineID(nil)
     case .deferredBusy:
       break
     }

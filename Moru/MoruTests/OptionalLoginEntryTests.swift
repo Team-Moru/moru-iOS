@@ -91,6 +91,79 @@ final class OptionalLoginEntryTests: XCTestCase {
     )
   }
 
+  func testAccountEntryStillAppearsAfterTheAppDiesDuringTheOnboardingTrial() {
+    // 체험 도중 프로세스가 죽으면 didCompleteOnboardingTrial은 사라지지만
+    // 프로필은 이미 저장돼 있다. 예전에는 이 조합이 곧장 홈으로 갔다.
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .signedOut,
+        didCompleteOnboardingTrial: false,
+        isAccountEntryPending: true
+      ),
+      .accountEntry(nil)
+    )
+
+    // 계정 연결을 마쳤으면 대기 상태가 지워져 홈으로 간다.
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .signedOut,
+        didCompleteAccountEntry: true,
+        isAccountEntryPending: true
+      ),
+      .main
+    )
+
+    // 계정 기능이 꺼진 빌드에서는 대기 상태가 남아 있어도 홈으로 간다.
+    XCTAssertEqual(
+      destination(
+        phase: .ready,
+        hasLocalProfile: true,
+        accountState: .signedOut,
+        accountFeaturesEnabled: false,
+        isAccountEntryPending: true
+      ),
+      .main
+    )
+  }
+
+  @MainActor
+  func testAccountEntryPendingSurvivesRelaunchAndClearsOnCompletionOrReset() {
+    let defaults = UserDefaults(suiteName: "OnboardingProgressStoreTests")!
+    defaults.removePersistentDomain(forName: "OnboardingProgressStoreTests")
+    let makeState = {
+      AppRouterState(
+        onboardingProgressStore: UserDefaultsOnboardingProgressStore(
+          userDefaults: defaults,
+          key: "test-account-entry-pending"
+        )
+      )
+    }
+
+    let firstLaunch = makeState()
+    XCTAssertFalse(firstLaunch.isAccountEntryPending)
+
+    firstLaunch.markOnboardingTrialCompleted()
+
+    // 새 프로세스를 흉내 낸다. 메모리 플래그는 사라지고 저장소만 남는다.
+    XCTAssertTrue(makeState().isAccountEntryPending)
+
+    let secondLaunch = makeState()
+    secondLaunch.markAccountEntryCompleted()
+
+    XCTAssertFalse(makeState().isAccountEntryPending)
+
+    let thirdLaunch = makeState()
+    thirdLaunch.markOnboardingTrialCompleted()
+    thirdLaunch.resetOnboardingFlags()
+
+    XCTAssertFalse(makeState().isAccountEntryPending)
+    defaults.removePersistentDomain(forName: "OnboardingProgressStoreTests")
+  }
+
   func testCompletedOnboardingTrialRoutesAccountEntryOnlyWhenNeeded() {
     XCTAssertEqual(
       destination(
@@ -447,7 +520,8 @@ final class OptionalLoginEntryTests: XCTestCase {
     accountFeaturesEnabled: Bool = true,
     didStartOnboarding: Bool = false,
     didCompleteOnboardingTrial: Bool = false,
-    didCompleteAccountEntry: Bool = false
+    didCompleteAccountEntry: Bool = false,
+    isAccountEntryPending: Bool = false
   ) -> AppRootDestination {
     AppRouter.rootDestination(
       sessionPhase: phase,
@@ -456,7 +530,8 @@ final class OptionalLoginEntryTests: XCTestCase {
       accountFeaturesEnabled: accountFeaturesEnabled,
       didStartOnboarding: didStartOnboarding,
       didCompleteOnboardingTrial: didCompleteOnboardingTrial,
-      didCompleteAccountEntry: didCompleteAccountEntry
+      didCompleteAccountEntry: didCompleteAccountEntry,
+      isAccountEntryPending: isAccountEntryPending
     )
   }
 }
