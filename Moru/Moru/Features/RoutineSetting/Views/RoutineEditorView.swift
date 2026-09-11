@@ -77,7 +77,7 @@ struct RoutineEditorView: View {
               .padding(.top, MoruSpacing.sixteen)
           }
         }
-        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.gutter)
         .padding(.top, MoruSpacing.eight)
       }
       .defaultScrollAnchor(.top)

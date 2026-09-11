@@ -204,7 +204,7 @@ struct HomeView: View {
       state: viewModel.weatherState,
       requestWeather: viewModel.requestWeather
     )
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .padding(.horizontal, MoruSpacing.gutter)
   }
 
   @ViewBuilder
@@ -647,7 +647,7 @@ private struct HomeRefreshIndicator: View {
         .font(AppFont.caption1Medium)
         .foregroundStyle(MoruColor.textSecondary)
     }
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .padding(.horizontal, MoruSpacing.gutter)
     .accessibilityElement(children: .combine)
   }
 }
@@ -768,7 +768,7 @@ private struct HomeEmptyView: View {
         )
     }
     .frame(maxWidth: .infinity, minHeight: 320)
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .padding(.horizontal, MoruSpacing.gutter)
   }
 }
 
@@ -790,7 +790,7 @@ private struct HomeFailureView: View {
       MoruButton("다시 시도", style: .secondary, action: retryAction)
     }
     .frame(maxWidth: .infinity, minHeight: 320)
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .padding(.horizontal, MoruSpacing.gutter)
   }
 }
 
@@ -807,7 +807,7 @@ private struct HomeFailureBanner: View {
 
       MoruButton("다시 시도", style: .secondary, action: retryAction)
     }
-    .padding(.horizontal, AppSpacing.screenHorizontal)
+    .padding(.horizontal, MoruSpacing.gutter)
   }
 }
 

@@ -123,7 +123,7 @@ private struct MoruIconsPreviewHost: View {
           MoruRoutineStepTypeIcon(type: .input)
         }
       }
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.gray100)
   }

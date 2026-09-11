@@ -135,7 +135,7 @@ struct HistoryAccountDailyDetailView: View {
           }
         }
       }
-      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.gutter)
       .padding(.top, MoruSpacing.eight)
       .padding(.bottom, MoruSpacing.sixtyFour)
     }

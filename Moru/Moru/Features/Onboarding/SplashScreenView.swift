@@ -48,7 +48,7 @@ struct SplashScreenView: View {
           .accessibilityIdentifier(
             SplashScreenAccessibility.startIdentifier
           )
-          .padding(.horizontal, AppSpacing.screenHorizontal)
+          .padding(.horizontal, MoruSpacing.gutter)
           .padding(.bottom, AppSpacing.xxl)
       }
     }

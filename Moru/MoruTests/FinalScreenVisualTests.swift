@@ -266,7 +266,7 @@ final class FinalScreenVisualTests: XCTestCase {
         onTap: {},
         onStart: {}
       )
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.babyBlue50)
   }
@@ -281,7 +281,7 @@ final class FinalScreenVisualTests: XCTestCase {
       completionRateChangePercentagePoints: 20,
       averageDurationText: "12:30"
     )
-    .padding(AppSpacing.screenHorizontal)
+    .padding(MoruSpacing.gutter)
     .background(AppColor.grayWhite)
   }
 
@@ -337,7 +337,7 @@ final class FinalScreenVisualTests: XCTestCase {
         onOpenSettings: { _ in },
         onStartRoutine: { _ in }
       )
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.babyBlue50)
   }
@@ -416,17 +416,17 @@ private enum VisualBaseline {
     "moru-pr43-alarm-ring-light-M.png":
       "AAAAAAAAIiEAABAABVglOAZYACASMAQAAAAAAAAAwIALIyYDBhPRdEDwAGAAAAAAAAAgAIACOoca4xAHwAQAAA==",
     "moru-pr44-bundled-voices-light-AX3.png":
-      "AAAAAIAQmCDAAAiI5eTlZOVI1WL1cuYw2QDNQMyIhAAGAnAHUA06BwSDMAdQDXoHBgM5A3kB5qDNHM0c8sB4AQ==",
+      "AAAAAIAQmCDAAAiI5eTlZOVI1WL1cuYw2QDNQMyIhAAGAnAHUA06BwSDMAdQDXoHBgM5A3kB5qDNHM0c8oD4AA==",
     "moru-pr44-bundled-voices-light-M.png":
-      "AAAAAIAAmCCCAMwA1ADQoNSA5oAJIlAMUAwkAlAMUAU0A1ANWAcyh1ANGAcAAAAAAAAAAAAAAAPkAMFkyGhgAA==",
+      "AAAAAIAAmCCCAMwA1ADQoNSA5oAJIlAMUAwkAlAMUAU0A1ANWAcyh1ANGAcAAAAAAAAAAAAAAAPkAMFkyGBgAA==",
     "moru-pr50-session-empty-home-light-AX3.png":
       "AAAEAQcADwA8gDjg3mLGYfBx+eD5gO2A1oDWgApgalFLAUOnakla0SQiBoAGAAaAOyAzOTCEOaTkmuTb5NvpIA==",
     "moru-pr50-session-empty-home-light-M.png":
-      "AAAEAQcADwA8gDjgcOBw8HDxeOD8wMyAzwDWAAEgdAFgAWADAAAAAACAAwADMA1IPcCxsgaTD4fkyuTb5MvJJA==",
+      "AAAEAQcADwA8gDjgcOBw8HDxeOD8wMyAzwDWAAEgdAFgAWADAAAAAACAAwADMA1IPcCxsgaXFoPkyuTb5MvJJA==",
     "moru-pr50-session-empty-routine-light-AX3.png":
       "AAAAAAAACADAAMQA5AA4AABABgAGAAaAOyA7ODKEMKZVGFWQe7B7sIU+Hscax4E+4AAAAAAAUSQsymzbrFrSJA==",
     "moru-pr50-session-empty-routine-light-M.png":
-      "AAAAAAAAIACAAMgAyAAwAAAAAAAAAAMgDwANSFigGCYGk4MCwAAAAAAAAAAAAAAAAAAAAAAAUSQsymzbrFrSJA==",
+      "AAAAAAAAIACAAMgAyAAwAAAAAAAAAAMgDwANSBigGKImk4YCwAAAAAAAAAAAAAAAAAAAAAAAUSQsymzbrFrSJA==",
     "moru-pr52-history-streak-light-AX3.png":
       "AAAAAAAACADgAOQA1APYAMFkwSTANMC0xRTAdMIkwjTIzMjMyMzI0MjQyMzIxMgEyATIBOAAyiLOCmTLrcvZJA==",
     "moru-pr52-history-streak-light-M.png":

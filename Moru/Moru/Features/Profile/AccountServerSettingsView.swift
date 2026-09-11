@@ -192,7 +192,7 @@ struct AccountServerSettingsSummaryView: View {
     .padding(.horizontal, MoruSpacing.sixteen)
     .padding(.vertical, MoruSpacing.twelve)
     .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruRadius.card)
     .accessibilityElement(children: .combine)
   }
 }
@@ -353,7 +353,7 @@ struct AccountServerVoiceSelectionView: View {
     }
     .padding(MoruSpacing.sixteen)
     .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-    .homePilotSurface(cornerRadius: MoruSpacing.sixteen)
+    .homePilotSurface(cornerRadius: MoruRadius.card)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("profile.account.server-voice.\(voice.ttsID)")
   }

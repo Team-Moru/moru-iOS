@@ -76,7 +76,7 @@ struct CurrentRoutineCard: View {
     .padding(.vertical, MoruSpacing.twelve)
     .frame(minHeight: 72)
     .background(MoruColor.accentSurface)
-    .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.sixteen))
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
   }
 
   private var summaryIndicator: some View {

@@ -262,7 +262,7 @@ struct AccountEntryView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilitySortPriority(1)
             }
-            .padding(.horizontal, MoruSpacing.twenty)
+            .padding(.horizontal, MoruSpacing.gutter)
             .padding(.bottom, max(56, proxy.safeAreaInsets.bottom + 48))
           }
           .frame(maxWidth: .infinity, minHeight: proxy.size.height)
@@ -377,7 +377,7 @@ struct AccountEntryView: View {
     .padding(MoruSpacing.twelve)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(statusBackgroundColor)
-    .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.twelve))
+    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.small))
     .accessibilityElement(children: .combine)
     .accessibilityLabel(statusMessage)
     .accessibilityIdentifier(AccountEntryAccessibility.statusIdentifier)

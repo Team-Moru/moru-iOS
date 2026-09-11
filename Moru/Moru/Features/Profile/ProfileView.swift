@@ -312,7 +312,7 @@ struct ProfileView: View {
         supportSection
           .padding(.top, MoruSpacing.twentyEight)
       }
-      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.gutter)
     }
   }
 
@@ -357,7 +357,7 @@ struct ProfileView: View {
     .padding(.horizontal, MoruSpacing.sixteen)
     .padding(.vertical, MoruSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-    .profilePilotSurface(cornerRadius: MoruSpacing.sixteen)
+    .profilePilotSurface(cornerRadius: MoruRadius.card)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(displayName), \(profileSubtitle)")
     .accessibilityIdentifier("profile.summary")
@@ -772,11 +772,11 @@ struct ProfileView: View {
         profileTitle
 
         VStack(spacing: MoruSpacing.twenty) {
-          ProfileSkeletonBlock(cornerRadius: MoruSpacing.sixteen)
+          ProfileSkeletonBlock(cornerRadius: MoruRadius.card)
             .frame(height: 82)
-          ProfileSkeletonBlock(cornerRadius: MoruSpacing.twelve)
+          ProfileSkeletonBlock(cornerRadius: MoruRadius.small)
             .frame(height: 64)
-          ProfileSkeletonBlock(cornerRadius: MoruSpacing.twelve)
+          ProfileSkeletonBlock(cornerRadius: MoruRadius.small)
             .frame(height: 64)
         }
         .padding(.top, MoruSpacing.twelve)
@@ -789,7 +789,7 @@ struct ProfileView: View {
         supportSection
           .padding(.top, MoruSpacing.twentyEight)
       }
-      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.gutter)
       .padding(.bottom, MoruSpacing.sixtyFour)
     }
     .accessibilityElement(children: .contain)
@@ -820,7 +820,7 @@ struct ProfileView: View {
         supportSection
           .padding(.top, MoruSpacing.twentyEight)
       }
-      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.gutter)
       .padding(.bottom, MoruSpacing.sixtyFour)
     }
   }
@@ -842,7 +842,7 @@ struct ProfileView: View {
 
         Spacer()
       }
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
       .navigationTitle("이름 변경")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -1121,7 +1121,7 @@ struct ProfileView: View {
     .padding(.horizontal, MoruSpacing.sixteen)
     .padding(.vertical, MoruSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-    .profilePilotSurface(cornerRadius: MoruSpacing.twelve)
+    .profilePilotSurface(cornerRadius: MoruRadius.small)
   }
 }
 
@@ -1259,7 +1259,7 @@ struct MoruVoiceSettingsView: View {
           .accessibilityIdentifier("profile.voice.server")
         }
         .padding(MoruSpacing.sixteen)
-        .profilePilotSurface(cornerRadius: MoruSpacing.twelve)
+        .profilePilotSurface(cornerRadius: MoruRadius.small)
 
         if let message = profileViewModel.voiceErrorMessage {
           Text(message)
@@ -1268,7 +1268,7 @@ struct MoruVoiceSettingsView: View {
             .fixedSize(horizontal: false, vertical: true)
         }
       }
-      .padding(.horizontal, MoruSpacing.twenty)
+      .padding(.horizontal, MoruSpacing.gutter)
       .padding(.top, MoruSpacing.twenty)
       .padding(.bottom, MoruSpacing.sixtyFour)
     }

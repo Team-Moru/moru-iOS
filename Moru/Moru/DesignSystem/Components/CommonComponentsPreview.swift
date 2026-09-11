@@ -71,7 +71,7 @@ private struct MoruCommonComponentsPreviewHost: View {
             .foregroundStyle(MoruColor.textSecondary)
         }
       }
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.gray100)
   }

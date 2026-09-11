@@ -1045,7 +1045,7 @@ final class HistoryRunReportingTests: XCTestCase {
           calendar: overview.calendar
         )
       }
-      .padding(AppSpacing.screenHorizontal)
+      .padding(MoruSpacing.gutter)
     }
     .background(AppColor.babyBlue50)
     .environment(\.dynamicTypeSize, dynamicTypeSize)

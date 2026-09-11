@@ -41,7 +41,7 @@ struct OnboardingFlowView: View {
         } else {
           ScrollView(showsIndicators: false) {
             stepContent
-              .padding(.horizontal, MoruSpacing.twenty)
+              .padding(.horizontal, MoruSpacing.gutter)
               .padding(.top, MoruSpacing.thirtyTwo)
               .padding(.bottom, contentBottomSpacing)
           }
@@ -229,16 +229,6 @@ enum OnboardingFigmaLayout {
   static let alarmTimeFontSize: CGFloat = 72
   static let alarmScrollBottomSpacing: CGFloat = 72
   static let alarmAccessibilityScrollBottomSpacing: CGFloat = 128
-  static let weekdayButtonSize: CGFloat = 44
-  static let maximumWeekdaySpacing: CGFloat = 7
-
-  static func weekdaySpacing(availableWidth: CGFloat) -> CGFloat {
-    let itemCount = CGFloat(Weekday.onboardingDisplayOrder.count)
-    let gapCount = max(itemCount - 1, 1)
-    let availableSpacing =
-      (availableWidth - weekdayButtonSize * itemCount) / gapCount
-    return min(maximumWeekdaySpacing, max(0, availableSpacing))
-  }
 }
 
 private struct OnboardingStepLayout<Content: View>: View {
@@ -657,7 +647,7 @@ private struct RoutineOrganizingContent: View {
       Spacer(minLength: MoruSpacing.twenty)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(.horizontal, MoruSpacing.twenty)
+    .padding(.horizontal, MoruSpacing.gutter)
   }
 }
 
@@ -812,7 +802,7 @@ private struct OnboardingAlarmSettingView: View {
             .foregroundStyle(MoruColor.textSecondary)
             .frame(maxWidth: .infinity)
 
-          WeekdayCircleSelector(viewModel: viewModel)
+          MoruWeekdaySelector(selectedWeekdays: $viewModel.draft.selectedWeekdays)
             .frame(maxWidth: .infinity)
 
           Text(OnboardingCopy.alarmSoundGuidance)
@@ -1345,61 +1335,6 @@ private struct TimeWheelControl: View {
       hour: viewModel.draft.alarmHour,
       minute: viewModel.draft.alarmMinute
     )
-  }
-}
-
-private struct WeekdayCircleSelector: View {
-  @ObservedObject var viewModel: OnboardingViewModel
-
-  var body: some View {
-    GeometryReader { geometry in
-      HStack(
-        spacing: OnboardingFigmaLayout.weekdaySpacing(
-          availableWidth: geometry.size.width
-        )
-      ) {
-        ForEach(Weekday.onboardingDisplayOrder) { weekday in
-          Button {
-            viewModel.toggleWeekday(weekday)
-          } label: {
-            Text(weekday.shortKoreanTitle)
-              .font(
-                .custom(
-                  MoruTextWeight.semiBold.rawValue,
-                  fixedSize: 18
-                )
-              )
-              .foregroundStyle(
-                viewModel.draft.selectedWeekdays.contains(weekday)
-                  ? AppColor.grayWhite
-                  : MoruColor.textPrimary
-              )
-              .lineLimit(1)
-              .frame(width: 42, height: 42)
-              .background(
-                viewModel.draft.selectedWeekdays.contains(weekday)
-                  ? MoruColor.accent
-                  : MoruColor.progressTrack
-              )
-              .clipShape(Circle())
-          }
-          .buttonStyle(.plain)
-          .frame(
-            width: OnboardingFigmaLayout.weekdayButtonSize,
-            height: OnboardingFigmaLayout.weekdayButtonSize
-          )
-          .contentShape(Rectangle())
-          .accessibilityLabel("\(weekday.shortKoreanTitle)요일")
-          .accessibilityValue(
-            viewModel.draft.selectedWeekdays.contains(weekday)
-              ? "선택됨"
-              : "선택 안 됨"
-          )
-        }
-      }
-      .frame(maxWidth: .infinity)
-    }
-    .frame(height: OnboardingFigmaLayout.weekdayButtonSize)
   }
 }
 

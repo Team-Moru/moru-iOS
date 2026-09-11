@@ -60,7 +60,7 @@ struct RoutineSettingView: View {
               .padding(.top, AppSpacing.sm)
           }
         }
-        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.horizontal, MoruSpacing.gutter)
         .padding(.top, MoruSpacing.twenty)
       }
       .defaultScrollAnchor(.top)

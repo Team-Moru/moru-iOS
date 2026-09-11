@@ -418,7 +418,7 @@ struct HistoryWeeklyCompletionChart: View {
             .padding(.horizontal, MoruSpacing.twenty)
             .padding(.vertical, MoruSpacing.twenty)
             .background(historyPilotSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.twelve))
+            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.small))
             .shadow(color: MoruColor.shadow, radius: 15, x: 0, y: 0)
             .padding(.vertical, MoruSpacing.eight)
         }
@@ -727,7 +727,7 @@ struct HistoryMonthlyHeatmapView: View {
                 .padding(.bottom, MoruSpacing.eight)
                 .frame(maxWidth: .infinity, minHeight: 212, alignment: .top)
                 .background(historyPilotSurface)
-                .clipShape(RoundedRectangle(cornerRadius: MoruSpacing.twelve))
+                .clipShape(RoundedRectangle(cornerRadius: MoruRadius.small))
             }
             .padding(.top, MoruSpacing.eight)
             .padding(.bottom, MoruSpacing.twenty)
@@ -763,7 +763,7 @@ struct HistoryMonthlyHeatmapView: View {
 
     private func heatmapCell(_ day: HistoryHeatmapDay) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: MoruSpacing.eight)
+            RoundedRectangle(cornerRadius: MoruRadius.chip)
                 .fill(fillColor(for: day.bucket))
 
             if let date = day.date {
@@ -989,7 +989,7 @@ struct HistoryLoadingView: View {
                     .frame(width: 160, height: 24)
                     .frame(maxWidth: .infinity, minHeight: 40)
 
-                HistorySkeletonBlock(cornerRadius: MoruSpacing.twelve)
+                HistorySkeletonBlock(cornerRadius: MoruRadius.small)
                     .frame(height: 212)
             }
             .padding(.top, MoruSpacing.eight)

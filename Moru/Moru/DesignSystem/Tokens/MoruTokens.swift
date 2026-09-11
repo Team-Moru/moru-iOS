@@ -77,10 +77,15 @@ enum MoruSpacing {
   static let thirtySix = AppSpacing.thirtySix
   static let thirtyEight: CGFloat = 38
   static let sixtyFour = AppSpacing.sixtyFour
+
+  /// 화면·시트 루트의 좌우 거터. 값의 단일 출처는 `AppSpacing.screenHorizontal`이다.
+  static let gutter = AppSpacing.screenHorizontal
 }
 
 /// 모서리 토큰. 값은 `AppRadius`와 같은 출처를 쓴다.
 enum MoruRadius {
+  static let chip = AppRadius.xs
+  static let small: CGFloat = 12
   static let card = AppRadius.sm
   static let largeCard = AppRadius.lg
   static let pill = AppRadius.pill

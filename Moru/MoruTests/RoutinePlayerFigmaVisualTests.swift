@@ -544,7 +544,7 @@ private enum RoutinePlayerVisualBaseline {
     "regular-timer-light-M.png":
       "AAAAAAEKxpzGHIAIjkBchAYQAAAAIAGIAOQAMAMSB5IDkgBwDOQPCDondiOBxoMGggRjIAAAAAAAAAAAAAAAAA==",
     "resolution-retry-light-AX3.png":
-      "AAAAAAGABpAGAABAAACCAABAEqAxkDWYFqQypDOkNiQ2oBbgORAx0hrEGuJ0keM44Tj0gPgAAAQAAAAAAAAAAA==",
+      "AAAAAAGABpAGAABAAACCAABAEqAxkDWYFqQypDOkNiQ2oBbgORAx0hrEGuJ0keM44Tj0gPgAQAQAAAAAAAAAAA==",
     "resolution-retry-light-M.png":
       "AAAAAAEABpACAAEAAACCAAAAAAAAAAAAAAAAAAMcZGB1aBqm6KjkyOAIAAYAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
     "step-completed-light-AX3.png":
