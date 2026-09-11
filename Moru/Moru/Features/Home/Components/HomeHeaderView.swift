@@ -7,9 +7,22 @@
 
 import SwiftUI
 
+private struct HomeCaptureReferenceDateKey: EnvironmentKey {
+  static let defaultValue: Date? = nil
+}
+
+extension EnvironmentValues {
+  /// 시각 캡처 테스트가 인사말 시간대를 고정할 때 쓴다. 제품 코드는 설정하지 않는다.
+  var homeCaptureReferenceDate: Date? {
+    get { self[HomeCaptureReferenceDateKey.self] }
+    set { self[HomeCaptureReferenceDateKey.self] = newValue }
+  }
+}
+
 struct HomeHeaderView: View {
   let userName: String
   private let fixedDate: Date?
+  @Environment(\.homeCaptureReferenceDate) private var captureReferenceDate
 
   init(userName: String, date: Date? = nil) {
     self.userName = userName
@@ -18,8 +31,16 @@ struct HomeHeaderView: View {
 
   var body: some View {
     TimelineView(.periodic(from: .now, by: 60)) { context in
-      headerContent(at: fixedDate ?? context.date)
+      headerContent(at: fixedDate ?? referenceDate ?? context.date)
     }
+  }
+
+  private var referenceDate: Date? {
+#if DEBUG
+    captureReferenceDate
+#else
+    nil
+#endif
   }
 
   private func headerContent(at date: Date) -> some View {

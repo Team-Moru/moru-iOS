@@ -1,5 +1,5 @@
 //
-//  SkipStepDialogView.swift
+//  ExitRoutineDialogView.swift
 //  Moru
 //
 //  Created by 김승겸 on 7/8/26.
@@ -7,12 +7,16 @@
 
 import SwiftUI
 
-struct SkipStepDialogView: View {
+/// 상단바 닫기(X)·종료 확인 다이얼로그. 문구만 다르고 결과는 둘 다 기록 저장이다.
+struct ExitRoutineDialogView: View {
+  let exit: RoutinePlayerViewModel.DialogState.Exit
   let onCancel: () -> Void
   let onConfirm: () -> Void
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-  private let copy = RoutinePlayerDialogCopy.skipStep
+  private var copy: RoutinePlayerDialogCopy {
+    RoutinePlayerDialogCopy.exit(exit)
+  }
 
   var body: some View {
     ZStack {

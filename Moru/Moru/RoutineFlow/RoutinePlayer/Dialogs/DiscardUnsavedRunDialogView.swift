@@ -1,18 +1,16 @@
 //
-//  SkipStepDialogView.swift
+//  DiscardUnsavedRunDialogView.swift
 //  Moru
-//
-//  Created by 김승겸 on 7/8/26.
 //
 
 import SwiftUI
 
-struct SkipStepDialogView: View {
+struct DiscardUnsavedRunDialogView: View {
   let onCancel: () -> Void
   let onConfirm: () -> Void
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-  private let copy = RoutinePlayerDialogCopy.skipStep
+  private let copy = RoutinePlayerDialogCopy.discardUnsavedRun
 
   var body: some View {
     ZStack {

@@ -30,12 +30,13 @@ struct RoutinePlayerView: View {
             ZStack {
                 backgroundView
                 contentView
+                    .overlay(alignment: .bottom) {
+                        // 다이얼로그 스크림 아래에 두어 다이얼로그가 떠 있는 동안은 눌리지 않게 한다.
+                        if let errorMessage = viewModel.errorMessage {
+                            saveErrorBanner(message: errorMessage)
+                        }
+                    }
                 dialogView
-            }
-            .overlay(alignment: .bottom) {
-                if let errorMessage = viewModel.errorMessage {
-                    saveErrorBanner(message: errorMessage)
-                }
             }
             .interactiveDismissDisabled()
             .navigationBarBackButtonHidden(true)
@@ -43,7 +44,12 @@ struct RoutinePlayerView: View {
                 viewModel.resolveRoutine()
             }
         }
+        .onAppear {
+            // 루틴은 폰을 내려놓고 하는 것이라 자동 잠금이 실행을 끊으면 안 된다.
+            UIApplication.shared.isIdleTimerDisabled = true
+        }
         .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
             speechInputController.cancel()
             viewModel.viewDidDisappear()
         }
@@ -54,6 +60,13 @@ struct RoutinePlayerView: View {
         ) { _ in
             speechInputController.cancel()
             viewModel.runtimeDidInterrupt()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: UIApplication.willEnterForegroundNotification
+            )
+        ) { _ in
+            viewModel.runtimeDidResume()
         }
     }
 
@@ -186,7 +199,6 @@ struct RoutinePlayerView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .disabled(viewModel.isStepInteractionDisabled)
     }
 
     private func runningView(
@@ -210,7 +222,10 @@ struct RoutinePlayerView: View {
                             height: viewModel.isTrialExecution ? 70 : 20
                         )
 
+                    // 단계 게이트는 단계 콘텐츠에만 건다. 상단바의 닫기·종료는
+                    // 저장 실패 중에도 눌러서 나갈 수 있어야 한다.
                     stepContent(for: step)
+                        .disabled(viewModel.isStepInteractionDisabled)
 
                 }
                 .frame(
@@ -220,7 +235,6 @@ struct RoutinePlayerView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .disabled(viewModel.isStepInteractionDisabled)
         .onAppear {
             viewModel.runnableContentDidAppear()
         }
@@ -347,8 +361,20 @@ struct RoutinePlayerView: View {
                 }
             )
 
-        case .some(.exit(_)):
-            EndRoutineDialogView(
+        case .some(.exit(let exit)):
+            ExitRoutineDialogView(
+                exit: exit,
+                onCancel: {
+                    viewModel.cancelActiveDialog()
+                },
+                onConfirm: {
+                    speechInputController.cancel()
+                    viewModel.confirmActiveDialog()
+                }
+            )
+
+        case .some(.discardUnsavedRun):
+            DiscardUnsavedRunDialogView(
                 onCancel: {
                     viewModel.cancelActiveDialog()
                 },
@@ -396,17 +422,20 @@ struct RoutinePlayerView: View {
         .padding(.horizontal, 20)
     }
 
+    /// 닫기(X): 기록을 저장하고 요약 없이 홈으로. "종료"와 역할이 다르므로 아이콘으로 구분한다.
     private var closeButton: some View {
         Button {
             viewModel.requestCloseRoutine()
         } label: {
-            Text("닫기")
-                .font(AppFont.pretendardMedium(size: 16, relativeTo: .body))
+            Image(systemName: "xmark")
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(AppColor.gray350)
-                .frame(minWidth: 56, minHeight: 40)
+                .frame(minWidth: 44, minHeight: 40)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("닫기")
+        .accessibilityHint("지금까지의 진행을 기록하고 홈으로 돌아갑니다")
     }
 
     private var topBarTitle: some View {
@@ -428,6 +457,7 @@ struct RoutinePlayerView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityHint("지금까지의 결과를 저장하고 완료 화면으로 이동합니다")
     }
 
     private var progressSection: some View {
@@ -467,7 +497,7 @@ struct RoutinePlayerView: View {
         RoutineFinishedView(
             completionRate: summary.completionRate,
             streak: summary.streak,
-            stepResults: viewModel.stepResults,
+            stepResults: viewModel.summaryStepResults,
             isTrial: summary.persistedRunID == nil,
             onTapTodayRecord: {
                 if summary.persistedRunID == nil {
@@ -492,7 +522,7 @@ struct RoutinePlayerView: View {
                     for: summary
                 ),
                 wakeUpTime: summary.startedAt,
-                results: viewModel.stepResults,
+                results: viewModel.summaryStepResults,
                 onTapBack: {
                     isShowingTodayRecord = false
                 },
@@ -530,6 +560,14 @@ struct RoutinePlayerView: View {
 
             MoruButton("다시 시도", isEnabled: !viewModel.isSavingRun) {
                 viewModel.retrySavingRun()
+            }
+
+            MoruButton(
+                RoutinePlayerDialogCopy.discardUnsavedRun.confirmTitle,
+                style: .text,
+                isEnabled: viewModel.hasUnsavedRun
+            ) {
+                viewModel.requestDiscardUnsavedRun()
             }
         }
         .padding(20)

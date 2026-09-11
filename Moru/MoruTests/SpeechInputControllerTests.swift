@@ -165,6 +165,7 @@ final class SpeechInputControllerTests: XCTestCase {
     await controller.start()
 
     XCTAssertEqual(controller.phase, .failed(.transcriberUnavailable))
+    XCTAssertEqual(controller.permanentFailure, .transcriberUnavailable)
     XCTAssertEqual(
       controller.statusText,
       "이 기기에서는 음성 인식 기능을 사용할 수 없어요."
@@ -206,6 +207,7 @@ final class SpeechInputControllerTests: XCTestCase {
     await controller.start()
 
     XCTAssertEqual(controller.phase, .failed(.audioSession))
+    XCTAssertNil(controller.permanentFailure)
     XCTAssertEqual(
       controller.statusText,
       "마이크를 시작할 수 없어요. 다시 시도해 주세요."
@@ -597,6 +599,7 @@ final class SpeechInputControllerTests: XCTestCase {
     await controller.start()
 
     XCTAssertEqual(controller.phase, .failed(.microphonePermissionDenied))
+    XCTAssertEqual(controller.permanentFailure, .microphonePermissionDenied)
     XCTAssertEqual(session.cancelCallCount, 1)
     XCTAssertEqual(
       controller.statusText,

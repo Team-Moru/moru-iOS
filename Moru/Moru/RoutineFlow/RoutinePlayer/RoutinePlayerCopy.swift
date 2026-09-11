@@ -6,6 +6,9 @@
 import Foundation
 
 enum RoutinePlayerCopy {
+  /// 음성 대신 손으로 단계를 끝내는 버튼. 음성 인식 영구 실패와 타이머 조기 완료가 함께 쓴다.
+  static let manualCompletionTitle = "완료했어요"
+
   struct TimerSegment: Equatable {
     let title: String
     let duration: String?

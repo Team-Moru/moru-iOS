@@ -1215,9 +1215,203 @@ final class RouterRuntimeContractTests: XCTestCase {
     case .userDismissed:
       viewModel.requestCloseRoutine()
 
-    case .summaryCTA, .summaryRecord, .terminalUnavailable:
+    case .summaryCTA, .summaryRecord, .terminalUnavailable, .discardedUnsavedRun:
       XCTFail("Only early exit reasons are valid for this helper.")
     }
+  }
+
+  // MARK: - 완료 요약 정합성
+
+  @MainActor
+  func testSummaryListsEveryPlannedStepAndKeepsUnreachedOnesOutOfTheSavedRecord() {
+    let routine = makeExecutableRoutine(
+      steps: [
+        RoutineStep(type: .confirm, title: "첫째", order: 0),
+        RoutineStep(type: .timer, title: "둘째", order: 1),
+        RoutineStep(type: .input, title: "셋째", order: 2),
+      ]
+    )
+    let saver = RoutineRunSaverSpy()
+    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: .manual
+      ),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: UUID()
+    ) { _, _ in }
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep(transcript: "완료했어요")
+    viewModel.finishStepCompletedScreen()
+    viewModel.requestSkipStep()
+    viewModel.confirmActiveDialog()
+    viewModel.requestEndRoutine()
+    viewModel.confirmActiveDialog()
+
+    guard case .summary(let summary) = viewModel.screenState else {
+      XCTFail("Ending early should display the summary.")
+      return
+    }
+
+    // 저장되는 결과는 완료·건너뜀 2건뿐이다.
+    XCTAssertEqual(saver.requests.first?.results.count, 2)
+    XCTAssertEqual(summary.totalStepCount, 3)
+    XCTAssertEqual(summary.completedStepCount, 1)
+    XCTAssertEqual(summary.skippedStepCount, 1)
+
+    // 요약은 계획된 3단계를 순서대로 보여 주고 셋째는 미완료다.
+    let displayed = viewModel.summaryStepResults
+    XCTAssertEqual(displayed.map(\.stepTitle), ["첫째", "둘째", "셋째"])
+    XCTAssertTrue(displayed[0].isCompleted)
+    XCTAssertTrue(displayed[1].skipped)
+    XCTAssertFalse(displayed[2].isCompleted)
+    XCTAssertFalse(displayed[2].skipped)
+    XCTAssertEqual(
+      displayed.map(RoutineFinishedView.statusSymbolName(for:)),
+      ["checkmark", "xmark", "minus"]
+    )
+    XCTAssertEqual(
+      displayed.map(RoutineFinishedView.statusLabel(for:)),
+      ["완료", "건너뜀", "미완료"]
+    )
+  }
+
+  // MARK: - 저장 실패 시 종료 의도
+
+  @MainActor
+  private func makeRegularViewModelWithFailingSave(
+    failuresRemaining: Int = 1
+  ) -> (RoutinePlayerViewModel, RoutineRunSaverSpy, RoutinePlayerEventRecorder) {
+    let routine = makeExecutableRoutine()
+    let saver = RoutineRunSaverSpy(failuresRemaining: failuresRemaining)
+    let finalizer = SavingRegularRoutineFinalizer(saver: saver)
+    let resolver = RoutineExecutionResolverSpy(resolution: .available(routine))
+    let eventRecorder = RoutinePlayerEventRecorder()
+    let viewModel = RoutinePlayerViewModel(
+      request: RegularRoutineExecutionRequest(
+        routineID: routine.id,
+        source: .manual
+      ),
+      resolver: resolver,
+      finalizer: finalizer,
+      presentationToken: UUID()
+    ) { token, event in
+      eventRecorder.record(presentationToken: token, event: event)
+    }
+
+    return (viewModel, saver, eventRecorder)
+  }
+
+  @MainActor
+  func testNaturalCompletionSaveFailureStillLetsTheUserLeaveWithoutARecord() {
+    let (viewModel, saver, eventRecorder) = makeRegularViewModelWithFailingSave()
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep()
+    viewModel.finishStepCompletedScreen()
+
+    XCTAssertNotNil(viewModel.errorMessage)
+    XCTAssertTrue(viewModel.hasUnsavedRun)
+    XCTAssertTrue(viewModel.isStepInteractionDisabled)
+
+    // 자연 완료 저장 실패는 화면이 .stepCompleted에 머물지만 종료 의도는 통과해야 한다.
+    viewModel.requestCloseRoutine()
+    XCTAssertEqual(viewModel.dialogState, .discardUnsavedRun)
+
+    viewModel.confirmActiveDialog()
+
+    XCTAssertNil(viewModel.dialogState)
+    XCTAssertNil(viewModel.errorMessage)
+    XCTAssertFalse(viewModel.hasUnsavedRun)
+    XCTAssertEqual(saver.requests.count, 1)
+    XCTAssertTrue(saver.savedRuns.isEmpty)
+    XCTAssertEqual(eventRecorder.events, [.exitRequested(.discardedUnsavedRun)])
+
+    // 나간 뒤의 재시도·재종료는 아무것도 하지 않는다.
+    viewModel.retrySavingRun()
+    viewModel.requestEndRoutine()
+    viewModel.confirmActiveDialog()
+    XCTAssertEqual(saver.requests.count, 1)
+    XCTAssertEqual(eventRecorder.events, [.exitRequested(.discardedUnsavedRun)])
+  }
+
+  @MainActor
+  func testDiscardDialogCancelKeepsTheSameRequestRetryable() {
+    let (viewModel, saver, eventRecorder) = makeRegularViewModelWithFailingSave()
+
+    viewModel.resolveRoutine()
+    viewModel.completeCurrentStep()
+    viewModel.finishStepCompletedScreen()
+
+    viewModel.requestDiscardUnsavedRun()
+    XCTAssertEqual(viewModel.dialogState, .discardUnsavedRun)
+
+    viewModel.cancelActiveDialog()
+    XCTAssertNil(viewModel.dialogState)
+    XCTAssertTrue(viewModel.hasUnsavedRun)
+    XCTAssertTrue(eventRecorder.events.isEmpty)
+
+    viewModel.retrySavingRun()
+
+    guard case .summary(let summary) = viewModel.screenState else {
+      XCTFail("A successful retry after cancelling the discard dialog should show a summary.")
+      return
+    }
+
+    XCTAssertEqual(saver.requests.count, 2)
+    XCTAssertEqual(saver.requests[0], saver.requests[1])
+    XCTAssertEqual(eventRecorder.events, [.completionDisplayed(summary)])
+  }
+
+  @MainActor
+  func testCloseSaveFailureRoutesTopBarEndIntoTheDiscardDialog() {
+    let (viewModel, saver, eventRecorder) = makeRegularViewModelWithFailingSave()
+
+    viewModel.resolveRoutine()
+    viewModel.requestCloseRoutine()
+    viewModel.confirmActiveDialog()
+
+    XCTAssertNotNil(viewModel.errorMessage)
+    XCTAssertEqual(saver.requests.count, 1)
+
+    // 저장 대기 중에는 종료 버튼도 종료 다이얼로그가 아니라 기록 없이 나가기를 묻는다.
+    viewModel.requestEndRoutine()
+    XCTAssertEqual(viewModel.dialogState, .discardUnsavedRun)
+
+    // 다이얼로그가 떠 있는 동안 도착한 단계 완료는 저장 대기 중이라 무시된다.
+    viewModel.completeCurrentStep()
+    XCTAssertTrue(viewModel.stepResults.isEmpty)
+
+    viewModel.confirmActiveDialog()
+    XCTAssertEqual(eventRecorder.events, [.exitRequested(.discardedUnsavedRun)])
+    XCTAssertEqual(saver.requests.count, 1)
+  }
+
+  @MainActor
+  func testDiscardRequestIsIgnoredWithoutAnUnsavedRun() {
+    let (viewModel, saver, eventRecorder) = makeRegularViewModelWithFailingSave(
+      failuresRemaining: 0
+    )
+
+    viewModel.resolveRoutine()
+    viewModel.requestDiscardUnsavedRun()
+    XCTAssertNil(viewModel.dialogState)
+
+    // 저장 대기가 없으면 종료는 기존 종료 다이얼로그 그대로다.
+    viewModel.requestEndRoutine()
+    XCTAssertEqual(viewModel.dialogState, .exit(.endedEarly))
+    viewModel.confirmActiveDialog()
+
+    guard case .summary = viewModel.screenState else {
+      XCTFail("An early end without a save failure should show the summary.")
+      return
+    }
+    XCTAssertEqual(saver.savedRuns.count, 1)
+    XCTAssertEqual(eventRecorder.events.count, 1)
   }
 }
 

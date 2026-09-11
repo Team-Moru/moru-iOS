@@ -57,6 +57,8 @@ enum RoutinePlayerExit: Equatable {
   case endedEarly
   case terminalUnavailable
   case userDismissed
+  /// 저장에 실패한 실행 기록을 버리고 나간다. 라우터는 `userDismissed`와 같이 처리한다.
+  case discardedUnsavedRun
 }
 
 enum RoutinePlayerEvent: Equatable {

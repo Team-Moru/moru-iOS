@@ -10,6 +10,14 @@ import XCTest
 @testable import Moru
 
 final class FinalScreenVisualTests: XCTestCase {
+  private static let homeReferenceDate: Date = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
+    return calendar.date(
+      from: DateComponents(year: 2026, month: 7, day: 24, hour: 9, minute: 0)
+    )!
+  }()
+
   @MainActor
   func testMainScreensRenderAtReferenceAccessibilitySizes() async throws {
     for variant in VisualVariant.allCases {
@@ -361,6 +369,9 @@ final class FinalScreenVisualTests: XCTestCase {
     let renderedContent = content
       .environment(\.dynamicTypeSize, variant.dynamicTypeSize)
       .environment(\.locale, Locale(identifier: "ko_KR"))
+      // 홈 인사말은 시간대(오전/오후/저녁)에 따라 바뀌어 AX3 레이아웃이 흔들린다.
+      // 기준선은 오전에 승인됐으므로 09:00 KST로 고정한다.
+      .environment(\.homeCaptureReferenceDate, Self.homeReferenceDate)
       .preferredColorScheme(.light)
 
     let bounds = CGRect(x: 0, y: 0, width: 393, height: 852)

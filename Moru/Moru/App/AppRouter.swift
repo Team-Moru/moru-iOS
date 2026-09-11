@@ -65,6 +65,7 @@ struct AppRouter: View {
   @ObservedObject private var coordinator: AppNavigationCoordinator
 
   @State private var deferredOnboardingTrialRoutineID: UUID?
+  @State private var alarmStopMonitor = ScheduledAlarmStopMonitor()
   @State private var didStartOnboarding = false
   @State private var didCompleteOnboardingTrial = false
   @State private var didCompleteAccountEntry = false
@@ -243,9 +244,15 @@ struct AppRouter: View {
       item: presentationBinding,
       onDismiss: completePendingDismissal
     ) { presentation in
-      routinePlayerView(for: presentation)
-        .id(presentation.id)
-        .interactiveDismissDisabled()
+      AlarmStopRetryBannerContainer(
+        isVisible: alarmStopMonitor.showsRetryBanner(for: presentation.id),
+        isRetrying: alarmStopMonitor.isRetrying,
+        onRetry: retryScheduledAlarmStop
+      ) {
+        routinePlayerView(for: presentation)
+          .id(presentation.id)
+      }
+      .interactiveDismissDisabled()
     }
     .sheet(isPresented: geminiConsentPresentationBinding) {
       GeminiDataConsentView(consentStore: geminiDataConsentStore)
@@ -658,6 +665,7 @@ struct AppRouter: View {
     }
 
     let effect = coordinator.presentationDidDismiss()
+    alarmStopMonitor.clear()
     state.refreshHome()
     execute(effect)
     retryDeferredAlarmIngressOrOnboarding()
@@ -727,34 +735,63 @@ struct AppRouter: View {
     }
 
     let attempt = coordinator.presentScheduledRoutine(context: context)
-    stopAlarmWithoutBlockingRoutinePresentation(context)
 
-    switch attempt {
-    case .deferredBusy:
+    // 알람은 플레이어 표시가 승인된 뒤에만 끈다. 미뤄진 경우는 부활 경로가 다시 들어온다.
+    switch ScheduledAlarmStopPolicy.action(for: attempt) {
+    case .defer:
       Self.alarmLogger.info("scheduled_player_deferred_busy")
-      return
-    case .alreadyPresented:
-      Self.alarmLogger.info("scheduled_player_already_presented")
+    case .completeAndStop(let presentationToken):
+      if case .alreadyPresented = attempt {
+        Self.alarmLogger.info("scheduled_player_already_presented")
+      } else {
+        Self.alarmLogger.info("scheduled_player_presented")
+      }
       AlarmIngressOccurrenceStore.shared.complete(context.ingress)
-    case .presented:
-      Self.alarmLogger.info("scheduled_player_presented")
-      AlarmIngressOccurrenceStore.shared.complete(context.ingress)
+      stopScheduledAlarmWithoutBlockingRoutinePresentation(
+        context,
+        presentationToken: presentationToken
+      )
     }
   }
 
   @MainActor
-  private func stopAlarmWithoutBlockingRoutinePresentation(
-    _ context: AlarmRingContext
+  private func stopScheduledAlarmWithoutBlockingRoutinePresentation(
+    _ context: AlarmRingContext,
+    presentationToken: UUID
   ) {
-    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+    guard dependencies.alarmRuntimeHandler != nil else {
       return
     }
 
+    alarmStopMonitor.begin(context: context, presentationToken: presentationToken)
+    performScheduledAlarmStop(context)
+  }
+
+  /// 플레이어 상단 배너의 재시도. 정지 실패는 로그로 끝나지 않고 사용자에게 돌아온다.
+  @MainActor
+  private func retryScheduledAlarmStop() {
+    guard let context = alarmStopMonitor.beginRetry() else {
+      return
+    }
+
+    performScheduledAlarmStop(context)
+  }
+
+  @MainActor
+  private func performScheduledAlarmStop(_ context: AlarmRingContext) {
+    guard let alarmRuntimeHandler = dependencies.alarmRuntimeHandler else {
+      alarmStopMonitor.markFailed()
+      return
+    }
+
+    let monitor = alarmStopMonitor
     Task { @MainActor in
       do {
         try await alarmRuntimeHandler.stopAlarm(for: context)
+        monitor.markStopped()
         Self.alarmLogger.info("scheduled_player_alarm_stop_succeeded")
       } catch {
+        monitor.markFailed()
         Self.alarmLogger.error("scheduled_player_alarm_stop_failed")
       }
     }

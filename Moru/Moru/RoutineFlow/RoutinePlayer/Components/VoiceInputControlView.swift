@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum SpeechNoInputAction: Equatable {
   case playReminder
@@ -43,6 +44,8 @@ struct VoiceInputControlView: View {
   let waitUntilGuidanceFinishes: () async -> Bool
   let onNoSpeechReminder: () async -> Bool
   let onAutomaticSkip: () -> Void
+  /// 음성 인식이 영구 실패했을 때 손으로 단계를 끝내는 경로. nil이면 버튼을 숨긴다.
+  let onManualComplete: (() -> Void)?
   let onFinished: (String) -> Void
   private let appSettingsOpener: AppSettingsOpener
   @State private var isAutomaticallyFinishing = false
@@ -50,6 +53,8 @@ struct VoiceInputControlView: View {
   @State private var pendingAutomaticFinishTask: Task<Void, Never>?
   @State private var noInputSequence = SpeechNoInputSequence()
   @State private var noInputHandlingTask: Task<Void, Never>?
+  /// 안내 대기 중에 백그라운드를 다녀오면 대기가 false로 끝나는데, 그 경우에도 자동 시작을 살린다.
+  @State private var shouldResumeAfterInterruptedGuidance = false
 
   init(
     speechInputController: SpeechInputController,
@@ -60,6 +65,7 @@ struct VoiceInputControlView: View {
     waitUntilGuidanceFinishes: @escaping () async -> Bool = { true },
     onNoSpeechReminder: @escaping () async -> Bool = { true },
     onAutomaticSkip: @escaping () -> Void = {},
+    onManualComplete: (() -> Void)? = nil,
     appSettingsOpener: AppSettingsOpener = AppSettingsOpener(),
     onFinished: @escaping (String) -> Void
   ) {
@@ -71,6 +77,7 @@ struct VoiceInputControlView: View {
     self.waitUntilGuidanceFinishes = waitUntilGuidanceFinishes
     self.onNoSpeechReminder = onNoSpeechReminder
     self.onAutomaticSkip = onAutomaticSkip
+    self.onManualComplete = onManualComplete
     self.appSettingsOpener = appSettingsOpener
     self.onFinished = onFinished
   }
@@ -111,8 +118,17 @@ struct VoiceInputControlView: View {
         return
       }
 
-      automaticStartState = guidanceDidFinish ? .ready : .manualOnly
+      let resumesAfterInterruption = shouldResumeAfterInterruptedGuidance
+      shouldResumeAfterInterruptedGuidance = false
+      automaticStartState = guidanceDidFinish || resumesAfterInterruption ? .ready : .manualOnly
       await startAutomaticallyIfPossible()
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(
+        for: UIApplication.willEnterForegroundNotification
+      )
+    ) { _ in
+      resumeAutomaticStartAfterForeground()
     }
     .onChange(of: speechInputController.latestTranscriptUpdate) { _, update in
       if let update,
@@ -155,6 +171,29 @@ struct VoiceInputControlView: View {
 
     automaticStartState = .started
     await speechInputController.start()
+  }
+
+  /// 백그라운드 진입이 인식을 취소하면 `.started`/`.manualOnly`에 멈춰 자동 시작이 다시 오지 않는다.
+  /// 복귀 시 안내 재생 없이 인식만 다시 켠다. 일시정지·실패 상태는 건드리지 않는다.
+  private func resumeAutomaticStartAfterForeground() {
+    switch automaticStartState {
+    case .waitingForGuidance:
+      shouldResumeAfterInterruptedGuidance = true
+
+    case .started, .manualOnly:
+      guard speechInputController.phase == .idle,
+            !speechInputController.isPreparing else {
+        return
+      }
+
+      automaticStartState = .ready
+      Task {
+        await startAutomaticallyIfPossible()
+      }
+
+    case .ready:
+      break
+    }
   }
 
   private func scheduleAutomaticFinishIfNeeded(for update: SpeechTranscriptUpdate?) {
@@ -383,15 +422,26 @@ struct VoiceInputControlView: View {
         .foregroundStyle(AppColor.gray500)
         .multilineTextAlignment(.center)
 
-      if isMicrophonePermissionDenied {
-        Button("설정 열기") {
-          Task {
-            await appSettingsOpener.open()
+      if speechInputController.permanentFailure != nil {
+        // 재시도가 무의미한 실패. 완주 경로가 건너뛰기뿐이면 완수율이 0%로 고정되므로
+        // 손으로 끝내는 큰 버튼을 준다.
+        if let onManualComplete {
+          MoruButton(RoutinePlayerCopy.manualCompletionTitle) {
+            onManualComplete()
           }
+          .padding(.top, 4)
         }
-        .buttonStyle(.plain)
-        .font(AppFont.label1NormalSemiBold)
-        .foregroundStyle(AppColor.orange350)
+
+        if isMicrophonePermissionDenied {
+          Button("설정 열기") {
+            Task {
+              await appSettingsOpener.open()
+            }
+          }
+          .buttonStyle(.plain)
+          .font(AppFont.label1NormalSemiBold)
+          .foregroundStyle(AppColor.orange350)
+        }
       } else {
         Button("다시 시도") {
           Task {

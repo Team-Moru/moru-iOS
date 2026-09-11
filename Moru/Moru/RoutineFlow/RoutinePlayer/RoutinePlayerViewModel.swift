@@ -11,6 +11,7 @@ nonisolated private enum RoutinePlayerDiagnosticEvent: String, Sendable {
     case stepStarted
     case serverVoiceUnavailableContinuedSilently
     case guidanceInterrupted
+    case resumedFromBackground
 }
 
 /// Records only coarse state transitions so TestFlight diagnostics never
@@ -49,6 +50,8 @@ final class RoutinePlayerViewModel {
         
         case skipStep
         case exit(Exit)
+        /// 저장에 실패한 기록을 버리고 나갈지 묻는다.
+        case discardUnsavedRun
     }
     
     private enum FinalizationMode {
@@ -101,12 +104,27 @@ final class RoutinePlayerViewModel {
     private(set) var isSavingRun = false
     private(set) var errorMessage: String?
 
+    /// 단계 상호작용(완료·건너뛰기·다음 단계)을 막는 단일 게이트.
+    /// 저장 대기 중에도 중복 완료를 막기 위해 `pendingSave`를 포함한다.
     var isStepInteractionDisabled: Bool {
         !isPresentationActive
             || dialogState != nil
             || pendingSave != nil
             || isSavingRun
             || didRequestExit
+    }
+
+    /// 종료 의도 게이트. 저장 실패로 `pendingSave`가 남아 있어도 나가는 길은 항상 열어 둔다.
+    private var canRequestExit: Bool {
+        isPresentationActive
+            && dialogState == nil
+            && !isSavingRun
+            && !didRequestExit
+    }
+
+    /// 저장하지 못한 실행 기록이 남아 있어 "기록 없이 나가기"를 제안할 수 있는 상태
+    var hasUnsavedRun: Bool {
+        pendingSave != nil && !isSavingRun
     }
     
     init(
@@ -183,6 +201,19 @@ final class RoutinePlayerViewModel {
         }
 
         return false
+    }
+
+    /// 완료 요약용 결과. 저장되는 `stepResults`는 완료·건너뜀만 담지만, 요약은 기록 탭과 같이
+    /// 계획된 모든 단계를 보여 준다. 도달하지 못한 단계는 완료도 건너뜀도 아닌 "미완료"다.
+    var summaryStepResults: [RoutineStepResult] {
+        steps.map { step in
+            stepResults.first(where: { $0.stepID == step.id })
+                ?? RoutineStepResult(
+                    stepID: step.id,
+                    stepTitle: step.title,
+                    stepType: step.type
+                )
+        }
     }
 
     var isGuidancePlaying: Bool {
@@ -274,6 +305,15 @@ final class RoutinePlayerViewModel {
     func requestCloseRoutine() {
         requestExitDialog(.userDismissed)
     }
+
+    /// 저장 실패 배너의 "기록 없이 나가기"
+    func requestDiscardUnsavedRun() {
+        guard canRequestExit, hasUnsavedRun else {
+            return
+        }
+
+        dialogState = .discardUnsavedRun
+    }
     
     func cancelActiveDialog() {
         dialogState = nil
@@ -294,6 +334,9 @@ final class RoutinePlayerViewModel {
             
         case .exit(let exit):
             confirmExit(exit)
+
+        case .discardUnsavedRun:
+            discardUnsavedRunAndExit()
         }
     }
     
@@ -528,6 +571,15 @@ final class RoutinePlayerViewModel {
         diagnostics.record(.guidanceInterrupted)
     }
 
+    /// 포그라운드 복귀. 안내는 다시 틀지 않고(이미 들은 내용) 뷰 쪽이 음성 인식·타이머를 되살린다.
+    func runtimeDidResume() {
+        guard isPresentationActive, !didRequestExit else {
+            return
+        }
+
+        diagnostics.record(.resumedFromBackground)
+    }
+
     private var isExitEligible: Bool {
         switch screenState {
         case .preparingServerVoice, .running:
@@ -538,7 +590,12 @@ final class RoutinePlayerViewModel {
     }
     
     private func requestExitDialog(_ exit: DialogState.Exit) {
-        guard !isStepInteractionDisabled else {
+        guard canRequestExit else {
+            return
+        }
+
+        if hasUnsavedRun {
+            dialogState = .discardUnsavedRun
             return
         }
         
@@ -547,6 +604,16 @@ final class RoutinePlayerViewModel {
         }
         
         dialogState = .exit(exit)
+    }
+
+    private func discardUnsavedRunAndExit() {
+        guard hasUnsavedRun else {
+            return
+        }
+
+        pendingSave = nil
+        errorMessage = nil
+        emitExit(.discardedUnsavedRun)
     }
 
     private func applyPendingStepCompletion() {
@@ -567,7 +634,7 @@ final class RoutinePlayerViewModel {
     }
     
     private func confirmExit(_ exit: DialogState.Exit) {
-        guard !isStepInteractionDisabled else {
+        guard canRequestExit, !hasUnsavedRun else {
             return
         }
         
@@ -720,7 +787,7 @@ final class RoutinePlayerViewModel {
                 terminalIntent = .summary
             case .userDismissed:
                 terminalIntent = .exit(.userDismissed)
-            case .summaryCTA, .summaryRecord, .terminalUnavailable:
+            case .summaryCTA, .summaryRecord, .terminalUnavailable, .discardedUnsavedRun:
                 assertionFailure("Unsupported early exit: \(exit)")
                 return
             }
