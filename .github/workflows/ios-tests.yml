@@ -1,0 +1,70 @@
+name: iOS Tests
+
+# 2026-09-10: self-hosted macOS 러너 도입을 보류했다. 러너가 없는 상태에서 pull_request/push
+# 트리거를 두면 실행이 queued 상태로 쌓이므로 수동 실행(workflow_dispatch)만 남긴다.
+# 당분간은 로컬에서 `bash Scripts/run-tests.sh smoke|full`을 기준으로 개발한다.
+# 러너를 등록한 뒤에는 아래 주석 처리한 트리거를 되살리고, 잡의 fork 가드 주석을 참고한다.
+# 절차는 Moru/docs/SelfHostedRunner.md 참고.
+on:
+  workflow_dispatch:
+    inputs:
+      plan:
+        description: 실행할 테스트 플랜
+        type: choice
+        options:
+          - smoke
+          - full
+        default: smoke
+  # pull_request:
+  # push:
+  #   branches:
+  #     - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
+  MORU_XCODEBUILD_QUIET: "1"
+
+jobs:
+  tests:
+    name: ${{ inputs.plan }} test plan
+    # workflow_dispatch는 저장소 write 권한자만 실행할 수 있어 별도 가드가 필요 없다.
+    # pull_request 트리거를 되살릴 때는 self-hosted 러너에서 fork PR의 임의 코드를 실행하지
+    # 않도록 아래 조건을 다시 넣는다.
+    #   if: github.event_name != 'pull_request' ||
+    #       github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: ${{ inputs.plan == 'full' && 150 || 60 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Static gates
+        run: |
+          bash Scripts/check-iphone-functional-gate.sh
+          bash Scripts/check-swiftdata-boundary.sh
+          bash Scripts/check-folder-convention.sh
+
+      - name: Run test plan
+        run: bash Scripts/run-tests.sh ${{ inputs.plan }}
+
+      - name: Upload results and captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.plan }}-test-results
+          path: |
+            build/TestResults
+            build/captures
+          if-no-files-found: ignore
