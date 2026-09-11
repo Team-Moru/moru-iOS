@@ -47,8 +47,10 @@ private struct MoruCommonComponentsPreviewHost: View {
         MoruVoiceCard(
           name: "민서",
           description: "따뜻한 친구",
-          isSelected: $voiceCardSelected
-        )
+          isSelected: voiceCardSelected
+        ) {
+          voiceCardSelected.toggle()
+        }
         MoruToggle(isOn: $toggleOn)
         MoruCheckBadge(state: .on)
         MoruCheckBadge(state: .off)
