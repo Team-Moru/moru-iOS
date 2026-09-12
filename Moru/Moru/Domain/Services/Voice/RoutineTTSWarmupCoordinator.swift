@@ -33,6 +33,19 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let routineLocalID: UUID
   }
 
+  /// 계획을 실제로 싣었는지, 못 실었다면 기존 계획을 버려야 하는지.
+  ///
+  /// 이 구분이 필요한 이유: 로컬 단계가 바뀌었거나 사라졌다면 들고 있던 계획은
+  /// 틀린 것이므로 버려야 하고, 저장소 읽기가 잠깐 실패한 것뿐이라면 버리면
+  /// 안 된다. 버리면 다음 재생 때 안내가 통째로 없어진다.
+  private enum PlanPublication {
+    case published
+    /// 로컬이 달라졌다 — 들고 있던 계획은 더 이상 이 단계의 것이 아니다.
+    case rejectedStalePlan
+    /// 일시적 실패 — 판단할 수 없으므로 기존 계획을 그대로 둔다.
+    case unavailable
+  }
+
   private enum ForegroundPreparationResult {
     case prepared
     case pendingBinding
@@ -937,39 +950,27 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
             isAudioCacheUsable(for: identity) else {
         return
       }
-      let currentLocalStep: RoutineStep
-      do {
-        guard let routine = try routineRepository?.routine(id: routineGroupLocalID),
-              let step = routine.steps.first(where: { $0.id == routineLocalID }) else {
-          preparedPlans[localKey] = nil
-          continue
-        }
-        currentLocalStep = step
-      } catch {
-        // A failed local-store read does not prove that the existing plan is
-        // invalid; localAudioURLs will revalidate the binding before use.
-        continue
-      }
-      guard RoutineTTSLocalFingerprint(
-        title: currentLocalStep.title,
-        type: currentLocalStep.type
-      ) == RoutineTTSLocalFingerprint(
-        title: localStep.title,
-        type: localStep.type
-      ) else {
-        preparedPlans[localKey] = nil
-        continue
-      }
-      preparedPlans[localKey] = PreparedPlan(
-        identity: identity,
-        fingerprint: RoutineTTSLocalFingerprint(
-          title: currentLocalStep.title,
-          type: currentLocalStep.type
+      // 전경 경로와 같은 일이다. 예전에는 여기에 같은 로직이 한 벌 더 있었고,
+      // 한쪽만 고치면 배경으로 데운 안내와 재생 직전에 데운 안내가 서로 다른
+      // 기준으로 실린다.
+      switch publishPreparedPlan(
+        candidate: ForegroundCandidate(
+          localStep: localStep,
+          localKey: localKey,
+          routineGroupRemoteID: groupBinding.remoteID,
+          routineRemoteID: routineBinding.remoteID,
+          assets: assets
         ),
-        routineGroupRemoteID: groupBinding.remoteID,
-        routineRemoteID: routineBinding.remoteID,
-        keys: keys
-      )
+        keys: keys,
+        identity: identity
+      ) {
+      case .published:
+        break
+      case .rejectedStalePlan:
+        preparedPlans[localKey] = nil
+      case .unavailable:
+        break
+      }
     }
   }
 
@@ -1213,7 +1214,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       return .unavailable
     }
     for (candidate, keys) in cachedCandidates {
-      guard publishPreparedPlan(
+      // 전경에서는 어느 쪽 실패든 결과가 같다 — 지금 들려줄 수 없다.
+      guard case .published = publishPreparedPlan(
         candidate: candidate,
         keys: keys,
         identity: identity
@@ -1536,11 +1538,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     candidate: ForegroundCandidate,
     keys: [RoutineTTSAudioCacheKey],
     identity: AccountSessionIdentity
-  ) -> Bool {
+  ) -> PlanPublication {
     guard !Task.isCancelled,
           sessionIdentityProvider?.currentAccountSessionIdentity == identity,
           isAudioCacheUsable(for: identity) else {
-      return false
+      return .unavailable
     }
     do {
       guard let routineRepository,
@@ -1550,7 +1552,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
             let currentStep = routine.steps.first(where: {
               $0.id == candidate.localKey.routineLocalID
             }) else {
-        return false
+        return .rejectedStalePlan
       }
       let currentFingerprint = RoutineTTSLocalFingerprint(
         title: currentStep.title,
@@ -1560,7 +1562,9 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         title: candidate.localStep.title,
         type: candidate.localStep.type
       )
-      guard currentFingerprint == initialFingerprint else { return false }
+      guard currentFingerprint == initialFingerprint else {
+        return .rejectedStalePlan
+      }
       preparedPlans[candidate.localKey] = PreparedPlan(
         identity: identity,
         fingerprint: currentFingerprint,
@@ -1568,9 +1572,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         routineRemoteID: candidate.routineRemoteID,
         keys: keys
       )
-      return true
+      return .published
     } catch {
-      return false
+      // 저장소 읽기 실패는 일시적이다. 재생 직전에 바인딩을 다시 확인하므로
+      // 들고 있던 계획을 여기서 버릴 이유가 없다.
+      return .unavailable
     }
   }
 
