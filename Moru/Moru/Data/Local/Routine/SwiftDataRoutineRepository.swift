@@ -642,20 +642,18 @@ nonisolated final class SwiftDataRoutineRepository: RoutineRepository {
     return try modelContext.fetch(descriptor).first
   }
 
+  /// 저장 트랜잭션 안의 마지막 방어선.
+  ///
+  /// 판단 기준은 `ActiveRoutineWeekdayPolicy` 한 곳에 있다. 예전에는 이 함수가
+  /// 규칙을 직접 들고 있어서 UseCase 쪽 판단과 갈라질 수 있었다.
   @MainActor
   private func ensureActiveRoutineWeekdaysDoNotOverlap() throws {
     let activeRoutines = try modelContext.fetch(
       FetchDescriptor<PersistedRoutine>(predicate: #Predicate { $0.isActive })
     )
 
-    var scheduledWeekdays: Set<Weekday> = []
-    for persisted in activeRoutines {
-      let routine = try SwiftDataMapper.makeDomainRoutine(from: persisted)
-      let weekdays = Set(routine.alarmSchedule?.weekdays ?? [])
-      guard scheduledWeekdays.isDisjoint(with: weekdays) else {
-        throw RepositoryContractError.overlappingActiveRoutineWeekdays
-      }
-      scheduledWeekdays.formUnion(weekdays)
-    }
+    try ActiveRoutineWeekdayPolicy.validate(
+      try activeRoutines.map(SwiftDataMapper.makeDomainRoutine(from:))
+    )
   }
 }

@@ -82,17 +82,11 @@ struct RoutineSettingUseCase {
       return []
     }
 
-    let routines = try routineRepository.fetchRoutines()
-    return routines.reduce(into: Set<UUID>()) { result, routine in
-      guard routine.id != mutation.routineID,
-            routine.isActive,
-            let schedule = routine.alarmSchedule,
-            !mutation.selectedWeekdays.isDisjoint(with: schedule.weekdays) else {
-        return
-      }
-
-      result.insert(routine.id)
-    }
+    return ActiveRoutineWeekdayPolicy.conflictingRoutineIDs(
+      occupying: mutation.selectedWeekdays,
+      excluding: mutation.routineID,
+      among: try routineRepository.fetchRoutines()
+    )
   }
 
   func updateActivation(
