@@ -283,7 +283,7 @@ final class RoutineTTSAudioStorageTests: XCTestCase {
         return RoutineTTSAudioDownloadedFile(fileURL: file, byteCount: 3)
       }
     }
-    await Task.yield()
+    await gate.waitUntilWaiting()
     try await cache.purge(accountID: "account-a")
 
     let replacementURL = try await cache.fileURL(for: key) { stagingDirectory in
@@ -529,14 +529,42 @@ private actor TestCounter {
   func increment() { value += 1 }
 }
 
+/// 열림을 기억하는 게이트.
+///
+/// 예전에는 `open()`이 **이미 저장된** continuation만 깨웠다. 로더가 `wait()`으로
+/// 이 액터에 들어오기 전에 `open()`이 액터 경합에서 이기면 그 깨움은 사라지고,
+/// 뒤늦게 park한 `wait()`은 영원히 깨어나지 않는다. 고전적인 lost wakeup이다.
+///
+/// `testPurgeCancelsOldLoadAndDoesNotRemoveSameKeyReplacement`가 시뮬레이터에서
+/// 간헐적으로 테스트 플랜의 180초 상한에 걸려 멈추던 원인이 이것이다. 실기기에서는
+/// 스케줄링이 달라 재현되지 않아 제품 코드 문제로 오해하기 쉬웠다.
 private actor TestGate {
   private var continuation: CheckedContinuation<Void, Error>?
+  private var isOpen = false
+  private var waiterCount = 0
 
   func wait() async throws {
+    guard !isOpen else {
+      return
+    }
+
+    waiterCount += 1
     try await withCheckedThrowingContinuation { continuation = $0 }
   }
 
+  /// 로더가 실제로 게이트에 걸릴 때까지 기다린다. `Task.yield()` 한 번으로
+  /// 갈음하면 로드가 in-flight로 등록되기 전에 다음 줄이 실행될 수 있어,
+  /// 테스트가 의도한 "진행 중인 로드를 purge가 취소한다" 상황을 못 만든다.
+  func waitUntilWaiting(timeout: Duration = .seconds(2)) async {
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: timeout)
+    while waiterCount == 0, clock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(1))
+    }
+  }
+
   func open() {
+    isOpen = true
     continuation?.resume()
     continuation = nil
   }
