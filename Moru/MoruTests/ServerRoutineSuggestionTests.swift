@@ -916,11 +916,49 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     XCTAssertEqual(coordinator.cancellationCount, 1)
   }
 
+  /// 요청이 시작되기 전에 화면을 벗어나면 요청 자체가 일어나지 않아야 한다.
+  ///
+  /// 예전에는 이걸 `.goals`에서 확인했는데, 온보딩 흐름의 `.goals`는 코디네이터를
+  /// 거치지 않는다 — `refreshPreview()`가 동기로 성공해 그 자리에서 단계를 넘긴다
+  /// (아래 `testOnboardingGoalsResolvesLocallyWithoutConsultingCoordinator` 참고).
+  /// 취소할 요청이 애초에 없으니 취소를 검증할 수 없었다. 코디네이터가 실제로
+  /// 호출되는 `.freeform`으로 옮긴다.
   func testImmediateDisappearanceAfterCTAStopsRequestBeforeItStarts()
     async {
     let coordinator = CountingRoutineSuggestionCoordinator(
       result: RoutineSuggestionResult(
         routine: makeRoutine(name: "시작되면 안 되는 추천"),
+        source: .server
+      )
+    )
+    let viewModel = OnboardingViewModel(
+      draft: OnboardingDraft(freeformText: "누르자마자 화면을 닫아요"),
+      step: .freeform,
+      routineSuggestionService: RoutineSuggestionLocalStub(),
+      routineSuggestionCoordinator: coordinator
+    )
+
+    viewModel.primaryButtonDidTap()
+    viewModel.viewDidDisappear()
+    await _Concurrency.Task<Never, Never>.yield()
+    await _Concurrency.Task<Never, Never>.yield()
+
+    XCTAssertEqual(coordinator.callCount, 0)
+    XCTAssertFalse(viewModel.isSuggesting)
+    XCTAssertNil(viewModel.draft.previewRoutine)
+
+    // 단계 표시는 누르는 순간 동기로 바뀌지만, 거기서 더 나아가면 안 된다.
+    XCTAssertEqual(viewModel.step, .organizing)
+    XCTAssertNotEqual(viewModel.step, .review)
+  }
+
+  /// 온보딩 첫 추천은 항상 로컬 생성이 이긴다. 코디네이터는 DI까지 연결돼 있지만
+  /// 이 경로에서는 닿지 않는다 — 로그인 전이라 서버를 부를 수 없기 때문이다.
+  /// 이 사실이 위 테스트의 전제이므로 함께 고정한다.
+  func testOnboardingGoalsResolvesLocallyWithoutConsultingCoordinator() {
+    let coordinator = CountingRoutineSuggestionCoordinator(
+      result: RoutineSuggestionResult(
+        routine: makeRoutine(name: "닿지 않는 서버 추천"),
         source: .server
       )
     )
@@ -932,14 +970,11 @@ final class ServerRoutineSuggestionTests: XCTestCase {
     )
 
     viewModel.primaryButtonDidTap()
-    viewModel.viewDidDisappear()
-    await _Concurrency.Task<Never, Never>.yield()
-    await _Concurrency.Task<Never, Never>.yield()
 
     XCTAssertEqual(coordinator.callCount, 0)
-    XCTAssertEqual(viewModel.step, .goals)
+    XCTAssertEqual(viewModel.step, .suggestedRoutine)
     XCTAssertFalse(viewModel.isSuggesting)
-    XCTAssertNil(viewModel.draft.previewRoutine)
+    XCTAssertNotNil(viewModel.draft.previewRoutine)
   }
 
   private func input(

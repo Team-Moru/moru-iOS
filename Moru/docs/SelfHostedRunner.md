@@ -12,7 +12,9 @@
 >   (`Moru/docs/iPhoneFunctionalGate.md` 자동 검증 절)로 한다.
 >
 > 재도입 절차: (1) §2대로 러너 등록 → (2) `ios-tests.yml`의 트리거 주석 해제와 fork 가드
-> `if:` 복원 → (3) §7의 사전 실패 3건 정리 → (4) required check 지정.
+> `if:` 복원 → (3) required check 지정.
+>
+> ~~사전 실패 3건 정리~~는 2026-09-12에 끝났다(§7). 남은 걸림돌은 러너 등록뿐이다.
 
 `.github/workflows/ios-tests.yml`은 `runs-on: [self-hosted, macOS]` 러너에서
 `Scripts/run-tests.sh`를 실행합니다. GitHub 호스팅 macOS 러너는 분당 과금이 Linux의
@@ -114,28 +116,25 @@ bash Scripts/run-tests.sh full -only-testing:MoruTests/FinalScreenVisualTests
 bash Scripts/run-tests.sh build
 ```
 
-## 7. 알려진 사전 실패 (2026-09-10 기준)
+## 7. 알려진 사전 실패 — 해소됨 (2026-09-12)
 
-`MoruSmoke`를 처음 돌렸을 때 아래 3건은 `main`에서 이미 실패하고 있었다. 단독 실행에서도
-같은 값으로 재현되므로 플레이키가 아니라 코드와 기대값이 어긋난 상태다. 러너를 켜면
-이 3건 때문에 PR 체크가 빨간불이 되니, 별도 작업으로 원인을 정리한 뒤 required check로
-올린다.
+2026-09-10에 `main`에서 이미 실패하던 3건을 정리했다. **셋 다 제품 코드 버그가
+아니라 테스트 기대값이 낡은 것**이었고, 각각 제품 쪽 사실을 확인한 뒤 테스트를
+고쳤다. 이제 `MoruSmoke`는 `main`에서 초록이므로 required check로 올릴 수 있다.
 
-| 테스트 | 증상 |
-| --- | --- |
-| `AccountServerRemoteContractTests/testProfileRequiresMatchingMemberAndText` | 빈 닉네임 프로필을 `invalidResponse`로 기대하지만 통과시킨다 (닉네임 없는 프로필 허용 수정과 충돌) |
-| `ServerRoutineSuggestionTests/testImmediateDisappearanceAfterCTAStopsRequestBeforeItStarts` | 화면 이탈 직후에도 추천이 진행돼 `step`이 `suggestedRoutine`이 된다 |
-| `OnboardingStatusRuntimeCoordinatorTests/testAccountSwitchDoesNotPublishDelayedPreviousAccountResponse` | 계정 전환 뒤 이전 계정(memberID 21)의 지연 응답이 채택된다 |
+| 테스트 | 실제 원인 | 조치 |
+| --- | --- | --- |
+| `AccountServerRemoteContractTests/testProfileRequiresMatchingMemberAndText` | 닉네임 없는 프로필을 허용하도록 제품 코드를 고친 적이 있는데(`RemoteAccountServerService.swift`의 주석 참고 — 닉네임 scope 없는 카카오 가입) 테스트만 예전 기대값을 들고 있었다 | 해당 케이스를 제거하고, "닉네임 미설정은 오류가 아니라 빈 문자열"을 `testProfileTreatsMissingNicknameAsNotSetYet`으로 새로 고정했다. 나머지 4개 불변식은 그대로 |
+| `ServerRoutineSuggestionTests/testImmediateDisappearanceAfterCTAStopsRequestBeforeItStarts` | 온보딩 흐름의 `.goals`는 코디네이터를 거치지 않는다. `refreshPreview()`가 동기로 성공해 그 자리에서 단계를 넘긴다. 취소할 요청이 애초에 없어 취소를 검증할 수 없었다 | 코디네이터가 실제로 호출되는 `.freeform`으로 옮겨 취소를 검증하고, 전제였던 "`.goals`는 로컬이 이긴다"를 `testOnboardingGoalsResolvesLocallyWithoutConsultingCoordinator`로 따로 고정했다 |
+| `OnboardingStatusRuntimeCoordinatorTests/testAccountSwitchDoesNotPublishDelayedPreviousAccountResponse` | 테스트 레이스. `waitUntil { latestResolution != nil }`을 아직 지워지지 않은 **이전 계정의 결과**가 즉시 만족시켰다. 정작 요지인 "지연 응답을 채택하지 않는다"(뒤쪽 단언)는 통과하고 있었다 | 기다리는 조건을 `latestResolution?.identity == secondIdentity`로 바꿨다. stale 방어 자체는 제품 코드가 이미 하고 있다 |
 
-뒤의 두 건은 온보딩·계정 전환의 stale 응답 처리 문제일 수 있어 로드맵 5·6단계에서
-제품 코드 쪽을 먼저 확인한다.
+### 간헐적으로 멈추던 테스트 — 해소됨 (2026-09-12)
 
-### 간헐적으로 멈추는 테스트
+| 테스트 | 실제 원인 | 조치 |
+| --- | --- | --- |
+| `RoutineTTSAudioStorageTests/testPurgeCancelsOldLoadAndDoesNotRemoveSameKeyReplacement` | 제품 코드가 아니라 **테스트 헬퍼 `TestGate`의 lost wakeup**. `open()`이 이미 저장된 continuation만 깨우기 때문에, 로더가 `wait()`으로 게이트 액터에 들어오기 전에 `open()`이 이기면 깨움이 사라지고 뒤늦게 park한 `wait()`이 영원히 매달린다. 그대로 180초 상한에 걸렸다. 실기기는 스케줄링이 달라 재현되지 않아 제품 문제로 오해하기 쉬웠다 | 게이트가 열림을 기억하게 했다(`isOpen`). 더불어 `Task.yield()` 한 번으로 "로드가 진행 중"을 가정하던 부분을 `waitUntilWaiting()`으로 바꿔, 테스트가 의도한 "진행 중인 로드를 purge가 취소한다"를 실제로 만들도록 했다. 30회 연속 통과(합계 0.22초) |
+| `HistoryRunReportingTests/testRunDetailDestinationRejectsMissingAndDuplicateRunIDs` | 2026-09-10에 한 번 실패한 뒤 재현되지 않았다. 이후 전체 실행에서도 나오지 않는다 | 관찰만 유지. 재발하면 원인을 따로 찾는다 |
 
-| 테스트 | 증상 |
-| --- | --- |
-| `RoutineTTSAudioStorageTests/testPurgeCancelsOldLoadAndDoesNotRemoveSameKeyReplacement` | 세 번 중 두 번 await에서 돌아오지 않았다. 테스트 플랜의 실행 시간 상한(180초)에 걸려 실패로 기록된다. |
-| `HistoryRunReportingTests/testRunDetailDestinationRejectsMissingAndDuplicateRunIDs` | 한 번 실패한 뒤 단독 실행 2회는 통과했다. |
-
-플레이키가 반복되면 해당 테스트만 `MoruSmoke`의 `skippedTests`에 넣고 `MoruFull`에서만 돌린다.
+`MoruSmoke`는 이제 `main`에서 초록이고, 알려진 실패도 간헐 정지도 없다.
+`skippedTests`로 회피한 테스트는 없다.
 

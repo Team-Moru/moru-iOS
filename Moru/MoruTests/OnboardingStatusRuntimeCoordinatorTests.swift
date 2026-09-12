@@ -102,11 +102,16 @@ final class OnboardingStatusRuntimeCoordinatorTests: XCTestCase {
     )
 
     try fixture.establishSession(memberID: 22, completed: false)
-    try await waitUntil { fixture.coordinator.latestResolution != nil }
     let secondIdentity = try XCTUnwrap(
       fixture.accountSessionStore.currentAccountSessionIdentity
     )
     XCTAssertNotEqual(firstIdentity, secondIdentity)
+
+    // "결과가 있다"로 기다리면 아직 지워지지 않은 이전 계정의 결과가 조건을
+    // 즉시 만족시킨다. 기다려야 하는 것은 "전환된 계정의 결과"다.
+    try await waitUntil {
+      fixture.coordinator.latestResolution?.identity == secondIdentity
+    }
     XCTAssertEqual(fixture.coordinator.latestResolution?.identity, secondIdentity)
     XCTAssertEqual(fixture.coordinator.latestResolution?.resolvedCompleted, false)
 
