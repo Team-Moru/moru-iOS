@@ -21,6 +21,17 @@ enum MoruColor {
   /// 카드 안의 타일. 테두리 없이 바탕 tint만 쓴다.
   static let tileSurface = Color(.tertiarySystemFill)
 
+  /// 홈 바탕 위쪽. 아래로 내려가며 `canvas`와 만나 다른 탭과 이어진다.
+  ///
+  /// 예전에는 브랜드 푸른색(`babyBlue100`)이었다. 인사말 뒤에 깔리는 글로우가
+  /// 주황이라 파란 바탕과 서로 밀어냈다. 글로우와 같은 계열로 아주 살짝만
+  /// 기울여 두면 글로우가 바탕을 밝히는 광원처럼 읽힌다.
+  static let homeCanvasTop = Color(
+    red: 250 / 255,
+    green: 246 / 255,
+    blue: 243 / 255
+  )
+
   // MARK: - Accent
 
   /// 브랜드 강조. 탭 선택, 진행 바, 활성 카드 틴트에 쓴다.

@@ -119,7 +119,7 @@ struct RoutineFinishedView: View {
     ZStack(alignment: .top) {
       LinearGradient(
         colors: [
-          Color(red: 230 / 255, green: 237 / 255, blue: 255 / 255),
+          MoruColor.homeCanvasTop,
           MoruColor.canvas,
         ],
         startPoint: .top,
@@ -127,12 +127,8 @@ struct RoutineFinishedView: View {
       )
       .ignoresSafeArea()
 
-      Image(AppImage.moruGradientGlow)
-        .resizable()
-        .frame(width: 393, height: 450)
+      MoruBrandGlow(diameter: 420, intensity: 0.5)
         .offset(y: -30)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
     .ignoresSafeArea()
   }

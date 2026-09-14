@@ -58,15 +58,9 @@ struct HomeHeaderView: View {
     .padding(.horizontal, MoruSpacing.twenty)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     .background(alignment: .bottom) {
-      Image(AppImage.moruGradientGlow)
-        .resizable()
-        .scaledToFit()
-        .opacity(0.8)
-        .frame(width: 353, height: 404)
+      MoruBrandGlow(diameter: 380, intensity: 0.5)
         .frame(maxWidth: .infinity, alignment: .center)
         .offset(y: 31)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
     .frame(height: 296)
   }
@@ -121,22 +115,22 @@ enum HomeGreetingPeriod: Equatable {
 
 #Preview("홈 헤더 · 새벽") {
   HomeHeaderView(userName: "다인", date: homePreviewDate(hour: 5))
-    .background(AppColor.babyBlue50)
+    .background(MoruColor.homeCanvasTop)
 }
 
 #Preview("홈 헤더 · 아침") {
   HomeHeaderView(userName: "다인", date: homePreviewDate(hour: 8))
-    .background(AppColor.babyBlue50)
+    .background(MoruColor.homeCanvasTop)
 }
 
 #Preview("홈 헤더 · 점심") {
   HomeHeaderView(userName: "다인", date: homePreviewDate(hour: 13))
-    .background(AppColor.babyBlue50)
+    .background(MoruColor.homeCanvasTop)
 }
 
 #Preview("홈 헤더 · 저녁") {
   HomeHeaderView(userName: "다인", date: homePreviewDate(hour: 20))
-    .background(AppColor.babyBlue50)
+    .background(MoruColor.homeCanvasTop)
 }
 
 private func homePreviewDate(hour: Int) -> Date {

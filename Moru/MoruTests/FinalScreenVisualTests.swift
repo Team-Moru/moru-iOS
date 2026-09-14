@@ -395,9 +395,9 @@ private enum VisualBaseline {
     "moru-pr32-final-history-light-M.png":
       "AAAAAAAAIADAAMgCwCDaFMwY3JjUhGAA4ALkCDhzMTM5YzBzBAvAAKBCGgMGAwADFVMNcW9xdTF1GWTLJcvQEA==",
     "moru-pr32-final-home-light-AX3.png":
-      "AAAEAQcADwA8gDjg3mLGYfBx+eD5gO2A1gD2gAFjB4MOwx5DG2MOowzDDYMOQw5DAIMBAwMDCyMki+TL5Nvk2A==",
+      "AAACACoAfwB/AH8AziDOYPUA6QD9gOWS1pDWgAonB4MOwx5DG2MOowzDDYMOQw5DAAcBAwMDCyMki2TL5NvkmA==",
     "moru-pr32-final-home-light-M.png":
-      "AAAEAQcADwA8gDjgcOBw8HDxeOD8wMyAzwDWABMLOTMxMzAzHcU5cTNjAwYkQ2ADaAMGAwAHcgVkC+Tb5NrJJA==",
+      "AAACACoAfwB/AP4A/wD/AP8AfwDcAMQAywDWgBMPKTMxMzAzHcU5cTNjAwckA2ADaAMEAxAPcgVkC2Tb5MvJJA==",
     "moru-pr32-final-profile-light-AX3.png":
       "AAAAAAAACADgAOQAxQAqAxoDOgNuBU4DHUMcQ4gQ2QCRA2wFaAUSA8gAxYBqB2oFJMPzAOMo4iSmcCTYpNj1yA==",
     "moru-pr32-final-profile-light-M.png":
@@ -419,9 +419,9 @@ private enum VisualBaseline {
     "moru-pr44-bundled-voices-light-M.png":
       "AAAAAIAAmCCCAMwA1ADQoNSA5oAJIlAMUAwkAlAMUAU0A1ANWAcyh1ANGAcAAAAAAAAAAAAAAAPkAMFkyGBgAA==",
     "moru-pr50-session-empty-home-light-AX3.png":
-      "AAAEAQcADwA8gDjg3mLGYfBx+eD5gO2A1oDWgApgalFLAUOnakla0SQiBoAGAAaAOyAzOTCEOaTkmuTb5NvpIA==",
+      "AAACACoAfwB/AH8AziDOYPUA6QDZgOWS1pD2gCoHagNLA0Ojakla0SQPBgAGAAaAOyAzODCEOaTkmuTbpNraIA==",
     "moru-pr50-session-empty-home-light-M.png":
-      "AAAEAQcADwA8gDjgcOBw8HDxeOD8wMyAzwDWAAEgdAFgAWADAAAAAACAAwADMA1IPcCxsgaXFoPkyuTb5MvJJA==",
+      "AAACACoAfwB/AP4A/wD/AP8AfwDcAMQAywDWgAkHZANgAyADBAJAAACAAwADMA1IPYCxsAabDofkyuTb5NvZJA==",
     "moru-pr50-session-empty-routine-light-AX3.png":
       "AAAAAAAACADAAMQA5AA4AABABoAGAAaAOyA7ODKEMKZVGFWQe7B7sIU+Hscaw4E+4AAAAAAAQQAs2mzbrFrSJA==",
     "moru-pr50-session-empty-routine-light-M.png":
@@ -431,13 +431,13 @@ private enum VisualBaseline {
     "moru-pr52-history-streak-light-M.png":
       "AAAAAAAAIADAAMgCwCDaFMwY3JjUhGAA4ALkCDhzMTM5YzBzBAvAAKBCGgMGAwADFVMNcW9xdTF1GWTLJcvQEA==",
     "moru-pr52-regular-completion-light-AX3.png":
-      "AQASAA8EZghyKXKoclFzUPvg8PB44HhBPQMdQi8jDgNuWGXoAAIAAASCLIKMjB6mOaM4s+YI4ADJZMFk9oDygA==",
+      "DQA8AL0AZihyKPKo9hDzQLsg/gD/AH4APQENSQ4hDgPuXNnsBAFCAASALInMhB6jOaM4s+UI5ADJZMFk9AD0gA==",
     "moru-pr52-regular-completion-light-M.png":
-      "AQASAA4AHwA8wnjgcPDw8PDw+UB9QHygfgA/AAsufxlakZAiAwIGkghgZMBxwHAgCACAACaTJpPBYMTEwMCAAA==",
+      "DQA8AH4AfwD+AP8A/wD/AP8A/0D9QDSwFQBKgAMn/5ismEAAAwAGkAhgYcBhwGAgCACAAAaDJpPhYMTEwICAAA==",
     "moru-pr52-trial-completion-light-AX3.png":
-      "AQASAB8EbwhiKXKocrDyMPWQ8PB44HhBPQMdQi8jDgNuWGboIAIAgBqQGhAfKB0gHSQENnAB4ADJZMFk9ADgAA==",
+      "DQA8AL0AayhiKHOo3JTbhH8A/wD/AG1JLEEOAQ4R0fxAAIFAGIAaAB8gHSAdJB0gAggAAnAA4ADJZMFk8oDgAA==",
     "moru-pr52-trial-completion-light-M.png":
-      "AQASAA4AHwA8wnjgcPDw8PDw+UB9QHyAfgA/AAsufxlWkRAABwAHAAMAAEAAAAAAAAAAAAAAAAPgAMDEwMCAAA==",
+      "DQA8AH4AfwD+AP8A/wD/AP8A/UDtQH6AHQBSgAMn/5ismIAiBwAHAAMQAEAAAAAAAAAAAAAAAAPhAMTEwICAAA==",
     "moru-pr52-weekly-comparison-light-AX3.png":
       "AAAAAAAAAAAAAAAAAAAAAAAABQAMAAxAGKAcoEAIHiAeYA1ADEBAEAzADoAcgBkgGSAAAAAAAAAAAAAAAAAAAA==",
     "moru-pr52-weekly-comparison-light-M.png":
