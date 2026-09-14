@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+/// 켜고 끄는 스위치.
+///
+/// 캡슐과 손잡이를 직접 그리던 것을 시스템 `Toggle`로 바꿨다. 탭바 유리와
+/// 같은 출처에서 외형을 받아야 OS가 바뀔 때 함께 따라간다.
 struct MoruToggle: View {
   @Binding var isOn: Bool
 
@@ -15,21 +19,9 @@ struct MoruToggle: View {
   }
 
   var body: some View {
-    Button {
-      isOn.toggle()
-    } label: {
-      ZStack(alignment: isOn ? .trailing : .leading) {
-        Capsule()
-          .fill(isOn ? MoruColor.accent : MoruColor.disabled)
-          .frame(width: 52, height: 28)
-
-        Circle()
-          .fill(AppColor.grayWhite)
-          .frame(width: 20, height: 20)
-          .padding(4)
-      }
-    }
-    .buttonStyle(.plain)
-    .accessibilityLabel(isOn ? "켜짐" : "꺼짐")
+    Toggle("", isOn: $isOn)
+      .labelsHidden()
+      .tint(MoruColor.accent)
+      .accessibilityLabel(isOn ? "켜짐" : "꺼짐")
   }
 }

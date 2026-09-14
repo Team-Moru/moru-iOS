@@ -392,7 +392,7 @@ private enum RoutineManagementVisualBaseline {
     "routine-list-light-AX3.png":
       "AAAAAAAACADAAMQA5AA4AAIAykTKYNEU2RTTMNpwxODAYMAUAgLoAOhAWwBdEF2AGmAAcABx0SSsiizbrFrTZA==",
     "routine-list-light-M.png":
-      "AAAAAAAAIACAAMgAyAAUAOEA4ADYGMg0yDDhBMACwAACBFg4SDgABiIEWDhIOEgQACMPAw0HAQAsimzbrErSJA==",
+      "AAAAAAAAIACAAMgAyAAUAOEA4ADYEMgkyCThCMACwAACBFgYSBgAFiIEWBhIGEowgCYPAw8D0iQsimzbrFrSJA==",
     "step-add-light-AX3.png":
       "gACAAIKSxpSCmoAMyABBAwUBDoAMgAAQwADQAFwg1IKgAOAE4VjSuMK00ELAAMAA4yDDLNMg4EDAxMDA4AD0AA==",
     "step-add-light-M.png":

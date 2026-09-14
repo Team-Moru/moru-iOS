@@ -405,7 +405,7 @@ private enum VisualBaseline {
     "moru-pr32-final-routine-light-AX3.png":
       "AAAAAAAACADAAMQA5AA4AAIAykTKYNEU2RTTMNpwxODAYMAUAgLoAOhAWwBdEF2AGmAAcABwgSCsimzbLNrTJA==",
     "moru-pr32-final-routine-light-M.png":
-      "AAAAAAAAIACAAMgAyAAUAOEA4ADYGMg0yDDhBMACwAACBFg4SDgABiIEWDhIOEgQACMPAw0HAQAsimzbrErSJA==",
+      "AAAAAAAAIACAAMgAyAAUAOEA4ADYEMgkyCThCMACwAACBFgYSBgAFiIEWBhIGEowgCYvCw8D0iQsymzbrErSJA==",
     "moru-pr34-home-active-routines-light-AX3.png":
       "AAAAAAaAyQDJAKUjSIdIhWCDYgNSg2mDaYMEg2g5ajFoA0gDfgFjOWE4dAE4AwKLbIVkh2ADUoNag2mDaYMAQw==",
     "moru-pr34-home-active-routines-light-M.png":
