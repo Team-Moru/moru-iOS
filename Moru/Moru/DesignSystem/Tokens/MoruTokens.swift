@@ -9,7 +9,17 @@ import SwiftUI
 
 /// 화면이 쓰는 시맨틱 색 토큰. 값의 단일 출처는 `AppColor` 팔레트다.
 enum MoruColor {
-  static let canvas = AppColor.babyBlue50
+  /// 화면 바탕. 시스템이 정한 표면 위계를 그대로 받는다.
+  ///
+  /// 예전에는 브랜드 푸른색(`babyBlue50`)을 직접 썼다. 그러면 카드·바탕의 명도
+  /// 관계를 우리가 발명하게 되는데, 시스템이 그리는 탭바 유리는 시스템 위계를
+  /// 기준으로 자기를 그린다. 두 규칙이 어긋나면 유리가 겉돈다.
+  /// 자세한 것은 `docs/LiquidGlassRules.md`.
+  static let canvas = Color(.systemGroupedBackground)
+  /// 바탕 위의 카드.
+  static let cardSurface = Color(.secondarySystemGroupedBackground)
+  /// 카드 안의 타일. 테두리 없이 바탕 tint만 쓴다.
+  static let tileSurface = Color(.tertiarySystemFill)
 
   // MARK: - Accent
 

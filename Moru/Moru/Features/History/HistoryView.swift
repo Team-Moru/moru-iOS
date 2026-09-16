@@ -124,7 +124,7 @@ struct HistoryView: View {
           )
         }
       }
-      .background(MoruColor.canvas.ignoresSafeArea())
+      .moruCanvas()
       .navigationTitle(HistoryCopy.overviewTitle)
       .navigationBarTitleDisplayMode(.large)
       .navigationDestination(isPresented: $isWeeklyReportPresented) {
@@ -801,9 +801,7 @@ struct HistoryRecordCard: View {
         .background(AppColor.grayWhite.opacity(0.2))
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(historyPilotSurface)
-    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-    .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
+    .moruCard(cornerRadius: MoruRadius.largeCard)
     .accessibilityElement(children: .combine)
   }
 
@@ -920,7 +918,7 @@ struct HistoryDailyDetailView: View {
         .padding(.bottom, MoruSpacing.sixtyFour)
       }
     }
-    .background(MoruColor.canvas.ignoresSafeArea())
+    .moruCanvas()
     .navigationTitle(HistoryCopy.dailyReportTitle)
     .navigationBarTitleDisplayMode(.inline)
     .accessibilityElement(children: .contain)
@@ -997,7 +995,7 @@ struct HistoryRunDetailView: View {
         .padding(.bottom, MoruSpacing.sixtyFour)
       }
     }
-    .background(MoruColor.canvas.ignoresSafeArea())
+    .moruCanvas()
     .navigationTitle(dateTitle)
     .navigationBarTitleDisplayMode(.inline)
     .accessibilityElement(children: .contain)
@@ -1085,7 +1083,7 @@ struct HistoryWeeklyReportView: View {
         .padding(.bottom, MoruSpacing.sixtyFour)
       }
     }
-    .background(MoruColor.canvas.ignoresSafeArea())
+    .moruCanvas()
     .navigationTitle(HistoryCopy.weeklyReportTitle)
     .navigationBarTitleDisplayMode(.inline)
     .navigationDestination(isPresented: isDayDetailPresented) {

@@ -13,8 +13,10 @@ import XCTest
 @MainActor
 final class FigmaPilotFoundationTests: XCTestCase {
   func testPilotColorAliasesMatchApprovedHexValues() {
+    // 표면 토큰(canvas/cardSurface/tileSurface)은 여기 없다. 시스템 시맨틱
+    // 색이라 값을 애플이 정하고 iOS 버전·외관에 따라 달라진다. hex로 못 박으면
+    // OS가 바뀔 때 이 테스트가 먼저 깨진다. 대신 아래에서 위계만 확인한다.
     let colors: [(Color, UInt32)] = [
-      (MoruColor.canvas, 0xF3F6FC),
       (MoruColor.accent, 0xFF9861),
       (MoruColor.accentSoft, 0xFFAC80),
       (MoruColor.accentTint, 0xFFDFCE),
@@ -38,6 +40,35 @@ final class FigmaPilotFoundationTests: XCTestCase {
     for (color, expectedHex) in colors {
       XCTAssertEqual(rgbHex(color), expectedHex)
     }
+  }
+
+  /// 표면은 hex가 아니라 **위계**로 지킨다.
+  ///
+  /// 바탕보다 카드가 밝아야 카드가 선다. 예전에 프로필 카드가 배경과 255 중
+  /// 2밖에 차이나지 않아 사실상 보이지 않던 적이 있다. 시스템 시맨틱 색으로
+  /// 옮겨 구조적으로 막았지만, 누군가 다시 커스텀 색을 넣으면 그때 깨지라고
+  /// 남긴다.
+  func testSurfaceHierarchyKeepsCardsAboveTheCanvas() {
+    let canvas = rgbHex(MoruColor.canvas)
+    let card = rgbHex(MoruColor.cardSurface)
+
+    XCTAssertGreaterThan(
+      luminance(card),
+      luminance(canvas),
+      "카드가 바탕보다 밝아야 표면으로 읽힌다"
+    )
+    XCTAssertGreaterThan(
+      luminance(card) - luminance(canvas),
+      8,
+      "차이가 너무 작으면 카드가 보이지 않는다"
+    )
+  }
+
+  private func luminance(_ hex: UInt32) -> Double {
+    let r = Double((hex >> 16) & 0xFF)
+    let g = Double((hex >> 8) & 0xFF)
+    let b = Double(hex & 0xFF)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
   func testPilotSpacingAndRadiusAliasesMatchApprovedValues() {

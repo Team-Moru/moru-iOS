@@ -60,16 +60,10 @@ struct MoruRoutineCard: View {
     .padding(.vertical, AppSpacing.md)
     .frame(maxWidth: .infinity)
     .frame(minHeight: minimumHeight)
-    .background {
-      RoundedRectangle(cornerRadius: MoruRadius.largeCard)
-        .fill(backgroundColor)
-        .shadow(
-          color: shadowColor,
-          radius: shadowRadius,
-          x: 0,
-          y: 0
-        )
-    }
+    .moruCard(
+      cornerRadius: MoruRadius.largeCard,
+      tint: backgroundColor
+    )
   }
 
   @ViewBuilder
@@ -120,24 +114,13 @@ struct MoruRoutineCard: View {
       .frame(width: 18, height: 18)
   }
 
+  /// 유리의 틴트. 활성 루틴만 색을 얹고, 나머지는 기본 틴트로 둔다.
   private var backgroundColor: Color {
     if isActive && !isAddCard {
       return MoruColor.accentTint
     }
 
-    return AppColor.grayWhite.opacity(0.2)
-  }
-
-  private var shadowColor: Color {
-    if isActive && !isAddCard {
-      return Color.clear
-    }
-
-    return MoruColor.shadow
-  }
-
-  private var shadowRadius: CGFloat {
-    isActive && !isAddCard ? 0 : 7.5
+    return MoruCardModifier.plainTint
   }
 
   private var routineDescriptionColor: Color {

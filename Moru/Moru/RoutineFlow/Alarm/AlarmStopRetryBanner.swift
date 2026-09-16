@@ -33,8 +33,7 @@ struct AlarmStopRetryBanner: View {
     }
     .padding(.horizontal, MoruSpacing.twenty)
     .padding(.vertical, MoruSpacing.twelve)
-    .background(AppColor.grayWhite, in: RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-    .shadow(color: MoruColor.shadow, radius: 12, y: 4)
+    .moruCard(cornerRadius: MoruRadius.largeCard)
     .padding(.horizontal, MoruSpacing.twenty)
     .padding(.top, MoruSpacing.eight)
     .accessibilityElement(children: .contain)

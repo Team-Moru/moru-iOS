@@ -64,7 +64,7 @@ struct RoutineSettingView: View {
         .padding(.top, MoruSpacing.twenty)
       }
       .defaultScrollAnchor(.top)
-      .background(MoruColor.canvas.ignoresSafeArea())
+      .moruCanvas()
       .navigationTitle("루틴")
       .navigationBarTitleDisplayMode(.large)
     }
@@ -305,9 +305,7 @@ struct RoutineSettingView: View {
     .frame(maxWidth: .infinity)
     .frame(minHeight: 76)
     .padding(.vertical, AppSpacing.sm)
-    .background(AppColor.grayWhite.opacity(0.35))
-    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-    .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
+    .moruCard(cornerRadius: MoruRadius.largeCard)
   }
 
   private func activationBinding(for routine: RoutineSettingItemState) -> Binding<Bool> {

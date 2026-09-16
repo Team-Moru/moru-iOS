@@ -29,10 +29,7 @@ struct HomePilotSurfaceModifier: ViewModifier {
   let cornerRadius: CGFloat
 
   func body(content: Content) -> some View {
-    content
-      .background(AppColor.grayWhite.opacity(0.2))
-      .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-      .shadow(color: MoruColor.shadow, radius: 15)
+    content.moruCard(cornerRadius: cornerRadius)
   }
 }
 
