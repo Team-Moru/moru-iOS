@@ -512,7 +512,7 @@ private struct RoutineDurationClockView: View {
   }
 }
 
-private struct ClockDurationSector: Shape {
+nonisolated private struct ClockDurationSector: Shape {
   var progress: CGFloat
 
   var animatableData: CGFloat {
