@@ -812,6 +812,130 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertEqual(remoteCallCount, 1)
   }
 
+  // MARK: - 백그라운드 전송 경로
+  //
+  // 아래 테스트들이 생기기 전까지 이 경로는 **한 번도 실행되지 않았다.**
+  // 픽스처가 backgroundTransferManager를 넘기지 않아 항상 nil이었고,
+  // 코디네이터는 매번 조기 반환했다. 초록이었지만 검증한 것이 없었다.
+
+  func testSceneActivationResumesPersistedBackgroundTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.coordinator.setSceneActive(true)
+    await waitUntilWarmup { spy.resumedMemberIDs.contains(7) }
+
+    XCTAssertEqual(spy.resumedMemberIDs, [7])
+  }
+
+  /// 백그라운드로 내려갈 때는 전송을 재개하지 않는다. 재개는 앱이 앞에 있을
+  /// 때만 할 일이고, 내려가는 길에는 진행 중인 작업을 멈춰야 한다.
+  func testBackgroundingDoesNotResumeTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.coordinator.setSceneActive(false)
+    await drainWarmupTasks()
+
+    XCTAssertTrue(spy.resumedMemberIDs.isEmpty)
+    XCTAssertEqual(spy.discardAllCallCount, 0)
+  }
+
+  /// 로그아웃하면 큐에 남은 전송을 전부 버린다. 남겨 두면 다음 계정이
+  /// 로그인했을 때 이전 계정의 음성을 내려받는다.
+  func testLogoutDiscardsAllBackgroundTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.identityProvider.currentAccountSessionIdentity = nil
+    fixture.coordinator.accountSessionDidChange()
+    await waitUntilWarmup { spy.discardAllCallCount == 1 }
+
+    XCTAssertEqual(spy.discardAllCallCount, 1)
+    XCTAssertTrue(spy.resumedMemberIDs.isEmpty)
+  }
+
+  func testAccountSwitchResumesTransfersForTheNewAccountOnly() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.identityProvider.currentAccountSessionIdentity = AccountSessionIdentity(
+      memberID: 9,
+      sessionID: UUID()
+    )
+    fixture.coordinator.accountSessionDidChange()
+    await waitUntilWarmup { spy.resumedMemberIDs.contains(9) }
+
+    XCTAssertEqual(spy.resumedMemberIDs, [9])
+    XCTAssertEqual(spy.discardAllCallCount, 0)
+  }
+
+  /// BGAppRefresh 진입점. 읽기 전용 상태 조회와 전송 정리만 한다.
+  func testBackgroundPrefetchOpportunityResumesTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    await fixture.coordinator.resumeBackgroundPrefetchOpportunity()
+
+    XCTAssertEqual(spy.resumedMemberIDs, [7])
+  }
+
+  /// 동기화가 끝나면 새로 생긴 루틴을 데운다. 단, 앱이 앞에 있을 때만.
+  func testRoutineSyncCompletionScansActiveRoutinesOnlyWhileSceneIsActive() async throws {
+    let fixture = try await makeWarmupFixture(response: [])
+
+    fixture.coordinator.routineSyncDidComplete()
+    await drainWarmupTasks()
+    XCTAssertEqual(
+      fixture.routineRepository.fetchActiveCallCount,
+      0,
+      "화면이 뒤에 있으면 스캔하지 않는다"
+    )
+
+    fixture.coordinator.setSceneActive(true)
+    await waitUntilWarmup { fixture.routineRepository.fetchActiveCallCount > 0 }
+    let afterActivation = fixture.routineRepository.fetchActiveCallCount
+
+    fixture.coordinator.routineSyncDidComplete()
+    await waitUntilWarmup {
+      fixture.routineRepository.fetchActiveCallCount > afterActivation
+    }
+
+    XCTAssertGreaterThan(
+      fixture.routineRepository.fetchActiveCallCount,
+      afterActivation
+    )
+  }
+
+  private func waitUntilWarmup(
+    _ condition: @MainActor () -> Bool
+  ) async {
+    for _ in 0..<200 where !condition() {
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+  }
+
+  private func drainWarmupTasks() async {
+    for _ in 0..<20 {
+      await Task.yield()
+    }
+  }
+
   func testForegroundRetryCapPersistsRetryScheduledJobAndDisplayState() async throws {
     let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
     let root = FileManager.default.temporaryDirectory
@@ -1339,7 +1463,8 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring =
       InMemoryVoiceSelectionVersionStore(),
     prefetchJobStore: (any RoutineTTSPrefetchJobStoring)? = nil,
-    preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil
+    preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil,
+    backgroundTransferManager: BackgroundTransferSpy? = nil
   ) async throws -> WarmupFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let bindings = SwiftDataRoutineSyncRepository(modelContainer: container)
@@ -1391,6 +1516,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       foregroundPollingPolicy: foregroundPollingPolicy,
       voiceSelectionVersionStore: voiceSelectionVersionStore,
       prefetchJobStore: prefetchJobStore,
+      backgroundTransferManager: backgroundTransferManager,
       preparationStatusCenter: preparationStatusCenter
     )
     return WarmupFixture(
@@ -1402,7 +1528,8 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       remote: remote,
       identityProvider: identity,
       routineRepository: routineRepository,
-      root: root
+      root: root,
+      backgroundTransferManager: backgroundTransferManager
     )
   }
 
@@ -1455,6 +1582,7 @@ private struct WarmupFixture {
   let identityProvider: MutableIdentityProvider
   let routineRepository: WarmupRoutineRepository
   let root: URL
+  let backgroundTransferManager: BackgroundTransferSpy?
 
   func seedCachedFiles(stepIDs: [Int64]) async throws {
     let source = root.appendingPathComponent("seed.mp3")
@@ -1847,5 +1975,34 @@ private final class RemoteTestTrialFinalizer: TrialRoutineFinalizing {
       results: results,
       endedEarly: false
     )
+  }
+}
+
+/// 백그라운드 전송 관리자 대역.
+///
+/// 예전에는 픽스처가 이걸 아예 넘기지 않아 항상 nil이었다. 그러면 코디네이터의
+/// 프리페치 지속화·전송 재개 경로가 **모든 테스트에서** 조기 반환한다
+/// (`persistPlayableIntroJobIfSupported`, `resumePersistedTransfersNow`).
+/// 즉 그 코드는 한 번도 실행되지 않은 채 초록이었다.
+@MainActor
+final class BackgroundTransferSpy: RoutineTTSBackgroundTransferManaging {
+  private(set) var resumedMemberIDs: [Int64] = []
+  private(set) var enqueuedJobIDs: [UUID] = []
+  private(set) var discardAllCallCount = 0
+
+  func resumePendingTransfers(
+    memberID: Int64,
+    selectionVersion: Int64?,
+    selectedTTSID: Int64?
+  ) async {
+    resumedMemberIDs.append(memberID)
+  }
+
+  func enqueue(jobID: UUID) async {
+    enqueuedJobIDs.append(jobID)
+  }
+
+  func discardAllTransfers() async {
+    discardAllCallCount += 1
   }
 }
