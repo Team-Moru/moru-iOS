@@ -15,8 +15,19 @@ import sys
 project_path, plist_path, entitlements_path = map(pathlib.Path, sys.argv[1:])
 project = project_path.read_text(encoding="utf-8")
 
+expected_team = "Z7FSDLFCMK"
+development_teams = re.findall(
+    r"^\s*DEVELOPMENT_TEAM = \"?([^\";]+)\"?;",
+    project,
+    re.MULTILINE,
+)
+if not development_teams or any(team != expected_team for team in development_teams):
+    raise SystemExit(
+        "error: every build configuration DEVELOPMENT_TEAM must equal "
+        f"{expected_team!r}; found {development_teams}"
+    )
+
 expected_settings = {
-    "DEVELOPMENT_TEAM": "Z7FSDLFCMK",
     "MORU_APPLE_SIGN_IN_ENABLED": "YES",
     "MORU_GOOGLE_IOS_CLIENT_ID": (
         "800384412803-r62hbcns8s3jdkjaq5failk863bl19nv.apps.googleusercontent.com"
@@ -53,10 +64,12 @@ expected_bundle_identifiers = [
     "com.teammoru.Moru",
     "com.teammoru.MoruTests",
     "com.teammoru.MoruTests",
+    "com.teammoru.MoruUITests",
+    "com.teammoru.MoruUITests",
 ]
-if bundle_identifiers != expected_bundle_identifiers:
+if sorted(bundle_identifiers) != sorted(expected_bundle_identifiers):
     raise SystemExit(
-        "error: app/test Debug/Release bundle identifiers changed; "
+        "error: app/test/UI test Debug/Release bundle identifiers changed; "
         f"found {bundle_identifiers}"
     )
 
