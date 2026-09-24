@@ -52,6 +52,9 @@ struct MoruButton: View {
       }
       .buttonStyle(.glassProminent)
       .tint(MoruColor.ctaFill)
+      // 유리에 윤곽을 준다. 없으면 배경이 밝을 때 버튼의 경계가 녹아
+      // 어디까지가 누를 수 있는 곳인지 흐려진다.
+      .overlay { Capsule().stroke(MoruColor.ctaFill.opacity(0.35), lineWidth: 1) }
       .buttonBorderShape(.capsule)
       .controlSize(.extraLarge)
       .buttonSizing(.flexible)
@@ -64,6 +67,7 @@ struct MoruButton: View {
         label
       }
       .buttonStyle(.glass)
+      .overlay { Capsule().stroke(MoruColor.border, lineWidth: 1) }
       .buttonBorderShape(.capsule)
       .controlSize(.extraLarge)
       .buttonSizing(.flexible)

@@ -125,7 +125,7 @@ struct ProfileView: View {
           failureView(message)
         }
       }
-      .background(MoruColor.canvas.ignoresSafeArea())
+      .moruCanvas()
       .navigationTitle(ProfileCopy.title)
       .navigationBarTitleDisplayMode(.large)
       .navigationDestination(isPresented: $isMoruVoiceSettingsPresented) {
@@ -308,7 +308,7 @@ struct ProfileView: View {
     .padding(.horizontal, MoruSpacing.sixteen)
     .padding(.vertical, MoruSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-    .profilePilotSurface(cornerRadius: MoruRadius.card)
+    .moruCard(cornerRadius: MoruRadius.card)
     .contentShape(Rectangle())
     .onTapGesture {
       displayNameDraft = displayName
@@ -1079,7 +1079,7 @@ struct ProfileView: View {
     .padding(.horizontal, MoruSpacing.sixteen)
     .padding(.vertical, MoruSpacing.eight)
     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-    .profilePilotSurface(cornerRadius: MoruRadius.small)
+    .moruCard(cornerRadius: MoruRadius.small)
   }
 }
 
@@ -1217,7 +1217,7 @@ struct MoruVoiceSettingsView: View {
           .accessibilityIdentifier("profile.voice.server")
         }
         .padding(MoruSpacing.sixteen)
-        .profilePilotSurface(cornerRadius: MoruRadius.small)
+        .moruCard(cornerRadius: MoruRadius.small)
 
         if let message = profileViewModel.voiceErrorMessage {
           Text(message)
@@ -1230,7 +1230,7 @@ struct MoruVoiceSettingsView: View {
       .padding(.top, MoruSpacing.twenty)
       .padding(.bottom, MoruSpacing.sixtyFour)
     }
-    .background(MoruColor.canvas.ignoresSafeArea())
+    .moruCanvas()
     .navigationTitle("")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar(.visible, for: .navigationBar)
@@ -1361,20 +1361,5 @@ private struct ProfileSkeletonBlock: View {
         )
       )
       .accessibilityHidden(true)
-  }
-}
-
-private extension View {
-
-  func profilePilotSurface(cornerRadius: CGFloat) -> some View {
-    background(
-      RoundedRectangle(cornerRadius: cornerRadius)
-        .fill(MoruColor.profileSurface)
-    )
-    .overlay {
-      RoundedRectangle(cornerRadius: cornerRadius)
-        .stroke(MoruColor.border, lineWidth: 1)
-    }
-    .shadow(color: MoruColor.shadow, radius: 7.5)
   }
 }

@@ -57,7 +57,7 @@ struct AccountServerVoiceSelectionView: View {
         }
         .padding(MoruSpacing.twenty)
       }
-      .background(MoruColor.canvas.ignoresSafeArea())
+      .moruCanvas()
       .navigationTitle("서버 생성 음성")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {

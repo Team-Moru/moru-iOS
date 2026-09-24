@@ -51,13 +51,7 @@ struct RoutineStepDraftRow: View {
     .padding(.trailing, MoruSpacing.eight)
     .padding(.vertical, MoruSpacing.eight)
     .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 112 : 62)
-    .background(AppColor.grayWhite)
-    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
-    .overlay(
-      RoundedRectangle(cornerRadius: MoruRadius.card)
-        .stroke(MoruColor.border, lineWidth: 1)
-    )
-    .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
+    .moruCard()
     .contentShape(Rectangle())
     .onTapGesture {
       onTapCard()

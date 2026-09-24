@@ -177,9 +177,10 @@ struct HistoryReportSummaryCard: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .background(MoruColor.summarySurface)
-        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-        .shadow(color: MoruColor.shadow, radius: 15, x: 0, y: 0)
+        .moruCard(
+            cornerRadius: MoruRadius.largeCard,
+            tint: MoruColor.summarySurface
+        )
     }
 
     private func metricView(_ metric: HistoryReportMetric) -> some View {
@@ -256,14 +257,7 @@ struct HistoryWakeMetricsView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(historyPilotSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-            .shadow(
-                color: MoruColor.shadow,
-                radius: 15,
-                x: 0,
-                y: 0
-            )
+            .moruCard(cornerRadius: MoruRadius.largeCard)
             .padding(.vertical, MoruSpacing.eight)
         }
     }
@@ -388,10 +382,6 @@ private struct HistoryPilotSectionHeader: View {
     }
 }
 
-var historyPilotSurface: Color {
-    AppColor.grayWhite.opacity(0.2)
-}
-
 struct HistoryWeeklyCompletionChart: View {
     let completions: [HistoryDailyCompletion]
     let calendar: Calendar
@@ -417,9 +407,7 @@ struct HistoryWeeklyCompletionChart: View {
             }
             .padding(.horizontal, MoruSpacing.twenty)
             .padding(.vertical, MoruSpacing.twenty)
-            .background(historyPilotSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.small))
-            .shadow(color: MoruColor.shadow, radius: 15, x: 0, y: 0)
+            .moruCard(cornerRadius: MoruRadius.small)
             .padding(.vertical, MoruSpacing.eight)
         }
     }
@@ -601,9 +589,7 @@ struct HistoryInlineEmptyCard: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, minHeight: 76)
             .padding(.horizontal, MoruSpacing.sixteen)
-            .background(AppColor.grayWhite.opacity(0.35))
-            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-            .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
+            .moruCard(cornerRadius: MoruRadius.largeCard)
     }
 }
 
@@ -726,20 +712,13 @@ struct HistoryMonthlyHeatmapView: View {
                 .padding(.top, dynamicTypeSize.isAccessibilitySize ? 20 : 24)
                 .padding(.bottom, MoruSpacing.eight)
                 .frame(maxWidth: .infinity, minHeight: 212, alignment: .top)
-                .background(historyPilotSurface)
-                .clipShape(RoundedRectangle(cornerRadius: MoruRadius.small))
+                // 바깥 카드가 이미 표면을 세웠다. 여기에 카드를 또 두면
+                // 테두리가 겹쳐 무엇이 한 덩어리인지 흐려진다.
             }
             .padding(.top, MoruSpacing.eight)
             .padding(.bottom, MoruSpacing.twenty)
             .frame(maxWidth: .infinity, minHeight: 284, alignment: .top)
-            .background(historyPilotSurface)
-            .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-            .shadow(
-                color: MoruColor.shadow,
-                radius: 15,
-                x: 0,
-                y: 0
-            )
+            .moruCard(cornerRadius: MoruRadius.largeCard)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("history.heatmap")
@@ -892,9 +871,7 @@ struct HistoryStepResultRow: View {
         .padding(.horizontal, MoruSpacing.sixteen)
         .padding(.vertical, MoruSpacing.twelve)
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-        .background(historyPilotSurface)
-        .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
-        .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
+        .moruCard(cornerRadius: MoruRadius.largeCard)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(index)번째, \(title), \(resultText)")
     }

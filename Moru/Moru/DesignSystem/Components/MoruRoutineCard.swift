@@ -37,38 +37,46 @@ struct MoruRoutineCard: View {
     self._isActive = isActive
   }
 
+  @ViewBuilder
   var body: some View {
-    Group {
-      if isAddCard {
-        HStack(spacing: MoruSpacing.ten) {
-          Spacer(minLength: 0)
-
-          addIcon
-
-          Text(title)
-            .moruTextStyle(.b4.weight(.semiBold))
-            .foregroundStyle(MoruColor.disabled)
-            .fixedSize(horizontal: false, vertical: true)
-
-          Spacer(minLength: 0)
-        }
-      } else {
-        routineCardContent
-      }
-    }
-    .padding(.horizontal, MoruSpacing.twenty)
-    .padding(.vertical, AppSpacing.md)
-    .frame(maxWidth: .infinity)
-    .frame(minHeight: minimumHeight)
-    .background {
-      RoundedRectangle(cornerRadius: MoruRadius.largeCard)
-        .fill(backgroundColor)
-        .shadow(
-          color: shadowColor,
-          radius: shadowRadius,
-          x: 0,
-          y: 0
+    if isAddCard {
+      // 이건 읽는 카드가 아니라 누르는 것이다. 카드 표면 대신 유리로 그려
+      // 무엇이 컨트롤인지 말한다. 자세한 것은 `docs/LiquidGlassRules.md`.
+      addCardContent
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.vertical, AppSpacing.md)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: minimumHeight)
+        .glassEffect(
+          .regular.interactive(),
+          in: .rect(cornerRadius: MoruRadius.largeCard)
         )
+    } else {
+      routineCardContent
+        .padding(.horizontal, MoruSpacing.twenty)
+        .padding(.vertical, AppSpacing.md)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: minimumHeight)
+        .moruCard(
+          cornerRadius: MoruRadius.largeCard,
+          tint: backgroundColor
+        )
+    }
+  }
+
+  private var addCardContent: some View {
+    HStack(spacing: MoruSpacing.ten) {
+      Spacer(minLength: 0)
+
+      addIcon
+
+      Text(title)
+        .moruTextStyle(.b4.weight(.semiBold))
+        // 유리 위에서는 `disabled` 회색이 사라진다. 한 단계 진하게 둔다.
+        .foregroundStyle(MoruColor.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      Spacer(minLength: 0)
     }
   }
 
@@ -116,28 +124,17 @@ struct MoruRoutineCard: View {
     Image(systemName: "plus")
       .resizable()
       .scaledToFit()
-      .foregroundStyle(MoruColor.disabled)
+      .foregroundStyle(MoruColor.textSecondary)
       .frame(width: 18, height: 18)
   }
 
+  /// 유리의 틴트. 활성 루틴만 색을 얹고, 나머지는 기본 틴트로 둔다.
   private var backgroundColor: Color {
     if isActive && !isAddCard {
       return MoruColor.accentTint
     }
 
-    return AppColor.grayWhite.opacity(0.2)
-  }
-
-  private var shadowColor: Color {
-    if isActive && !isAddCard {
-      return Color.clear
-    }
-
-    return MoruColor.shadow
-  }
-
-  private var shadowRadius: CGFloat {
-    isActive && !isAddCard ? 0 : 7.5
+    return MoruCardModifier.plainTint
   }
 
   private var routineDescriptionColor: Color {

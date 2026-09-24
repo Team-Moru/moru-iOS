@@ -86,7 +86,7 @@ struct RoutineEditorView: View {
         .padding(.top, MoruSpacing.eight)
       }
       .defaultScrollAnchor(.top)
-      .background(MoruColor.canvas.ignoresSafeArea())
+      .moruCanvas()
       .navigationTitle(draft.routineID == nil ? "루틴 만들기" : "루틴 수정")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -402,13 +402,7 @@ struct RoutineEditorView: View {
       }
       .frame(maxWidth: .infinity)
       .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 88 : 62)
-      .background(AppColor.grayWhite)
-      .clipShape(RoundedRectangle(cornerRadius: MoruRadius.card))
-      .overlay(
-        RoundedRectangle(cornerRadius: MoruRadius.card)
-          .stroke(MoruColor.border, lineWidth: 1)
-      )
-      .shadow(color: MoruColor.shadow, radius: 7.5, x: 0, y: 0)
+      .moruCard()
     }
     .buttonStyle(.plain)
   }

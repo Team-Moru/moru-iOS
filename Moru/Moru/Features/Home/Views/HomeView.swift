@@ -293,8 +293,8 @@ struct HomeView: View {
   private var homeBackground: LinearGradient {
     LinearGradient(
       stops: [
-        Gradient.Stop(color: AppColor.babyBlue100, location: 0),
-        Gradient.Stop(color: AppColor.babyBlue50, location: 1),
+        Gradient.Stop(color: MoruColor.homeCanvasTop, location: 0),
+        Gradient.Stop(color: MoruColor.canvas, location: 1),
       ],
       startPoint: UnitPoint(x: 0.5, y: 0),
       endPoint: UnitPoint(x: 0.5, y: 1)

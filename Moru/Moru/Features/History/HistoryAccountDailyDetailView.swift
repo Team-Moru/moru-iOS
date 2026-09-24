@@ -38,7 +38,7 @@ struct HistoryAccountDailyDetailView: View {
         }
       }
     }
-    .background(MoruColor.canvas.ignoresSafeArea())
+    .moruCanvas()
     .navigationTitle(dateTitle)
     .navigationBarTitleDisplayMode(.inline)
     .accessibilityElement(children: .contain)
@@ -168,8 +168,7 @@ struct HistoryAccountDailyDetailView: View {
     }
     .padding(MoruSpacing.twenty)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(historyPilotSurface)
-    .clipShape(RoundedRectangle(cornerRadius: MoruRadius.largeCard))
+    .moruCard(cornerRadius: MoruRadius.largeCard)
     .accessibilityElement(children: .combine)
   }
 
