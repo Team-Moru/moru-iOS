@@ -812,6 +812,261 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     XCTAssertEqual(remoteCallCount, 1)
   }
 
+  // MARK: - 전경 준비의 분기별 결과
+  //
+  // prepareForegroundNow는 내부적으로 여섯 갈래로 끝난다. 그 enum은 private이라
+  // 밖에서 볼 수 없으므로, **각 갈래를 만들어내는 입력**과 **밖으로 드러나는
+  // 결과**를 짝지어 고정한다. 이 여섯이 서 있어야 prepareNow와 합쳐도
+  // 안전한지 알 수 있다.
+  //
+  //   내부 결과                  → prepareAndWait 상태
+  //   .prepared                 → .prepared
+  //   .unavailable              → .unavailable
+  //   .pendingBinding           → 재시도 후 .retryablePending
+  //   .pendingGeneration        → 재시도 후 .retryablePending
+  //   .retryableDownload        → 재시도 후 .retryablePending
+  //   .retryableRemoteRequest   → 재시도 후 .retryablePending
+
+  private func cappedPolicy() -> RoutineTTSForegroundPollingPolicy {
+    RoutineTTSForegroundPollingPolicy(maximumAttempts: 2, retryDelay: .zero)
+  }
+
+  /// (1) 바인딩·응답·캐시가 모두 갖춰지면 준비 완료.
+  func testForegroundBranchPreparedWhenEverythingIsInPlace() async throws {
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71])],
+      foregroundPollingPolicy: cappedPolicy()
+    )
+    try await fixture.seedCachedFiles(stepIDs: [71])
+
+    let status = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    XCTAssertEqual(status, .prepared)
+  }
+
+  /// (2) 바인딩도 없고 서버로 보낼 의도도 없으면 로컬 루틴이다. 기다리지 않는다.
+  func testForegroundBranchUnavailableWhenThereIsNoServerIntent() async throws {
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71])],
+      recordsBindings: false,
+      foregroundPollingPolicy: cappedPolicy()
+    )
+
+    let status = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    XCTAssertEqual(status, .unavailable)
+  }
+
+  /// (3) 그룹 생성이 큐에 올라가 있으면 바인딩을 기다린다. 여기서 포기하면
+  /// 서버가 만들어 줄 안내를 두고 번들 음성을 틀게 된다.
+  func testForegroundBranchPendingBindingWhileGroupCreationIsQueued() async throws {
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71])],
+      recordsBindings: false,
+      foregroundPollingPolicy: cappedPolicy()
+    )
+    let routine = try XCTUnwrap(
+      fixture.routineRepository.routine(id: fixture.groupID)
+    )
+    _ = try fixture.bindings.enqueue(
+      EnqueuedRoutineSyncMutation(
+        memberID: 7,
+        command: .createRoutineGroup(RoutineSyncGroupSnapshot(routine: routine))
+      ),
+      at: .distantPast
+    )
+
+    let status = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    XCTAssertEqual(status, .retryablePending)
+  }
+
+  /// (4) 서버가 아직 생성 중이면 기다린다.
+  func testForegroundBranchPendingGenerationWhileServerIsStillMaking() async throws {
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71], includePending: true)],
+      foregroundPollingPolicy: cappedPolicy()
+    )
+
+    let status = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    XCTAssertEqual(status, .retryablePending)
+  }
+
+  /// (5) 상태 조회가 실패하는 것은 일시적이다. 루틴을 로컬로 강등하지 않는다.
+  func testForegroundBranchRetryableWhenTheRemoteRequestFails() async throws {
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71])],
+      foregroundPollingPolicy: cappedPolicy()
+    )
+    await fixture.remote.failAllResponses()
+
+    let status = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    XCTAssertEqual(status, .retryablePending)
+    let callCount = await fixture.remote.callCount
+    XCTAssertGreaterThanOrEqual(callCount, 1)
+  }
+
+  /// (6) 내려받기 실패도 마찬가지로 일시적이다. 응답은 멀쩡하므로 다음 기회에
+  /// 다시 받으면 된다.
+  func testForegroundBranchRetryableWhenTheDownloadFails() async throws {
+    let downloader = FailingWarmupDownloader()
+    let fixture = try await makeWarmupFixture(
+      response: [remoteRoutine(id: 51, stepIDs: [71])],
+      downloader: downloader,
+      foregroundPollingPolicy: cappedPolicy()
+    )
+
+    let status = await fixture.coordinator.prepareAndWait(
+      routineGroupLocalID: fixture.groupID,
+      routineLocalIDs: [fixture.routineID]
+    )
+
+    XCTAssertEqual(status, .retryablePending)
+    let callCount = await downloader.callCount
+    XCTAssertGreaterThanOrEqual(callCount, 1)
+  }
+
+  // MARK: - 백그라운드 전송 경로
+  //
+  // 아래 테스트들이 생기기 전까지 이 경로는 **한 번도 실행되지 않았다.**
+  // 픽스처가 backgroundTransferManager를 넘기지 않아 항상 nil이었고,
+  // 코디네이터는 매번 조기 반환했다. 초록이었지만 검증한 것이 없었다.
+
+  func testSceneActivationResumesPersistedBackgroundTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.coordinator.setSceneActive(true)
+    await waitUntilWarmup { spy.resumedMemberIDs.contains(7) }
+
+    XCTAssertEqual(spy.resumedMemberIDs, [7])
+  }
+
+  /// 백그라운드로 내려갈 때는 전송을 재개하지 않는다. 재개는 앱이 앞에 있을
+  /// 때만 할 일이고, 내려가는 길에는 진행 중인 작업을 멈춰야 한다.
+  func testBackgroundingDoesNotResumeTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.coordinator.setSceneActive(false)
+    await drainWarmupTasks()
+
+    XCTAssertTrue(spy.resumedMemberIDs.isEmpty)
+    XCTAssertEqual(spy.discardAllCallCount, 0)
+  }
+
+  /// 로그아웃하면 큐에 남은 전송을 전부 버린다. 남겨 두면 다음 계정이
+  /// 로그인했을 때 이전 계정의 음성을 내려받는다.
+  func testLogoutDiscardsAllBackgroundTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.identityProvider.currentAccountSessionIdentity = nil
+    fixture.coordinator.accountSessionDidChange()
+    await waitUntilWarmup { spy.discardAllCallCount == 1 }
+
+    XCTAssertEqual(spy.discardAllCallCount, 1)
+    XCTAssertTrue(spy.resumedMemberIDs.isEmpty)
+  }
+
+  func testAccountSwitchResumesTransfersForTheNewAccountOnly() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    fixture.identityProvider.currentAccountSessionIdentity = AccountSessionIdentity(
+      memberID: 9,
+      sessionID: UUID()
+    )
+    fixture.coordinator.accountSessionDidChange()
+    await waitUntilWarmup { spy.resumedMemberIDs.contains(9) }
+
+    XCTAssertEqual(spy.resumedMemberIDs, [9])
+    XCTAssertEqual(spy.discardAllCallCount, 0)
+  }
+
+  /// BGAppRefresh 진입점. 읽기 전용 상태 조회와 전송 정리만 한다.
+  func testBackgroundPrefetchOpportunityResumesTransfers() async throws {
+    let spy = BackgroundTransferSpy()
+    let fixture = try await makeWarmupFixture(
+      response: [],
+      backgroundTransferManager: spy
+    )
+
+    await fixture.coordinator.resumeBackgroundPrefetchOpportunity()
+
+    XCTAssertEqual(spy.resumedMemberIDs, [7])
+  }
+
+  /// 동기화가 끝나면 새로 생긴 루틴을 데운다. 단, 앱이 앞에 있을 때만.
+  func testRoutineSyncCompletionScansActiveRoutinesOnlyWhileSceneIsActive() async throws {
+    let fixture = try await makeWarmupFixture(response: [])
+
+    fixture.coordinator.routineSyncDidComplete()
+    await drainWarmupTasks()
+    XCTAssertEqual(
+      fixture.routineRepository.fetchActiveCallCount,
+      0,
+      "화면이 뒤에 있으면 스캔하지 않는다"
+    )
+
+    fixture.coordinator.setSceneActive(true)
+    await waitUntilWarmup { fixture.routineRepository.fetchActiveCallCount > 0 }
+    let afterActivation = fixture.routineRepository.fetchActiveCallCount
+
+    fixture.coordinator.routineSyncDidComplete()
+    await waitUntilWarmup {
+      fixture.routineRepository.fetchActiveCallCount > afterActivation
+    }
+
+    XCTAssertGreaterThan(
+      fixture.routineRepository.fetchActiveCallCount,
+      afterActivation
+    )
+  }
+
+  private func waitUntilWarmup(
+    _ condition: @MainActor () -> Bool
+  ) async {
+    for _ in 0..<200 where !condition() {
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+  }
+
+  private func drainWarmupTasks() async {
+    for _ in 0..<20 {
+      await Task.yield()
+    }
+  }
+
   func testForegroundRetryCapPersistsRetryScheduledJobAndDisplayState() async throws {
     let pending = [remoteRoutine(id: 51, stepIDs: [71], includePending: true)]
     let root = FileManager.default.temporaryDirectory
@@ -1339,7 +1594,8 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
     voiceSelectionVersionStore: any RoutineTTSVoiceSelectionVersionStoring =
       InMemoryVoiceSelectionVersionStore(),
     prefetchJobStore: (any RoutineTTSPrefetchJobStoring)? = nil,
-    preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil
+    preparationStatusCenter: RoutineTTSPreparationStatusCenter? = nil,
+    backgroundTransferManager: BackgroundTransferSpy? = nil
   ) async throws -> WarmupFixture {
     let container = try ModelContainer.moruContainer(isStoredInMemoryOnly: true)
     let bindings = SwiftDataRoutineSyncRepository(modelContainer: container)
@@ -1391,6 +1647,7 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       foregroundPollingPolicy: foregroundPollingPolicy,
       voiceSelectionVersionStore: voiceSelectionVersionStore,
       prefetchJobStore: prefetchJobStore,
+      backgroundTransferManager: backgroundTransferManager,
       preparationStatusCenter: preparationStatusCenter
     )
     return WarmupFixture(
@@ -1402,7 +1659,8 @@ final class RemoteFirstRoutineGuidancePlayerTests: XCTestCase {
       remote: remote,
       identityProvider: identity,
       routineRepository: routineRepository,
-      root: root
+      root: root,
+      backgroundTransferManager: backgroundTransferManager
     )
   }
 
@@ -1455,6 +1713,7 @@ private struct WarmupFixture {
   let identityProvider: MutableIdentityProvider
   let routineRepository: WarmupRoutineRepository
   let root: URL
+  let backgroundTransferManager: BackgroundTransferSpy?
 
   func seedCachedFiles(stepIDs: [Int64]) async throws {
     let source = root.appendingPathComponent("seed.mp3")
@@ -1500,6 +1759,7 @@ private actor WarmupRemoteStub: RoutineTTSRemoteServing {
   private var shouldSuspend = false
   private var continuation: CheckedContinuation<[ServerRoutineTTSRoutine], Never>?
   private var suspendedResponse: [ServerRoutineTTSRoutine]?
+  private var shouldFail = false
 
   init(
     response: [ServerRoutineTTSRoutine],
@@ -1509,6 +1769,8 @@ private actor WarmupRemoteStub: RoutineTTSRemoteServing {
   }
 
   func suspendNextResponse() { shouldSuspend = true }
+  /// 다음 호출부터 계속 던진다. `.retryableRemoteRequest` 분기를 만들기 위한 것.
+  func failAllResponses() { shouldFail = true }
   func resumeResponse() {
     continuation?.resume(returning: suspendedResponse ?? [])
     continuation = nil
@@ -1520,6 +1782,9 @@ private actor WarmupRemoteStub: RoutineTTSRemoteServing {
     identity: AccountSessionIdentity
   ) async throws -> [ServerRoutineTTSRoutine] {
     callCount += 1
+    if shouldFail {
+      throw WarmupStubError.remoteUnavailable
+    }
     let response = nextResponse()
     if shouldSuspend {
       suspendedResponse = response
@@ -1847,5 +2112,52 @@ private final class RemoteTestTrialFinalizer: TrialRoutineFinalizing {
       results: results,
       endedEarly: false
     )
+  }
+}
+
+/// 백그라운드 전송 관리자 대역.
+///
+/// 예전에는 픽스처가 이걸 아예 넘기지 않아 항상 nil이었다. 그러면 코디네이터의
+/// 프리페치 지속화·전송 재개 경로가 **모든 테스트에서** 조기 반환한다
+/// (`persistPlayableIntroJobIfSupported`, `resumePersistedTransfersNow`).
+/// 즉 그 코드는 한 번도 실행되지 않은 채 초록이었다.
+@MainActor
+final class BackgroundTransferSpy: RoutineTTSBackgroundTransferManaging {
+  private(set) var resumedMemberIDs: [Int64] = []
+  private(set) var enqueuedJobIDs: [UUID] = []
+  private(set) var discardAllCallCount = 0
+
+  func resumePendingTransfers(
+    memberID: Int64,
+    selectionVersion: Int64?,
+    selectedTTSID: Int64?
+  ) async {
+    resumedMemberIDs.append(memberID)
+  }
+
+  func enqueue(jobID: UUID) async {
+    enqueuedJobIDs.append(jobID)
+  }
+
+  func discardAllTransfers() async {
+    discardAllCallCount += 1
+  }
+}
+
+enum WarmupStubError: Error {
+  case remoteUnavailable
+  case downloadFailed
+}
+
+/// 항상 실패하는 다운로더. `.retryableDownload` 분기를 만든다.
+private actor FailingWarmupDownloader: RoutineTTSAudioDownloading {
+  private(set) var callCount = 0
+
+  func download(
+    _ request: RoutineTTSAudioDownloadRequest,
+    stagingDirectory: URL
+  ) async throws -> RoutineTTSAudioDownloadedFile {
+    callCount += 1
+    throw WarmupStubError.downloadFailed
   }
 }

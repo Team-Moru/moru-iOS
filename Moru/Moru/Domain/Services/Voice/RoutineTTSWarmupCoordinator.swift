@@ -6,184 +6,6 @@
 import Foundation
 import OSLog
 
-/// A bounded retry window used only when a user is about to hear a
-/// server-generated routine. Background warming intentionally remains a
-/// single request so foregrounding many routines cannot amplify traffic.
-nonisolated struct RoutineTTSForegroundPollingPolicy: Equatable, Sendable {
-  let maximumAttempts: Int
-  let retryDelay: Duration
-  let maximumWait: Duration
-
-  init(
-    maximumAttempts: Int = 31,
-    retryDelay: Duration = .seconds(1),
-    maximumWait: Duration = .seconds(30)
-  ) {
-    precondition(maximumAttempts > 0)
-    precondition(maximumWait > .zero)
-    self.maximumAttempts = maximumAttempts
-    self.retryDelay = retryDelay
-    self.maximumWait = maximumWait
-  }
-}
-
-private actor RoutineTTSForegroundWaitGate {
-  private var result: RoutineTTSForegroundPreparationStatus?
-  private var continuation:
-    CheckedContinuation<RoutineTTSForegroundPreparationStatus, Never>?
-
-  func value() async -> RoutineTTSForegroundPreparationStatus {
-    if let result {
-      return result
-    }
-    return await withCheckedContinuation { continuation in
-      self.continuation = continuation
-    }
-  }
-
-  func resolve(_ result: RoutineTTSForegroundPreparationStatus) {
-    guard self.result == nil else { return }
-    self.result = result
-    continuation?.resume(returning: result)
-    continuation = nil
-  }
-}
-
-nonisolated struct RoutineTTSPrefetchPollingPolicy: Sendable {
-  let maximumAttempts: Int
-  let retryDelays: [Duration]
-  let now: @Sendable () -> Date
-  let sleep: @Sendable (Duration) async throws -> Void
-
-  init(
-    maximumAttempts: Int = 4,
-    retryDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)],
-    now: @escaping @Sendable () -> Date = Date.init,
-    sleep: @escaping @Sendable (Duration) async throws -> Void = {
-      try await Task.sleep(for: $0)
-    }
-  ) {
-    precondition(maximumAttempts > 0)
-    precondition(retryDelays.count >= max(0, maximumAttempts - 1))
-    self.maximumAttempts = maximumAttempts
-    self.retryDelays = retryDelays
-    self.now = now
-    self.sleep = sleep
-  }
-}
-
-/// The result of the bounded foreground wait that precedes a server-only
-/// routine cue. Keeping the result explicit prevents callers from treating a
-/// missing or still-generating cue as a successfully completed silent cue.
-nonisolated enum RoutineTTSForegroundPreparationStatus: Equatable, Sendable {
-  case prepared
-  case retryablePending
-  case unavailable
-  case cancelled
-}
-
-/// Events are intentionally identifier- and URL-free so they can be read from
-/// a TestFlight device console without disclosing account or routine content.
-nonisolated enum RoutineTTSDiagnosticEvent: String, Sendable {
-  case cachePlanMissing
-  case missingGroupBinding
-  /// No binding AND no createRoutineGroup mutation record exists at all for
-  /// this local group. Distinguishes "sync never even recorded intent" from
-  /// the other missingGroupBinding causes below.
-  case missingGroupBindingNoMutationRecord
-  /// A createRoutineGroup mutation exists but is in the terminal `.blocked`
-  /// state, which never resolves automatically.
-  case missingGroupBindingMutationBlocked
-  /// A binding record exists but failed identity/shape validation
-  /// (wrong member, namespace, or remoteID) rather than being absent.
-  case missingGroupBindingInvalidExistingBinding
-  case missingRoutineBinding
-  case remoteFetchFailed
-  case responseUnavailable
-  case waitingForBinding
-  case waitingForGeneration
-  case foregroundPrepared
-  case foregroundRetryExhausted
-  case audioDownloadFailed
-  case voiceCacheInvalidated
-  case cachePurgeFailed
-  case customCueUnavailable
-  case serverCueUnavailable
-  /// The done/remind server-voice common cue's plan was not yet prepared
-  /// when playback needed it. Fails open (silently completes) by design.
-  case commonCueUnavailableForServerVoice
-  /// A common cue's local file was already cache-validated but failed to
-  /// start playback at cue time. Also fails open by design.
-  case commonCueLateFailure
-}
-
-nonisolated struct RoutineTTSDiagnostics: Sendable {
-  private let logger = Logger(
-    subsystem: Bundle.main.bundleIdentifier ?? "com.teammoru.Moru",
-    category: "RoutineTTS"
-  )
-
-  func record(_ event: RoutineTTSDiagnosticEvent) {
-    logger.notice(
-      "Routine TTS: \(event.rawValue, privacy: .public)"
-    )
-  }
-}
-
-@MainActor
-protocol RoutineTTSWarming: AnyObject {
-  func prepare(routineGroupLocalID: UUID, routineLocalIDs: [UUID])
-  /// Indicates whether this step is synced already or has a pending synced
-  /// creation on the current account. A step without that intent remains a
-  /// local cue instead of waiting for server audio.
-  func expectsServerGeneratedIntro(
-    routineGroupLocalID: UUID,
-    routineLocalID: UUID
-  ) -> Bool
-  func prepareAndWait(
-    routineGroupLocalID: UUID,
-    routineLocalIDs: [UUID]
-  ) async -> RoutineTTSForegroundPreparationStatus
-}
-
-@MainActor
-protocol RoutineTTSVoiceSelectionVersionStoring: AnyObject {
-  func selectionVersion(forMemberID memberID: Int64) -> Int64?
-  func setSelectionVersion(_ version: Int64, forMemberID memberID: Int64)
-  func removeSelectionVersion(forMemberID memberID: Int64)
-  func selectedTTSID(forMemberID memberID: Int64) -> Int64?
-  func setSelectedTTSID(_ ttsID: Int64, forMemberID memberID: Int64)
-  func removeSelectedTTSID(forMemberID memberID: Int64)
-}
-
-extension RoutineTTSVoiceSelectionVersionStoring {
-  func selectedTTSID(forMemberID memberID: Int64) -> Int64? { nil }
-  func setSelectedTTSID(_ ttsID: Int64, forMemberID memberID: Int64) {}
-  func removeSelectedTTSID(forMemberID memberID: Int64) {}
-}
-
-extension RoutineTTSWarming {
-  func expectsServerGeneratedIntro(
-    routineGroupLocalID: UUID,
-    routineLocalID: UUID
-  ) -> Bool {
-    false
-  }
-
-  /// Keeps lightweight test and preview doubles source-compatible while the
-  /// production coordinator supplies the foreground readiness wait.
-  func prepareAndWait(
-    routineGroupLocalID: UUID,
-    routineLocalIDs: [UUID]
-  ) async -> RoutineTTSForegroundPreparationStatus {
-    prepare(
-      routineGroupLocalID: routineGroupLocalID,
-      routineLocalIDs: routineLocalIDs
-    )
-    return .prepared
-  }
-}
-
 @MainActor
 final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudioProviding {
   private struct PreparedPlan {
@@ -211,6 +33,19 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let routineLocalID: UUID
   }
 
+  /// 계획을 실제로 싣었는지, 못 실었다면 기존 계획을 버려야 하는지.
+  ///
+  /// 이 구분이 필요한 이유: 로컬 단계가 바뀌었거나 사라졌다면 들고 있던 계획은
+  /// 틀린 것이므로 버려야 하고, 저장소 읽기가 잠깐 실패한 것뿐이라면 버리면
+  /// 안 된다. 버리면 다음 재생 때 안내가 통째로 없어진다.
+  private enum PlanPublication {
+    case published
+    /// 로컬이 달라졌다 — 들고 있던 계획은 더 이상 이 단계의 것이 아니다.
+    case rejectedStalePlan
+    /// 일시적 실패 — 판단할 수 없으므로 기존 계획을 그대로 둔다.
+    case unavailable
+  }
+
   private enum ForegroundPreparationResult {
     case prepared
     case pendingBinding
@@ -228,14 +63,10 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     let assets: [RoutineTTSResolvedAsset]
   }
 
-  private enum PreparedPlanBindingValidation {
-    case valid
-    case invalid
-    case unavailable
-  }
 
   private let remoteService: any RoutineTTSRemoteServing
   private let bindingRepository: any RoutineSyncRepository
+  private let bindingValidator: RoutineTTSBindingValidator
   private let routineRepository: (any RoutineRepository)?
   private let audioCache: RoutineTTSAudioCache?
   private let downloader: any RoutineTTSAudioDownloading
@@ -294,6 +125,10 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
   ) {
     self.remoteService = remoteService
     self.bindingRepository = bindingRepository
+    self.bindingValidator = RoutineTTSBindingValidator(
+      bindingRepository: bindingRepository,
+      serverNamespace: serverNamespace
+    )
     self.routineRepository = routineRepository
     self.audioCache = audioCache
     self.downloader = downloader
@@ -546,13 +381,13 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         entityKind: .routineGroup,
         localEntityID: routineGroupLocalID
       ) else {
-        return try hasServerSyncIntent(
+        return try bindingValidator.hasServerSyncIntent(
           memberID: identity.memberID,
           routineGroupLocalID: routineGroupLocalID,
           routineLocalID: routineLocalID
         )
       }
-      guard isValidGroupBinding(
+      guard bindingValidator.isValidGroupBinding(
         groupBinding,
         routineGroupLocalID: routineGroupLocalID,
         identity: identity
@@ -566,13 +401,13 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         entityKind: .routine,
         localEntityID: routineLocalID
       ) else {
-        return try hasServerSyncIntent(
+        return try bindingValidator.hasServerSyncIntent(
           memberID: identity.memberID,
           routineGroupLocalID: routineGroupLocalID,
           routineLocalID: routineLocalID
         )
       }
-      guard isValidRoutineBinding(
+      guard bindingValidator.isValidRoutineBinding(
         routineBinding,
         routineGroupLocalID: routineGroupLocalID,
         routineLocalID: routineLocalID,
@@ -800,9 +635,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       return nil
     }
 
-    switch validateCurrentBinding(
-      for: plan,
-      planKey: planKey,
+    switch bindingValidator.validateCurrentBinding(
+      routineGroupLocalID: planKey.routineGroupLocalID,
+      routineLocalID: planKey.routineLocalID,
+      expectedGroupRemoteID: plan.routineGroupRemoteID,
+      expectedRoutineRemoteID: plan.routineRemoteID,
       identity: identity
     ) {
     case .valid, .unavailable:
@@ -957,7 +794,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         memberID: identity.memberID,
         entityKind: .routineGroup,
         localEntityID: routineGroupLocalID
-      ), isValidGroupBinding(
+      ), bindingValidator.isValidGroupBinding(
         binding,
         routineGroupLocalID: routineGroupLocalID,
         identity: identity
@@ -1113,39 +950,27 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
             isAudioCacheUsable(for: identity) else {
         return
       }
-      let currentLocalStep: RoutineStep
-      do {
-        guard let routine = try routineRepository?.routine(id: routineGroupLocalID),
-              let step = routine.steps.first(where: { $0.id == routineLocalID }) else {
-          preparedPlans[localKey] = nil
-          continue
-        }
-        currentLocalStep = step
-      } catch {
-        // A failed local-store read does not prove that the existing plan is
-        // invalid; localAudioURLs will revalidate the binding before use.
-        continue
-      }
-      guard RoutineTTSLocalFingerprint(
-        title: currentLocalStep.title,
-        type: currentLocalStep.type
-      ) == RoutineTTSLocalFingerprint(
-        title: localStep.title,
-        type: localStep.type
-      ) else {
-        preparedPlans[localKey] = nil
-        continue
-      }
-      preparedPlans[localKey] = PreparedPlan(
-        identity: identity,
-        fingerprint: RoutineTTSLocalFingerprint(
-          title: currentLocalStep.title,
-          type: currentLocalStep.type
+      // 전경 경로와 같은 일이다. 예전에는 여기에 같은 로직이 한 벌 더 있었고,
+      // 한쪽만 고치면 배경으로 데운 안내와 재생 직전에 데운 안내가 서로 다른
+      // 기준으로 실린다.
+      switch publishPreparedPlan(
+        candidate: ForegroundCandidate(
+          localStep: localStep,
+          localKey: localKey,
+          routineGroupRemoteID: groupBinding.remoteID,
+          routineRemoteID: routineBinding.remoteID,
+          assets: assets
         ),
-        routineGroupRemoteID: groupBinding.remoteID,
-        routineRemoteID: routineBinding.remoteID,
-        keys: keys
-      )
+        keys: keys,
+        identity: identity
+      ) {
+      case .published:
+        break
+      case .rejectedStalePlan:
+        preparedPlans[localKey] = nil
+      case .unavailable:
+        break
+      }
     }
   }
 
@@ -1200,7 +1025,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
           routineGroupLocalID: routineGroupLocalID,
           routineLocalIDs: requestedRoutineIDs
         )
-        if try hasPendingGroupBinding(
+        if try bindingValidator.hasPendingGroupBinding(
           memberID: identity.memberID,
           routineGroupLocalID: routineGroupLocalID
         ) {
@@ -1227,7 +1052,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         )
         return .unavailable
       }
-      guard isValidGroupBinding(
+      guard bindingValidator.isValidGroupBinding(
         binding,
         routineGroupLocalID: routineGroupLocalID,
         identity: identity
@@ -1294,7 +1119,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         )
         let hasPendingBinding: Bool
         do {
-          hasPendingBinding = try hasPendingRoutineBinding(
+          hasPendingBinding = try bindingValidator.hasPendingRoutineBinding(
             memberID: identity.memberID,
             routineGroupLocalID: routineGroupLocalID,
             routineLocalID: routineLocalID
@@ -1389,7 +1214,8 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
       return .unavailable
     }
     for (candidate, keys) in cachedCandidates {
-      guard publishPreparedPlan(
+      // 전경에서는 어느 쪽 실패든 결과가 같다 — 지금 들려줄 수 없다.
+      guard case .published = publishPreparedPlan(
         candidate: candidate,
         keys: keys,
         identity: identity
@@ -1712,11 +1538,11 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     candidate: ForegroundCandidate,
     keys: [RoutineTTSAudioCacheKey],
     identity: AccountSessionIdentity
-  ) -> Bool {
+  ) -> PlanPublication {
     guard !Task.isCancelled,
           sessionIdentityProvider?.currentAccountSessionIdentity == identity,
           isAudioCacheUsable(for: identity) else {
-      return false
+      return .unavailable
     }
     do {
       guard let routineRepository,
@@ -1726,7 +1552,7 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
             let currentStep = routine.steps.first(where: {
               $0.id == candidate.localKey.routineLocalID
             }) else {
-        return false
+        return .rejectedStalePlan
       }
       let currentFingerprint = RoutineTTSLocalFingerprint(
         title: currentStep.title,
@@ -1736,7 +1562,9 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         title: candidate.localStep.title,
         type: candidate.localStep.type
       )
-      guard currentFingerprint == initialFingerprint else { return false }
+      guard currentFingerprint == initialFingerprint else {
+        return .rejectedStalePlan
+      }
       preparedPlans[candidate.localKey] = PreparedPlan(
         identity: identity,
         fingerprint: currentFingerprint,
@@ -1744,99 +1572,17 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
         routineRemoteID: candidate.routineRemoteID,
         keys: keys
       )
-      return true
+      return .published
     } catch {
-      return false
+      // 저장소 읽기 실패는 일시적이다. 재생 직전에 바인딩을 다시 확인하므로
+      // 들고 있던 계획을 여기서 버릴 이유가 없다.
+      return .unavailable
     }
-  }
-
-  private func hasPendingGroupBinding(
-    memberID: Int64,
-    routineGroupLocalID: UUID
-  ) throws -> Bool {
-    guard let mutation = try bindingRepository.mutation(
-      memberID: memberID,
-      operation: .createRoutineGroup,
-      entityKind: .routineGroup,
-      localEntityID: routineGroupLocalID
-    ) else {
-      return false
-    }
-    return Self.isBindingDeliveryPending(mutation.state)
-  }
-
-  private func hasServerSyncIntent(
-    memberID: Int64,
-    routineGroupLocalID: UUID,
-    routineLocalID: UUID
-  ) throws -> Bool {
-    if try bindingRepository.mutation(
-      memberID: memberID,
-      operation: .createRoutineGroup,
-      entityKind: .routineGroup,
-      localEntityID: routineGroupLocalID
-    ) != nil {
-      return true
-    }
-    if try bindingRepository.mutation(
-      memberID: memberID,
-      operation: .addRoutine,
-      entityKind: .routine,
-      localEntityID: routineLocalID
-    ) != nil {
-      return true
-    }
-    return try bindingRepository.binding(
-      memberID: memberID,
-      entityKind: .routine,
-      localEntityID: routineLocalID
-    ) != nil
-  }
-
-  private func hasPendingRoutineBinding(
-    memberID: Int64,
-    routineGroupLocalID: UUID,
-    routineLocalID: UUID
-  ) throws -> Bool {
-    if try hasPendingGroupBinding(
-      memberID: memberID,
-      routineGroupLocalID: routineGroupLocalID
-    ) {
-      return true
-    }
-    guard let mutation = try bindingRepository.mutation(
-      memberID: memberID,
-      operation: .addRoutine,
-      entityKind: .routine,
-      localEntityID: routineLocalID
-    ) else {
-      return false
-    }
-    return Self.isBindingDeliveryPending(mutation.state)
   }
 
   private static func uniqueRoutineIDs(_ ids: [UUID]) -> [UUID] {
     var seen = Set<UUID>()
     return ids.filter { seen.insert($0).inserted }
-  }
-
-  private static func isBindingDeliveryPending(
-    _ state: RoutineSyncMutationState
-  ) -> Bool {
-    switch state {
-    // Newly saved groups start waiting for runtime contract admission, then
-    // become queued. All three states can still gain a server binding during
-    // the same bounded first-cue window, so none should fall through
-    // silently. `needsReconciliation` means the request may already have
-    // reached the server; `RoutineSyncSender` retries it automatically
-    // (see its `pendingReplay` branch), so it is not a dead end either.
-    case .waitingForServerContract, .queued, .attempting, .needsReconciliation:
-      true
-    // `blocked` is the only state that requires explicit intervention and
-    // will never resolve on its own.
-    case .blocked:
-      false
-    }
   }
 
   private func invalidatePreparedPlans(
@@ -1879,73 +1625,6 @@ final class RoutineTTSWarmupCoordinator: RoutineTTSWarming, RoutineTTSLocalAudio
     voiceSelectionVersionStore.selectedTTSID(
       forMemberID: identity.memberID
     )
-  }
-
-  private func validateCurrentBinding(
-    for plan: PreparedPlan,
-    planKey: LocalPlanKey,
-    identity: AccountSessionIdentity
-  ) -> PreparedPlanBindingValidation {
-    do {
-      guard let groupBinding = try bindingRepository.binding(
-        memberID: identity.memberID,
-        entityKind: .routineGroup,
-        localEntityID: planKey.routineGroupLocalID
-      ), let routineBinding = try bindingRepository.binding(
-        memberID: identity.memberID,
-        entityKind: .routine,
-        localEntityID: planKey.routineLocalID
-      ) else {
-        return .invalid
-      }
-      guard isValidGroupBinding(
-        groupBinding,
-        routineGroupLocalID: planKey.routineGroupLocalID,
-        identity: identity
-      ), groupBinding.remoteID == plan.routineGroupRemoteID,
-      isValidRoutineBinding(
-        routineBinding,
-        routineGroupLocalID: planKey.routineGroupLocalID,
-        routineLocalID: planKey.routineLocalID,
-        groupBinding: groupBinding,
-        identity: identity
-      ), routineBinding.remoteID == plan.routineRemoteID else {
-        return .invalid
-      }
-      return .valid
-    } catch {
-      return .unavailable
-    }
-  }
-
-  private func isValidGroupBinding(
-    _ binding: RoutineServerBinding,
-    routineGroupLocalID: UUID,
-    identity: AccountSessionIdentity
-  ) -> Bool {
-    binding.entityKind == .routineGroup
-      && binding.localEntityID == routineGroupLocalID
-      && binding.remoteID > 0
-      && binding.memberID == identity.memberID
-      && binding.serverNamespace == serverNamespace
-  }
-
-  private func isValidRoutineBinding(
-    _ binding: RoutineServerBinding,
-    routineGroupLocalID: UUID,
-    routineLocalID: UUID,
-    groupBinding: RoutineServerBinding,
-    identity: AccountSessionIdentity
-  ) -> Bool {
-    binding.entityKind == .routine
-      && binding.localEntityID == routineLocalID
-      && binding.remoteID > 0
-      && binding.memberID == identity.memberID
-      && binding.serverNamespace == serverNamespace
-      && binding.parentEntityKind == .routineGroup
-      && binding.parentLocalEntityID == routineGroupLocalID
-      && binding.memberID == groupBinding.memberID
-      && binding.serverNamespace == groupBinding.serverNamespace
   }
 
   private func hasCurrentIdentity(_ identity: AccountSessionIdentity) -> Bool {
